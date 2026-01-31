@@ -33,7 +33,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import TeamDashboard from './pages/TeamDashboard';
 import Analytics from './pages/Analytics';
 import { signInSuccess, signOutUserSuccess } from './redux/user/userSlice';
-import { parseJsonSafely, fetchWithRefresh } from './utils/http';
+import { parseJsonSafely, fetchWithRefresh, API_BASE_URL } from './utils/http';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { BuyerViewProvider } from './contexts/BuyerViewContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -144,7 +144,7 @@ function AuthBootstrap() {
     (async () => {
       try {
         // Silent auth check - don't trigger error toasts for initial auth check
-        const res = await fetch('/api/user/me', { credentials: 'include' });
+        const res = await fetch(`${API_BASE_URL}/api/user/me`, { credentials: 'include' });
 
         if (res.ok) {
           const data = await parseJsonSafely(res);

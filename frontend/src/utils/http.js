@@ -1,3 +1,9 @@
+// API base URL - empty for same-origin (dev), full URL for production
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+// Helper to get full API URL
+export const getApiUrl = (path) => `${API_BASE_URL}${path}`;
+
 export async function parseJsonSafely(response) {
   try {
     const text = await response.text();
@@ -66,7 +72,7 @@ export async function refreshAccessToken(shouldRedirect = true) {
   isRefreshing = true;
   refreshPromise = (async () => {
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -195,6 +201,6 @@ export class ApiClient {
 }
 
 // Create default API client instance
-export const apiClient = new ApiClient('/api');
+export const apiClient = new ApiClient(`${API_BASE_URL}/api`);
 
 
