@@ -18,6 +18,7 @@
     "logs:clean": "rm -rf logs/*.log",
     "logs:rotate": "node scripts/rotateLogs.js",
     "db:seed": "node scripts/seedDatabase.js",
+    "db:seed-categories": "node scripts/seedCategories.js",
     "db:migrate": "node scripts/migrateDatabase.js",
     "db:backup": "node scripts/backup.js",
     "health:check": "curl -f http://localhost:3000/api/health/health",
