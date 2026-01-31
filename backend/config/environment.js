@@ -160,10 +160,10 @@ export const validateConfig = () => {
     }
   }
 
-  // Validate email configuration for production
+  // Warn about email configuration for production (not required)
   if (config.server.isProduction) {
     if (!config.email.host || !config.email.auth.user || !config.email.auth.pass) {
-      errors.push('Email configuration is required for production');
+      console.warn('Warning: Email configuration not set. Email features will be disabled.');
     }
   }
 

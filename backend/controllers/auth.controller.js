@@ -18,14 +18,14 @@ import { validateEmail, validatePassword } from '../middleware/security.js';
 
 const cookieOptions = {
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: config.server.isProduction ? 'none' : 'lax', // 'none' for cross-domain in production
   secure: config.server.isProduction,
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
 const refreshCookieOptions = {
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: config.server.isProduction ? 'none' : 'lax', // 'none' for cross-domain in production
   secure: config.server.isProduction,
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
