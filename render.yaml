@@ -1,0 +1,96 @@
+# Render Blueprint for MERN Estate
+# Deploy using: https://render.com/docs/blueprint-spec
+
+services:
+  # API Service (Node.js)
+  - type: web
+    name: mern-estate-api
+    env: node
+    region: singapore  # Choose closest to your users
+    plan: starter      # Upgrade to standard for production
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node index.js
+    healthCheckPath: /api/health/startup
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          name: mern-estate-client
+          type: web
+          property: host
+      # Optional - Set these in Render dashboard
+      - key: SENTRY_DSN
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: MESSAGE_ENCRYPTION_KEY
+        sync: false
+    autoDeploy: true
+
+  # Static Site (React Frontend)
+  - type: web
+    name: mern-estate-client
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    routes:
+      # API proxy to backend
+      - type: rewrite
+        source: /api/*
+        destination: https://mern-estate-api.onrender.com/api/*
+      - type: rewrite
+        source: /uploads/*
+        destination: https://mern-estate-api.onrender.com/uploads/*
+      # SPA fallback
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_SENTRY_DSN
+        sync: false
