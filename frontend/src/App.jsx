@@ -24,6 +24,7 @@ import AdminCategoryFields from './pages/AdminCategoryFields';
 import AdminImport from './pages/AdminImport';
 import DynamicListings from './pages/DynamicListings';
 import PasswordReset from './pages/PasswordReset';
+import ForgotPassword from './pages/ForgotPassword';
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 import BuyerRequirements from './pages/BuyerRequirements';
@@ -60,7 +61,7 @@ function AppContent() {
   const { showError } = useNotification();
   
   // Pages where footer should not be shown
-  const noFooterPages = ['/sign-in', '/unauthorized'];
+  const noFooterPages = ['/sign-in', '/sign-up', '/forgot-password', '/unauthorized'];
   const showFooter = !noFooterPages.includes(location.pathname);
   
   return (
@@ -88,6 +89,7 @@ function AppContent() {
       <Route path='/' element={<Home />} />
       <Route path='/sign-in' element={<div className='-mt-16'><SignIn /></div>} />
       <Route path='/sign-up' element={<div className='-mt-16'><SignUp /></div>} />
+      <Route path='/forgot-password' element={<div className='-mt-16'><ForgotPassword /></div>} />
       {/* Sign up is disabled */}
       <Route path='/listing/:listingId' element={<Listing />} />
       <Route path='/unauthorized' element={<Unauthorized />} />

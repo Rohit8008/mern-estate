@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   signInStart,
@@ -104,6 +104,15 @@ export default function SignIn() {
                 onChange={handleChange}
                 required
               />
+            </div>
+
+            <div className='flex justify-end'>
+              <Link
+                to='/forgot-password'
+                className='text-sm text-blue-600 hover:text-blue-800 font-medium'
+              >
+                Forgot password?
+              </Link>
             </div>
 
             <button
