@@ -14,7 +14,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', email: '', password: '', assignedCategories: [] });
+  const [newUser, setNewUser] = useState({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
@@ -226,6 +226,11 @@ export default function Admin() {
             <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='dashboard'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineViewGrid /> Dashboard</button>
             <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='listings'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineCollection /> Listings</button>
             <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='categories'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineTag /> Categories</button>
+            {isAdmin && (
+              <a href='/admin/property-types' className='flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 text-slate-700'>
+                <HiOutlineTag /> Property Types
+              </a>
+            )}
             <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='owners'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineUserGroup /> Owners</button>
             {isAdmin && (
               <button onClick={() => setActiveTab('users')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='users'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineClipboardList /> Users</button>
@@ -693,6 +698,13 @@ export default function Admin() {
                 value={newUser.password}
                 onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
               />
+              <input
+                className='border p-2 rounded'
+                placeholder='Phone/Mobile Number'
+                type='tel'
+                value={newUser.phone}
+                onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+              />
               <div className='flex flex-wrap gap-2 items-center'>
                 {categories.map((c) => (
                   <label key={c._id} className='flex items-center gap-2 text-sm'>
@@ -726,7 +738,7 @@ export default function Admin() {
                     const data = await res.json();
                     if (data && data._id) {
                       setUsers((prev) => [data, ...prev]);
-                      setNewUser({ username: '', email: '', password: '', assignedCategories: [] });
+                      setNewUser({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
                     }
                   } catch (_) {}
                   setCreating(false);

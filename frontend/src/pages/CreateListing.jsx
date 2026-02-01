@@ -8,6 +8,8 @@ import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/
 import { app } from '../firebase';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient } from '../utils/http';
+import PropertyTypeFields from '../components/PropertyTypeFields';
+import DynamicCategoryFields from '../components/DynamicCategoryFields';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -166,7 +168,7 @@ export default function CreateListing() {
     state: '',
     pincode: '',
     type: 'sale',
-    propertyType: 'house',
+    propertyType: '',
     customPropertyType: '',
     bedrooms: 1,
     bathrooms: 1,
@@ -206,6 +208,12 @@ export default function CreateListing() {
   const [geoStatus, setGeoStatus] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [propertyTypes, setPropertyTypes] = useState([]);
+  const [loadingPropertyTypes, setLoadingPropertyTypes] = useState(false);
+  const [selectedPropertyType, setSelectedPropertyType] = useState(null);
+  const [propertyTypeFields, setPropertyTypeFields] = useState({});
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categoryFields, setCategoryFields] = useState({});
 
   // Auto-calculation for size and price
   useEffect(() => {
@@ -257,8 +265,22 @@ export default function CreateListing() {
       }
     };
 
+    const fetchPropertyTypes = async () => {
+      try {
+        setLoadingPropertyTypes(true);
+        const data = await apiClient.get('/property-types/list');
+        setPropertyTypes(data.data || []);
+      } catch (error) {
+        console.log('Error fetching property types:', error.message);
+        setPropertyTypes([]);
+      } finally {
+        setLoadingPropertyTypes(false);
+      }
+    };
+
     fetchCategories();
     fetchOwners();
+    fetchPropertyTypes();
   }, []);
 
   const handleChange = (e) => {
@@ -284,11 +306,43 @@ export default function CreateListing() {
     }
 
     if (e.target.type === 'select-one') {
-      setFormData({
-        ...formData,
-        [e.target.name]: e.target.value,
-      });
+      if (e.target.name === 'propertyType') {
+        const selectedType = propertyTypes.find(pt => pt.slug === e.target.value);
+        setSelectedPropertyType(selectedType);
+        setPropertyTypeFields({});
+        setFormData({
+          ...formData,
+          propertyType: e.target.value,
+        });
+      } else if (e.target.name === 'category') {
+        const category = categories.find(c => c.slug === e.target.value);
+        setSelectedCategory(category);
+        setCategoryFields({});
+        setFormData({
+          ...formData,
+          category: e.target.value,
+        });
+      } else {
+        setFormData({
+          ...formData,
+          [e.target.name]: e.target.value,
+        });
+      }
     }
+  };
+
+  const handlePropertyTypeFieldChange = (fieldKey, value) => {
+    setPropertyTypeFields({
+      ...propertyTypeFields,
+      [fieldKey]: value,
+    });
+  };
+
+  const handleCategoryFieldChange = (fieldKey, value) => {
+    setCategoryFields({
+      ...categoryFields,
+      [fieldKey]: value,
+    });
   };
 
   const handleImageSubmit = async () => {
@@ -361,6 +415,8 @@ export default function CreateListing() {
         },
         body: JSON.stringify({
           ...formData,
+          propertyTypeFields: propertyTypeFields,
+          categoryFields: categoryFields,
           userRef: currentUser._id,
         }),
       });
@@ -544,14 +600,22 @@ export default function CreateListing() {
                     value={formData.propertyType}
                     onChange={handleChange}
                     className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                    required
                   >
-                    <option value='house'>House</option>
-                    <option value='flat'>Flat</option>
-                    <option value='plot'>Plot</option>
-                    <option value='factory'>Factory</option>
-                    <option value='shelter'>Shelter</option>
-                    <option value='other'>Other</option>
+                    <option value=''>Select Property Type</option>
+                    {loadingPropertyTypes ? (
+                      <option disabled>Loading...</option>
+                    ) : (
+                      propertyTypes.map((type) => (
+                        <option key={type._id} value={type.slug}>
+                          {type.icon} {type.name}
+                        </option>
+                      ))
+                    )}
                   </select>
+                  {selectedPropertyType && (
+                    <p className='text-xs text-gray-500 mt-1'>{selectedPropertyType.description}</p>
+                  )}
                 </div>
                 </div>
             
@@ -571,7 +635,7 @@ export default function CreateListing() {
                 </div>
                 
               {/* Property Details */}
-              <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-2'>
                     Listing Type *
@@ -586,39 +650,16 @@ export default function CreateListing() {
                     <option value='rent'>Rent</option>
                   </select>
                 </div>
-                
-                <div>
-                  <label htmlFor='bedrooms' className='block text-sm font-medium text-gray-700 mb-2'>
-                    Bedrooms
-                  </label>
-                    <input
-                  type='number'
-                  id='bedrooms'
-                  min='1'
-                    max='50'
-                  required
-                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  onChange={handleChange}
-                  value={formData.bedrooms}
-                />
-              </div>
-                
-                      <div>
-                  <label htmlFor='bathrooms' className='block text-sm font-medium text-gray-700 mb-2'>
-                    Bathrooms
-                  </label>
-                <input
-                  type='number'
-                  id='bathrooms'
-                  min='1'
-                    max='50'
-                  required
-                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  onChange={handleChange}
-                  value={formData.bathrooms}
-                />
-              </div>
                     </div>
+
+              {/* Dynamic Property Type Fields */}
+              {selectedPropertyType && selectedPropertyType.fields && selectedPropertyType.fields.length > 0 && (
+                <PropertyTypeFields
+                  fields={selectedPropertyType.fields}
+                  values={propertyTypeFields}
+                  onChange={handlePropertyTypeFieldChange}
+                />
+              )}
 
               {/* Pricing */}
               <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
@@ -1056,8 +1097,13 @@ export default function CreateListing() {
                       ))
                     )}
                   </select>
+                  {selectedCategory && (
+                    <p className='text-xs text-gray-500 mt-1'>
+                      {selectedCategory.fields?.length || 0} additional fields for this category
+                    </p>
+                  )}
                 </div>
-                
+
                   <div>
                   <label className='block text-sm font-medium text-gray-700 mb-2'>
                     Features
@@ -1096,6 +1142,32 @@ export default function CreateListing() {
                   </div>
                 </div>
                     </div>
+
+              {/* Dynamic Category Fields */}
+              {selectedCategory && selectedCategory.fields && selectedCategory.fields.length > 0 && (
+                <div className='border-t border-gray-200 pt-8'>
+                  <div className='flex items-center gap-3 mb-6'>
+                    <div className='w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center'>
+                      <svg className='w-5 h-5 text-indigo-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-semibold text-gray-900'>
+                        {selectedCategory.name} Details
+                      </h2>
+                      <p className='text-sm text-gray-500'>
+                        Fill in the specific details for your {selectedCategory.name.toLowerCase()} listing
+                      </p>
+                    </div>
+                  </div>
+                  <DynamicCategoryFields
+                    fields={selectedCategory.fields}
+                    values={categoryFields}
+                    onChange={handleCategoryFieldChange}
+                  />
+                </div>
+              )}
 
               {/* Image Upload */}
                 <div>

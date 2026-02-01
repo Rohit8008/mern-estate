@@ -25,6 +25,8 @@ import taskRouter from './routes/task.route.js';
 import metricsRouter from './routes/metrics.route.js';
 import crmRouter from './routes/crm.route.js';
 import analyticsRouter from './routes/analytics.route.js';
+import dashboardRouter from './routes/dashboard.route.js';
+import propertyTypeRouter from './routes/propertyType.route.js';
 
 import {
   securityHeaders,
@@ -76,6 +78,7 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/listing', listingRouter);
   app.use('/api/category', categoryRouter);
+  app.use('/api/property-types', propertyTypeRouter);
   app.use('/api/upload', uploadRouter);
   app.use('/api/message', messageRouter);
   app.use('/api/owner', ownerRouter);
@@ -87,6 +90,7 @@ export function createApp() {
   app.use('/api/metrics', metricsRouter);
   app.use('/api/crm', crmRouter);
   app.use('/api/analytics', analyticsRouter);
+  app.use('/api/dashboard', dashboardRouter);
 
   app.use(express.static(path.join(__dirname, '/frontend/dist')));
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

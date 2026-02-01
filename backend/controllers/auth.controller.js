@@ -162,6 +162,20 @@ export const signin = asyncHandler(async (req, res, next) => {
     throw new AuthenticationError('Invalid email or password');
   }
 
+  // Check if user has a password (OAuth users may not have one)
+  if (!validUser.password) {
+    logSecurityEvent({
+      email: validUser.email,
+      method: 'password',
+      status: 'blocked',
+      reason: 'Account created with OAuth, password login not available',
+      ip: clientIP,
+      userAgent: userAgent,
+      path: req.originalUrl,
+    });
+    throw new AuthenticationError('This account was created with Google. Please sign in with Google.');
+  }
+
   // Check account status
   if (validUser.status === 'inactive') {
     logSecurityEvent({
@@ -305,6 +319,152 @@ export const refreshToken = asyncHandler(async (req, res, next) => {
     .cookie('refresh_token', newRefreshToken, refreshCookieOptions)
     .status(200)
     .json({ success: true, ...rest });
+});
+
+export const google = asyncHandler(async (req, res, next) => {
+  const { email, name, photo } = req.body;
+  const clientIP = req.ip || req.connection.remoteAddress;
+  const userAgent = req.headers['user-agent'] || '';
+
+  if (!email || !name) {
+    throw new ValidationError('Email and name are required for Google authentication');
+  }
+
+  // Validate email format
+  if (!validateEmail(email)) {
+    throw new ValidationError('Please provide a valid email address', 'email');
+  }
+
+  try {
+    // Check if user exists
+    const user = await User.findOne({ email });
+
+    if (user) {
+      // User exists, sign them in
+      // Check account status
+      if (user.status === 'inactive') {
+        logSecurityEvent({
+          email: user.email,
+          method: 'google',
+          status: 'blocked',
+          reason: 'Account inactive',
+          ip: clientIP,
+          userAgent: userAgent,
+          path: req.originalUrl,
+        });
+        throw new AuthenticationError('Your account is inactive. Please contact support.');
+      }
+      if (user.status === 'suspended') {
+        logSecurityEvent({
+          email: user.email,
+          method: 'google',
+          status: 'blocked',
+          reason: 'Account suspended',
+          ip: clientIP,
+          userAgent: userAgent,
+          path: req.originalUrl,
+        });
+        throw new AuthenticationError('Your account has been suspended. Please contact support.');
+      }
+
+      // Generate token pair
+      const { accessToken, refreshToken } = generateTokenPair(user._id);
+
+      // Update user login tracking
+      await User.findByIdAndUpdate(user._id, {
+        $push: { refreshTokens: { token: refreshToken, ip: clientIP, userAgent: userAgent } },
+        $set: { lastLogin: new Date(), avatar: photo || user.avatar },
+        $inc: { loginCount: 1 }
+      });
+
+      // Log successful login
+      logSecurityEvent({
+        email: user.email,
+        method: 'google',
+        status: 'success',
+        reason: 'Successful Google login',
+        ip: clientIP,
+        userAgent: userAgent,
+        path: req.originalUrl,
+      });
+
+      const { password: pass, refreshTokens, ...rest } = user.toObject();
+      res
+        .cookie('access_token', accessToken, cookieOptions)
+        .cookie('refresh_token', refreshToken, refreshCookieOptions)
+        .status(200)
+        .json({ success: true, ...rest, avatar: photo || user.avatar });
+    } else {
+      // User doesn't exist, create new account
+      const generatedPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcryptjs.hash(generatedPassword, config.security.bcryptRounds);
+      
+      // Generate username from name
+      const baseUsername = name.split(' ').join('').toLowerCase();
+      let username = baseUsername + Math.random().toString(36).slice(-4);
+      
+      // Ensure username is unique
+      let existingUser = await User.findOne({ username });
+      while (existingUser) {
+        username = baseUsername + Math.random().toString(36).slice(-8);
+        existingUser = await User.findOne({ username });
+      }
+
+      const newUser = new User({
+        username,
+        firstName: name.split(' ')[0] || '',
+        lastName: name.split(' ').slice(1).join(' ') || '',
+        email,
+        password: hashedPassword,
+        avatar: photo || "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png",
+        status: 'active',
+        lastLogin: new Date(),
+      });
+
+      await newUser.save();
+
+      // Generate token pair
+      const { accessToken, refreshToken } = generateTokenPair(newUser._id);
+
+      // Update user with refresh token
+      await User.findByIdAndUpdate(newUser._id, {
+        $push: { refreshTokens: { token: refreshToken, ip: clientIP, userAgent: userAgent } },
+        $inc: { loginCount: 1 }
+      });
+
+      // Log successful registration
+      logSecurityEvent({
+        email: newUser.email,
+        method: 'google',
+        status: 'success',
+        reason: 'User registered via Google',
+        ip: clientIP,
+        userAgent: userAgent,
+        path: req.originalUrl,
+      });
+
+      const { password: pass, refreshTokens, ...rest } = newUser.toObject();
+      res
+        .cookie('access_token', accessToken, cookieOptions)
+        .cookie('refresh_token', refreshToken, refreshCookieOptions)
+        .status(201)
+        .json({ success: true, ...rest });
+    }
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logSecurityEvent({
+      email: email || '',
+      method: 'google',
+      status: 'blocked',
+      reason: `Google authentication failed: ${error.message}`,
+      ip: clientIP,
+      userAgent: userAgent,
+      path: req.originalUrl,
+    });
+    throw new AuthenticationError('Google authentication failed');
+  }
 });
 
 export const signOut = asyncHandler(async (req, res, next) => {

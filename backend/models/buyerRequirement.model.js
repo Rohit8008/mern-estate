@@ -22,11 +22,27 @@ const buyerRequirementSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    preferredCity: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    preferredLocality: {
+      type: String,
+      trim: true,
+      index: true,
+    },
     propertyType: {
       type: String,
       required: [true, 'Property type is required'],
       enum: ['sale', 'rent'],
       default: 'sale',
+    },
+    propertyTypeInterest: {
+      type: String,
+      enum: ['residential', 'commercial', 'land', 'any'],
+      default: 'any',
+      index: true,
     },
     minPrice: {
       type: Number,
@@ -72,15 +88,6 @@ const buyerRequirementSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    notes: {
-      type: String,
-      trim: true,
-    },
-    status: {
-      type: String,
-      enum: ['active', 'matched', 'closed', 'inactive'],
-      default: 'active',
-    },
     matchedProperties: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Listing',
@@ -99,6 +106,17 @@ const buyerRequirementSchema = new mongoose.Schema(
       enum: ['low', 'medium', 'high'],
       default: 'medium',
     },
+    assignedAgent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    followUpDate: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -109,6 +127,9 @@ const buyerRequirementSchema = new mongoose.Schema(
 buyerRequirementSchema.index({ buyerName: 'text', preferredLocation: 'text', additionalRequirements: 'text' });
 buyerRequirementSchema.index({ propertyType: 1, status: 1 });
 buyerRequirementSchema.index({ createdBy: 1 });
+buyerRequirementSchema.index({ preferredCity: 1, preferredLocality: 1 });
+buyerRequirementSchema.index({ assignedAgent: 1, status: 1, followUpDate: 1 });
+buyerRequirementSchema.index({ propertyTypeInterest: 1, status: 1 });
 
 // Virtual for full name
 buyerRequirementSchema.virtual('fullName').get(function() {

@@ -17,7 +17,7 @@ export const createBuyerRequirement = async (req, res, next) => {
 
 export const getBuyerRequirements = async (req, res, next) => {
   try {
-    const { search, propertyType, status, priority } = req.query;
+    const { search, propertyType, status, priority, preferredCity, preferredLocality, assignedAgent, propertyTypeInterest } = req.query;
     const query = {};
 
     // Only filter by createdBy if user is not admin or employee
@@ -51,10 +51,35 @@ export const getBuyerRequirements = async (req, res, next) => {
       query.priority = priority;
     }
 
+    // Add city filter
+    if (preferredCity && preferredCity.trim() && preferredCity !== 'all') {
+      query.preferredCity = { $regex: preferredCity.trim(), $options: 'i' };
+    }
+
+    // Add locality filter
+    if (preferredLocality && preferredLocality.trim() && preferredLocality !== 'all') {
+      query.preferredLocality = { $regex: preferredLocality.trim(), $options: 'i' };
+    }
+
+    // Add assigned agent filter
+    if (assignedAgent && assignedAgent !== 'all') {
+      if (assignedAgent === 'unassigned') {
+        query.assignedAgent = null;
+      } else {
+        query.assignedAgent = assignedAgent;
+      }
+    }
+
+    // Add property type interest filter
+    if (propertyTypeInterest && propertyTypeInterest !== 'all') {
+      query.propertyTypeInterest = propertyTypeInterest;
+    }
+
     const buyerRequirements = await BuyerRequirement.find(query)
       .sort({ createdAt: -1 })
       .populate('matchedProperties', 'name price imageUrls address')
-      .populate('createdBy', 'username email');
+      .populate('createdBy', 'username email')
+      .populate('assignedAgent', 'username email firstName lastName');
 
     res.json(buyerRequirements);
   } catch (error) {

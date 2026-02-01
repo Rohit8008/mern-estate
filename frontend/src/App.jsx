@@ -32,6 +32,7 @@ import ClientDetail from './pages/ClientDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import TeamDashboard from './pages/TeamDashboard';
 import Analytics from './pages/Analytics';
+import PropertyTypeManagement from './pages/PropertyTypeManagement';
 import { signInSuccess, signOutUserSuccess } from './redux/user/userSlice';
 import { parseJsonSafely, fetchWithRefresh, API_BASE_URL } from './utils/http';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
@@ -109,6 +110,7 @@ function AppContent() {
         <Route path='/admin' element={<Admin />} />
         <Route path='/admin/dashboard' element={<AdminDashboard />} />
         <Route path='/admin/categories/:slug/fields' element={<AdminCategoryFields />} />
+        <Route path='/admin/property-types' element={<PropertyTypeManagement />} />
         <Route path='/admin/import' element={<AdminImport />} />
       </Route>
 

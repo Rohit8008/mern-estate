@@ -24,11 +24,18 @@ const listingSchema = new mongoose.Schema(
     },
     bathrooms: {
       type: Number,
-      required: true,
+      required: false,
+      default: 1,
     },
     bedrooms: {
       type: Number,
-      required: true,
+      required: false,
+      default: 1,
+    },
+    propertyTypeFields: {
+      type: Map,
+      of: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     furnished: {
       type: Boolean,
@@ -77,6 +84,72 @@ const listingSchema = new mongoose.Schema(
     userRef: {
       type: String,
       required: true,
+    },
+    city: {
+      type: String,
+      required: false,
+      default: '',
+      index: true,
+      trim: true,
+    },
+    locality: {
+      type: String,
+      required: false,
+      default: '',
+      index: true,
+      trim: true,
+    },
+    areaSqFt: {
+      type: Number,
+      required: false,
+      default: 0,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ['available', 'sold', 'under_negotiation'],
+      default: 'available',
+      index: true,
+    },
+    assignedAgent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    propertyCategory: {
+      type: String,
+      enum: ['residential', 'commercial', 'land', 'unknown'],
+      default: 'unknown',
+      index: true,
+    },
+    propertyType: {
+      type: String,
+      enum: ['apartment', 'villa', 'house', 'other', ''],
+      default: '',
+      index: true,
+    },
+    commercialType: {
+      type: String,
+      enum: ['office', 'shop', 'showroom', 'warehouse', 'other', ''],
+      default: '',
+      index: true,
+    },
+    plotType: {
+      type: String,
+      enum: ['residential', 'commercial', 'agricultural', 'other', ''],
+      default: '',
+      index: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
     },
     // New property fields
     areaName: {
@@ -134,6 +207,11 @@ listingSchema.index({ userRef: 1 }); // User listings
 listingSchema.index({ createdAt: -1 }); // Default sort
 listingSchema.index({ regularPrice: 1, createdAt: -1 }); // Price sort with secondary sort
 listingSchema.index({ location: '2dsphere' }); // Geospatial queries
+listingSchema.index({ city: 1, locality: 1 });
+listingSchema.index({ status: 1, assignedAgent: 1, createdAt: -1 });
+listingSchema.index({ propertyCategory: 1, regularPrice: 1, createdAt: -1 });
+listingSchema.index({ isDeleted: 1, createdAt: -1 });
+listingSchema.index({ assignedAgent: 1, city: 1, locality: 1, status: 1 });
 
 // Compound indexes for common query patterns
 listingSchema.index({ 
@@ -149,6 +227,16 @@ listingSchema.index({
   regularPrice: 1 
 });
 
+listingSchema.index({
+  city: 1,
+  locality: 1,
+  propertyCategory: 1,
+  status: 1,
+  regularPrice: 1,
+  areaSqFt: 1,
+  createdAt: -1,
+});
+
 // Pre-save middleware for data validation
 listingSchema.pre('save', function(next) {
   // Ensure regularPrice is positive
@@ -159,11 +247,6 @@ listingSchema.pre('save', function(next) {
   // Ensure discountPrice is less than regularPrice
   if (this.discountPrice && this.discountPrice >= this.regularPrice) {
     return next(new Error('Discount price must be less than regular price'));
-  }
-  
-  // Ensure bedrooms and bathrooms are positive
-  if (this.bedrooms <= 0 || this.bathrooms <= 0) {
-    return next(new Error('Bedrooms and bathrooms must be positive'));
   }
   
   next();

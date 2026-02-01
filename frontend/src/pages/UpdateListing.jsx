@@ -14,6 +14,7 @@ import L from 'leaflet';
 import { parseJsonSafely, fetchWithRefresh, handleApiResponse } from '../utils/http';
 import { io } from 'socket.io-client';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import DynamicCategoryFields from '../components/DynamicCategoryFields';
 
 const defaultIcon = new L.Icon({
   iconUrl:
@@ -75,6 +76,7 @@ export default function UpdateListing() {
   const [geocoding, setGeocoding] = useState(false);
   const [geoStatus, setGeoStatus] = useState('');
   const [categoryFields, setCategoryFields] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [owners, setOwners] = useState([]);
   const [ownersQuery, setOwnersQuery] = useState('');
   const [ownersLoading, setOwnersLoading] = useState(false);
@@ -209,13 +211,21 @@ export default function UpdateListing() {
   // Load category field definitions when category changes
   useEffect(() => {
     const loadCategoryFields = async () => {
-      if (!formData.category) { setCategoryFields([]); return; }
+      if (!formData.category) {
+        setCategoryFields([]);
+        setSelectedCategory(null);
+        return;
+      }
       try {
         const res = await fetch(`/api/category/by-slug/${formData.category}`);
         const data = await parseJsonSafely(res);
         const fields = Array.isArray(data?.fields) ? data.fields : [];
         setCategoryFields(fields);
-      } catch (_) { setCategoryFields([]); }
+        setSelectedCategory(data);
+      } catch (_) {
+        setCategoryFields([]);
+        setSelectedCategory(null);
+      }
     };
     loadCategoryFields();
   }, [formData.category]);
@@ -305,9 +315,16 @@ export default function UpdateListing() {
   const handleOwnerChange = (ownerId, isChecked) => {
     setFormData(prev => ({
       ...prev,
-      ownerIds: isChecked 
+      ownerIds: isChecked
         ? [...prev.ownerIds, ownerId]
         : prev.ownerIds.filter(id => id !== ownerId)
+    }));
+  };
+
+  const handleCategoryFieldChange = (fieldKey, value) => {
+    setFormData(prev => ({
+      ...prev,
+      attributes: { ...prev.attributes, [fieldKey]: value },
     }));
   };
 
@@ -658,92 +675,25 @@ export default function UpdateListing() {
                 />
               </div>
 
-              {/* Category Fields */}
-              {categoryFields.length > 0 && (
+              {/* Dynamic Category Fields */}
+              {selectedCategory && selectedCategory.fields && selectedCategory.fields.length > 0 && (
                 <div className='border rounded-lg p-4 bg-gray-50'>
-                  <div className='font-semibold mb-3 text-gray-800'>Category Fields</div>
-                  <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
-                    {categoryFields.map((f) => {
-                      const val = formData.attributes?.[f.key] ?? '';
-                      if (f.type === 'boolean') {
-                        return (
-                          <label key={f.key} className='flex items-center gap-2'>
-                            <input
-                              type='checkbox'
-                              checked={!!val}
-                              onChange={(e) =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  attributes: { ...prev.attributes, [f.key]: e.target.checked },
-                                }))
-                              }
-                              className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                            />
-                            <span className='text-sm'>{f.label}{f.required ? ' *' : ''}</span>
-                          </label>
-                        );
-                      }
-                      if (f.type === 'select') {
-                        return (
-                          <div key={f.key} className='flex flex-col'>
-                            <label className='text-sm font-medium text-gray-700 mb-1'>{f.label}{f.required ? ' *' : ''}</label>
-                            {f.multiple ? (
-                              <select
-                                multiple
-                                className='border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                                value={Array.isArray(val) ? val : []}
-                                onChange={(e) => {
-                                  const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
-                                  setFormData((prev) => ({ ...prev, attributes: { ...prev.attributes, [f.key]: selected } }));
-                                }}
-                              >
-                                {(f.options || []).map((opt) => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <select
-                                className='border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                                value={val}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    attributes: { ...prev.attributes, [f.key]: e.target.value },
-                                  }))
-                                }
-                              >
-                                <option value=''>Select</option>
-                                {(f.options || []).map((opt) => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            )}
-                            {f.description && <span className='text-xs text-gray-500 mt-1'>{f.description}</span>}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={f.key} className='flex flex-col'>
-                          <label className='text-sm font-medium text-gray-700 mb-1'>{f.label}{f.required ? ' *' : ''}</label>
-                          <input
-                            type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
-                            className='border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                            placeholder={f.placeholder || ''}
-                            min={f.type === 'number' && f.min !== undefined ? f.min : undefined}
-                            max={f.type === 'number' && f.max !== undefined ? f.max : undefined}
-                            value={val}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                attributes: { ...prev.attributes, [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value },
-                              }))
-                            }
-                          />
-                          {f.description && <span className='text-xs text-gray-500 mt-1'>{f.description}</span>}
-                        </div>
-                      );
-                    })}
+                  <div className='flex items-center gap-3 mb-4'>
+                    <div className='w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center'>
+                      <svg className='w-4 h-4 text-indigo-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className='font-semibold text-gray-800'>{selectedCategory.name} Details</h3>
+                      <p className='text-xs text-gray-500'>Fill in the specific details for this category</p>
+                    </div>
                   </div>
+                  <DynamicCategoryFields
+                    fields={selectedCategory.fields}
+                    values={formData.attributes || {}}
+                    onChange={handleCategoryFieldChange}
+                  />
                 </div>
               )}
               {/* Location Coordinates */}

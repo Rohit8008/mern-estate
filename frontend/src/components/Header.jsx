@@ -5,7 +5,6 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useEffect, useState } from 'react';
 import { signOutUserSuccess } from '../redux/user/userSlice';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import HealthStatus from './HealthStatus';
 import { useNotification } from '../contexts/NotificationContext';
 import { fetchWithRefresh, handleApiResponse } from '../utils/http';
 
@@ -102,11 +101,6 @@ export default function Header() {
                 RealVista
               </span>
             </Link>
-            
-            {/* Health Status - Only show in development or for admins */}
-            {(import.meta.env.DEV || currentUser?.role === 'admin') && (
-              <HealthStatus showDetails={currentUser?.role === 'admin'} />
-            )}
           </div>
 
           {/* Navigation Links */}

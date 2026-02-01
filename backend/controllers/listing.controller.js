@@ -214,6 +214,157 @@ export const getListing = async (req, res, next) => {
   }
 };
 
+// Assign listing to an agent (Admin only)
+export const assignListingToAgent = asyncHandler(async (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    throw new AuthorizationError('Only admins can assign listings to agents');
+  }
+
+  const { listingId, agentId } = req.body;
+
+  if (!listingId || !agentId) {
+    throw new ValidationError('Listing ID and Agent ID are required');
+  }
+
+  const listing = await Listing.findById(listingId);
+  if (!listing) {
+    throw new NotFoundError('Listing not found');
+  }
+
+  const agent = await User.findById(agentId);
+  if (!agent || (agent.role !== 'employee' && agent.role !== 'admin')) {
+    throw new ValidationError('Invalid agent ID or user is not an employee/admin');
+  }
+
+  listing.assignedAgent = agentId;
+  await listing.save();
+
+  logger.info('Listing assigned to agent', {
+    listingId: listing._id,
+    agentId,
+    assignedBy: req.user.id,
+  });
+
+  sendSuccessResponse(res, listing, 'Listing assigned successfully');
+});
+
+// Unassign listing from agent (Admin only)
+export const unassignListingFromAgent = asyncHandler(async (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    throw new AuthorizationError('Only admins can unassign listings');
+  }
+
+  const { listingId } = req.body;
+
+  if (!listingId) {
+    throw new ValidationError('Listing ID is required');
+  }
+
+  const listing = await Listing.findById(listingId);
+  if (!listing) {
+    throw new NotFoundError('Listing not found');
+  }
+
+  listing.assignedAgent = null;
+  await listing.save();
+
+  logger.info('Listing unassigned from agent', {
+    listingId: listing._id,
+    unassignedBy: req.user.id,
+  });
+
+  sendSuccessResponse(res, listing, 'Listing unassigned successfully');
+});
+
+// Get listings assigned to the current agent
+export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
+  if (req.user?.role !== 'employee' && req.user?.role !== 'admin') {
+    throw new AuthorizationError('Only employees and admins can access assigned listings');
+  }
+
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const startIndex = Math.max(parseInt(req.query.startIndex) || 0, 0);
+
+  const query = {
+    assignedAgent: req.user.id,
+    isDeleted: false,
+  };
+
+  // Allow filtering by status
+  const status = req.query.status;
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+
+  const [listings, totalCount] = await Promise.all([
+    Listing.find(query)
+      .select('-__v')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(startIndex)
+      .lean(),
+    Listing.countDocuments(query)
+  ]);
+
+  const response = {
+    listings,
+    pagination: {
+      total: totalCount,
+      limit,
+      startIndex,
+      hasMore: startIndex + limit < totalCount,
+    },
+  };
+
+  sendSuccessResponse(res, response, 'Assigned listings retrieved successfully');
+});
+
+// Soft delete a listing (Admin only)
+export const softDeleteListing = asyncHandler(async (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    throw new AuthorizationError('Only admins can delete listings');
+  }
+
+  const listing = await Listing.findById(req.params.id);
+  if (!listing) {
+    throw new NotFoundError('Listing not found');
+  }
+
+  listing.isDeleted = true;
+  listing.deletedAt = new Date();
+  await listing.save();
+
+  logger.info('Listing soft deleted', {
+    listingId: listing._id,
+    deletedBy: req.user.id,
+  });
+
+  sendSuccessResponse(res, { id: listing._id }, 'Listing deleted successfully');
+});
+
+// Restore a soft-deleted listing (Admin only)
+export const restoreListing = asyncHandler(async (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    throw new AuthorizationError('Only admins can restore listings');
+  }
+
+  const listing = await Listing.findById(req.params.id);
+  if (!listing) {
+    throw new NotFoundError('Listing not found');
+  }
+
+  listing.isDeleted = false;
+  listing.deletedAt = null;
+  await listing.save();
+
+  logger.info('Listing restored', {
+    listingId: listing._id,
+    restoredBy: req.user.id,
+  });
+
+  sendSuccessResponse(res, listing, 'Listing restored successfully');
+});
+
 export const getListings = asyncHandler(async (req, res, next) => {
   const startTime = Date.now();
   
@@ -224,6 +375,74 @@ export const getListings = asyncHandler(async (req, res, next) => {
   // Build query object
   const query = {};
   
+  // Exclude soft-deleted by default (admin can override with includeDeleted=true)
+  if (req.query.includeDeleted !== 'true' || req.user?.role !== 'admin') {
+    query.isDeleted = false;
+  }
+  
+  // City filter
+  const city = req.query.city;
+  if (city && city.trim() && city !== 'all') {
+    query.city = { $regex: city.trim(), $options: 'i' };
+  }
+  
+  // Locality filter
+  const locality = req.query.locality;
+  if (locality && locality.trim() && locality !== 'all') {
+    query.locality = { $regex: locality.trim(), $options: 'i' };
+  }
+  
+  // Status filter
+  const status = req.query.status;
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+  
+  // Assigned agent filter
+  const assignedAgent = req.query.assignedAgent;
+  if (assignedAgent && assignedAgent !== 'all') {
+    if (assignedAgent === 'unassigned') {
+      query.assignedAgent = null;
+    } else {
+      query.assignedAgent = assignedAgent;
+    }
+  }
+  
+  // Property category filter
+  const propertyCategory = req.query.propertyCategory;
+  if (propertyCategory && propertyCategory !== 'all') {
+    query.propertyCategory = propertyCategory;
+  }
+  
+  // Property type filters (residential/commercial/land subtypes)
+  const propertyType = req.query.propertyType;
+  if (propertyType && propertyType !== 'all') {
+    query.propertyType = propertyType;
+  }
+  
+  const commercialType = req.query.commercialType;
+  if (commercialType && commercialType !== 'all') {
+    query.commercialType = commercialType;
+  }
+  
+  const plotType = req.query.plotType;
+  if (plotType && plotType !== 'all') {
+    query.plotType = plotType;
+  }
+  
+  // Area range filter
+  const minAreaSqFt = parseInt(req.query.minAreaSqFt);
+  const maxAreaSqFt = parseInt(req.query.maxAreaSqFt);
+  if (!isNaN(minAreaSqFt) || !isNaN(maxAreaSqFt)) {
+    query.areaSqFt = {};
+    if (!isNaN(minAreaSqFt) && minAreaSqFt > 0) {
+      query.areaSqFt.$gte = minAreaSqFt;
+    }
+    if (!isNaN(maxAreaSqFt) && maxAreaSqFt > 0) {
+      query.areaSqFt.$lte = maxAreaSqFt;
+    }
+  }
+  
   // Boolean filters with proper handling
   const booleanFilters = ['offer', 'furnished', 'parking'];
   booleanFilters.forEach(filter => {
@@ -233,7 +452,7 @@ export const getListings = asyncHandler(async (req, res, next) => {
     }
   });
   
-  // Type filter
+  // Type filter (legacy - keep for backward compatibility)
   const type = req.query.type;
   if (type && type !== 'all') {
     query.type = type;
@@ -269,6 +488,8 @@ export const getListings = asyncHandler(async (req, res, next) => {
       { name: { $regex: escapedTerm, $options: 'i' } },
       { description: { $regex: escapedTerm, $options: 'i' } },
       { address: { $regex: escapedTerm, $options: 'i' } },
+      { city: { $regex: escapedTerm, $options: 'i' } },
+      { locality: { $regex: escapedTerm, $options: 'i' } },
     ];
   }
   

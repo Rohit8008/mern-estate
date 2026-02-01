@@ -1,5 +1,5 @@
 import express from 'express';
-import { signOut, signin, refreshToken } from '../controllers/auth.controller.js';
+import { signOut, signin, refreshToken, google } from '../controllers/auth.controller.js';
 import { authRateLimit, refreshRateLimit } from '../middleware/security.js';
 
 const router = express.Router();
@@ -10,6 +10,8 @@ router.post("/signup", (req, res) => {
 });
 // Apply stricter rate limit to signin attempts
 router.post("/signin", authRateLimit, signin);
+// Google OAuth signin/signup
+router.post("/google", authRateLimit, google);
 // Apply a dedicated higher-limit rate limiter to refresh so clients don't get locked out
 router.post('/refresh', refreshRateLimit, refreshToken);
 router.post('/signout', signOut);
