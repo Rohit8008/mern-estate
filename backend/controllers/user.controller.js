@@ -142,9 +142,68 @@ export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(401, 'You can only delete your own account!'));
   try {
-    await User.findByIdAndDelete(req.params.id);
+    await User.findByIdAndUpdate(req.params.id, { status: 'inactive' });
     res.clearCookie('access_token');
-    res.status(200).json('User has been deleted!');
+    res.clearCookie('refresh_token');
+    res.status(200).json({ success: true, message: 'Account deactivated successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminDeleteUser = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+
+    // Cannot delete yourself
+    if (req.user.id === targetId) {
+      return next(errorHandler(403, 'You cannot delete your own account from the admin panel'));
+    }
+
+    const targetUser = await User.findById(targetId);
+    if (!targetUser) {
+      return next(errorHandler(404, 'User not found'));
+    }
+
+    // Cannot delete another admin
+    if (targetUser.role === 'admin') {
+      return next(errorHandler(403, 'Cannot delete an admin account'));
+    }
+
+    await User.findByIdAndUpdate(targetId, { status: 'inactive' });
+
+    res.status(200).json({ success: true, message: 'User has been deactivated successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminToggleUserStatus = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+    const { status } = req.body;
+
+    if (!['active', 'inactive'].includes(status)) {
+      return next(errorHandler(400, 'Status must be "active" or "inactive"'));
+    }
+
+    if (req.user.id === targetId) {
+      return next(errorHandler(403, 'You cannot change your own status'));
+    }
+
+    const targetUser = await User.findById(targetId);
+    if (!targetUser) {
+      return next(errorHandler(404, 'User not found'));
+    }
+
+    if (targetUser.role === 'admin') {
+      return next(errorHandler(403, 'Cannot change status of an admin account'));
+    }
+
+    targetUser.status = status;
+    await targetUser.save();
+
+    res.status(200).json({ success: true, message: `User ${status === 'active' ? 'reactivated' : 'deactivated'} successfully` });
   } catch (error) {
     next(error);
   }

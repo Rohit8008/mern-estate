@@ -508,6 +508,24 @@ export default function Profile() {
                 )}
               </form>
             </div>
+
+            {/* Danger Zone */}
+            <div className='bg-white rounded-lg shadow-sm border border-red-200 p-6'>
+              <h3 className='text-lg font-semibold text-red-600 mb-2'>Danger Zone</h3>
+              <p className='text-sm text-gray-500 mb-4'>
+                Once you delete your account, there is no going back. All your data will be permanently removed.
+              </p>
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                    handleDeleteUser();
+                  }
+                }}
+                className='w-full py-2 px-4 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors'
+              >
+                Delete My Account
+              </button>
+            </div>
           </div>
 
           {/* Right Column - Profile Information */}

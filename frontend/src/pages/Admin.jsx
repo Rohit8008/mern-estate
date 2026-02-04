@@ -167,15 +167,39 @@ export default function Admin() {
 
   const deleteUser = async (userId) => {
     try {
-      const res = await fetch(`/api/user/${userId}`, {
+      const res = await fetch(`/api/user/admin/delete/${userId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
       const data = await res.json();
       if (data && data.success) {
-        setUsers((prev) => prev.filter((u) => u._id !== userId));
+        setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, status: 'inactive' } : u));
+      } else {
+        alert(data.message || 'Failed to deactivate user');
       }
-    } catch (_) {}
+    } catch (_) {
+      alert('Failed to deactivate user');
+    }
+  };
+
+  const toggleUserStatus = async (userId, currentStatus) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    try {
+      const res = await fetch(`/api/user/admin/toggle-status/${userId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, status: newStatus } : u));
+      } else {
+        alert(data.message || 'Failed to update user status');
+      }
+    } catch (_) {
+      alert('Failed to update user status');
+    }
   };
 
   const openCategoryModal = (user) => {
@@ -776,6 +800,7 @@ export default function Admin() {
                     <th className='text-left p-3 border-b font-semibold'>Email</th>
                     <th className='text-left p-3 border-b font-semibold'>Role</th>
                     <th className='text-left p-3 border-b font-semibold'>Categories</th>
+                    <th className='text-left p-3 border-b font-semibold'>Status</th>
                     <th className='text-left p-3 border-b font-semibold'>Created</th>
                     <th className='text-left p-3 border-b font-semibold'>Actions</th>
                   </tr>
@@ -862,6 +887,15 @@ export default function Admin() {
                           )}
                         </div>
                       </td>
+                      <td className='p-3'>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          user.status === 'active' ? 'bg-green-100 text-green-800' :
+                          user.status === 'suspended' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {user.status || 'active'}
+                        </span>
+                      </td>
                       <td className='p-3 text-xs text-slate-600'>
                         {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                       </td>
@@ -873,23 +907,25 @@ export default function Admin() {
                           >
                             Edit Categories
                           </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-                                deleteUser(user._id);
-                              }
-                            }}
-                            className='px-2 py-1 text-xs rounded border text-red-600 hover:bg-red-50'
-                          >
-                            Delete
-                          </button>
+                          {user.role !== 'admin' && (
+                            <button
+                              onClick={() => toggleUserStatus(user._id, user.status || 'active')}
+                              className={`px-2 py-1 text-xs rounded border ${
+                                (user.status || 'active') === 'active'
+                                  ? 'text-orange-600 hover:bg-orange-50'
+                                  : 'text-green-600 hover:bg-green-50'
+                              }`}
+                            >
+                              {(user.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))}
                   {users.length === 0 && (
                     <tr>
-                      <td className='p-3 text-slate-500 text-center' colSpan={6}>
+                      <td className='p-3 text-slate-500 text-center' colSpan={7}>
                         No users found.
                       </td>
                     </tr>
