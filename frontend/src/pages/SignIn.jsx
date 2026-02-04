@@ -18,6 +18,13 @@ export default function SignIn() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { showSuccess, showError } = useNotification();
+
+  // Google username picker state
+  const [showUsernamePicker, setShowUsernamePicker] = useState(false);
+  const [googleData, setGoogleData] = useState(null);
+  const [username, setUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -45,13 +52,23 @@ export default function SignIn() {
       const provider = new GoogleAuthProvider();
       const auth = getAuth(app);
       const result = await signInWithPopup(auth, provider);
-      
-      const data = await apiClient.post('/auth/google', {
+
+      const payload = {
         name: result.user.displayName,
         email: result.user.email,
         photo: result.user.photoURL,
-      });
-      
+      };
+
+      const data = await apiClient.post('/auth/google', payload);
+
+      if (data.needsUsername) {
+        // New user — show username picker
+        setGoogleData(payload);
+        setShowUsernamePicker(true);
+        dispatch(signInFailure(null));
+        return;
+      }
+
       dispatch(signInSuccess(data));
       showSuccess('Welcome! You have been signed in with Google.');
       navigate('/');
@@ -59,6 +76,43 @@ export default function SignIn() {
       const apiError = handleApiError(error, error);
       dispatch(signInFailure(apiError.message));
       showError(apiError.message || 'Could not sign in with Google');
+    }
+  };
+
+  const handleUsernameSubmit = async (e) => {
+    e.preventDefault();
+    setUsernameError('');
+
+    if (!username.trim() || username.trim().length < 3) {
+      setUsernameError('Username must be at least 3 characters');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username.trim())) {
+      setUsernameError('Only letters, numbers, and underscores allowed');
+      return;
+    }
+
+    try {
+      dispatch(signInStart());
+      const data = await apiClient.post('/auth/google', {
+        ...googleData,
+        username: username.trim(),
+      });
+
+      if (data.needsUsername) {
+        dispatch(signInFailure(null));
+        setUsernameError('Please enter a valid username');
+        return;
+      }
+
+      dispatch(signInSuccess(data));
+      setShowUsernamePicker(false);
+      showSuccess('Welcome! Your account has been created.');
+      navigate('/');
+    } catch (error) {
+      const apiError = handleApiError(error, error);
+      dispatch(signInFailure(null));
+      setUsernameError(apiError.message);
     }
   };
   return (
@@ -176,6 +230,66 @@ export default function SignIn() {
           </p>
         </div>
       </div>
+
+      {/* Username Picker Modal */}
+      {showUsernamePicker && (
+        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4'>
+          <div className='bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-md w-full p-8'>
+            <div className='text-center mb-6'>
+              <div className='w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg'>
+                <svg className='w-7 h-7 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' />
+                </svg>
+              </div>
+              <h2 className='text-2xl font-bold text-gray-900'>Choose a username</h2>
+              <p className='text-gray-500 text-sm mt-1'>Pick a unique username for your account</p>
+            </div>
+
+            <form onSubmit={handleUsernameSubmit} className='space-y-5'>
+              <div>
+                <label htmlFor='username' className='block text-sm font-semibold text-gray-700 mb-2'>
+                  Username
+                </label>
+                <input
+                  type='text'
+                  id='username'
+                  value={username}
+                  placeholder='e.g. john_doe'
+                  className='w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300'
+                  onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))}
+                  autoFocus
+                  required
+                  minLength={3}
+                />
+                <p className='text-xs text-gray-400 mt-1.5'>Letters, numbers, and underscores only. Minimum 3 characters.</p>
+              </div>
+
+              {usernameError && (
+                <div className='p-3 bg-red-50 border border-red-200 rounded-xl'>
+                  <p className='text-sm text-red-700'>{usernameError}</p>
+                </div>
+              )}
+
+              <div className='flex gap-3'>
+                <button
+                  type='button'
+                  onClick={() => { setShowUsernamePicker(false); setGoogleData(null); setUsername(''); setUsernameError(''); }}
+                  className='flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-200'
+                >
+                  Cancel
+                </button>
+                <button
+                  type='submit'
+                  disabled={loading}
+                  className='flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50'
+                >
+                  {loading ? 'Creating...' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

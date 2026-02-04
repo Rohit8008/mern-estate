@@ -322,7 +322,7 @@ export const refreshToken = asyncHandler(async (req, res, next) => {
 });
 
 export const google = asyncHandler(async (req, res, next) => {
-  const { email, name, photo } = req.body;
+  const { email, name, photo, username } = req.body;
   const clientIP = req.ip || req.connection.remoteAddress;
   const userAgent = req.headers['user-agent'] || '';
 
@@ -395,27 +395,29 @@ export const google = asyncHandler(async (req, res, next) => {
         .status(200)
         .json({ success: true, ...rest, avatar: photo || user.avatar });
     } else {
-      // User doesn't exist, create new account
-      const generatedPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
-      const hashedPassword = await bcryptjs.hash(generatedPassword, config.security.bcryptRounds);
-      
-      // Generate username from name
-      const baseUsername = name.split(' ').join('').toLowerCase();
-      let username = baseUsername + Math.random().toString(36).slice(-4);
-      
-      // Ensure username is unique
-      let existingUser = await User.findOne({ username });
-      while (existingUser) {
-        username = baseUsername + Math.random().toString(36).slice(-8);
-        existingUser = await User.findOne({ username });
+      // User doesn't exist — require a username before creating
+      if (!username || !username.trim()) {
+        return res.status(200).json({ success: false, needsUsername: true });
+      }
+
+      // Validate and check uniqueness
+      const trimmedUsername = username.trim().toLowerCase();
+      if (trimmedUsername.length < 3) {
+        throw new ValidationError('Username must be at least 3 characters', 'username');
+      }
+      if (!/^[a-z0-9_]+$/.test(trimmedUsername)) {
+        throw new ValidationError('Username can only contain letters, numbers, and underscores', 'username');
+      }
+      const existingUser = await User.findOne({ username: trimmedUsername });
+      if (existingUser) {
+        throw new ConflictError('Username is already taken');
       }
 
       const newUser = new User({
-        username,
+        username: trimmedUsername,
         firstName: name.split(' ')[0] || '',
         lastName: name.split(' ').slice(1).join(' ') || '',
         email,
-        password: hashedPassword,
         avatar: photo || "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png",
         status: 'active',
         lastLogin: new Date(),

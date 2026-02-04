@@ -53,9 +53,9 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
       minlength: [8, 'Password must be at least 8 characters long'],
       select: false, // Don't include password in queries by default
+      default: null,
     },
     avatar:{
       type: String,
@@ -185,9 +185,9 @@ const userSchema = new mongoose.Schema(
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
-  // Only hash the password if it has been modified (or is new)
-  if (!this.isModified('password')) return next();
-  
+  // Only hash the password if it has been modified (or is new) and is set
+  if (!this.isModified('password') || !this.password) return next();
+
   try {
     // Hash password with cost of 12
     this.password = await bcryptjs.hash(this.password, 12);

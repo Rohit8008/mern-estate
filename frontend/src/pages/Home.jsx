@@ -366,11 +366,11 @@ export default function Home() {
             <div className='flex items-center gap-6 text-blue-100'>
               <div className='flex items-center gap-2'>
                 <FaPhone className='w-4 h-4' />
-                <span>+1 (234) 567-8900</span>
+                <span>+91 62839 30283</span>
               </div>
               <div className='flex items-center gap-2'>
                 <FaEnvelope className='w-4 h-4' />
-                <span>info@realvista.com</span>
+                <span>mittalrohit701@gmail.com</span>
               </div>
             </div>
           </div>

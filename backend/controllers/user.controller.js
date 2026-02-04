@@ -128,7 +128,7 @@ export const resetPasswordWithOtp = async (req, res, next) => {
     }
     const hash = crypto.createHash('sha256').update(String(otp)).digest('hex');
     if (hash !== user.passwordResetOtpHash) return next(errorHandler(400, 'Invalid OTP'));
-    user.password = bcryptjs.hashSync(newPassword, 10);
+    user.password = newPassword;
     user.passwordResetOtpHash = null;
     user.passwordResetOtpExpires = null;
     await user.save();
