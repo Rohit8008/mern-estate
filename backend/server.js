@@ -1,23 +1,18 @@
 import http from 'http';
-import { Server } from 'socket.io';
 
 import databaseConnection from './config/database.js';
 import { config } from './config/environment.js';
 import { createApp } from './app.js';
 import PropertyType from './models/propertyType.model.js';
-
-// In-memory online presence
-const onlineUsers = new Set();
+import { onlineUsers } from './utils/onlineUsers.js';
+import { initSocket, io } from './socket.js';
 
 export const app = createApp();
 export const server = http.createServer(app);
 
-export const io = new Server(server, {
-  cors: {
-    origin: config.cors.origin,
-    credentials: config.cors.credentials,
-  },
-});
+initSocket(server);
+
+export { io };
 
 async function seedPropertyTypesIfEmpty() {
   try {

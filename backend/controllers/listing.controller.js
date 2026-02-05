@@ -2,6 +2,7 @@ import Listing from '../models/listing.model.js';
 import User from '../models/user.model.js';
 import Owner from '../models/owner.model.js';
 import Category from '../models/category.model.js';
+import { io } from '../index.js';
 import { 
   errorHandler, 
   AppError, 
@@ -13,6 +14,53 @@ import {
   sendErrorResponse
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
+
+async function getListingUpdateRecipients(category) {
+  try {
+    const baseRoles = ['admin', 'employee'];
+
+    const query = {
+      role: { $in: baseRoles },
+    };
+
+    if (category) {
+      query.$or = [
+        { role: 'admin' },
+        { role: 'employee', assignedCategories: category },
+      ];
+    } else {
+      query.role = 'admin';
+    }
+
+    const users = await User.find(query).select('_id').lean();
+    return (users || []).map((u) => String(u._id));
+  } catch (_) {
+    return [];
+  }
+}
+
+async function emitListingUpdate(action, listing, categoryOverride) {
+  try {
+    if (!io) return;
+
+    const category = categoryOverride || listing?.category;
+    const recipients = await getListingUpdateRecipients(category);
+    if (!recipients.length) return;
+
+    const payload = {
+      action,
+      listingId: listing?._id,
+      title: listing?.name,
+      name: listing?.name,
+      category,
+    };
+
+    const unique = Array.from(new Set(recipients));
+    unique.forEach((userId) => {
+      io.to(`user:${userId}`).emit('listing:update', payload);
+    });
+  } catch (_) {}
+}
 
 export const createListing = asyncHandler(async (req, res, next) => {
   // Block buyers from creating listings
@@ -75,6 +123,8 @@ export const createListing = asyncHandler(async (req, res, next) => {
   }
   
   const listing = await Listing.create(req.body);
+
+  await emitListingUpdate('created', listing, listing?.category);
   
   // Log successful listing creation
   logger.info('Listing created successfully', {
@@ -112,6 +162,9 @@ export const deleteListing = async (req, res, next) => {
 
   try {
     await Listing.findByIdAndDelete(req.params.id);
+
+    await emitListingUpdate('deleted', listing, listing?.category);
+
     res.status(200).json('Listing has been deleted!');
   } catch (error) {
     next(error);
@@ -184,6 +237,10 @@ export const updateListing = async (req, res, next) => {
       if (count !== req.body.ownerIds.length) return next(errorHandler(400, 'One or more owners are invalid'));
     }
     const updatedListing = await Listing.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const category = updatedListing?.category || listing?.category;
+
+    await emitListingUpdate('updated', updatedListing, category);
+
     res.status(200).json(updatedListing);
   } catch (error) {
     next(error);
@@ -239,6 +296,8 @@ export const assignListingToAgent = asyncHandler(async (req, res, next) => {
   listing.assignedAgent = agentId;
   await listing.save();
 
+  await emitListingUpdate('assigned', listing, listing?.category);
+
   logger.info('Listing assigned to agent', {
     listingId: listing._id,
     agentId,
@@ -267,6 +326,8 @@ export const unassignListingFromAgent = asyncHandler(async (req, res, next) => {
 
   listing.assignedAgent = null;
   await listing.save();
+
+  await emitListingUpdate('unassigned', listing, listing?.category);
 
   logger.info('Listing unassigned from agent', {
     listingId: listing._id,
@@ -334,6 +395,8 @@ export const softDeleteListing = asyncHandler(async (req, res, next) => {
   listing.deletedAt = new Date();
   await listing.save();
 
+  await emitListingUpdate('soft_deleted', listing, listing?.category);
+
   logger.info('Listing soft deleted', {
     listingId: listing._id,
     deletedBy: req.user.id,
@@ -356,6 +419,8 @@ export const restoreListing = asyncHandler(async (req, res, next) => {
   listing.isDeleted = false;
   listing.deletedAt = null;
   await listing.save();
+
+  await emitListingUpdate('restored', listing, listing?.category);
 
   logger.info('Listing restored', {
     listingId: listing._id,

@@ -1,5 +1,5 @@
 import express from 'express';
-import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, me} from '../controllers/user.controller.js';
+import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, me, searchUsers} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
 
@@ -46,6 +46,7 @@ router.post('/update/:id', verifyToken, updateUser)
 router.delete('/delete/:id', verifyToken, deleteUser)
 router.delete('/admin/delete/:id', verifyToken, requireAdmin, adminDeleteUser)
 router.post('/admin/toggle-status/:id', verifyToken, requireAdmin, adminToggleUserStatus)
+router.get('/search', verifyToken, searchUsers)
 router.get('/listings/:id', verifyToken, getUserListings)
 router.get('/:id', verifyToken, getUser)
 router.get('/public/:id', getUserPublic)

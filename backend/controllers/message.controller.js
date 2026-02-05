@@ -1,6 +1,7 @@
 import Message from '../models/message.model.js';
 import { errorHandler } from '../utils/error.js';
 import { io } from '../index.js';
+import { onlineUsers } from '../utils/onlineUsers.js';
 import User from '../models/user.model.js';
 import Listing from '../models/listing.model.js';
 import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../utils/encryption.js';
@@ -60,14 +61,16 @@ export const sendMessage = async (req, res, next) => {
       content: encryptedContent,
       isEncrypted: true,
     });
+    // Return plaintext content in all outgoing responses
+    const decrypted = { ...msg.toObject(), content: finalContent };
     // Notify receiver about new message and update conversations
-    io.to(`user:${receiverId}`).emit('message:new', msg);
+    io.to(`user:${receiverId}`).emit('message:new', decrypted);
     io.to(`user:${receiverId}`).emit('conversations:update');
     // Update sender conversations list as well (for last message preview)
     io.to(`user:${req.user.id}`).emit('conversations:update');
     // Confirm to sender that message is persisted (delivery)
-    io.to(`user:${req.user.id}`).emit('message:sent', msg);
-    res.status(201).json(msg);
+    io.to(`user:${req.user.id}`).emit('message:sent', decrypted);
+    res.status(201).json(decrypted);
   } catch (error) {
     next(error);
   }
@@ -162,4 +165,15 @@ export const getConversations = async (req, res, next) => {
   }
 };
 
-
+export const getOnlineUsers = async (req, res, next) => {
+  try {
+    const ids = Array.from(onlineUsers).filter((id) => id !== req.user.id);
+    if (ids.length === 0) return res.status(200).json([]);
+    const users = await User.find({ _id: { $in: ids }, status: { $ne: 'inactive' } })
+      .select('username firstName lastName avatar _id')
+      .lean();
+    res.status(200).json(users);
+  } catch (error) {
+    next(error);
+  }
+};

@@ -16,7 +16,6 @@ export default function Chat({ otherIdProp }) {
   const [otherUser, setOtherUser] = useState(null);
   const [peerOnline, setPeerOnline] = useState(false);
   const [sendingIds, setSendingIds] = useState({}); // optimistic tracking
-  const bottomRef = useRef(null);
   const socketRef = useRef(null);
   // No call/voice/video features
 
@@ -30,7 +29,6 @@ export default function Chat({ otherIdProp }) {
       console.error('Error loading thread:', error);
     }
     setLoading(false);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
   useEffect(() => {
@@ -64,7 +62,6 @@ export default function Chat({ otherIdProp }) {
     socket.on('message:new', (msg) => {
       if (msg.senderId === otherId && msg.receiverId === currentUser?._id) {
         setMessages((prev) => [...prev, msg]);
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
         // actively mark as read when chat is open and message arrives
         (async () => {
           try {
@@ -118,7 +115,7 @@ export default function Chat({ otherIdProp }) {
     if (!input.trim()) return;
     const tmpId = `tmp_${Date.now()}`;
     const optimistic = {
-      _id: `tmp_${Date.now()}`,
+      _id: tmpId,
       senderId: currentUser?._id,
       receiverId: otherId,
       content: input,
@@ -126,7 +123,6 @@ export default function Chat({ otherIdProp }) {
       read: false,
     };
     setMessages((prev) => [...prev, optimistic]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     try {
       const res = await fetch('/api/message/send', {
         method: 'POST',
@@ -171,71 +167,147 @@ export default function Chat({ otherIdProp }) {
   };
 
 
-  return (
-    <main className='max-w-3xl mx-auto px-4 py-6'>
-      <div className='border rounded-xl bg-white h-[72vh] flex flex-col'>
-        <div className='border-b px-4 py-3 flex items-center gap-3'>
+  const messagesContainerRef = useRef(null);
+
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Update all scroll calls to use the new method
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const isEmbedded = !!otherIdProp;
+
+  const chatContent = (
+    <div className={`border rounded-xl bg-white flex flex-col shadow-sm ${isEmbedded ? 'h-[calc(100vh-180px)]' : 'h-[72vh]'}`}>
+      {/* Chat Header */}
+      <div className='border-b px-4 py-3 flex items-center gap-3 bg-gradient-to-r from-slate-50 to-white'>
+        <div className='relative'>
           <img
             src={otherUser?.avatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}
             alt='avatar'
-            className='w-9 h-9 rounded-full object-cover'
+            className='w-11 h-11 rounded-full object-cover ring-2 ring-slate-100'
           />
-          <div className='flex-1'>
-            <div className='flex items-center gap-2'>
-              <div className='font-semibold text-slate-800'>{otherUser?.username || 'Chat'}</div>
-              <span className={`inline-block w-2 h-2 rounded-full ${peerOnline ? 'bg-green-500' : 'bg-slate-300'}`} />
-            </div>
-            <div className='text-xs text-slate-500 h-4'>{peerTyping ? 'typing…' : (peerOnline ? 'online' : '')}</div>
+          <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${peerOnline ? 'bg-green-500' : 'bg-slate-300'}`} />
+        </div>
+        <div className='flex-1'>
+          <div className='font-semibold text-slate-800'>{otherUser?.username || 'Chat'}</div>
+          <div className='text-xs text-slate-500 h-4'>
+            {peerTyping ? (
+              <span className='text-blue-600 font-medium'>typing...</span>
+            ) : peerOnline ? (
+              <span className='text-green-600'>Online</span>
+            ) : (
+              <span className='text-slate-400'>Offline</span>
+            )}
           </div>
         </div>
-        <div className='flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50'>
-          {loading && <p>Loading...</p>}
-          {messages.map((m) => {
-            const isMine = m.senderId === currentUser?._id;
-            return (
-              <div key={m._id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm shadow ${isMine ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-slate-900 rounded-bl-sm'}`}>
-                  <div className='whitespace-pre-wrap leading-relaxed break-words'>
-                    {linkify(m.content)}
+      </div>
+
+      {/* Messages Area */}
+      <div
+        ref={messagesContainerRef}
+        className='flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-slate-50 to-slate-100'
+      >
+        {loading && (
+          <div className='flex justify-center py-8'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600'></div>
+          </div>
+        )}
+        {!loading && messages.length === 0 && (
+          <div className='flex flex-col items-center justify-center h-full text-slate-400'>
+            <svg xmlns='http://www.w3.org/2000/svg' className='h-16 w-16 mb-3 opacity-50' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' />
+            </svg>
+            <p className='text-sm'>No messages yet</p>
+            <p className='text-xs mt-1'>Start the conversation!</p>
+          </div>
+        )}
+        {messages.map((m) => {
+          const isMine = m.senderId === currentUser?._id;
+          return (
+            <div key={m._id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
+                isMine
+                  ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-md'
+                  : 'bg-white text-slate-800 rounded-bl-md border border-slate-100'
+              }`}>
+                <div className='whitespace-pre-wrap leading-relaxed break-words'>
+                  {linkify(m.content)}
+                </div>
+                {m.listingId && (
+                  <div className='mt-2'>
+                    <a href={`/listing/${m.listingId}`} className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      isMine
+                        ? 'border-blue-400/50 text-blue-100 hover:bg-blue-500/20'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}>
+                      <svg xmlns='http://www.w3.org/2000/svg' className='h-3 w-3' viewBox='0 0 20 20' fill='currentColor'>
+                        <path d='M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z' />
+                      </svg>
+                      View Listing
+                    </a>
                   </div>
-                  {m.listingId && (
-                    <div className='mt-2'>
-                      <a href={`/listing/${m.listingId}`} className={`inline-block text-xs px-2 py-1 rounded border ${isMine ? 'border-blue-200 text-blue-100 hover:bg-blue-500/10' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                        View Listing
-                      </a>
-                    </div>
+                )}
+                <div className={`mt-1.5 text-[10px] flex items-center gap-1 ${isMine ? 'text-blue-200' : 'text-slate-400'}`}>
+                  {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {isMine && (
+                    <span className={`ml-1 ${m.read ? 'text-cyan-300' : (sendingIds[m._id] ? 'text-blue-300' : 'text-blue-200/60')}`} title={m.read ? 'Seen' : (sendingIds[m._id] ? 'Delivered' : 'Sent')}>
+                      {m.read ? '✓✓' : (sendingIds[m._id] ? '✓' : '○')}
+                    </span>
                   )}
-                  <div className={`mt-1 text-[10px] flex items-center gap-1 ${isMine ? 'opacity-80' : 'text-slate-500'}`}>
-                    {new Date(m.createdAt).toLocaleTimeString()}
-                    {isMine && (
-                      <span className={`ml-1 ${m.read ? 'text-cyan-200' : (sendingIds[m._id] ? 'text-slate-100' : 'text-slate-200')}`} title={m.read ? 'Seen' : (sendingIds[m._id] ? 'Delivered' : 'Sent')}>
-                        {m.read ? '✓✓' : (sendingIds[m._id] ? '✓' : '…')}
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
-            );
-          })}
-          {peerTyping && (
-            <div className='text-xs text-slate-500 px-2 flex items-center gap-2'>
-              <span className='inline-block w-2 h-2 rounded-full bg-slate-400 animate-pulse'></span>
-              Typing...
             </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-        <div className='border-t p-3 flex gap-2 bg-white'>
-          <input
-            className='border rounded-lg p-2 flex-1'
-            placeholder='Type a message...'
-            value={input}
-            onChange={handleTyping}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-          />
-          <button onClick={send} className='px-4 py-2 rounded bg-blue-600 text-white'>Send</button>
-        </div>
+          );
+        })}
+        {peerTyping && (
+          <div className='flex justify-start'>
+            <div className='bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-sm border border-slate-100'>
+              <div className='flex gap-1'>
+                <span className='w-2 h-2 bg-slate-400 rounded-full animate-bounce' style={{ animationDelay: '0ms' }}></span>
+                <span className='w-2 h-2 bg-slate-400 rounded-full animate-bounce' style={{ animationDelay: '150ms' }}></span>
+                <span className='w-2 h-2 bg-slate-400 rounded-full animate-bounce' style={{ animationDelay: '300ms' }}></span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Input Area */}
+      <div className='border-t p-3 flex gap-2 bg-white rounded-b-xl'>
+        <input
+          className='border border-slate-200 rounded-full px-4 py-2.5 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow'
+          placeholder='Type a message...'
+          value={input}
+          onChange={handleTyping}
+          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+        />
+        <button
+          onClick={send}
+          disabled={!input.trim()}
+          className='px-5 py-2.5 rounded-full bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2'
+        >
+          <span>Send</span>
+          <svg xmlns='http://www.w3.org/2000/svg' className='h-4 w-4' viewBox='0 0 20 20' fill='currentColor'>
+            <path d='M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z' />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isEmbedded) {
+    return chatContent;
+  }
+
+  return (
+    <main className='max-w-3xl mx-auto px-4 py-6'>
+      {chatContent}
     </main>
   );
 }

@@ -269,6 +269,10 @@ export const setUserRole = async (req, res, next) => {
     if (String(target._id) === String(req.user.id) && role && role !== target.role) {
       return next(errorHandler(400, 'Admins cannot change their own role'));
     }
+    // Prevent admins from changing another admin's role
+    if (target.role === 'admin' && String(target._id) !== String(req.user.id)) {
+      return next(errorHandler(403, 'Cannot modify the role of another admin'));
+    }
     const updated = await User.findByIdAndUpdate(
       req.params.id,
       { $set: { role, assignedCategories: assignedCategories || [] } },
@@ -285,6 +289,25 @@ export const listUsers = async (req, res, next) => {
   try {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
     const users = await User.find().select('-password').populate('assignedRole', 'name description isActive');
+    res.status(200).json(users);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const searchUsers = async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q || q.length < 2) return res.status(200).json([]);
+    const regex = { $regex: q, $options: 'i' };
+    const users = await User.find({
+      _id: { $ne: req.user.id },
+      status: { $ne: 'inactive' },
+      $or: [{ username: regex }, { firstName: regex }, { lastName: regex }, { email: regex }],
+    })
+      .select('username firstName lastName avatar _id')
+      .limit(20)
+      .lean();
     res.status(200).json(users);
   } catch (error) {
     next(error);

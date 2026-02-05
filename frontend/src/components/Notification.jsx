@@ -6,6 +6,7 @@ const Notification = ({
   message, 
   duration = 5000, 
   onClose,
+  onClick,
   show = true 
 }) => {
   const [isVisible, setIsVisible] = useState(show);
@@ -28,6 +29,10 @@ const Notification = ({
   const handleClose = () => {
     setIsVisible(false);
     if (onClose) onClose();
+  };
+
+  const handleClick = () => {
+    if (onClick) onClick();
   };
 
   if (!isVisible) return null;
@@ -70,7 +75,21 @@ const Notification = ({
   };
 
   return (
-    <div className={`fixed top-4 right-4 z-50 max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden border ${typeStyles[type]}`}>
+    <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick ? handleClick : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') handleClick();
+            }
+          : undefined
+      }
+      className={`fixed top-4 right-4 z-50 max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden border ${
+        typeStyles[type]
+      } ${onClick ? 'cursor-pointer' : ''}`}
+    >
       <div className="p-4">
         <div className="flex items-start">
           <div className={`flex-shrink-0 ${iconStyles[type]}`}>
@@ -101,6 +120,7 @@ Notification.propTypes = {
   message: PropTypes.string.isRequired,
   duration: PropTypes.number,
   onClose: PropTypes.func,
+  onClick: PropTypes.func,
   show: PropTypes.bool,
 };
 

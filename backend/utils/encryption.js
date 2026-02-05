@@ -27,24 +27,24 @@ export function encryptMessage(text, password) {
     // Generate random salt and IV
     const salt = crypto.randomBytes(SALT_LENGTH);
     const iv = crypto.randomBytes(IV_LENGTH);
-    
+
     // Derive key from password and salt
     const key = deriveKey(password, salt);
-    
-    // Create cipher
-    const cipher = crypto.createCipher(ALGORITHM, key);
+
+    // Create cipher with IV (required for GCM mode)
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
     cipher.setAAD(Buffer.from('message-encryption', 'utf8'));
-    
+
     // Encrypt the text
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     // Get the authentication tag
     const tag = cipher.getAuthTag();
-    
+
     // Combine salt + iv + tag + encrypted data
     const combined = Buffer.concat([salt, iv, tag, Buffer.from(encrypted, 'hex')]);
-    
+
     return combined.toString('hex');
   } catch (error) {
     console.error('Encryption error:', error);
@@ -72,11 +72,11 @@ export function decryptMessage(encryptedHex, password) {
     // Derive the same key
     const key = deriveKey(password, salt);
     
-    // Create decipher
-    const decipher = crypto.createDecipher(ALGORITHM, key);
+    // Create decipher with IV (required for GCM mode)
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAAD(Buffer.from('message-encryption', 'utf8'));
     decipher.setAuthTag(tag);
-    
+
     // Decrypt the data
     let decrypted = decipher.update(encrypted, null, 'utf8');
     decrypted += decipher.final('utf8');

@@ -5,6 +5,7 @@ import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGrou
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useSelector } from 'react-redux';
 import RoleManagement from '../components/RoleManagement';
+import PropertyTypeManagement from './PropertyTypeManagement';
 
 export default function Admin() {
   const { currentUser } = useSelector((state) => state.user);
@@ -42,26 +43,16 @@ export default function Admin() {
 
   // Role-based access control
   const isAdmin = currentUser?.role === 'admin';
-  const isEmployee = currentUser?.role === 'employee';
-
-  // Redirect if in buyer view mode
-  if (isBuyerViewMode) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">Access Restricted</h1>
-          <p className="text-gray-600 mb-6">Admin features are not available in buyer view mode.</p>
-          <p className="text-sm text-gray-500">Exit buyer view mode to access admin features.</p>
-        </div>
-      </div>
-    );
-  }
+  const isBuyerViewRestricted = Boolean(isBuyerViewMode);
 
   useEffect(() => {
+    if (isBuyerViewRestricted) return;
+
     const load = async () => {
       setLoading(true);
       try {
         setOwnersLoading(true);
+        setListingsLoading(true);
         const [uRes, cRes, lRes, oRes, lsRes] = await Promise.all([
           fetch('/api/user/list', { credentials: 'include' }),
           fetch('/api/category/list'),
@@ -81,15 +72,21 @@ export default function Admin() {
         setLogsTotal(Number(lJson.total) || 0);
         setOwners(Array.isArray(oJson) ? oJson : []);
         setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
-      } catch (_) {}
-      setLoading(false);
-      setOwnersLoading(false);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+        setOwnersLoading(false);
+        setListingsLoading(false);
+      }
     };
     load();
-  }, [logPage]);
+  }, [isBuyerViewRestricted, logPage]);
 
   // Realtime owners refresh when admin updates owners
   useEffect(() => {
+    if (isBuyerViewRestricted) return;
+
     const socket = io('http://localhost:3000', {
       withCredentials: true,
       transports: ['websocket'],
@@ -100,14 +97,16 @@ export default function Admin() {
         const oText = await oRes.text();
         const oJson = oText ? JSON.parse(oText) : [];
         setOwners(Array.isArray(oJson) ? oJson : []);
-      } catch (_) {}
+      } catch (error) {
+        console.error(error);
+      }
     };
     socket.on('owners:changed', handleOwnersChanged);
     return () => {
       socket.off('owners:changed', handleOwnersChanged);
       socket.close();
     };
-  }, []);
+  }, [isBuyerViewRestricted]);
 
   const updateUser = async (id, role, assignedCategories) => {
     try {
@@ -122,8 +121,11 @@ export default function Admin() {
       if (data && data._id) {
         setUsers((prev) => prev.map((u) => (u._id === id ? data : u)));
       }
-    } catch (_) {}
-    setSaving(false);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const createOwner = async () => {
@@ -141,7 +143,11 @@ export default function Admin() {
         setOwners((prev) => [data, ...prev]);
         setNewOwner({ name: '', email: '', phone: '', companyName: '' });
       }
-    } catch (_) {}
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCreating(false);
+    }
   };
 
   const deleteOwnerById = async (id) => {
@@ -149,7 +155,9 @@ export default function Admin() {
       const res = await fetch(`/api/owner/${id}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data && data.success) setOwners((prev) => prev.filter((o) => o._id !== id));
-    } catch (_) {}
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const toggleOwnerActive = async (owner) => {
@@ -162,23 +170,8 @@ export default function Admin() {
       });
       const data = await res.json();
       if (data && data._id) setOwners((prev) => prev.map((o) => (o._id === data._id ? data : o)));
-    } catch (_) {}
-  };
-
-  const deleteUser = async (userId) => {
-    try {
-      const res = await fetch(`/api/user/admin/delete/${userId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data && data.success) {
-        setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, status: 'inactive' } : u));
-      } else {
-        alert(data.message || 'Failed to deactivate user');
-      }
-    } catch (_) {
-      alert('Failed to deactivate user');
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -240,6 +233,17 @@ export default function Admin() {
 
   return (
     <main className='max-w-7xl mx-auto px-4 py-6'>
+      {isBuyerViewRestricted ? (
+        <div className='max-w-6xl mx-auto px-4 py-8'>
+          <div className='text-center'>
+            <h1 className='text-2xl font-bold text-gray-800 mb-4'>Access Restricted</h1>
+            <p className='text-gray-600 mb-6'>Admin features are not available in buyer view mode.</p>
+            <p className='text-sm text-gray-500'>Exit buyer view mode to access admin features.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {!isBuyerViewRestricted ? (
       <div className='grid grid-cols-[220px_1fr] gap-6'>
         <aside className='bg-white rounded-xl shadow border p-3 sticky top-6 h-fit'>
           <div className='px-2 py-3'>
@@ -251,9 +255,12 @@ export default function Admin() {
             <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='listings'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineCollection /> Listings</button>
             <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='categories'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineTag /> Categories</button>
             {isAdmin && (
-              <a href='/admin/property-types' className='flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 text-slate-700'>
+              <button
+                onClick={() => setActiveTab('property-types')}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='property-types'?'bg-slate-100 text-slate-900':'text-slate-700'}`}
+              >
                 <HiOutlineTag /> Property Types
-              </a>
+              </button>
             )}
             <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='owners'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineUserGroup /> Owners</button>
             {isAdmin && (
@@ -273,6 +280,7 @@ export default function Admin() {
               <div className='flex items-center justify-between'>
                 <h1 className='text-2xl font-bold text-slate-800'>{isAdmin ? 'Admin Dashboard' : 'Employee Dashboard'}</h1>
                 <div className='flex items-center gap-2'>
+                  {loading ? <span className='text-sm text-slate-500'>Loading…</span> : null}
                   <a href='/create-listing' className='inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-sm hover:opacity-95'><HiOutlinePlus /> New Listing</a>
                 </div>
               </div>
@@ -363,7 +371,7 @@ export default function Admin() {
                     String(l.address || '').toLowerCase().includes(q)
                   );
                 })
-                .map((l, idx) => {
+                .map((l) => {
                   const id = String(l._id).slice(-4).toUpperCase();
                   const price = l.offer ? l.discountPrice : l.regularPrice;
                   return (
@@ -501,6 +509,13 @@ export default function Admin() {
           </div>
         </section>
       )}
+
+      {/* Property Types */}
+      {activeTab === 'property-types' && isAdmin && (
+        <section className='mb-8'>
+          <PropertyTypeManagement />
+        </section>
+      )}
       {/* Security Logs */}
       {activeTab === 'logs' && (
       <section className='mb-8 bg-white rounded-xl shadow p-5'>
@@ -543,7 +558,9 @@ export default function Admin() {
                 const data = text ? JSON.parse(text) : { logs: [], total: 0 };
                 setLogs(Array.isArray(data.logs) ? data.logs : []);
                 setLogsTotal(Number(data.total) || 0);
-              } catch (_) {}
+              } catch (error) {
+                console.error(error);
+              }
             }}
           >Apply Filters</button>
           <button
@@ -557,7 +574,9 @@ export default function Admin() {
                 const data = text ? JSON.parse(text) : { logs: [], total: 0 };
                 setLogs(Array.isArray(data.logs) ? data.logs : []);
                 setLogsTotal(Number(data.total) || 0);
-              } catch (_) {}
+              } catch (error) {
+                console.error(error);
+              }
             }}
           >Reset</button>
           <label className='flex items-center gap-2 text-sm ml-2'>
@@ -764,8 +783,11 @@ export default function Admin() {
                       setUsers((prev) => [data, ...prev]);
                       setNewUser({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
                     }
-                  } catch (_) {}
-                  setCreating(false);
+                  } catch (error) {
+                    console.error(error);
+                  } finally {
+                    setCreating(false);
+                  }
                 }}
                 className='px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-70'
               >
@@ -1008,10 +1030,9 @@ export default function Admin() {
         {activeTab === 'roles' && isAdmin && (
           <RoleManagement />
         )}
-      </section>
-    </div>
+        </section>
+      </div>
+      ) : null}
     </main>
   );
 }
-
-
