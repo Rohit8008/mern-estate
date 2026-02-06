@@ -27,7 +27,7 @@ export default function TeamDashboard() {
 
   if (loading) {
     return (
-      <div className='min-h-screen bg-gray-50'>
+      <div>
         <div className='max-w-6xl mx-auto px-4 py-8 space-y-6'>
           <div>
             <Skeleton className='h-8 w-48' />
@@ -66,7 +66,7 @@ export default function TeamDashboard() {
 
   if (error) {
     return (
-      <div className='min-h-screen bg-gray-50'>
+      <div>
         <div className='max-w-6xl mx-auto px-4 py-8'>
           <Card>
             <CardHeader>
@@ -88,7 +88,7 @@ export default function TeamDashboard() {
   const { my, myTasks, myClientsByStatus } = data;
 
   return (
-    <div className='min-h-screen bg-gray-50'>
+    <div>
       <div className='max-w-6xl mx-auto px-4 py-8 space-y-6'>
         <div>
           <h1 className='text-3xl font-bold text-gray-900'>My Dashboard</h1>

@@ -34,7 +34,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="p-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <div className="h-8 bg-gray-200 rounded w-64 mb-2 animate-pulse"></div>
@@ -52,7 +52,7 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="p-6">
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800">{error}</p>
@@ -66,143 +66,142 @@ export default function Dashboard() {
   const isEmployee = currentUser?.role === 'employee';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {currentUser?.firstName || currentUser?.username}!
-          </h1>
-          <p className="text-gray-600">
-            Here's what's happening with your real estate business today.
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Welcome back, {currentUser?.firstName || currentUser?.username}!
+        </h1>
+        <p className="text-gray-600">
+          Here's what's happening with your real estate business today.
+        </p>
+      </div>
 
-        {/* Property Stats */}
+      {/* Property Stats */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Property Overview</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatsCard
+            title="Total Properties"
+            value={analytics?.properties?.total || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            )}
+            iconColor="text-blue-600"
+          />
+          <StatsCard
+            title="Available"
+            value={analytics?.properties?.available || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            iconColor="text-green-600"
+          />
+          <StatsCard
+            title="Sold"
+            value={analytics?.properties?.sold || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            iconColor="text-indigo-600"
+          />
+          <StatsCard
+            title="Under Negotiation"
+            value={analytics?.properties?.underNegotiation || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            iconColor="text-yellow-600"
+          />
+        </div>
+      </div>
+
+      {/* Buyer Stats */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Buyer Requirements</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatsCard
+            title="Total Buyers"
+            value={analytics?.buyers?.total || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            )}
+            iconColor="text-purple-600"
+          />
+          <StatsCard
+            title="Active"
+            value={analytics?.buyers?.active || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            )}
+            iconColor="text-green-600"
+          />
+          <StatsCard
+            title="Matched"
+            value={analytics?.buyers?.matched || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            )}
+            iconColor="text-pink-600"
+          />
+          <StatsCard
+            title="Closed"
+            value={analytics?.buyers?.closed || 0}
+            icon={({ className }) => (
+              <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            iconColor="text-gray-600"
+          />
+        </div>
+      </div>
+
+      {/* Employee Stats (Admin Only) */}
+      {isAdmin && analytics?.employees && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Property Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Team Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <StatsCard
-              title="Total Properties"
-              value={analytics?.properties?.total || 0}
+              title="Total Employees"
+              value={analytics.employees.total || 0}
               icon={({ className }) => (
                 <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              )}
-              iconColor="text-blue-600"
-            />
-            <StatsCard
-              title="Available"
-              value={analytics?.properties?.available || 0}
-              icon={({ className }) => (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              iconColor="text-green-600"
-            />
-            <StatsCard
-              title="Sold"
-              value={analytics?.properties?.sold || 0}
-              icon={({ className }) => (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               )}
               iconColor="text-indigo-600"
             />
             <StatsCard
-              title="Under Negotiation"
-              value={analytics?.properties?.underNegotiation || 0}
+              title="Active Employees"
+              value={analytics.employees.active || 0}
               icon={({ className }) => (
                 <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              iconColor="text-yellow-600"
-            />
-          </div>
-        </div>
-
-        {/* Buyer Stats */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Buyer Requirements</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatsCard
-              title="Total Buyers"
-              value={analytics?.buyers?.total || 0}
-              icon={({ className }) => (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              )}
-              iconColor="text-purple-600"
-            />
-            <StatsCard
-              title="Active"
-              value={analytics?.buyers?.active || 0}
-              icon={({ className }) => (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               )}
               iconColor="text-green-600"
             />
-            <StatsCard
-              title="Matched"
-              value={analytics?.buyers?.matched || 0}
-              icon={({ className }) => (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              )}
-              iconColor="text-pink-600"
-            />
-            <StatsCard
-              title="Closed"
-              value={analytics?.buyers?.closed || 0}
-              icon={({ className }) => (
-                <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              iconColor="text-gray-600"
-            />
           </div>
         </div>
+      )}
 
-        {/* Employee Stats (Admin Only) */}
-        {isAdmin && analytics?.employees && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Team Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <StatsCard
-                title="Total Employees"
-                value={analytics.employees.total || 0}
-                icon={({ className }) => (
-                  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                )}
-                iconColor="text-indigo-600"
-              />
-              <StatsCard
-                title="Active Employees"
-                value={analytics.employees.active || 0}
-                icon={({ className }) => (
-                  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-                iconColor="text-green-600"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Listings */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Listings</h3>
@@ -295,7 +294,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

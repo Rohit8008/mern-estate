@@ -31,7 +31,7 @@ export default function CategoryListings() {
   }, [slug]);
 
   return (
-    <main className='min-h-screen bg-gray-50'>
+    <main>
       <div className='max-w-7xl mx-auto px-4 py-8'>
         {/* Header Section */}
         <div className='mb-8'>

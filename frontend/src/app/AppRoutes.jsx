@@ -48,7 +48,6 @@ export default function AppRoutes() {
         <Route path='/category/:slug' element={<CategoryListings />} />
         <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
         <Route path='/dashboard' element={<TeamDashboard />} />
-        <Route path='/analytics' element={<Analytics />} />
         <Route path='/clients' element={<Clients />} />
         <Route path='/clients/:id' element={<ClientDetail />} />
       </Route>
@@ -63,6 +62,7 @@ export default function AppRoutes() {
       <Route element={<AdminRoute />}>
         <Route path='/admin' element={<Admin />} />
         <Route path='/admin/dashboard' element={<AdminDashboard />} />
+        <Route path='/admin/analytics' element={<Analytics />} />
         <Route path='/admin/categories/:slug/fields' element={<AdminCategoryFields />} />
         <Route path='/admin/property-types' element={<PropertyTypeManagement />} />
         <Route path='/admin/import' element={<AdminImport />} />

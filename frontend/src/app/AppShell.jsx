@@ -12,7 +12,9 @@ export default function AppShell({ children }) {
   return (
     <>
       <Header />
-      <div className='pt-16'>{children}</div>
+      <div className='pt-16 min-h-screen bg-gradient-to-b from-slate-50 to-white'>
+        {children}
+      </div>
       {showFooter && <Footer />}
     </>
   );

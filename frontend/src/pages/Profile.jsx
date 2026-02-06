@@ -258,7 +258,7 @@ export default function Profile() {
   console.log('Popup state:', showPopup, popupMessage, popupType);
 
   return (
-    <div className='min-h-screen bg-gray-50'>
+    <div>
       {/* Simple Popup Notification */}
       {showPopup && (
         <div 
