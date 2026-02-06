@@ -124,7 +124,16 @@ export const canManageResource = (resourceType) => {
 export const canToggleOwnerActive = requirePermission('toggleOwnerActive');
 
 // Middleware to check if user can create listings
-export const canCreateListing = requirePermission('createListing');
+export const canCreateListing = async (req, res, next) => {
+  // Admin always allowed
+  if (req.user?.role === 'admin') return next();
+
+  // Employees should be able to create listings by default.
+  // If no role is assigned yet, allow; category restrictions are enforced in controller.
+  if (req.user?.role === 'employee' && !req.user.assignedRole) return next();
+
+  return requirePermission('createListing')(req, res, next);
+};
 
 // Middleware to check if user can manage roles
 export const canManageRoles = requirePermission('manageRoles');

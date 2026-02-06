@@ -16,6 +16,7 @@ import {
   getPopularSearches
 } from '../controllers/listing.controller.js';
 import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
+import { canCreateListing } from '../middleware/permissions.js';
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.get('/search', searchListings);
 router.get('/suggestions', getSearchSuggestions);
 router.get('/popular-searches', getPopularSearches);
 
-router.post('/create', verifyToken, createListing);
+router.post('/create', verifyToken, canCreateListing, createListing);
 router.delete('/delete/:id', verifyToken, deleteListing);
 router.post('/update/:id', verifyToken, updateListing);
 router.get('/get/:id', getListing);

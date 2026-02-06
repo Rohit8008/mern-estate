@@ -125,7 +125,7 @@ export async function fetchWithRefresh(url, options = {}, silent = false) {
   });
 
   // If token expired, try to refresh
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     const refreshData = await refreshAccessToken(!silent);
     if (refreshData) {
       // Retry the original request with new token

@@ -166,6 +166,7 @@ roleSchema.statics.getDefaultRoles = function() {
       permissions: {
         viewClients: true,
         viewOwners: true,
+        createListing: true,
         viewListings: true,
         viewCategories: true,
         viewMessages: true,

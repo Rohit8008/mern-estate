@@ -195,7 +195,7 @@ export const deleteListing = async (req, res, next) => {
       listing.category &&
       req.user.assignedCategories?.includes(listing.category)
     )) {
-      return next(errorHandler(401, 'You can only delete your own listings!'));
+      return next(errorHandler(403, 'You can only delete your own listings!'));
     }
   }
 
@@ -233,7 +233,7 @@ export const updateListing = async (req, res, next) => {
       listing.category &&
       req.user.assignedCategories?.includes(listing.category)
     )) {
-      return next(errorHandler(401, 'You can only update your own listings!'));
+      return next(errorHandler(403, 'You can only update your own listings!'));
     }
   }
 

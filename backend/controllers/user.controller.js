@@ -15,7 +15,7 @@ export const test = (req, res) => {
 
 export const updateUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
-    return next(errorHandler(401, 'You can only update your own account!'));
+    return next(errorHandler(403, 'You can only update your own account!'));
   try {
     // Email cannot be updated
     if (req.body.email && req.body.email !== undefined) {
@@ -141,7 +141,7 @@ export const resetPasswordWithOtp = async (req, res, next) => {
 
 export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
-    return next(errorHandler(401, 'You can only delete your own account!'));
+    return next(errorHandler(403, 'You can only delete your own account!'));
   try {
     await User.findByIdAndUpdate(req.params.id, {
       status: 'inactive',
@@ -229,7 +229,7 @@ export const getUserListings = async (req, res, next) => {
       next(error);
     }
   } else {
-    return next(errorHandler(401, 'You can only view your own listings!'));
+    return next(errorHandler(403, 'You can only view your own listings!'));
   }
 };
 

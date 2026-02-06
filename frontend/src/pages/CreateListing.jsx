@@ -241,7 +241,15 @@ export default function CreateListing() {
         console.log('Fetching categories...');
         const data = await apiClient.get('/category/list');
         console.log('Categories response:', data);
-        setCategories(data.data || data || []);
+        const all = data.data || data || [];
+        if (currentUser?.role === 'employee') {
+          const allowed = Array.isArray(currentUser.assignedCategories)
+            ? currentUser.assignedCategories
+            : [];
+          setCategories(all.filter((c) => allowed.includes(c.slug)));
+        } else {
+          setCategories(all);
+        }
       } catch (error) {
         console.log('Error fetching categories:', error.message);
         setCategories([]);
@@ -281,7 +289,7 @@ export default function CreateListing() {
     fetchCategories();
     fetchOwners();
     fetchPropertyTypes();
-  }, []);
+  }, [currentUser?.role, currentUser?.assignedCategories]);
 
   const handleChange = (e) => {
     if (e.target.id === 'sale' || e.target.id === 'rent') {
