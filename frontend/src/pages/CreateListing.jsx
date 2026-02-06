@@ -437,7 +437,10 @@ export default function CreateListing() {
       setLoading(false);
       if (data.success === false) {
         setError(data.message);
+        return;
       }
+      // Trigger cache invalidation event
+      window.dispatchEvent(new CustomEvent('listing-created', { detail: { id: data.data._id } }));
       navigate(`/listing/${data.data._id}`);
     } catch (error) {
       setError(error.message);

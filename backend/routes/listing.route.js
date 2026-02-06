@@ -10,11 +10,19 @@ import {
   getMyAssignedListings,
   softDeleteListing,
   restoreListing,
-  bulkImportListings
+  bulkImportListings,
+  searchListings,
+  getSearchSuggestions,
+  getPopularSearches
 } from '../controllers/listing.controller.js';
 import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
 
 const router = express.Router();
+
+// Search routes (public, placed first for priority)
+router.get('/search', searchListings);
+router.get('/suggestions', getSearchSuggestions);
+router.get('/popular-searches', getPopularSearches);
 
 router.post('/create', verifyToken, createListing);
 router.delete('/delete/:id', verifyToken, deleteListing);

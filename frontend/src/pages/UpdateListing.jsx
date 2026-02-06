@@ -439,6 +439,8 @@ export default function UpdateListing() {
       if (data.success === false) {
         setError(data.message);
       } else {
+        // Trigger cache invalidation event
+        window.dispatchEvent(new CustomEvent('listing-updated', { detail: { id: data._id } }));
         navigate(`/listing/${data._id}`);
       }
     } catch (error) {

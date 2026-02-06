@@ -194,7 +194,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
 
   const handleBulkDelete = async () => {
     if (selectedRows.size === 0) return;
-    
+
     if (!confirm(`Delete ${selectedRows.size} listings?`)) return;
 
     try {
@@ -203,6 +203,12 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
       );
 
       await Promise.all(deletePromises);
+
+      // Trigger cache invalidation event for each deleted listing
+      Array.from(selectedRows).forEach(id => {
+        window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id } }));
+      });
+
       setListings(prev => prev.filter(l => !selectedRows.has(l._id)));
       setSelectedRows(new Set());
     } catch (err) {

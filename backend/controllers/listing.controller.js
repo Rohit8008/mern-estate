@@ -3,17 +3,53 @@ import User from '../models/user.model.js';
 import Owner from '../models/owner.model.js';
 import Category from '../models/category.model.js';
 import { io } from '../index.js';
-import { 
-  errorHandler, 
-  AppError, 
-  ValidationError, 
-  NotFoundError, 
+import {
+  errorHandler,
+  AppError,
+  ValidationError,
+  NotFoundError,
   AuthorizationError,
   asyncHandler,
   sendSuccessResponse,
   sendErrorResponse
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
+import {
+  tokenize,
+  buildFuzzyRegex,
+  scoreDocument,
+  generateSearchVariations,
+  generateSuggestions,
+  highlightMatches,
+} from '../utils/search.js';
+
+// In-memory cache for search suggestions (simple LRU-like cache)
+const searchCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 100;
+
+function getCachedResults(key) {
+  const cached = searchCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  searchCache.delete(key);
+  return null;
+}
+
+function setCachedResults(key, data) {
+  if (searchCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = searchCache.keys().next().value;
+    searchCache.delete(firstKey);
+  }
+  searchCache.set(key, { data, timestamp: Date.now() });
+}
+
+// Clear all search cache (called when listings are created, updated, or deleted)
+function clearSearchCache() {
+  searchCache.clear();
+  logger.info('Search cache cleared');
+}
 
 async function getListingUpdateRecipients(category) {
   try {
@@ -126,7 +162,8 @@ export const createListing = asyncHandler(async (req, res, next) => {
   const listing = await Listing.create(req.body);
 
   await emitListingUpdate('created', listing, listing?.category);
-  
+  clearSearchCache(); // Clear search cache on listing creation
+
   // Log successful listing creation
   logger.info('Listing created successfully', {
     listingId: listing._id,
@@ -170,6 +207,7 @@ export const deleteListing = async (req, res, next) => {
     });
 
     await emitListingUpdate('deleted', listing, listing?.category);
+    clearSearchCache(); // Clear search cache on listing deletion
 
     res.status(200).json('Listing has been deleted!');
   } catch (error) {
@@ -247,6 +285,7 @@ export const updateListing = async (req, res, next) => {
     const category = updatedListing?.category || listing?.category;
 
     await emitListingUpdate('updated', updatedListing, category);
+    clearSearchCache(); // Clear search cache on listing update
 
     res.status(200).json(updatedListing);
   } catch (error) {
@@ -355,7 +394,7 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
 
   const query = {
     assignedAgent: req.user.id,
-    isDeleted: false,
+    isDeleted: { $ne: true },
   };
 
   // Allow filtering by status
@@ -403,6 +442,7 @@ export const softDeleteListing = asyncHandler(async (req, res, next) => {
   await listing.save();
 
   await emitListingUpdate('soft_deleted', listing, listing?.category);
+  clearSearchCache(); // Clear search cache on soft delete
 
   logger.info('Listing soft deleted', {
     listingId: listing._id,
@@ -428,6 +468,7 @@ export const restoreListing = asyncHandler(async (req, res, next) => {
   await listing.save();
 
   await emitListingUpdate('restored', listing, listing?.category);
+  clearSearchCache(); // Clear search cache on restore
 
   logger.info('Listing restored', {
     listingId: listing._id,
@@ -449,7 +490,7 @@ export const getListings = asyncHandler(async (req, res, next) => {
   
   // Exclude soft-deleted by default (admin can override with includeDeleted=true)
   if (req.query.includeDeleted !== 'true' || req.user?.role !== 'admin') {
-    query.isDeleted = false;
+    query.isDeleted = { $ne: true };
   }
   
   // City filter
@@ -552,17 +593,51 @@ export const getListings = asyncHandler(async (req, res, next) => {
     query.category = category;
   }
   
-  // Search functionality with text index optimization
+  // Advanced fuzzy search functionality
   const searchTerm = req.query.searchTerm;
+  const fuzzyLevel = req.query.fuzzyLevel || 'medium'; // strict, medium, loose
+
   if (searchTerm && searchTerm.trim()) {
-    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    query.$or = [
-      { name: { $regex: escapedTerm, $options: 'i' } },
-      { description: { $regex: escapedTerm, $options: 'i' } },
-      { address: { $regex: escapedTerm, $options: 'i' } },
-      { city: { $regex: escapedTerm, $options: 'i' } },
-      { locality: { $regex: escapedTerm, $options: 'i' } },
-    ];
+    const terms = tokenize(searchTerm);
+    const searchConditions = [];
+
+    terms.forEach(term => {
+      // Build fuzzy regex for the term
+      const fuzzyRegex = buildFuzzyRegex(term, { fuzzyLevel });
+
+      // Primary field searches with fuzzy matching
+      searchConditions.push(
+        { name: fuzzyRegex },
+        { description: fuzzyRegex },
+        { address: fuzzyRegex },
+        { city: fuzzyRegex },
+        { locality: fuzzyRegex },
+        { areaName: fuzzyRegex },
+        { propertyNo: fuzzyRegex }
+      );
+
+      // Add search variations for typo tolerance
+      const variations = generateSearchVariations(term);
+      variations.slice(1, 3).forEach(variation => {
+        const varRegex = new RegExp(variation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        searchConditions.push(
+          { name: varRegex },
+          { city: varRegex },
+          { locality: varRegex }
+        );
+      });
+
+      // Numeric search for prices if term is numeric
+      const numericValue = parseFloat(term);
+      if (!isNaN(numericValue) && numericValue > 0) {
+        const tolerance = numericValue * 0.1; // 10% tolerance
+        searchConditions.push(
+          { regularPrice: { $gte: numericValue - tolerance, $lte: numericValue + tolerance } }
+        );
+      }
+    });
+
+    query.$or = searchConditions;
   }
   
   // Sorting
@@ -727,9 +802,10 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Notify about new listings
+  // Notify about new listings and clear cache
   if (results.success.length > 0) {
     io.emit('listing:update', { action: 'bulk_import', count: results.success.length });
+    clearSearchCache(); // Clear search cache after bulk import
   }
 
   res.status(200).json({
@@ -737,4 +813,360 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
     message: `Imported ${results.success.length} listings, ${results.failed.length} failed`,
     data: results,
   });
+});
+
+/**
+ * Professional Search Endpoint
+ * Fast, fuzzy search with relevance scoring and filtering
+ */
+export const searchListings = asyncHandler(async (req, res, next) => {
+  const startTime = Date.now();
+
+  const {
+    q: searchTerm,
+    fuzzyLevel = 'medium',
+    limit: rawLimit = 20,
+    page = 1,
+    sort = 'relevance',
+    order = 'desc',
+    // Filters
+    type,
+    minPrice,
+    maxPrice,
+    bedrooms,
+    bathrooms,
+    city,
+    locality,
+    propertyCategory,
+    propertyType,
+    status = 'available',
+    offer,
+    furnished,
+    parking,
+  } = req.query;
+
+  const limit = Math.min(parseInt(rawLimit) || 20, 50);
+  const skip = (Math.max(parseInt(page) || 1, 1) - 1) * limit;
+
+  // Check cache for identical queries
+  const cacheKey = JSON.stringify({ searchTerm, fuzzyLevel, limit, page, sort, order, type, minPrice, maxPrice, city, locality });
+  const cachedResult = getCachedResults(cacheKey);
+  if (cachedResult) {
+    logger.info('Search cache hit', { searchTerm, responseTime: `${Date.now() - startTime}ms` });
+    return sendSuccessResponse(res, cachedResult, 'Search results (cached)');
+  }
+
+  // Build base query
+  const query = { isDeleted: { $ne: true } };
+
+  // Apply filters
+  if (type && type !== 'all') query.type = type;
+  if (status && status !== 'all') query.status = status;
+  if (propertyCategory && propertyCategory !== 'all') query.propertyCategory = propertyCategory;
+  if (propertyType && propertyType !== 'all') query.propertyType = propertyType;
+  if (offer === 'true') query.offer = true;
+  if (furnished === 'true') query.furnished = true;
+  if (parking === 'true') query.parking = true;
+
+  // Price range
+  if (minPrice || maxPrice) {
+    query.regularPrice = {};
+    if (minPrice) query.regularPrice.$gte = parseFloat(minPrice);
+    if (maxPrice) query.regularPrice.$lte = parseFloat(maxPrice);
+  }
+
+  // Bedrooms/Bathrooms
+  if (bedrooms) query.bedrooms = { $gte: parseInt(bedrooms) };
+  if (bathrooms) query.bathrooms = { $gte: parseInt(bathrooms) };
+
+  // Location filters with fuzzy matching
+  if (city && city !== 'all') {
+    query.city = { $regex: city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+  }
+  if (locality && locality !== 'all') {
+    query.locality = { $regex: locality.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+  }
+
+  let listings = [];
+  let totalCount = 0;
+
+  if (searchTerm && searchTerm.trim()) {
+    const terms = tokenize(searchTerm);
+    const searchConditions = [];
+
+    terms.forEach(term => {
+      const fuzzyRegex = buildFuzzyRegex(term, { fuzzyLevel });
+      const variations = generateSearchVariations(term);
+
+      // Primary searches
+      searchConditions.push(
+        { name: fuzzyRegex },
+        { description: fuzzyRegex },
+        { address: fuzzyRegex },
+        { city: fuzzyRegex },
+        { locality: fuzzyRegex },
+        { areaName: fuzzyRegex },
+        { propertyNo: fuzzyRegex }
+      );
+
+      // Variation searches for typo tolerance
+      variations.slice(1, 3).forEach(variation => {
+        const varRegex = new RegExp(variation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        searchConditions.push(
+          { name: varRegex },
+          { city: varRegex },
+          { address: varRegex }
+        );
+      });
+    });
+
+    const searchQuery = { ...query, $or: searchConditions };
+
+    // Get all matching results for scoring (limited for performance)
+    const allResults = await Listing.find(searchQuery)
+      .select('name description address city locality areaName propertyNo regularPrice discountPrice offer bedrooms bathrooms imageUrls type propertyType propertyCategory status createdAt')
+      .limit(500)
+      .lean();
+
+    // Score and rank results
+    const scoredResults = allResults.map(doc => {
+      const scoreData = scoreDocument(doc, terms);
+      return { ...doc, _searchScore: scoreData.score, _matchedFields: scoreData.matchedFields };
+    });
+
+    // Sort by relevance or specified field
+    if (sort === 'relevance') {
+      scoredResults.sort((a, b) => b._searchScore - a._searchScore);
+    } else {
+      const sortOrder = order === 'asc' ? 1 : -1;
+      scoredResults.sort((a, b) => {
+        const aVal = a[sort] || 0;
+        const bVal = b[sort] || 0;
+        return (aVal - bVal) * sortOrder;
+      });
+    }
+
+    totalCount = scoredResults.length;
+    listings = scoredResults.slice(skip, skip + limit);
+
+    // Add highlighting to results
+    listings = listings.map(listing => ({
+      ...listing,
+      _highlights: {
+        name: highlightMatches(listing.name, terms),
+        address: highlightMatches(listing.address, terms),
+        city: highlightMatches(listing.city, terms),
+      }
+    }));
+  } else {
+    // No search term - just apply filters
+    const sortObj = {};
+    if (sort && sort !== 'relevance') {
+      sortObj[sort] = order === 'asc' ? 1 : -1;
+    } else {
+      sortObj.createdAt = -1;
+    }
+
+    [listings, totalCount] = await Promise.all([
+      Listing.find(query)
+        .select('name description address city locality areaName regularPrice discountPrice offer bedrooms bathrooms imageUrls type propertyType propertyCategory status createdAt')
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Listing.countDocuments(query)
+    ]);
+  }
+
+  const responseTime = Date.now() - startTime;
+
+  const result = {
+    listings,
+    pagination: {
+      total: totalCount,
+      page: parseInt(page) || 1,
+      limit,
+      totalPages: Math.ceil(totalCount / limit),
+      hasMore: skip + limit < totalCount,
+    },
+    meta: {
+      searchTerm: searchTerm || null,
+      fuzzyLevel,
+      responseTime: `${responseTime}ms`,
+      filters: { type, minPrice, maxPrice, city, locality, propertyCategory, status },
+    }
+  };
+
+  // Cache the result
+  setCachedResults(cacheKey, result);
+
+  logger.info('Search executed', {
+    searchTerm,
+    resultCount: listings.length,
+    totalCount,
+    responseTime: `${responseTime}ms`,
+    userId: req.user?.id,
+  });
+
+  sendSuccessResponse(res, result, 'Search results');
+});
+
+/**
+ * Search Suggestions / Autocomplete Endpoint
+ * Returns quick suggestions as user types
+ */
+export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
+  const startTime = Date.now();
+  const { q: searchTerm, limit: rawLimit = 8 } = req.query;
+
+  if (!searchTerm || searchTerm.trim().length < 2) {
+    return sendSuccessResponse(res, { suggestions: [] }, 'Suggestions');
+  }
+
+  const limit = Math.min(parseInt(rawLimit) || 8, 15);
+  const termLower = searchTerm.toLowerCase().trim();
+
+  // Check cache
+  const cacheKey = `suggestions:${termLower}`;
+  const cached = getCachedResults(cacheKey);
+  if (cached) {
+    return sendSuccessResponse(res, cached, 'Suggestions (cached)');
+  }
+
+  // Build regex for prefix matching (fastest)
+  const prefixRegex = new RegExp(`^${termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+  const containsRegex = new RegExp(termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+  // Get suggestions from different fields
+  const [
+    nameSuggestions,
+    citySuggestions,
+    localitySuggestions,
+    areaSuggestions
+  ] = await Promise.all([
+    // Name suggestions (prefix match)
+    Listing.find({ name: prefixRegex, isDeleted: { $ne: true } })
+      .select('name')
+      .limit(limit)
+      .lean(),
+    // City suggestions (distinct values)
+    Listing.distinct('city', { city: containsRegex, isDeleted: { $ne: true } }),
+    // Locality suggestions
+    Listing.distinct('locality', { locality: containsRegex, isDeleted: { $ne: true } }),
+    // Area name suggestions
+    Listing.distinct('areaName', { areaName: containsRegex, isDeleted: { $ne: true } }),
+  ]);
+
+  // Combine and dedupe suggestions
+  const suggestions = new Map();
+
+  // Process name suggestions (highest priority)
+  nameSuggestions.forEach(doc => {
+    if (doc.name) {
+      suggestions.set(doc.name.toLowerCase(), {
+        text: doc.name,
+        type: 'property',
+        priority: 4
+      });
+    }
+  });
+
+  // Process city suggestions
+  citySuggestions.slice(0, 5).forEach(city => {
+    if (city) {
+      const key = city.toLowerCase();
+      if (!suggestions.has(key)) {
+        suggestions.set(key, { text: city, type: 'city', priority: 3 });
+      }
+    }
+  });
+
+  // Process locality suggestions
+  localitySuggestions.slice(0, 5).forEach(locality => {
+    if (locality) {
+      const key = locality.toLowerCase();
+      if (!suggestions.has(key)) {
+        suggestions.set(key, { text: locality, type: 'locality', priority: 2 });
+      }
+    }
+  });
+
+  // Process area suggestions
+  areaSuggestions.slice(0, 3).forEach(area => {
+    if (area) {
+      const key = area.toLowerCase();
+      if (!suggestions.has(key)) {
+        suggestions.set(key, { text: area, type: 'area', priority: 1 });
+      }
+    }
+  });
+
+  // Sort by priority and limit
+  const sortedSuggestions = Array.from(suggestions.values())
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, limit);
+
+  const result = {
+    suggestions: sortedSuggestions,
+    query: searchTerm,
+    responseTime: `${Date.now() - startTime}ms`
+  };
+
+  // Cache for quick subsequent requests
+  setCachedResults(cacheKey, result);
+
+  sendSuccessResponse(res, result, 'Suggestions');
+});
+
+/**
+ * Get Popular/Trending Searches
+ * Returns frequently searched terms and locations
+ */
+export const getPopularSearches = asyncHandler(async (req, res, next) => {
+  const { limit: rawLimit = 10 } = req.query;
+  const limit = Math.min(parseInt(rawLimit) || 10, 20);
+
+  // Get popular cities
+  const popularCities = await Listing.aggregate([
+    { $match: { isDeleted: { $ne: true }, city: { $ne: '' } } },
+    { $group: { _id: '$city', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: limit }
+  ]);
+
+  // Get popular localities
+  const popularLocalities = await Listing.aggregate([
+    { $match: { isDeleted: { $ne: true }, locality: { $ne: '' } } },
+    { $group: { _id: '$locality', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: limit }
+  ]);
+
+  // Get popular property types
+  const popularPropertyTypes = await Listing.aggregate([
+    { $match: { isDeleted: { $ne: true }, propertyType: { $ne: '' } } },
+    { $group: { _id: '$propertyType', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 6 }
+  ]);
+
+  // Get price ranges
+  const priceStats = await Listing.aggregate([
+    { $match: { isDeleted: { $ne: true } } },
+    {
+      $group: {
+        _id: null,
+        minPrice: { $min: '$regularPrice' },
+        maxPrice: { $max: '$regularPrice' },
+        avgPrice: { $avg: '$regularPrice' }
+      }
+    }
+  ]);
+
+  sendSuccessResponse(res, {
+    popularCities: popularCities.map(c => ({ name: c._id, count: c.count })),
+    popularLocalities: popularLocalities.map(l => ({ name: l._id, count: l.count })),
+    popularPropertyTypes: popularPropertyTypes.map(p => ({ name: p._id, count: p.count })),
+    priceStats: priceStats[0] || { minPrice: 0, maxPrice: 0, avgPrice: 0 },
+  }, 'Popular searches');
 });

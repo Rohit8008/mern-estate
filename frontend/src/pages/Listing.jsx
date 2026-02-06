@@ -476,7 +476,14 @@ export default function Listing() {
                           });
                           const data = await parseJsonSafely(res);
                           if (data.success === false) return;
-                          navigate('/');
+                          // Trigger cache invalidation event
+                          window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));
+                          // Go back to previous page, or to search if no history
+                          if (window.history.length > 2) {
+                            navigate(-1);
+                          } else {
+                            navigate('/search');
+                          }
                         } catch (_) {}
                       }}
                       className='w-1/2 flex items-center justify-center gap-2 bg-red-700 text-white rounded-lg uppercase hover:opacity-95 p-3'

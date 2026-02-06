@@ -239,6 +239,9 @@ export default function Profile() {
         return;
       }
 
+      // Trigger cache invalidation event
+      window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listingId } }));
+
       setUserListings((prev) =>
         prev.filter((listing) => listing._id !== listingId)
       );

@@ -87,6 +87,30 @@ export default function Admin() {
     load();
   }, [isBuyerViewRestricted, logPage]);
 
+  // Listen for listing changes to refresh data
+  useEffect(() => {
+    const refreshListings = async () => {
+      try {
+        const lsRes = await fetch('/api/listing/get?limit=50&order=desc', { credentials: 'include' });
+        const lsText = await lsRes.text();
+        const lsJson = lsText ? JSON.parse(lsText) : { success: true, data: { listings: [] } };
+        setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
+      } catch (error) {
+        console.error('Error refreshing listings:', error);
+      }
+    };
+
+    window.addEventListener('listing-created', refreshListings);
+    window.addEventListener('listing-deleted', refreshListings);
+    window.addEventListener('listing-updated', refreshListings);
+
+    return () => {
+      window.removeEventListener('listing-created', refreshListings);
+      window.removeEventListener('listing-deleted', refreshListings);
+      window.removeEventListener('listing-updated', refreshListings);
+    };
+  }, []);
+
   // Realtime owners refresh when admin updates owners
   useEffect(() => {
     if (isBuyerViewRestricted) return;
