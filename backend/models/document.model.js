@@ -16,6 +16,9 @@ const documentSchema = new mongoose.Schema(
       clientId: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', default: null, index: true },
       listingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', default: null, index: true },
     },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );

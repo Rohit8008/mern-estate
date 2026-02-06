@@ -58,7 +58,7 @@ export const createTask = async (req, res, next) => {
 export const listTasks = async (req, res, next) => {
   try {
     const { q, status, assignedTo, page = 1, limit = 20, kind, clientId, listingId } = req.query;
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
 
     if (q) filter.$text = { $search: q };
     if (status) filter.status = status;
@@ -86,7 +86,7 @@ export const listTasks = async (req, res, next) => {
 
 export const getTaskById = async (req, res, next) => {
   try {
-    const doc = await Task.findById(req.params.id);
+    const doc = await Task.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!doc) return next(errorHandler(404, 'Task not found'));
     if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, 'Forbidden'));
     res.json({ success: true, data: doc });
@@ -123,7 +123,11 @@ export const deleteTask = async (req, res, next) => {
     const doc = await Task.findById(req.params.id);
     if (!doc) return next(errorHandler(404, 'Task not found'));
     if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, 'Forbidden'));
-    await doc.deleteOne();
+    await Task.findByIdAndUpdate(req.params.id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
     res.json({ success: true, message: 'Task deleted' });
   } catch (err) {
     next(err);

@@ -8,7 +8,8 @@ const listingSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: true,
+      required: false,
+      default: '',
     },
     address: {
       type: String,

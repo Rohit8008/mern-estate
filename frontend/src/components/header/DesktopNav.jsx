@@ -4,16 +4,18 @@ import PropTypes from 'prop-types';
 export default function DesktopNav({ currentUser, isBuyerViewMode, isActive }) {
   return (
     <nav className='hidden lg:flex items-center space-x-1'>
-      <Link
-        to='/search'
-        className={`${
-          isActive('/search')
-            ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200'
-            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-        } px-4 py-2 rounded-xl font-semibold transition-all duration-200 hover:shadow-md`}
-      >
-        Properties
-      </Link>
+      {currentUser && (
+        <Link
+          to='/search'
+          className={`${
+            isActive('/search')
+              ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          } px-4 py-2 rounded-xl font-semibold transition-all duration-200 hover:shadow-md`}
+        >
+          Properties
+        </Link>
+      )}
       {(currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') &&
         !isBuyerViewMode && (
           <Link

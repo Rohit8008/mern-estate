@@ -1,15 +1,16 @@
 import express from 'express';
-import { 
-  createListing, 
-  deleteListing, 
-  updateListing, 
-  getListing, 
+import {
+  createListing,
+  deleteListing,
+  updateListing,
+  getListing,
   getListings,
   assignListingToAgent,
   unassignListingFromAgent,
   getMyAssignedListings,
   softDeleteListing,
-  restoreListing
+  restoreListing,
+  bulkImportListings
 } from '../controllers/listing.controller.js';
 import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
 
@@ -31,5 +32,8 @@ router.get('/my-assigned', verifyToken, getMyAssignedListings);
 // Soft delete and restore (Admin only)
 router.post('/soft-delete/:id', verifyToken, requireAdmin, softDeleteListing);
 router.post('/restore/:id', verifyToken, requireAdmin, restoreListing);
+
+// Bulk import listings (Admin only)
+router.post('/bulk-import', verifyToken, requireAdmin, bulkImportListings);
 
 export default router;

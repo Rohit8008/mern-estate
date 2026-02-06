@@ -10,6 +10,8 @@ const subscriberSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
     },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

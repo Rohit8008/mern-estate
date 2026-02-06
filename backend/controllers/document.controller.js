@@ -83,7 +83,7 @@ export const uploadDocument = async (req, res, next) => {
 export const listDocuments = async (req, res, next) => {
   try {
     const { kind, clientId, listingId, tag, page = 1, limit = 20 } = req.query;
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
     if (kind) filter['related.kind'] = kind;
     if (clientId) filter['related.clientId'] = clientId;
     if (listingId) filter['related.listingId'] = listingId;
@@ -132,10 +132,12 @@ export const deleteDocument = async (req, res, next) => {
       }
     }
 
-    // Remove file (best effort)
-    try { fs.unlinkSync(path.join(uploadsDir, doc.filename)); } catch (_) {}
-
-    await doc.deleteOne();
+    // Soft delete - don't remove the file
+    await Document.findByIdAndUpdate(id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
     res.json({ success: true, message: 'Document deleted' });
   } catch (err) {
     next(err);

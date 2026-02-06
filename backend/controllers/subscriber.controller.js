@@ -103,10 +103,17 @@ export const subscribe = async (req, res, next) => {
 
     const existing = await Subscriber.findOne({ email: email.toLowerCase().trim() });
     if (existing) {
-      return res.status(409).json({ success: false, message: 'This email is already subscribed' });
+      // If previously deleted, re-activate
+      if (existing.isDeleted) {
+        existing.isDeleted = false;
+        existing.deletedAt = null;
+        await existing.save();
+      } else {
+        return res.status(409).json({ success: false, message: 'This email is already subscribed' });
+      }
+    } else {
+      await Subscriber.create({ email });
     }
-
-    await Subscriber.create({ email });
 
     // Send welcome email (non-blocking — don't fail the subscription if email fails)
     sendMail({

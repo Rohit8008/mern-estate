@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { fetchWithRefresh, handleApiResponse } from '../utils/http';
-import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineKey } from 'react-icons/hi';
+import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineUpload, HiOutlineKey } from 'react-icons/hi';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useSelector } from 'react-redux';
 import RoleManagement from '../components/RoleManagement';
@@ -37,6 +37,10 @@ export default function Admin() {
   const [editingUser, setEditingUser] = useState(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResults, setImportResults] = useState(null);
   const totalOwners = owners.length;
   const totalUsers = users.length;
   const totalListings = listings.length;
@@ -195,6 +199,240 @@ export default function Admin() {
     }
   };
 
+  const exportListingsToCSV = () => {
+    if (!listings || listings.length === 0) {
+      alert('No listings to export');
+      return;
+    }
+
+    // Filter listings based on current search
+    const filteredListings = listings.filter((l) => {
+      if (!listSearch.trim()) return true;
+      const q = listSearch.toLowerCase();
+      return (
+        String(l.name || '').toLowerCase().includes(q) ||
+        String(l.address || '').toLowerCase().includes(q)
+      );
+    });
+
+    // Define CSV headers
+    const headers = [
+      'ID',
+      'Name',
+      'Address',
+      'City',
+      'State',
+      'Pincode',
+      'Category',
+      'Property Type',
+      'Type',
+      'Price',
+      'Discount Price',
+      'Offer',
+      'Bedrooms',
+      'Bathrooms',
+      'Parking',
+      'Furnished',
+      'Created At',
+    ];
+
+    // Convert listings to CSV rows
+    const rows = filteredListings.map((l) => [
+      l._id,
+      `"${(l.name || '').replace(/"/g, '""')}"`,
+      `"${(l.address || '').replace(/"/g, '""')}"`,
+      `"${(l.city || '').replace(/"/g, '""')}"`,
+      `"${(l.state || '').replace(/"/g, '""')}"`,
+      l.pincode || '',
+      l.category || '',
+      l.propertyType || '',
+      l.type || '',
+      l.regularPrice || 0,
+      l.discountPrice || 0,
+      l.offer ? 'Yes' : 'No',
+      l.bedrooms || 0,
+      l.bathrooms || 0,
+      l.parking ? 'Yes' : 'No',
+      l.furnished ? 'Yes' : 'No',
+      l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '',
+    ]);
+
+    // Build CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `listings_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const parseCSV = (text) => {
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length < 2) return [];
+
+    // Parse header row
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+    // Map common header variations to standard field names
+    const headerMap = {
+      'name': 'name',
+      'title': 'name',
+      'property name': 'name',
+      'description': 'description',
+      'address': 'address',
+      'city': 'city',
+      'state': 'state',
+      'pincode': 'pincode',
+      'zip': 'pincode',
+      'zipcode': 'pincode',
+      'type': 'type',
+      'listing type': 'type',
+      'property type': 'propertyType',
+      'propertytype': 'propertyType',
+      'category': 'category',
+      'price': 'regularPrice',
+      'regular price': 'regularPrice',
+      'regularprice': 'regularPrice',
+      'discount price': 'discountPrice',
+      'discountprice': 'discountPrice',
+      'offer': 'offer',
+      'bedrooms': 'bedrooms',
+      'beds': 'bedrooms',
+      'bathrooms': 'bathrooms',
+      'baths': 'bathrooms',
+      'parking': 'parking',
+      'furnished': 'furnished',
+      'latitude': 'latitude',
+      'lat': 'lat',
+      'longitude': 'longitude',
+      'lng': 'lng',
+      'floors': 'floors',
+      'plot size': 'plotSize',
+      'plotsize': 'plotSize',
+      'area': 'areaSqFt',
+      'areasqft': 'areaSqFt',
+      'sq yard': 'sqYard',
+      'sqyard': 'sqYard',
+      'sq yard rate': 'sqYardRate',
+      'sqyardrate': 'sqYardRate',
+      'facing': 'facing',
+      'floor': 'floor',
+      'total floors': 'totalFloors',
+      'totalfloors': 'totalFloors',
+      'lift': 'lift',
+      'balcony': 'balcony',
+      'garden': 'garden',
+      'area name': 'areaName',
+      'areaname': 'areaName',
+      'property no': 'propertyNo',
+      'propertyno': 'propertyNo',
+      'remarks': 'remarks',
+    };
+
+    const normalizedHeaders = headers.map(h => {
+      const lower = h.toLowerCase();
+      return headerMap[lower] || h;
+    });
+
+    // Parse data rows
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (const char of lines[i]) {
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+
+      if (values.length === normalizedHeaders.length) {
+        const row = {};
+        normalizedHeaders.forEach((header, idx) => {
+          row[header] = values[idx]?.replace(/^"|"$/g, '') || '';
+        });
+        data.push(row);
+      }
+    }
+
+    return data;
+  };
+
+  const handleImportFile = async () => {
+    if (!importFile) {
+      alert('Please select a file');
+      return;
+    }
+
+    setImporting(true);
+    setImportResults(null);
+
+    try {
+      const text = await importFile.text();
+      const listings = parseCSV(text);
+
+      if (listings.length === 0) {
+        alert('No valid data found in the file');
+        setImporting(false);
+        return;
+      }
+
+      const res = await fetch('/api/listing/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ listings }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setImportResults(data.data);
+        // Refresh listings
+        const listRes = await fetch('/api/listing/get?limit=200', { credentials: 'include' });
+        const listData = await listRes.json();
+        setListings(Array.isArray(listData?.data?.listings) ? listData.data.listings : []);
+      } else {
+        alert(data.message || 'Import failed');
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      alert('Failed to import listings: ' + error.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadSampleCSV = () => {
+    const sampleData = `name,address,city,state,pincode,type,propertyType,category,price,bedrooms,bathrooms,parking,furnished,latitude,longitude
+"Sample House","123 Main Street","Mumbai","Maharashtra","400001","sale","house","residential","5000000","3","2","Yes","Yes","19.0760","72.8777"
+"Sample Flat","456 Park Avenue","Delhi","Delhi","110001","rent","flat","residential","25000","2","1","No","Yes","28.6139","77.2090"`;
+
+    const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'listings_import_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const openCategoryModal = (user) => {
     setEditingUser(user);
     setSelectedCategories([...(user.assignedCategories || [])]);
@@ -303,29 +541,112 @@ export default function Admin() {
               </div>
             </>
           )}
-      {/* Consolidated budget (visual placeholder) */}
+      {/* Consolidated budget - Real Data */}
       {activeTab === 'dashboard' && (
       <section className='bg-white rounded-xl shadow p-5'>
-        <div className='flex items-center justify-between mb-3'>
+        <div className='flex items-center justify-between mb-4'>
           <div>
-            <h2 className='text-xl font-semibold'>Consolidated budget</h2>
-            <div className='text-xs text-slate-500'>Revenues vs Expenditures</div>
+            <h2 className='text-xl font-semibold'>Portfolio Overview</h2>
+            <div className='text-xs text-slate-500'>Listings Value & Distribution</div>
           </div>
           <div className='flex gap-4 text-sm'>
-            <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-sky-500'></span>Sales</div>
-            <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-red-400'></span>Costs</div>
+            <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-purple-500'></span>For Sale</div>
+            <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-blue-500'></span>For Rent</div>
           </div>
         </div>
-        <div className='relative h-40 w-full rounded-lg bg-gradient-to-br from-slate-50 to-white border overflow-hidden'>
-          <svg viewBox='0 0 600 160' className='absolute inset-0 w-full h-full'>
-            <polyline fill='none' stroke='rgba(59,130,246,0.9)' strokeWidth='2'
-              points='0,90 40,80 80,96 120,70 160,78 200,60 240,82 280,70 320,95 360,72 400,86 440,66 480,92 520,74 560,90 600,72' />
-            <polyline fill='none' stroke='rgba(248,113,113,0.9)' strokeWidth='2'
-              points='0,110 40,118 80,112 120,130 160,122 200,138 240,120 280,132 320,110 360,128 400,116 440,134 480,112 520,126 560,114 600,130' />
-            <g strokeDasharray='4 4' stroke='rgba(148,163,184,0.4)'>
-              <line x1='0' y1='80' x2='600' y2='80' />
-            </g>
-          </svg>
+
+        {/* Stats Row */}
+        <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6'>
+          <div className='p-3 bg-gradient-to-br from-purple-50 to-white rounded-lg border'>
+            <div className='text-xs text-purple-600 font-medium'>Total Sale Value</div>
+            <div className='text-lg font-bold text-purple-800'>
+              ₹{listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + (l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
+            </div>
+            <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'sale').length} properties</div>
+          </div>
+          <div className='p-3 bg-gradient-to-br from-blue-50 to-white rounded-lg border'>
+            <div className='text-xs text-blue-600 font-medium'>Monthly Rent Value</div>
+            <div className='text-lg font-bold text-blue-800'>
+              ₹{listings.filter(l => l.type === 'rent').reduce((sum, l) => sum + (l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
+            </div>
+            <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'rent').length} properties</div>
+          </div>
+          <div className='p-3 bg-gradient-to-br from-green-50 to-white rounded-lg border'>
+            <div className='text-xs text-green-600 font-medium'>With Offers</div>
+            <div className='text-lg font-bold text-green-800'>
+              {listings.filter(l => l.offer).length}
+            </div>
+            <div className='text-xs text-slate-500'>
+              ₹{listings.filter(l => l.offer).reduce((sum, l) => sum + ((l.regularPrice || 0) - (l.discountPrice || 0)), 0).toLocaleString('en-IN')} discount
+            </div>
+          </div>
+          <div className='p-3 bg-gradient-to-br from-amber-50 to-white rounded-lg border'>
+            <div className='text-xs text-amber-600 font-medium'>Avg. Sale Price</div>
+            <div className='text-lg font-bold text-amber-800'>
+              ₹{listings.filter(l => l.type === 'sale').length > 0
+                ? Math.round(listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + (l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0)), 0) / listings.filter(l => l.type === 'sale').length).toLocaleString('en-IN')
+                : 0}
+            </div>
+            <div className='text-xs text-slate-500'>per property</div>
+          </div>
+        </div>
+
+        {/* Category Distribution */}
+        <div className='mb-4'>
+          <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Category</div>
+          <div className='space-y-2'>
+            {(() => {
+              const categoryData = listings.reduce((acc, l) => {
+                const cat = l.category || 'uncategorized';
+                if (!acc[cat]) acc[cat] = { count: 0, value: 0 };
+                acc[cat].count++;
+                acc[cat].value += l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0);
+                return acc;
+              }, {});
+              const maxCount = Math.max(...Object.values(categoryData).map(c => c.count), 1);
+              return Object.entries(categoryData).map(([cat, data]) => (
+                <div key={cat} className='flex items-center gap-3'>
+                  <div className='w-24 text-xs text-slate-600 truncate capitalize'>{cat}</div>
+                  <div className='flex-1 h-6 bg-slate-100 rounded-full overflow-hidden'>
+                    <div
+                      className='h-full bg-gradient-to-r from-sky-500 to-blue-600 rounded-full flex items-center justify-end pr-2'
+                      style={{ width: `${(data.count / maxCount) * 100}%`, minWidth: '40px' }}
+                    >
+                      <span className='text-xs text-white font-medium'>{data.count}</span>
+                    </div>
+                  </div>
+                  <div className='w-28 text-xs text-slate-500 text-right'>₹{data.value.toLocaleString('en-IN')}</div>
+                </div>
+              ));
+            })()}
+            {listings.length === 0 && (
+              <div className='text-sm text-slate-400 text-center py-4'>No listings data available</div>
+            )}
+          </div>
+        </div>
+
+        {/* Property Type Distribution */}
+        <div>
+          <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Property Type</div>
+          <div className='flex flex-wrap gap-2'>
+            {(() => {
+              const typeData = listings.reduce((acc, l) => {
+                const type = l.propertyType || 'other';
+                if (!acc[type]) acc[type] = 0;
+                acc[type]++;
+                return acc;
+              }, {});
+              const colors = ['bg-purple-100 text-purple-800', 'bg-blue-100 text-blue-800', 'bg-green-100 text-green-800', 'bg-amber-100 text-amber-800', 'bg-red-100 text-red-800', 'bg-pink-100 text-pink-800'];
+              return Object.entries(typeData).map(([type, count], idx) => (
+                <span key={type} className={`px-3 py-1.5 rounded-full text-xs font-medium ${colors[idx % colors.length]}`}>
+                  {type}: {count}
+                </span>
+              ));
+            })()}
+            {listings.length === 0 && (
+              <span className='text-sm text-slate-400'>No data</span>
+            )}
+          </div>
         </div>
       </section>
       )}
@@ -344,7 +665,8 @@ export default function Admin() {
                 onChange={(e) => setListSearch(e.target.value)}
               />
             </div>
-            <button className='px-3 py-2 rounded-lg border text-sm flex items-center gap-2'><HiOutlineDownload /> Export</button>
+            <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors'><HiOutlineDownload /> Export</button>
+            <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors'><HiOutlineUpload /> Import</button>
             <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-800 text-white text-sm inline-flex items-center gap-2'><HiOutlinePlus /> Add New</a>
           </div>
         </div>
@@ -1026,6 +1348,135 @@ export default function Admin() {
           </div>
         )}
         
+        {/* Import Listings Modal */}
+        {showImportModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-800">
+                    Import Listings from CSV
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportFile(null);
+                      setImportResults(null);
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="text-sm text-slate-600 mt-1">
+                  Upload a CSV file to bulk import listings
+                </p>
+              </div>
+
+              <div className="p-6">
+                {/* Download Sample Template */}
+                <div className="mb-4 p-4 bg-slate-50 rounded-lg">
+                  <p className="text-sm text-slate-600 mb-2">
+                    Download a sample CSV template to see the expected format:
+                  </p>
+                  <button
+                    onClick={downloadSampleCSV}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                  >
+                    <HiOutlineDownload className="w-4 h-4" />
+                    Download Sample Template
+                  </button>
+                </div>
+
+                {/* File Upload */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Select CSV File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => setImportFile(e.target.files[0])}
+                    className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                  />
+                  {importFile && (
+                    <p className="mt-2 text-sm text-slate-600">
+                      Selected: {importFile.name}
+                    </p>
+                  )}
+                </div>
+
+                {/* Import Results */}
+                {importResults && (
+                  <div className="mt-4 p-4 rounded-lg border">
+                    <h4 className="font-medium text-slate-800 mb-2">Import Results</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="p-3 bg-green-50 rounded-lg">
+                        <div className="text-green-800 font-medium">{importResults.success?.length || 0}</div>
+                        <div className="text-green-600 text-xs">Successfully imported</div>
+                      </div>
+                      <div className="p-3 bg-red-50 rounded-lg">
+                        <div className="text-red-800 font-medium">{importResults.failed?.length || 0}</div>
+                        <div className="text-red-600 text-xs">Failed to import</div>
+                      </div>
+                    </div>
+                    {importResults.failed && importResults.failed.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-slate-700 mb-1">Errors:</p>
+                        <div className="max-h-32 overflow-y-auto text-xs text-red-600 bg-red-50 rounded p-2">
+                          {importResults.failed.map((err, idx) => (
+                            <div key={idx} className="mb-1">
+                              Row {err.row}: {err.error}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResults(null);
+                  }}
+                  disabled={importing}
+                  className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  {importResults ? 'Close' : 'Cancel'}
+                </button>
+                {!importResults && (
+                  <button
+                    onClick={handleImportFile}
+                    disabled={importing || !importFile}
+                    className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {importing ? (
+                      <>
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <HiOutlineUpload className="w-4 h-4" />
+                        Import Listings
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Role Management Tab */}
         {activeTab === 'roles' && isAdmin && (
           <RoleManagement />

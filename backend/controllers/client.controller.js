@@ -36,7 +36,7 @@ export const createClient = async (req, res, next) => {
 export const getClients = async (req, res, next) => {
   try {
     const { q, status, assignedTo, tag, page = 1, limit = 20 } = req.query;
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
 
     if (q) {
       filter.$text = { $search: q };
@@ -65,7 +65,7 @@ export const getClients = async (req, res, next) => {
 export const getClientById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const doc = await Client.findById(id).lean();
+    const doc = await Client.findOne({ _id: id, isDeleted: { $ne: true } }).lean();
     if (!doc) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(doc.assignedTo) !== req.user.id) {
       return next(errorHandler(403, 'Forbidden'));
@@ -110,7 +110,11 @@ export const deleteClient = async (req, res, next) => {
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
       return next(errorHandler(403, 'Forbidden'));
     }
-    await Client.findByIdAndDelete(id);
+    await Client.findByIdAndUpdate(id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
     res.json({ success: true, message: 'Client deleted' });
   } catch (err) {
     next(err);

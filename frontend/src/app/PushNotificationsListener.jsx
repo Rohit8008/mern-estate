@@ -28,9 +28,10 @@ export default function PushNotificationsListener() {
         const isOnMessages = location.pathname.startsWith('/messages');
         if (isOnMessages) return;
 
-        const senderLabel = msg.senderName || msg.senderUsername || 'someone';
+        const senderLabel = msg.senderName || msg.senderUsername || 'Someone';
+        const preview = msg.content ? msg.content.slice(0, 50) + (msg.content.length > 50 ? '...' : '') : '';
 
-        showInfo(`New message from ${senderLabel}`, {
+        showInfo(`${senderLabel}: ${preview || 'sent you a message'}`, {
           duration: 5000,
           onClick: () => {
             try {

@@ -11,7 +11,7 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
 
   // Build query based on role
   const listingQuery = { isDeleted: false };
-  const buyerQuery = {};
+  const buyerQuery = { isDeleted: { $ne: true } };
 
   // Employees only see their assigned data
   if (isEmployee && !isAdmin) {
@@ -44,8 +44,8 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'active' }),
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'matched' }),
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'closed' }),
-    isAdmin ? User.countDocuments({ role: 'employee' }) : Promise.resolve(0),
-    isAdmin ? User.countDocuments({ role: 'employee', status: 'active' }) : Promise.resolve(0),
+    isAdmin ? User.countDocuments({ role: 'employee', isDeleted: { $ne: true } }) : Promise.resolve(0),
+    isAdmin ? User.countDocuments({ role: 'employee', status: 'active', isDeleted: { $ne: true } }) : Promise.resolve(0),
     Listing.find(listingQuery)
       .sort({ createdAt: -1 })
       .limit(5)
@@ -179,7 +179,7 @@ export const getBuyerStats = asyncHandler(async (req, res, next) => {
   const isAdmin = req.user?.role === 'admin';
   const isEmployee = req.user?.role === 'employee';
 
-  const buyerQuery = {};
+  const buyerQuery = { isDeleted: { $ne: true } };
   if (isEmployee && !isAdmin) {
     buyerQuery.assignedAgent = req.user.id;
   }
@@ -247,15 +247,15 @@ export const getEmployeePerformance = asyncHandler(async (req, res, next) => {
     throw new AuthorizationError('Only admins can view employee performance');
   }
 
-  const employees = await User.find({ role: 'employee' }).select('_id username email firstName lastName');
+  const employees = await User.find({ role: 'employee', isDeleted: { $ne: true } }).select('_id username email firstName lastName');
 
   const performanceData = await Promise.all(
     employees.map(async (employee) => {
       const [assignedListings, soldListings, assignedBuyers, closedBuyers] = await Promise.all([
         Listing.countDocuments({ assignedAgent: employee._id, isDeleted: false }),
         Listing.countDocuments({ assignedAgent: employee._id, status: 'sold', isDeleted: false }),
-        BuyerRequirement.countDocuments({ assignedAgent: employee._id }),
-        BuyerRequirement.countDocuments({ assignedAgent: employee._id, status: 'closed' }),
+        BuyerRequirement.countDocuments({ assignedAgent: employee._id, isDeleted: { $ne: true } }),
+        BuyerRequirement.countDocuments({ assignedAgent: employee._id, status: 'closed', isDeleted: { $ne: true } }),
       ]);
 
       return {
@@ -297,12 +297,12 @@ export const getActivityLog = asyncHandler(async (req, res, next) => {
     .populate('assignedAgent', 'username firstName lastName')
     .lean();
 
-  const buyerQuery = {};
+  const buyerQuery2 = { isDeleted: { $ne: true } };
   if (!isAdmin) {
-    buyerQuery.$or = [{ createdBy: req.user.id }, { assignedAgent: req.user.id }];
+    buyerQuery2.$or = [{ createdBy: req.user.id }, { assignedAgent: req.user.id }];
   }
 
-  const recentBuyers = await BuyerRequirement.find(buyerQuery)
+  const recentBuyers = await BuyerRequirement.find(buyerQuery2)
     .sort({ createdAt: -1 })
     .limit(limit)
     .select('buyerName status createdAt createdBy assignedAgent')

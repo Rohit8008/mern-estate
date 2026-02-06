@@ -3,9 +3,12 @@ import { asyncHandler, ValidationError, NotFoundError } from '../utils/error.js'
 
 export const getAllPropertyTypes = asyncHandler(async (req, res) => {
   const { includeInactive } = req.query;
-  
-  const query = includeInactive === 'true' ? {} : { isActive: true };
-  
+
+  const query = { isDeleted: { $ne: true } };
+  if (includeInactive !== 'true') {
+    query.isActive = true;
+  }
+
   const propertyTypes = await PropertyType.find(query)
     .sort({ order: 1, name: 1 })
     .lean();
@@ -19,9 +22,9 @@ export const getAllPropertyTypes = asyncHandler(async (req, res) => {
 
 export const getPropertyTypeBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
-  
-  const propertyType = await PropertyType.findOne({ slug, isActive: true }).lean();
-  
+
+  const propertyType = await PropertyType.findOne({ slug, isActive: true, isDeleted: { $ne: true } }).lean();
+
   if (!propertyType) {
     throw new NotFoundError('Property type not found');
   }
@@ -111,7 +114,7 @@ export const deletePropertyType = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const propertyType = await PropertyType.findById(id);
-  
+
   if (!propertyType) {
     throw new NotFoundError('Property type not found');
   }
@@ -120,7 +123,11 @@ export const deletePropertyType = asyncHandler(async (req, res) => {
     throw new ValidationError('Cannot delete system property types');
   }
 
-  await PropertyType.findByIdAndDelete(id);
+  await PropertyType.findByIdAndUpdate(id, {
+    isDeleted: true,
+    deletedAt: new Date(),
+    deletedBy: req.user?.id || null,
+  });
 
   res.status(200).json({
     success: true,

@@ -72,6 +72,9 @@ const roleSchema = new mongoose.Schema(
     },
     isActive: { type: Boolean, default: true },
     isSystem: { type: Boolean, default: false }, // System roles cannot be deleted
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     createdBy: { 
       type: mongoose.Schema.Types.ObjectId, 
       ref: 'User',

@@ -15,6 +15,20 @@ const categorySchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     // Dynamic field definitions for listings in this category
     // Example item: { key: 'plotSize', label: 'Plot size', type: 'number', required: false, options: [] }
     fields: {

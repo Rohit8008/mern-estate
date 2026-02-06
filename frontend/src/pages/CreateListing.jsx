@@ -285,24 +285,27 @@ export default function CreateListing() {
 
   const handleChange = (e) => {
     if (e.target.id === 'sale' || e.target.id === 'rent') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         type: e.target.id,
-      });
+      }));
+      return;
     }
 
     if (e.target.id === 'parking' || e.target.id === 'furnished' || e.target.id === 'offer') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [e.target.id]: e.target.checked,
-      });
+      }));
+      return;
     }
 
     if (e.target.type === 'number' || e.target.type === 'text' || e.target.type === 'textarea') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [e.target.id]: e.target.value,
-      });
+      }));
+      return;
     }
 
     if (e.target.type === 'select-one') {
@@ -310,39 +313,39 @@ export default function CreateListing() {
         const selectedType = propertyTypes.find(pt => pt.slug === e.target.value);
         setSelectedPropertyType(selectedType);
         setPropertyTypeFields({});
-        setFormData({
-          ...formData,
+        setFormData(prev => ({
+          ...prev,
           propertyType: e.target.value,
-        });
+        }));
       } else if (e.target.name === 'category') {
         const category = categories.find(c => c.slug === e.target.value);
         setSelectedCategory(category);
         setCategoryFields({});
-        setFormData({
-          ...formData,
+        setFormData(prev => ({
+          ...prev,
           category: e.target.value,
-        });
+        }));
       } else {
-        setFormData({
-          ...formData,
+        setFormData(prev => ({
+          ...prev,
           [e.target.name]: e.target.value,
-        });
+        }));
       }
     }
   };
 
   const handlePropertyTypeFieldChange = (fieldKey, value) => {
-    setPropertyTypeFields({
-      ...propertyTypeFields,
+    setPropertyTypeFields(prev => ({
+      ...prev,
       [fieldKey]: value,
-    });
+    }));
   };
 
   const handleCategoryFieldChange = (fieldKey, value) => {
-    setCategoryFields({
-      ...categoryFields,
+    setCategoryFields(prev => ({
+      ...prev,
       [fieldKey]: value,
-    });
+    }));
   };
 
   const handleImageSubmit = async () => {
@@ -408,17 +411,26 @@ export default function CreateListing() {
       }
       setLoading(true);
       setError(false);
+
+      // Merge propertyTypeFields into main data for fields that exist in both
+      const mergedData = {
+        ...formData,
+        // Override with propertyTypeFields values if they exist
+        bedrooms: propertyTypeFields.bedrooms ?? formData.bedrooms,
+        bathrooms: propertyTypeFields.bathrooms ?? formData.bathrooms,
+        parking: propertyTypeFields.parking ?? formData.parking,
+        furnished: propertyTypeFields.furnished ?? formData.furnished,
+        propertyTypeFields: propertyTypeFields,
+        categoryFields: categoryFields,
+        userRef: currentUser._id,
+      };
+
       const res = await fetch('/api/listing/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          propertyTypeFields: propertyTypeFields,
-          categoryFields: categoryFields,
-          userRef: currentUser._id,
-        }),
+        body: JSON.stringify(mergedData),
       });
 
       const data = await res.json();
@@ -490,14 +502,29 @@ export default function CreateListing() {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
       );
-      
+
       const data = await response.json();
-      
+
       if (data && data.display_name) {
-        const address = data.display_name;
+        const addr = data.address || {};
+        // Extract city, state, pincode
+        const city = addr.city || addr.town || addr.village || addr.county || addr.district || '';
+        const state = addr.state || '';
+        const pincode = addr.postcode || '';
+        // Build a cleaner address
+        const addressParts = [];
+        if (addr.house_number) addressParts.push(addr.house_number);
+        if (addr.road) addressParts.push(addr.road);
+        if (addr.neighbourhood) addressParts.push(addr.neighbourhood);
+        if (addr.suburb) addressParts.push(addr.suburb);
+        const cleanAddress = addressParts.length > 0 ? addressParts.join(', ') : data.display_name.split(',').slice(0, 3).join(',');
+
         setFormData(prev => ({
           ...prev,
-          address: address
+          address: cleanAddress,
+          city: city,
+          state: state,
+          pincode: pincode
         }));
       }
     } catch (error) {
@@ -544,15 +571,10 @@ export default function CreateListing() {
     }, 500);
   };
 
-  // Auto-geocode when address is complete
-  useEffect(() => {
-    const { address, city, state, pincode } = formData;
-    
-    if (address && city && state && pincode) {
-      const fullAddress = `${address}, ${city}, ${state}, ${pincode}, India`;
-      geocodeAddress(fullAddress);
-    }
-  }, [formData.address, formData.city, formData.state, formData.pincode]);
+  // Auto-geocode removed - location is set via:
+  // 1. Selecting an address suggestion (auto-fills all fields + location)
+  // 2. Clicking "Find on Map" button
+  // 3. Clicking "Use My Location" button
 
   return (
     <main className='min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50'>
@@ -725,25 +747,43 @@ export default function CreateListing() {
                             onClick={() => {
                               const lat = parseFloat(suggestion.lat);
                               const lng = parseFloat(suggestion.lon);
+                              const addr = suggestion.address || {};
+                              // Extract city, state, pincode from suggestion
+                              const city = addr.city || addr.town || addr.village || addr.county || addr.district || '';
+                              const state = addr.state || '';
+                              const pincode = addr.postcode || '';
+                              // Build a cleaner address without duplicating city/state/pincode
+                              const addressParts = [];
+                              if (addr.house_number) addressParts.push(addr.house_number);
+                              if (addr.road) addressParts.push(addr.road);
+                              if (addr.neighbourhood) addressParts.push(addr.neighbourhood);
+                              if (addr.suburb) addressParts.push(addr.suburb);
+                              const cleanAddress = addressParts.length > 0 ? addressParts.join(', ') : suggestion.display_name.split(',').slice(0, 3).join(',');
+
                               setFormData(prev => ({
                                 ...prev,
-                                address: suggestion.display_name,
+                                address: cleanAddress,
+                                city: city,
+                                state: state,
+                                pincode: pincode,
                                 location: { lat, lng }
                               }));
                               setShowSuggestions(false);
                               setAddressSuggestions([]);
+                              setGeoStatus('Location found!');
+                              setTimeout(() => setGeoStatus(''), 2000);
                             }}
                           >
                             <div className='text-sm font-medium text-gray-900'>
                               {suggestion.display_name}
-                    </div>
+                            </div>
                             {suggestion.address && (
                               <div className='text-xs text-gray-500 mt-1'>
-                                {suggestion.address.city || suggestion.address.town || suggestion.address.village}, 
+                                {suggestion.address.city || suggestion.address.town || suggestion.address.village || suggestion.address.county},
                                 {suggestion.address.state}, {suggestion.address.postcode}
-                  </div>
+                              </div>
                             )}
-                  </div>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -771,15 +811,17 @@ export default function CreateListing() {
                       type='button'
                         onClick={() => {
                           const { address, city, state, pincode } = formData;
-                          if (address && city && state && pincode) {
-                            const fullAddress = `${address}, ${city}, ${state}, ${pincode}, India`;
+                          // Build address from available fields
+                          const parts = [address, city, state, pincode].filter(Boolean);
+                          if (parts.length > 0) {
+                            const fullAddress = parts.join(', ') + ', India';
                             geocodeAddress(fullAddress);
                           } else {
-                            setGeoStatus('Please fill in all address fields first');
+                            setGeoStatus('Please enter an address first');
                             setTimeout(() => setGeoStatus(''), 3000);
                           }
                         }}
-                        disabled={geocoding || !formData.address || !formData.city || !formData.state || !formData.pincode}
+                        disabled={geocoding || !formData.address}
                         className='px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2'
                     >
                       <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -1112,7 +1154,7 @@ export default function CreateListing() {
                     <label className='flex items-center'>
                     <input
                         type='checkbox'
-                        name='parking'
+                        id='parking'
                         checked={formData.parking}
                       onChange={handleChange}
                         className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
@@ -1122,7 +1164,7 @@ export default function CreateListing() {
                     <label className='flex items-center'>
                     <input
                         type='checkbox'
-                        name='furnished'
+                        id='furnished'
                         checked={formData.furnished}
                       onChange={handleChange}
                         className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
@@ -1132,7 +1174,7 @@ export default function CreateListing() {
                     <label className='flex items-center'>
                       <input
                         type='checkbox'
-                        name='offer'
+                        id='offer'
                         checked={formData.offer}
                         onChange={handleChange}
                         className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'

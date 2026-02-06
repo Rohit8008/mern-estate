@@ -267,48 +267,48 @@ export default function UpdateListing() {
   };
 
   const handleRemoveImage = (index) => {
-    setFormData({
-      ...formData,
-      imageUrls: formData.imageUrls.filter((_, i) => i !== index),
-    });
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const handleChange = (e) => {
     if (e.target.id === 'sale' || e.target.id === 'rent') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         type: e.target.id,
-      });
+      }));
     } else if (e.target.id === 'parking' || e.target.id === 'furnished' || e.target.id === 'offer') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [e.target.id]: e.target.checked,
-      });
+      }));
     } else if (e.target.name === 'propertyType') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         propertyType: e.target.value,
-      });
+      }));
     } else if (e.target.id === 'customPropertyType') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         customPropertyType: e.target.value,
-      });
+      }));
     } else if (e.target.type === 'number') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [e.target.id]: parseInt(e.target.value),
-      });
+      }));
     } else if (e.target.type === 'file') {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [e.target.id]: e.target.files[0],
-      });
+      }));
     } else {
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         [e.target.id]: e.target.value,
-      });
+      }));
     }
   };
 
@@ -371,7 +371,7 @@ export default function UpdateListing() {
       const data = await res.json();
       if (data && data.slug) {
         setCategories((prev) => [...prev, data]);
-        setFormData({ ...formData, category: data.slug });
+        setFormData(prev => ({ ...prev, category: data.slug }));
         setNewCategoryName('');
       }
     } catch (e) {}
@@ -554,14 +554,13 @@ export default function UpdateListing() {
               {/* Description */}
               <div>
                 <label htmlFor='description' className='block text-sm font-medium text-gray-700 mb-1'>
-                  Description *
+                  Description
                 </label>
                 <textarea
                   placeholder='Describe your property in detail...'
                   className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none'
                   id='description'
                   rows='4'
-                  required
                   onChange={handleChange}
                   value={formData.description}
                 />
@@ -922,7 +921,7 @@ export default function UpdateListing() {
                   className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
                   value={formData.category}
                   onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
+                    setFormData(prev => ({ ...prev, category: e.target.value }))
                   }
                 >
                   <option value=''>Select category</option>

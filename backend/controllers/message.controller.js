@@ -61,8 +61,18 @@ export const sendMessage = async (req, res, next) => {
       content: encryptedContent,
       isEncrypted: true,
     });
+    // Fetch sender details for notification
+    const sender = await User.findById(req.user.id).select('username firstName lastName').lean();
+    const senderName = sender?.firstName && sender?.lastName
+      ? `${sender.firstName} ${sender.lastName}`
+      : null;
     // Return plaintext content in all outgoing responses
-    const decrypted = { ...msg.toObject(), content: finalContent };
+    const decrypted = {
+      ...msg.toObject(),
+      content: finalContent,
+      senderName,
+      senderUsername: sender?.username,
+    };
     // Notify receiver about new message and update conversations
     io.to(`user:${receiverId}`).emit('message:new', decrypted);
     io.to(`user:${receiverId}`).emit('conversations:update');

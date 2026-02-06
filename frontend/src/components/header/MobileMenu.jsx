@@ -28,18 +28,20 @@ export default function MobileMenu({
             <FaHome className='w-5 h-5' />
             Home
           </Link>
-          <Link
-            onClick={onClose}
-            to='/search'
-            className={`${
-              isActive('/search')
-                ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-blue-300'
-                : 'text-gray-700 hover:bg-gray-50'
-            } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
-          >
-            <FaHome className='w-5 h-5' />
-            Properties
-          </Link>
+          {currentUser && (
+            <Link
+              onClick={onClose}
+              to='/search'
+              className={`${
+                isActive('/search')
+                  ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-blue-300'
+                  : 'text-gray-700 hover:bg-gray-50'
+              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+            >
+              <FaHome className='w-5 h-5' />
+              Properties
+            </Link>
+          )}
           {(currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') &&
             !isBuyerViewMode && (
               <Link

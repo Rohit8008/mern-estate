@@ -92,7 +92,7 @@ export default function UserMenu({
               <FaCog className='w-4 h-4' />
               <span>Settings</span>
             </Link>
-            {currentUser?.role === 'employee' && (
+            {(currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') && (
               <button
                 onClick={() => {
                   setShowUserMenu(false);

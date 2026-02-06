@@ -148,7 +148,7 @@ export const signin = asyncHandler(async (req, res, next) => {
     throw new ValidationError('Please provide a valid email address', 'email');
   }
 
-  const validUser = await User.findOne({ email }).select('+password');
+  const validUser = await User.findOne({ email, isDeleted: { $ne: true } }).select('+password');
   if (!validUser) {
     logSecurityEvent({
       email: email || '',
@@ -337,7 +337,7 @@ export const google = asyncHandler(async (req, res, next) => {
 
   try {
     // Check if user exists
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email, isDeleted: { $ne: true } });
 
     if (user) {
       // User exists, sign them in

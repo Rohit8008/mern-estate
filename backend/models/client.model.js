@@ -137,6 +137,11 @@ const clientSchema = new mongoose.Schema(
     convertedAt: { type: Date },
     lostReason: { type: String },
     lostAt: { type: Date },
+
+    // Soft delete
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );

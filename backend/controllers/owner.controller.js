@@ -26,7 +26,15 @@ export const updateOwner = async (req, res, next) => {
 
 export const deleteOwner = async (req, res, next) => {
   try {
-    const deleted = await Owner.findByIdAndDelete(req.params.id);
+    const deleted = await Owner.findByIdAndUpdate(
+      req.params.id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user?.id || null,
+      },
+      { new: true }
+    );
     if (!deleted) return next(errorHandler(404, 'Owner not found'));
     try { io.emit('owners:changed'); } catch (_) {}
     res.status(200).json({ success: true });
@@ -37,7 +45,7 @@ export const deleteOwner = async (req, res, next) => {
 
 export const getOwner = async (req, res, next) => {
   try {
-    const owner = await Owner.findById(req.params.id);
+    const owner = await Owner.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!owner) return next(errorHandler(404, 'Owner not found'));
     res.status(200).json(owner);
   } catch (e) {
@@ -48,7 +56,7 @@ export const getOwner = async (req, res, next) => {
 export const listOwners = async (req, res, next) => {
   try {
     const { q, active } = req.query;
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
     if (q) filter.name = { $regex: String(q), $options: 'i' };
     if (active === 'true') filter.active = true;
     if (active === 'false') filter.active = false;

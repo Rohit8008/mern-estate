@@ -31,15 +31,15 @@ export const createRole = async (req, res, next) => {
 export const getRoles = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, search, isActive } = req.query;
-    const filter = {};
-    
+    const filter = { isDeleted: { $ne: true } };
+
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     if (isActive !== undefined) {
       filter.isActive = isActive === 'true';
     }
@@ -67,10 +67,10 @@ export const getRoles = async (req, res, next) => {
 // Get single role
 export const getRole = async (req, res, next) => {
   try {
-    const role = await Role.findById(req.params.id)
+    const role = await Role.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
       .populate('createdBy', 'username firstName lastName')
       .populate('updatedBy', 'username firstName lastName');
-    
+
     if (!role) {
       return next(errorHandler(404, 'Role not found'));
     }
@@ -152,7 +152,11 @@ export const deleteRole = async (req, res, next) => {
       await User.updateMany({ assignedRole: req.params.id }, { $set: { assignedRole: null } });
     }
 
-    await Role.findByIdAndDelete(req.params.id);
+    await Role.findByIdAndUpdate(req.params.id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
     sendSuccessResponse(res, { deleted: true, id: req.params.id, unassignedUsers: force ? usersWithRole : 0 }, 'Role deleted successfully');
   } catch (error) {
     next(error);

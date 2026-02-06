@@ -44,6 +44,7 @@ export default function Listing() {
   const [copied, setCopied] = useState(false);
   const [contact, setContact] = useState(false);
   const [categoryFields, setCategoryFields] = useState([]);
+  const [propertyTypeData, setPropertyTypeData] = useState(null);
   const params = useParams();
   const { currentUser } = useSelector((state) => state.user);
   const navigate = useNavigate();
@@ -84,6 +85,20 @@ export default function Listing() {
     };
     fetchCategory();
   }, [listing?.category]);
+
+  useEffect(() => {
+    const fetchPropertyType = async () => {
+      if (!listing?.propertyType) { setPropertyTypeData(null); return; }
+      try {
+        const res = await fetch(`/api/property-types/${listing.propertyType}`);
+        const data = await parseJsonSafely(res);
+        setPropertyTypeData(data?.data || data || null);
+      } catch (_) {
+        setPropertyTypeData(null);
+      }
+    };
+    fetchPropertyType();
+  }, [listing?.propertyType]);
 
   return (
     <main>
@@ -222,24 +237,59 @@ export default function Listing() {
                     </div>
                   </div>
                 )}
-                <ul className='mt-4 text-green-900 font-semibold text-sm flex flex-wrap items-center gap-3 sm:gap-4'>
-                  <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
-                    <FaBed className='text-base' />
-                    {listing.bedrooms > 1 ? `${listing.bedrooms} beds` : `${listing.bedrooms} bed`}
-                  </li>
-                  <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
-                    <FaBath className='text-base' />
-                    {listing.bathrooms > 1 ? `${listing.bathrooms} baths` : `${listing.bathrooms} bath`}
-                  </li>
-                  <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
-                    <FaParking className='text-base' />
-                    {listing.parking ? 'Parking spot' : 'No Parking'}
-                  </li>
-                  <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
-                    <FaChair className='text-base' />
-                    {listing.furnished ? 'Furnished' : 'Unfurnished'}
-                  </li>
-                </ul>
+                {/* Property Type Fields */}
+                {listing.propertyTypeFields && Object.keys(listing.propertyTypeFields).length > 0 && (
+                  <div className='mt-4'>
+                    <p className='font-semibold text-black mb-3'>
+                      {propertyTypeData?.name || 'Property'} Details
+                    </p>
+                    <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3'>
+                      {Object.entries(listing.propertyTypeFields).map(([key, value]) => {
+                        const field = propertyTypeData?.fields?.find(f => f.key === key);
+                        const label = field?.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                        let displayValue;
+                        if (typeof value === 'boolean') {
+                          displayValue = value ? 'Yes' : 'No';
+                        } else if (Array.isArray(value)) {
+                          displayValue = value.join(', ');
+                        } else {
+                          displayValue = String(value);
+                        }
+                        const unit = field?.unit || '';
+                        return (
+                          <div key={key} className='bg-slate-50 rounded-lg p-3 border border-slate-100'>
+                            <span className='text-xs font-medium text-slate-500 block mb-1'>{label}</span>
+                            <span className='text-sm font-semibold text-slate-800'>
+                              {displayValue}{unit && ` ${unit}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Info Pills - Only show if no propertyTypeFields or as fallback */}
+                {(!listing.propertyTypeFields || Object.keys(listing.propertyTypeFields).length === 0) && (
+                  <ul className='mt-4 text-green-900 font-semibold text-sm flex flex-wrap items-center gap-3 sm:gap-4'>
+                    <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
+                      <FaBed className='text-base' />
+                      {listing.bedrooms > 1 ? `${listing.bedrooms} beds` : `${listing.bedrooms} bed`}
+                    </li>
+                    <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
+                      <FaBath className='text-base' />
+                      {listing.bathrooms > 1 ? `${listing.bathrooms} baths` : `${listing.bathrooms} bath`}
+                    </li>
+                    <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
+                      <FaParking className='text-base' />
+                      {listing.parking ? 'Parking spot' : 'No Parking'}
+                    </li>
+                    <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
+                      <FaChair className='text-base' />
+                      {listing.furnished ? 'Furnished' : 'Unfurnished'}
+                    </li>
+                  </ul>
+                )}
               </div>
               
               {/* New Property Details */}

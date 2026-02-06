@@ -21,6 +21,7 @@ async function getListingUpdateRecipients(category) {
 
     const query = {
       role: { $in: baseRoles },
+      isDeleted: { $ne: true },
     };
 
     if (category) {
@@ -150,7 +151,8 @@ export const deleteListing = async (req, res, next) => {
     return next(errorHandler(403, 'Buyers are not allowed to delete listings!'));
   }
 
-  if (req.user.id !== listing.userRef) {
+  // Admins can delete any listing
+  if (req.user.role !== 'admin' && req.user.id !== listing.userRef) {
     if (!(
       req.user.role === 'employee' &&
       listing.category &&
@@ -161,7 +163,11 @@ export const deleteListing = async (req, res, next) => {
   }
 
   try {
-    await Listing.findByIdAndDelete(req.params.id);
+    // Soft delete
+    await Listing.findByIdAndUpdate(req.params.id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+    });
 
     await emitListingUpdate('deleted', listing, listing?.category);
 
@@ -182,7 +188,8 @@ export const updateListing = async (req, res, next) => {
     return next(errorHandler(403, 'Buyers are not allowed to update listings!'));
   }
 
-  if (req.user.id !== listing.userRef) {
+  // Admins can update any listing
+  if (req.user.role !== 'admin' && req.user.id !== listing.userRef) {
     if (!(
       req.user.role === 'employee' &&
       listing.category &&
@@ -249,7 +256,7 @@ export const updateListing = async (req, res, next) => {
 
 export const getListing = async (req, res, next) => {
   try {
-    const listing = await Listing.findById(req.params.id);
+    const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!listing) {
       return next(errorHandler(404, 'Listing not found!'));
     }
@@ -607,4 +614,127 @@ export const getListings = asyncHandler(async (req, res, next) => {
   };
   
   sendSuccessResponse(res, response, 'Listings retrieved successfully');
+});
+
+// Bulk import listings from CSV/Excel data
+export const bulkImportListings = asyncHandler(async (req, res, next) => {
+  const { listings: listingsData } = req.body;
+
+  if (!listingsData || !Array.isArray(listingsData) || listingsData.length === 0) {
+    return next(errorHandler(400, 'No listings data provided'));
+  }
+
+  // Limit bulk import to 100 listings at a time
+  if (listingsData.length > 100) {
+    return next(errorHandler(400, 'Maximum 100 listings can be imported at once'));
+  }
+
+  const results = {
+    success: [],
+    failed: [],
+  };
+
+  for (let i = 0; i < listingsData.length; i++) {
+    const data = listingsData[i];
+    const rowNumber = i + 2; // +2 because row 1 is headers, and arrays are 0-indexed
+
+    try {
+      // Validate required fields
+      if (!data.name || !data.address) {
+        results.failed.push({
+          row: rowNumber,
+          name: data.name || 'Unknown',
+          error: 'Missing required fields (name, address)',
+        });
+        continue;
+      }
+
+      // Create listing object with defaults
+      const listingData = {
+        name: String(data.name).trim(),
+        description: data.description ? String(data.description).trim() : '',
+        address: String(data.address).trim(),
+        city: data.city ? String(data.city).trim() : '',
+        state: data.state ? String(data.state).trim() : '',
+        pincode: data.pincode ? String(data.pincode).trim() : '',
+        type: ['sale', 'rent'].includes(data.type?.toLowerCase()) ? data.type.toLowerCase() : 'sale',
+        propertyType: data.propertyType ? String(data.propertyType).trim().toLowerCase() : '',
+        category: data.category ? String(data.category).trim().toLowerCase() : '',
+        regularPrice: parseFloat(data.regularPrice) || parseFloat(data.price) || 0,
+        discountPrice: parseFloat(data.discountPrice) || 0,
+        offer: data.offer === true || data.offer === 'true' || data.offer === 'Yes' || data.offer === 'yes',
+        bedrooms: parseInt(data.bedrooms) || 1,
+        bathrooms: parseInt(data.bathrooms) || 1,
+        parking: data.parking === true || data.parking === 'true' || data.parking === 'Yes' || data.parking === 'yes',
+        furnished: data.furnished === true || data.furnished === 'true' || data.furnished === 'Yes' || data.furnished === 'yes',
+        imageUrls: data.imageUrls ? (Array.isArray(data.imageUrls) ? data.imageUrls : [data.imageUrls]) : [],
+        userRef: req.user.id,
+      };
+
+      // Handle location
+      if (data.latitude && data.longitude) {
+        listingData.location = {
+          lat: parseFloat(data.latitude),
+          lng: parseFloat(data.longitude),
+        };
+      } else if (data.lat && data.lng) {
+        listingData.location = {
+          lat: parseFloat(data.lat),
+          lng: parseFloat(data.lng),
+        };
+      }
+
+      // Handle property type fields
+      if (data.propertyTypeFields && typeof data.propertyTypeFields === 'object') {
+        listingData.propertyTypeFields = data.propertyTypeFields;
+      } else {
+        // Extract common property type fields from flat data
+        const propertyTypeFields = {};
+        const ptFieldKeys = ['floors', 'plotSize', 'areaSqFt', 'sqYard', 'sqYardRate', 'facing', 'floor', 'totalFloors', 'lift', 'balcony', 'garden', 'boundaryWall', 'cornerPlot'];
+        ptFieldKeys.forEach(key => {
+          if (data[key] !== undefined && data[key] !== '') {
+            if (['floors', 'areaSqFt', 'sqYard', 'sqYardRate', 'floor', 'totalFloors'].includes(key)) {
+              propertyTypeFields[key] = parseFloat(data[key]) || 0;
+            } else if (['lift', 'balcony', 'garden', 'boundaryWall', 'cornerPlot'].includes(key)) {
+              propertyTypeFields[key] = data[key] === true || data[key] === 'true' || data[key] === 'Yes' || data[key] === 'yes';
+            } else {
+              propertyTypeFields[key] = data[key];
+            }
+          }
+        });
+        if (Object.keys(propertyTypeFields).length > 0) {
+          listingData.propertyTypeFields = propertyTypeFields;
+        }
+      }
+
+      // Additional fields
+      if (data.areaName) listingData.areaName = String(data.areaName).trim();
+      if (data.propertyNo) listingData.propertyNo = String(data.propertyNo).trim();
+      if (data.remarks) listingData.remarks = String(data.remarks).trim();
+
+      const listing = await Listing.create(listingData);
+      results.success.push({
+        row: rowNumber,
+        name: listing.name,
+        id: listing._id,
+      });
+    } catch (error) {
+      results.failed.push({
+        row: rowNumber,
+        name: data.name || 'Unknown',
+        error: error.message,
+      });
+    }
+  }
+
+  // Notify about new listings
+  if (results.success.length > 0) {
+    io.emit('listing:update', { action: 'bulk_import', count: results.success.length });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `Imported ${results.success.length} listings, ${results.failed.length} failed`,
+    data: results,
+  });
 });

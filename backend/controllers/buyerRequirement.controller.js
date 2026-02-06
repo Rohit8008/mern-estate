@@ -18,7 +18,7 @@ export const createBuyerRequirement = async (req, res, next) => {
 export const getBuyerRequirements = async (req, res, next) => {
   try {
     const { search, propertyType, status, priority, preferredCity, preferredLocality, assignedAgent, propertyTypeInterest } = req.query;
-    const query = {};
+    const query = { isDeleted: { $ne: true } };
 
     // Only filter by createdBy if user is not admin or employee
     if (req.user.role !== 'admin' && req.user.role !== 'employee') {
@@ -89,7 +89,7 @@ export const getBuyerRequirements = async (req, res, next) => {
 
 export const getBuyerRequirement = async (req, res, next) => {
   try {
-    const buyerRequirement = await BuyerRequirement.findById(req.params.id)
+    const buyerRequirement = await BuyerRequirement.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
       .populate('matchedProperties', 'name price imageUrls address bedrooms bathrooms');
 
     if (!buyerRequirement) {
@@ -134,11 +134,16 @@ export const deleteBuyerRequirement = async (req, res, next) => {
       return next(errorHandler(404, 'Buyer requirement not found'));
     }
 
-    if (buyerRequirement.createdBy.toString() !== req.user.id) {
+    // Allow admin or owner to delete
+    if (req.user.role !== 'admin' && buyerRequirement.createdBy.toString() !== req.user.id) {
       return next(errorHandler(403, 'You can only delete your own buyer requirements'));
     }
 
-    await BuyerRequirement.findByIdAndDelete(req.params.id);
+    await BuyerRequirement.findByIdAndUpdate(req.params.id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
 
     res.json({ message: 'Buyer requirement deleted successfully' });
   } catch (error) {
@@ -267,7 +272,7 @@ export const updateBuyerStatus = async (req, res, next) => {
 export const getBuyerStats = async (req, res, next) => {
   try {
     const stats = await BuyerRequirement.aggregate([
-      { $match: { createdBy: req.user.id } },
+      { $match: { createdBy: req.user.id, isDeleted: { $ne: true } } },
       {
         $group: {
           _id: null,
@@ -281,7 +286,7 @@ export const getBuyerStats = async (req, res, next) => {
     ]);
 
     const propertyTypeStats = await BuyerRequirement.aggregate([
-      { $match: { createdBy: req.user.id } },
+      { $match: { createdBy: req.user.id, isDeleted: { $ne: true } } },
       {
         $group: {
           _id: '$propertyType',

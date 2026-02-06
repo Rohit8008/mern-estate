@@ -27,7 +27,7 @@ export const createCategory = async (req, res, next) => {
 
 export const getCategories = async (req, res, next) => {
   try {
-    const categories = await Category.find({}).sort({ name: 1 });
+    const categories = await Category.find({ isDeleted: { $ne: true } }).sort({ name: 1 });
     res.status(200).json(categories);
   } catch (error) {
     next(error);
@@ -39,23 +39,15 @@ export const deleteCategory = async (req, res, next) => {
     const { id } = req.params;
     const category = await Category.findById(id);
     if (!category) return next(errorHandler(404, 'Category not found'));
-    
-    // Remove this category from all users' assignedCategories
-    await User.updateMany(
-      { assignedCategories: category.slug },
-      { $pull: { assignedCategories: category.slug } }
-    );
-    
-    // Update listings that reference this category to remove the category reference
-    await Listing.updateMany(
-      { category: category.slug },
-      { $unset: { category: 1 } }
-    );
-    
-    // Delete the category
-    await Category.findByIdAndDelete(id);
-    
-    res.status(200).json('Category has been deleted and removed from all users and listings!');
+
+    // Soft delete the category
+    await Category.findByIdAndUpdate(id, {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user?.id || null,
+    });
+
+    res.status(200).json('Category has been deleted!');
   } catch (error) {
     next(error);
   }
@@ -64,7 +56,7 @@ export const deleteCategory = async (req, res, next) => {
 export const getCategoryBySlug = async (req, res, next) => {
   try {
     const { slug } = req.params;
-    const cat = await Category.findOne({ slug });
+    const cat = await Category.findOne({ slug, isDeleted: { $ne: true } });
     if (!cat) return next(errorHandler(404, 'Category not found'));
     res.status(200).json(cat);
   } catch (error) {

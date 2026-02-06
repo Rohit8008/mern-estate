@@ -142,7 +142,12 @@ export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(401, 'You can only delete your own account!'));
   try {
-    await User.findByIdAndUpdate(req.params.id, { status: 'inactive' });
+    await User.findByIdAndUpdate(req.params.id, {
+      status: 'inactive',
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
     res.status(200).json({ success: true, message: 'Account deactivated successfully' });
@@ -170,7 +175,12 @@ export const adminDeleteUser = async (req, res, next) => {
       return next(errorHandler(403, 'Cannot delete an admin account'));
     }
 
-    await User.findByIdAndUpdate(targetId, { status: 'inactive' });
+    await User.findByIdAndUpdate(targetId, {
+      status: 'inactive',
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: req.user.id,
+    });
 
     res.status(200).json({ success: true, message: 'User has been deactivated successfully' });
   } catch (error) {
@@ -212,7 +222,7 @@ export const adminToggleUserStatus = async (req, res, next) => {
 export const getUserListings = async (req, res, next) => {
   if (req.user.id === req.params.id) {
     try {
-      const listings = await Listing.find({ userRef: req.params.id });
+      const listings = await Listing.find({ userRef: req.params.id, isDeleted: { $ne: true } });
       res.status(200).json(listings);
     } catch (error) {
       next(error);
@@ -288,7 +298,7 @@ export const setUserRole = async (req, res, next) => {
 export const listUsers = async (req, res, next) => {
   try {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
-    const users = await User.find().select('-password').populate('assignedRole', 'name description isActive');
+    const users = await User.find({ isDeleted: { $ne: true } }).select('-password').populate('assignedRole', 'name description isActive');
     res.status(200).json(users);
   } catch (error) {
     next(error);
@@ -303,6 +313,7 @@ export const searchUsers = async (req, res, next) => {
     const users = await User.find({
       _id: { $ne: req.user.id },
       status: { $ne: 'inactive' },
+      isDeleted: { $ne: true },
       $or: [{ username: regex }, { firstName: regex }, { lastName: regex }, { email: regex }],
     })
       .select('username firstName lastName avatar _id')

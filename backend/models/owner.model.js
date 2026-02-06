@@ -15,6 +15,9 @@ const ownerSchema = new mongoose.Schema(
     taxId: { type: String, default: '' }, // GSTIN/PAN or similar
     notes: { type: String, default: '', maxlength: 1000 },
     active: { type: Boolean, default: true, index: true },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
