@@ -156,6 +156,35 @@ export default function Admin() {
     }
   };
 
+  const resetEmployeePassword = async (user) => {
+    try {
+      if (!isAdmin) return;
+      if (!user || user.role !== 'employee') return;
+
+      const nextPassword = window.prompt(`Set a new password for ${user.username || user.email || 'employee'}:`);
+      if (!nextPassword) return;
+
+      setSaving(true);
+      const res = await fetch(`/api/user/admin/set-employee-password/${user._id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ newPassword: nextPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        window.alert(data?.message || 'Failed to update password');
+        return;
+      }
+      window.alert('Password updated successfully');
+    } catch (error) {
+      console.error(error);
+      window.alert('Failed to update password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const createOwner = async () => {
     if (!newOwner.name.trim()) return;
     try {
@@ -1275,6 +1304,15 @@ export default function Admin() {
                           >
                             Edit Categories
                           </button>
+                          {isAdmin && user.role === 'employee' && (
+                            <button
+                              disabled={saving}
+                              onClick={() => resetEmployeePassword(user)}
+                              className='px-2 py-1 text-xs rounded border hover:bg-slate-50'
+                            >
+                              Reset Password
+                            </button>
+                          )}
                           {user.role !== 'admin' && (
                             <button
                               onClick={() => toggleUserStatus(user._id, user.status || 'active')}

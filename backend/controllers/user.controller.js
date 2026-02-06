@@ -5,6 +5,7 @@ import SecurityLog from '../models/securityLog.model.js';
 import User from '../models/user.model.js';
 import { errorHandler } from '../utils/error.js';
 import Listing from '../models/listing.model.js';
+import { validatePassword } from '../middleware/security.js';
 
 export const test = (req, res) => {
   res.json({
@@ -330,6 +331,10 @@ export const createEmployee = async (req, res, next) => {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
     const { username, firstName, lastName, email, password, assignedCategories, phone } = req.body;
     if (!username || !email || !password) return next(errorHandler(400, 'Missing fields'));
+
+    const pw = validatePassword(String(password));
+    if (!pw.isValid) return next(errorHandler(400, 'Password does not meet security requirements'));
+
     const exists = await User.findOne({ email });
     if (exists) return next(errorHandler(409, 'Email already in use'));
     
@@ -341,19 +346,63 @@ export const createEmployee = async (req, res, next) => {
       }
     }
     
-    const hashed = bcryptjs.hashSync(password, 10);
     const user = await User.create({
       username,
       firstName: firstName || '',
       lastName: lastName || '',
       email,
-      password: hashed,
+      password: String(password),
       role: 'employee',
       assignedCategories: assignedCategories || [],
       phone: phone || '',
     });
     const { password: pass, ...rest } = user._doc;
     res.status(201).json(rest);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminSetEmployeePassword = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+
+    const targetId = req.params.id;
+    const { newPassword } = req.body || {};
+    if (!newPassword) return next(errorHandler(400, 'Missing newPassword'));
+
+    if (String(req.user.id) === String(targetId)) {
+      return next(errorHandler(403, 'You cannot change your own password from this endpoint'));
+    }
+
+    const target = await User.findById(targetId).select('+password');
+    if (!target) return next(errorHandler(404, 'User not found'));
+
+    if (target.role === 'admin') return next(errorHandler(403, 'Cannot reset password for an admin account'));
+    if (target.role !== 'employee') return next(errorHandler(403, 'Only employee passwords can be changed here'));
+
+    const pw = validatePassword(String(newPassword));
+    if (!pw.isValid) return next(errorHandler(400, 'Password does not meet security requirements'));
+
+    target.password = String(newPassword);
+    target.passwordResetOtpHash = null;
+    target.passwordResetOtpExpires = null;
+    target.refreshTokens = [];
+    await target.save();
+
+    try {
+      await SecurityLog.create({
+        email: target.email,
+        method: 'password',
+        status: 'success',
+        reason: 'admin_password_reset',
+        ip: (req.headers['x-forwarded-for'] || '').split(',')[0]?.trim() || req.socket?.remoteAddress || '',
+        userAgent: req.headers['user-agent'] || '',
+        path: req.originalUrl || '',
+      });
+    } catch (_) {}
+
+    res.status(200).json({ success: true, message: 'Password updated' });
   } catch (error) {
     next(error);
   }
