@@ -62,25 +62,41 @@ export default function Admin() {
       setLoading(true);
       setOwnersLoading(true);
       setListingsLoading(true);
-      try {
-        // Common API calls accessible by both admin and employee
-        const [cJson, oJson, lsJson, permJson] = await Promise.all([
-          apiClient.get('/category/list'),
-          apiClient.get('/owner/list'),
-          apiClient.get('/listing/get?limit=50&order=desc'),
-          apiClient.get('/user/my-permissions'),
-        ]);
 
-        setCategories(Array.isArray(cJson) ? cJson : []);
-        setOwners(Array.isArray(oJson) ? oJson : []);
-        setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
-        if (permJson?.permissions) setUserPermissions(permJson.permissions);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setOwnersLoading(false);
-        setListingsLoading(false);
+      // Step 1: Fetch permissions first so we know what APIs to call
+      let perms = {};
+      try {
+        const permResult = await apiClient.get('/user/my-permissions');
+        if (permResult?.permissions) {
+          perms = permResult.permissions;
+          setUserPermissions(perms);
+        }
+      } catch (e) {
+        console.error('Failed to fetch permissions:', e);
       }
+
+      const canView = (perm) => isAdmin || perms[perm] === true;
+
+      // Step 2: Only call APIs the user has permission for
+      const calls = [
+        apiClient.get('/category/list'),                    // [0] public
+        apiClient.get('/listing/get?limit=50&order=desc'),  // [1] public
+        canView('viewOwners')
+          ? apiClient.get('/owner/list')                    // [2] needs viewOwners
+          : Promise.resolve([]),
+      ];
+
+      const results = await Promise.allSettled(calls);
+
+      const cJson  = results[0].status === 'fulfilled' ? results[0].value : [];
+      const lsJson = results[1].status === 'fulfilled' ? results[1].value : null;
+      const oJson  = results[2].status === 'fulfilled' ? results[2].value : [];
+
+      setCategories(Array.isArray(cJson) ? cJson : []);
+      setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
+      setOwners(Array.isArray(oJson) ? oJson : []);
+      setOwnersLoading(false);
+      setListingsLoading(false);
 
       // Admin-only API calls
       if (isAdmin) {
@@ -124,9 +140,10 @@ export default function Admin() {
     };
   }, []);
 
-  // Realtime owners refresh when admin updates owners
+  // Realtime owners refresh — only if user has viewOwners permission
+  const canViewOwners = isAdmin || userPermissions.viewOwners === true;
   useEffect(() => {
-    if (isBuyerViewRestricted) return;
+    if (isBuyerViewRestricted || !canViewOwners) return;
 
     const socket = io('http://localhost:3000', {
       withCredentials: true,
@@ -145,7 +162,7 @@ export default function Admin() {
       socket.off('owners:changed', handleOwnersChanged);
       socket.close();
     };
-  }, [isBuyerViewRestricted]);
+  }, [isBuyerViewRestricted, canViewOwners]);
 
   const updateUser = async (id, role, assignedCategories) => {
     try {
