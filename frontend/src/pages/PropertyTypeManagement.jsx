@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -21,9 +21,14 @@ const FIELD_TYPES = [
   { value: 'date', label: 'Date' },
 ];
 
+// Module-level cache so data survives component unmount/remount
+let cachedPropertyTypes = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export default function PropertyTypeManagement() {
-  const [propertyTypes, setPropertyTypes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [propertyTypes, setPropertyTypes] = useState(cachedPropertyTypes || []);
+  const [loading, setLoading] = useState(!cachedPropertyTypes);
   const [expandedId, setExpandedId] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -33,21 +38,127 @@ export default function PropertyTypeManagement() {
     icon: '🏠',
     category: 'residential',
   });
+  // Local draft for fields being edited — keyed by property type id
+  const [dirtyFields, setDirtyFields] = useState({});
+  const [savingId, setSavingId] = useState(null);
   const { showSuccess, showError } = useNotification();
+  const isFetching = useRef(false);
 
   useEffect(() => {
-    fetchPropertyTypes();
+    const isCacheValid = cachedPropertyTypes && (Date.now() - cacheTimestamp < CACHE_TTL);
+    if (isCacheValid) {
+      setPropertyTypes(cachedPropertyTypes);
+      setLoading(false);
+      return;
+    }
+    if (!isFetching.current) {
+      fetchPropertyTypes();
+    }
   }, []);
 
   const fetchPropertyTypes = async () => {
+    isFetching.current = true;
     try {
       setLoading(true);
       const data = await apiClient.get('/property-types/list?includeInactive=true');
-      setPropertyTypes(data.data || []);
+      const types = data.data || [];
+      setPropertyTypes(types);
+      cachedPropertyTypes = types;
+      cacheTimestamp = Date.now();
     } catch (error) {
       showError('Failed to load property types');
     } finally {
       setLoading(false);
+      isFetching.current = false;
+    }
+  };
+
+  // Get the fields to display — draft if editing, otherwise from server data
+  const getDisplayFields = (type) => {
+    if (dirtyFields[type._id]) {
+      return dirtyFields[type._id];
+    }
+    return type.fields || [];
+  };
+
+  const hasDirtyFields = (typeId) => !!dirtyFields[typeId];
+
+  // Update draft fields locally — NO api call
+  const updateLocalField = (typeId, fieldIndex, updates) => {
+    setDirtyFields(prev => {
+      const type = propertyTypes.find(t => t._id === typeId);
+      const currentFields = prev[typeId] || [...(type?.fields || [])];
+      const updated = [...currentFields];
+      updated[fieldIndex] = { ...updated[fieldIndex], ...updates };
+      return { ...prev, [typeId]: updated };
+    });
+  };
+
+  // Add a new field locally — NO api call
+  const addLocalField = (typeId) => {
+    setDirtyFields(prev => {
+      const type = propertyTypes.find(t => t._id === typeId);
+      const currentFields = prev[typeId] || [...(type?.fields || [])];
+      return {
+        ...prev,
+        [typeId]: [...currentFields, {
+          key: '',
+          label: '',
+          type: 'text',
+          required: false,
+          order: currentFields.length + 1,
+          group: 'general',
+        }],
+      };
+    });
+  };
+
+  // Remove a field locally — NO api call
+  const removeLocalField = (typeId, fieldIndex) => {
+    setDirtyFields(prev => {
+      const type = propertyTypes.find(t => t._id === typeId);
+      const currentFields = prev[typeId] || [...(type?.fields || [])];
+      return {
+        ...prev,
+        [typeId]: currentFields.filter((_, idx) => idx !== fieldIndex),
+      };
+    });
+  };
+
+  // Discard local changes
+  const discardFieldChanges = (typeId) => {
+    setDirtyFields(prev => {
+      const next = { ...prev };
+      delete next[typeId];
+      return next;
+    });
+  };
+
+  // Save fields to server — only API call for fields
+  const saveFields = async (typeId) => {
+    const fields = dirtyFields[typeId];
+    if (!fields) return;
+    try {
+      setSavingId(typeId);
+      await apiClient.put(`/property-types/${typeId}`, { fields });
+      // Update local cache
+      setPropertyTypes(prev => {
+        const updated = prev.map(t => (t._id === typeId ? { ...t, fields } : t));
+        cachedPropertyTypes = updated;
+        cacheTimestamp = Date.now();
+        return updated;
+      });
+      // Clear dirty state
+      setDirtyFields(prev => {
+        const next = { ...prev };
+        delete next[typeId];
+        return next;
+      });
+      showSuccess('Fields saved successfully');
+    } catch (error) {
+      showError('Failed to save fields');
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -67,23 +178,38 @@ export default function PropertyTypeManagement() {
       return;
     }
     try {
-      await apiClient.post('/property-types/create', formData);
+      const result = await apiClient.post('/property-types/create', formData);
       showSuccess('Property type created successfully');
       setShowCreateModal(false);
       setFormData({ name: '', description: '', icon: '🏠', category: 'residential' });
-      fetchPropertyTypes();
+      if (result.data) {
+        setPropertyTypes(prev => {
+          const updated = [...prev, result.data];
+          cachedPropertyTypes = updated;
+          cacheTimestamp = Date.now();
+          return updated;
+        });
+      } else {
+        fetchPropertyTypes();
+      }
     } catch (error) {
       showError(error.message || 'Failed to create property type');
     }
   };
 
-  const handleUpdateType = async (id, updates) => {
+  const handleToggleActive = async (id, currentActive) => {
     try {
-      await apiClient.put(`/property-types/${id}`, updates);
+      setPropertyTypes(prev => {
+        const updated = prev.map(t => (t._id === id ? { ...t, isActive: !currentActive } : t));
+        cachedPropertyTypes = updated;
+        cacheTimestamp = Date.now();
+        return updated;
+      });
+      await apiClient.put(`/property-types/${id}`, { isActive: !currentActive });
       showSuccess('Updated successfully');
-      fetchPropertyTypes();
     } catch (error) {
       showError('Failed to update property type');
+      fetchPropertyTypes();
     }
   };
 
@@ -92,40 +218,20 @@ export default function PropertyTypeManagement() {
     try {
       await apiClient.delete(`/property-types/${id}`);
       showSuccess('Property type deleted successfully');
-      fetchPropertyTypes();
+      setPropertyTypes(prev => {
+        const updated = prev.filter(t => t._id !== id);
+        cachedPropertyTypes = updated;
+        cacheTimestamp = Date.now();
+        return updated;
+      });
+      // Clean up any dirty state
+      setDirtyFields(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     } catch (error) {
       showError(error.message || 'Failed to delete property type');
-    }
-  };
-
-  const addField = (typeId) => {
-    const type = propertyTypes.find(t => t._id === typeId);
-    if (type) {
-      const updatedFields = [...(type.fields || []), {
-        key: '',
-        label: '',
-        type: 'text',
-        required: false,
-        order: (type.fields?.length || 0) + 1,
-        group: 'general',
-      }];
-      handleUpdateType(typeId, { fields: updatedFields });
-    }
-  };
-
-  const updateField = (typeId, fieldIndex, updates) => {
-    const type = propertyTypes.find(t => t._id === typeId);
-    if (type) {
-      const updatedFields = [...type.fields];
-      updatedFields[fieldIndex] = { ...updatedFields[fieldIndex], ...updates };
-      handleUpdateType(typeId, { fields: updatedFields });
-    }
-  };
-
-  const removeField = (typeId, fieldIndex) => {
-    const type = propertyTypes.find(t => t._id === typeId);
-    if (type) {
-      handleUpdateType(typeId, { fields: type.fields.filter((_, idx) => idx !== fieldIndex) });
     }
   };
 
@@ -211,8 +317,12 @@ export default function PropertyTypeManagement() {
       <div className='space-y-4'>
         {filtered.map((type) => {
           const isExpanded = expandedId === type._id;
+          const isDirty = hasDirtyFields(type._id);
+          const isSaving = savingId === type._id;
+          const displayFields = getDisplayFields(type);
+
           return (
-            <div key={type._id} className='bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm'>
+            <div key={type._id} className={`bg-white rounded-xl border overflow-hidden shadow-sm ${isDirty ? 'border-amber-300' : 'border-gray-200'}`}>
               {/* Card Header */}
               <div className='flex items-center justify-between p-5'>
                 <div className='flex items-center gap-4 min-w-0'>
@@ -233,13 +343,18 @@ export default function PropertyTypeManagement() {
                       }`}>
                         {type.isActive ? 'Active' : 'Inactive'}
                       </span>
+                      {isDirty && (
+                        <span className='text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium'>
+                          Unsaved changes
+                        </span>
+                      )}
                     </div>
                     <p className='text-sm text-gray-500 mt-0.5 truncate'>{type.description}</p>
                   </div>
                 </div>
                 <div className='flex items-center gap-2 flex-shrink-0 ml-4'>
                   <button
-                    onClick={() => handleUpdateType(type._id, { isActive: !type.isActive })}
+                    onClick={() => handleToggleActive(type._id, type.isActive)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                       type.isActive
                         ? 'border-orange-200 text-orange-700 hover:bg-orange-50'
@@ -277,20 +392,40 @@ export default function PropertyTypeManagement() {
                     <h4 className='text-sm font-semibold text-gray-700'>
                       Fields
                       <span className='ml-2 text-xs font-normal text-gray-400'>
-                        ({type.fields?.length || 0})
+                        ({displayFields.length})
                       </span>
                     </h4>
-                    <button
-                      onClick={() => addField(type._id)}
-                      className='px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'
-                    >
-                      + Add Field
-                    </button>
+                    <div className='flex items-center gap-2'>
+                      {isDirty && (
+                        <>
+                          <button
+                            onClick={() => discardFieldChanges(type._id)}
+                            disabled={isSaving}
+                            className='px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50'
+                          >
+                            Discard
+                          </button>
+                          <button
+                            onClick={() => saveFields(type._id)}
+                            disabled={isSaving}
+                            className='px-3 py-1.5 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50'
+                          >
+                            {isSaving ? 'Saving...' : 'Save Fields'}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => addLocalField(type._id)}
+                        className='px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'
+                      >
+                        + Add Field
+                      </button>
+                    </div>
                   </div>
 
-                  {type.fields && type.fields.length > 0 ? (
+                  {displayFields.length > 0 ? (
                     <div className='space-y-3'>
-                      {type.fields.map((field, idx) => (
+                      {displayFields.map((field, idx) => (
                         <div key={idx} className='bg-white rounded-lg border border-gray-200 p-4'>
                           <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
                             <div>
@@ -298,7 +433,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='text'
                                 value={field.key}
-                                onChange={(e) => updateField(type._id, idx, { key: e.target.value })}
+                                onChange={(e) => updateLocalField(type._id, idx, { key: e.target.value })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                                 placeholder='bedrooms'
                               />
@@ -308,7 +443,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='text'
                                 value={field.label}
-                                onChange={(e) => updateField(type._id, idx, { label: e.target.value })}
+                                onChange={(e) => updateLocalField(type._id, idx, { label: e.target.value })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                                 placeholder='Bedrooms'
                               />
@@ -317,7 +452,7 @@ export default function PropertyTypeManagement() {
                               <label className='block text-xs font-medium text-gray-500 mb-1'>Type</label>
                               <select
                                 value={field.type}
-                                onChange={(e) => updateField(type._id, idx, { type: e.target.value })}
+                                onChange={(e) => updateLocalField(type._id, idx, { type: e.target.value })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                               >
                                 {FIELD_TYPES.map(ft => (
@@ -330,7 +465,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='text'
                                 value={field.group}
-                                onChange={(e) => updateField(type._id, idx, { group: e.target.value })}
+                                onChange={(e) => updateLocalField(type._id, idx, { group: e.target.value })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                                 placeholder='rooms'
                               />
@@ -343,7 +478,7 @@ export default function PropertyTypeManagement() {
                                 <input
                                   type='checkbox'
                                   checked={field.required}
-                                  onChange={(e) => updateField(type._id, idx, { required: e.target.checked })}
+                                  onChange={(e) => updateLocalField(type._id, idx, { required: e.target.checked })}
                                   className='rounded border-gray-300 text-blue-600 focus:ring-blue-500'
                                 />
                                 Required
@@ -354,7 +489,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='number'
                                 value={field.min ?? ''}
-                                onChange={(e) => updateField(type._id, idx, { min: e.target.value ? Number(e.target.value) : null })}
+                                onChange={(e) => updateLocalField(type._id, idx, { min: e.target.value ? Number(e.target.value) : null })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                               />
                             </div>
@@ -363,7 +498,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='number'
                                 value={field.max ?? ''}
-                                onChange={(e) => updateField(type._id, idx, { max: e.target.value ? Number(e.target.value) : null })}
+                                onChange={(e) => updateLocalField(type._id, idx, { max: e.target.value ? Number(e.target.value) : null })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                               />
                             </div>
@@ -372,7 +507,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='text'
                                 value={field.unit || ''}
-                                onChange={(e) => updateField(type._id, idx, { unit: e.target.value })}
+                                onChange={(e) => updateLocalField(type._id, idx, { unit: e.target.value })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                                 placeholder='sq.ft'
                               />
@@ -382,7 +517,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='number'
                                 value={field.order || 0}
-                                onChange={(e) => updateField(type._id, idx, { order: Number(e.target.value) })}
+                                onChange={(e) => updateLocalField(type._id, idx, { order: Number(e.target.value) })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                               />
                             </div>
@@ -394,7 +529,7 @@ export default function PropertyTypeManagement() {
                               <input
                                 type='text'
                                 value={field.options?.join(', ') || ''}
-                                onChange={(e) => updateField(type._id, idx, {
+                                onChange={(e) => updateLocalField(type._id, idx, {
                                   options: e.target.value.split(',').map(o => o.trim()).filter(Boolean)
                                 })}
                                 className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
@@ -405,7 +540,7 @@ export default function PropertyTypeManagement() {
 
                           <div className='mt-3 flex justify-end'>
                             <button
-                              onClick={() => removeField(type._id, idx)}
+                              onClick={() => removeLocalField(type._id, idx)}
                               className='text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors'
                             >
                               Remove
@@ -416,7 +551,30 @@ export default function PropertyTypeManagement() {
                     </div>
                   ) : (
                     <div className='text-center py-8 text-sm text-gray-400'>
-                      No fields configured. Click "Add Field" to start.
+                      No fields configured. Click "+ Add Field" to start.
+                    </div>
+                  )}
+
+                  {/* Bottom save bar when dirty */}
+                  {isDirty && (
+                    <div className='mt-4 flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg'>
+                      <span className='text-sm text-amber-800'>You have unsaved changes</span>
+                      <div className='flex gap-2'>
+                        <button
+                          onClick={() => discardFieldChanges(type._id)}
+                          disabled={isSaving}
+                          className='px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-white transition-colors disabled:opacity-50'
+                        >
+                          Discard
+                        </button>
+                        <button
+                          onClick={() => saveFields(type._id)}
+                          disabled={isSaving}
+                          className='px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50'
+                        >
+                          {isSaving ? 'Saving...' : 'Save Fields'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

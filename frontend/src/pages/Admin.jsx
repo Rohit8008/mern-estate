@@ -44,6 +44,7 @@ export default function Admin() {
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState(null);
+  const [userPermissions, setUserPermissions] = useState({});
   const totalOwners = owners.length;
   const totalUsers = users.length;
   const totalListings = listings.length;
@@ -51,39 +52,55 @@ export default function Admin() {
   // Role-based access control
   const isAdmin = currentUser?.role === 'admin';
   const isBuyerViewRestricted = Boolean(isBuyerViewMode);
+  // Permission helper — admins have all permissions, employees check their role
+  const hasPerm = (perm) => isAdmin || userPermissions[perm] === true;
 
   useEffect(() => {
     if (isBuyerViewRestricted) return;
 
     const load = async () => {
       setLoading(true);
+      setOwnersLoading(true);
+      setListingsLoading(true);
       try {
-        setOwnersLoading(true);
-        setListingsLoading(true);
-        const [uJson, cJson, lJson, oJson, lsJson] = await Promise.all([
-          apiClient.get('/user/list'),
+        // Common API calls accessible by both admin and employee
+        const [cJson, oJson, lsJson, permJson] = await Promise.all([
           apiClient.get('/category/list'),
-          apiClient.get(`/user/security/logs?limit=${pageSize}&skip=${logPage*pageSize}`),
           apiClient.get('/owner/list'),
           apiClient.get('/listing/get?limit=50&order=desc'),
+          apiClient.get('/user/my-permissions'),
         ]);
 
-        setUsers(Array.isArray(uJson) ? uJson : []);
         setCategories(Array.isArray(cJson) ? cJson : []);
-        setLogs(Array.isArray(lJson?.logs) ? lJson.logs : []);
-        setLogsTotal(Number(lJson?.total) || 0);
         setOwners(Array.isArray(oJson) ? oJson : []);
         setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
+        if (permJson?.permissions) setUserPermissions(permJson.permissions);
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
         setOwnersLoading(false);
         setListingsLoading(false);
       }
+
+      // Admin-only API calls
+      if (isAdmin) {
+        try {
+          const [uJson, lJson] = await Promise.all([
+            apiClient.get('/user/list'),
+            apiClient.get(`/user/security/logs?limit=${pageSize}&skip=${logPage*pageSize}`),
+          ]);
+          setUsers(Array.isArray(uJson) ? uJson : []);
+          setLogs(Array.isArray(lJson?.logs) ? lJson.logs : []);
+          setLogsTotal(Number(lJson?.total) || 0);
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      setLoading(false);
     };
     load();
-  }, [isBuyerViewRestricted, logPage]);
+  }, [isBuyerViewRestricted, isAdmin, logPage]);
 
   // Listen for listing changes to refresh data
   useEffect(() => {
@@ -531,7 +548,7 @@ export default function Admin() {
                   <a href='/create-listing' className='inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-sm hover:opacity-95'><HiOutlinePlus /> New Listing</a>
                 </div>
               </div>
-              <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+              <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
                 <div className='bg-white rounded-xl shadow p-4 border'>
                   <div className='text-xs text-slate-500'>Listings</div>
                   <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalListings}</div>
@@ -542,11 +559,13 @@ export default function Admin() {
                   <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalOwners}</div>
                   <div className='text-xs text-slate-400 mt-1'>Registered partners</div>
                 </div>
-                <div className='bg-white rounded-xl shadow p-4 border'>
-                  <div className='text-xs text-slate-500'>Users</div>
-                  <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalUsers}</div>
-                  <div className='text-xs text-slate-400 mt-1'>Accounts</div>
-                </div>
+                {isAdmin && (
+                  <div className='bg-white rounded-xl shadow p-4 border'>
+                    <div className='text-xs text-slate-500'>Users</div>
+                    <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalUsers}</div>
+                    <div className='text-xs text-slate-400 mt-1'>Accounts</div>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -744,8 +763,8 @@ export default function Admin() {
             <div className='text-sm text-slate-600'>Total: {categories.length}</div>
           </div>
           
-          {/* Create Category Section - Admin Only */}
-          {isAdmin && (
+          {/* Create Category Section - Permission Based */}
+          {hasPerm('createCategory') && (
             <div className='mb-6 flex gap-2 items-center flex-wrap'>
               <input
                 type='text'
@@ -795,7 +814,7 @@ export default function Admin() {
                   <span className='text-xs text-slate-500'>
                     {category.fields?.length || 0} fields
                   </span>
-                  {isAdmin && (
+                  {hasPerm('deleteCategory') && (
                     <button
                       onClick={async () => {
                         if (confirm('Are you sure you want to delete this category?')) {
@@ -827,8 +846,8 @@ export default function Admin() {
       )}
 
       {/* Property Types */}
-      {activeTab === 'property-types' && isAdmin && (
-        <section className='mb-8'>
+      {isAdmin && (
+        <section className='mb-8' style={{ display: activeTab === 'property-types' ? 'block' : 'none' }}>
           <PropertyTypeManagement />
         </section>
       )}

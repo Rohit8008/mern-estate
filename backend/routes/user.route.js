@@ -1,5 +1,5 @@
 import express from 'express';
-import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, me, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
+import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, me, myPermissions, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
 import { validateBody, userRouteValidation } from '../middleware/validation.js';
@@ -10,6 +10,7 @@ const router = express.Router();
 router.get('/test', test);
 router.get('/list', verifyToken, requireAdmin, listUsers)
 router.get('/me', verifyToken, me)
+router.get('/my-permissions', verifyToken, myPermissions)
 router.get('/security/logs', verifyToken, requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 200, 1000);

@@ -270,6 +270,48 @@ export const me = async (req, res, next) => {
   }
 };
 
+export const myPermissions = async (req, res, next) => {
+  try {
+    if (!req.user?.id) return next(errorHandler(401, 'Unauthorized'));
+
+    // Admins get all permissions
+    if (req.user.role === 'admin') {
+      const Role = (await import('../models/role.model.js')).default;
+      // Get all permission keys from the schema definition
+      const permissionPaths = Object.keys(Role.schema.paths).filter(p => p.startsWith('permissions.'));
+      const allPerms = permissionPaths.reduce((acc, p) => {
+        acc[p.replace('permissions.', '')] = true;
+        return acc;
+      }, {});
+      return res.status(200).json({ permissions: allPerms, role: 'admin', isAdmin: true });
+    }
+
+    const user = await User.findById(req.user.id).populate('assignedRole');
+    if (!user) return next(errorHandler(404, 'User not found!'));
+
+    if (!user.assignedRole || !user.assignedRole.isActive) {
+      return res.status(200).json({ permissions: {}, role: user.role, isAdmin: false });
+    }
+
+    const perms = {};
+    const roleObj = user.assignedRole.toObject();
+    if (roleObj.permissions) {
+      for (const [key, val] of Object.entries(roleObj.permissions)) {
+        if (val === true) perms[key] = true;
+      }
+    }
+
+    return res.status(200).json({
+      permissions: perms,
+      role: user.role,
+      roleName: user.assignedRole.name,
+      isAdmin: false,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const setUserRole = async (req, res, next) => {
   try {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
