@@ -534,7 +534,9 @@ export default function Admin() {
           <nav className='flex flex-col'>
             <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='dashboard'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineViewGrid /> Dashboard</button>
             <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='listings'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineCollection /> Listings</button>
-            <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='categories'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineTag /> Categories</button>
+            {(hasPerm('createCategory') || hasPerm('deleteCategory') || hasPerm('updateCategory')) && (
+              <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='categories'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineTag /> Categories</button>
+            )}
             {isAdmin && (
               <button
                 onClick={() => setActiveTab('property-types')}
@@ -543,7 +545,9 @@ export default function Admin() {
                 <HiOutlineTag /> Property Types
               </button>
             )}
-            <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='owners'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineUserGroup /> Owners</button>
+            {hasPerm('viewOwners') && (
+              <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='owners'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineUserGroup /> Owners</button>
+            )}
             {isAdmin && (
               <button onClick={() => setActiveTab('users')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='users'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineClipboardList /> Users</button>
             )}
@@ -565,17 +569,19 @@ export default function Admin() {
                   <a href='/create-listing' className='inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-sm hover:opacity-95'><HiOutlinePlus /> New Listing</a>
                 </div>
               </div>
-              <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : ''} gap-4`}>
                 <div className='bg-white rounded-xl shadow p-4 border'>
                   <div className='text-xs text-slate-500'>Listings</div>
                   <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalListings}</div>
                   <div className='text-xs text-slate-400 mt-1'>Active items</div>
                 </div>
-                <div className='bg-white rounded-xl shadow p-4 border'>
-                  <div className='text-xs text-slate-500'>Owners</div>
-                  <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalOwners}</div>
-                  <div className='text-xs text-slate-400 mt-1'>Registered partners</div>
-                </div>
+                {hasPerm('viewOwners') && (
+                  <div className='bg-white rounded-xl shadow p-4 border'>
+                    <div className='text-xs text-slate-500'>Owners</div>
+                    <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalOwners}</div>
+                    <div className='text-xs text-slate-400 mt-1'>Registered partners</div>
+                  </div>
+                )}
                 {isAdmin && (
                   <div className='bg-white rounded-xl shadow p-4 border'>
                     <div className='text-xs text-slate-500'>Users</div>
@@ -979,34 +985,40 @@ export default function Admin() {
           <h2 className='text-xl font-semibold'>Owners</h2>
           {ownersLoading && <span className='text-sm text-slate-500'>Loading…</span>}
         </div>
-        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3'>
-          <input
-            className='border p-2 rounded'
-            placeholder='Owner name*'
-            value={newOwner.name}
-            onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
-          />
-          <input
-            className='border p-2 rounded'
-            placeholder='Email'
-            value={newOwner.email}
-            onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })}
-          />
-          <input
-            className='border p-2 rounded'
-            placeholder='Phone'
-            value={newOwner.phone}
-            onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
-          />
-          <input
-            className='border p-2 rounded'
-            placeholder='Company'
-            value={newOwner.companyName}
-            onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })}
-          />
-        </div>
+        {hasPerm('createOwner') && (
+          <>
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3'>
+              <input
+                className='border p-2 rounded'
+                placeholder='Owner name*'
+                value={newOwner.name}
+                onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
+              />
+              <input
+                className='border p-2 rounded'
+                placeholder='Email'
+                value={newOwner.email}
+                onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })}
+              />
+              <input
+                className='border p-2 rounded'
+                placeholder='Phone'
+                value={newOwner.phone}
+                onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
+              />
+              <input
+                className='border p-2 rounded'
+                placeholder='Company'
+                value={newOwner.companyName}
+                onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })}
+              />
+            </div>
+            <div className='flex items-center gap-2 mb-4'>
+              <button onClick={createOwner} className='px-4 py-2 rounded bg-blue-600 text-white'>Create Owner</button>
+            </div>
+          </>
+        )}
         <div className='flex items-center gap-2 mb-4'>
-          <button onClick={createOwner} className='px-4 py-2 rounded bg-blue-600 text-white'>Create Owner</button>
           <input
             className='border p-2 rounded ml-auto'
             placeholder='Search owners'
@@ -1048,8 +1060,10 @@ export default function Admin() {
                     </td>
                     <td className='p-2'>
                       <div className='flex items-center gap-2'>
-                        <button onClick={() => toggleOwnerActive(o)} className='px-2 py-1 text-xs rounded border'>{o.active ? 'Deactivate' : 'Activate'}</button>
-                        {isAdmin && (
+                        {hasPerm('updateOwner') && (
+                          <button onClick={() => toggleOwnerActive(o)} className='px-2 py-1 text-xs rounded border'>{o.active ? 'Deactivate' : 'Activate'}</button>
+                        )}
+                        {hasPerm('deleteOwner') && (
                           <button onClick={() => deleteOwnerById(o._id)} className='px-2 py-1 text-xs rounded border text-red-700'>Delete</button>
                         )}
                       </div>

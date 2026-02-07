@@ -8,21 +8,32 @@ export default function Categories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [userPermissions, setUserPermissions] = useState({});
+  const isAdmin = currentUser?.role === 'admin';
+  const hasPerm = (perm) => isAdmin || userPermissions[perm] === true;
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState('');
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const data = await apiClient.get('/category/list');
-        if (Array.isArray(data)) {
+        // Fetch permissions and categories in parallel
+        const [permResult, data] = await Promise.allSettled([
+          apiClient.get('/user/my-permissions'),
+          apiClient.get('/category/list'),
+        ]);
+        if (permResult.status === 'fulfilled' && permResult.value?.permissions) {
+          setUserPermissions(permResult.value.permissions);
+        }
+        const catData = data.status === 'fulfilled' ? data.value : [];
+        if (Array.isArray(catData)) {
           // Employees only see their assigned categories
           if (currentUser?.role === 'employee' && currentUser.assignedCategories?.length) {
-            setCategories(data.filter((c) => currentUser.assignedCategories.includes(c.slug)));
+            setCategories(catData.filter((c) => currentUser.assignedCategories.includes(c.slug)));
           } else {
-            setCategories(data);
+            setCategories(catData);
           }
         }
         setLoading(false);
@@ -31,13 +42,13 @@ export default function Categories() {
         setLoading(false);
       }
     };
-    fetchCategories();
+    fetchData();
   }, [currentUser]);
 
   return (
     <main className='max-w-6xl mx-auto px-4 py-8'>
       <h1 className='text-3xl font-bold text-slate-800 mb-6'>Categories</h1>
-      {currentUser?.role === 'admin' && (
+      {hasPerm('createCategory') && (
       <div className='mb-6 flex gap-2 items-center flex-wrap'>
         <input
           type='text'
@@ -75,7 +86,7 @@ export default function Categories() {
         >
           {creating ? 'Creating...' : 'Create Category'}
         </button>
-        <Link to='/admin/import' className='px-4 py-3 rounded-lg border text-slate-700'>Bulk Import</Link>
+        {isAdmin && <Link to='/admin/import' className='px-4 py-3 rounded-lg border text-slate-700'>Bulk Import</Link>}
       </div>
       )}
       {loading && <p>Loading...</p>}
@@ -95,28 +106,32 @@ export default function Categories() {
                 </Link>
               </div>
             </div>
-            {currentUser?.role === 'admin' && (
+            {(hasPerm('updateCategory') || hasPerm('deleteCategory')) && (
               <div className='mt-2 flex items-center gap-3'>
-                <Link to={`/admin/categories/${c.slug}/fields`} className='text-sm text-slate-700 underline'>Edit fields</Link>
-                <button
-                  onClick={async () => {
-                    const ok = window.confirm(`Delete category "${c.name}"? This cannot be undone.`);
-                    if (!ok) return;
-                    try {
-                      setDeletingId(c._id);
-                      await apiClient.delete(`/category/delete/${c._id}`);
-                      setCategories((prev) => prev.filter((x) => x._id !== c._id));
-                    } catch (e) {
-                      alert(e.message || 'Failed to delete');
-                    } finally {
-                      setDeletingId('');
-                    }
-                  }}
-                  disabled={deletingId === c._id}
-                  className='text-sm text-red-700 underline disabled:opacity-60'
-                >
-                  {deletingId === c._id ? 'Deleting…' : 'Delete'}
-                </button>
+                {hasPerm('updateCategory') && (
+                  <Link to={`/admin/categories/${c.slug}/fields`} className='text-sm text-slate-700 underline'>Edit fields</Link>
+                )}
+                {hasPerm('deleteCategory') && (
+                  <button
+                    onClick={async () => {
+                      const ok = window.confirm(`Delete category "${c.name}"? This cannot be undone.`);
+                      if (!ok) return;
+                      try {
+                        setDeletingId(c._id);
+                        await apiClient.delete(`/category/delete/${c._id}`);
+                        setCategories((prev) => prev.filter((x) => x._id !== c._id));
+                      } catch (e) {
+                        alert(e.message || 'Failed to delete');
+                      } finally {
+                        setDeletingId('');
+                      }
+                    }}
+                    disabled={deletingId === c._id}
+                    className='text-sm text-red-700 underline disabled:opacity-60'
+                  >
+                    {deletingId === c._id ? 'Deleting…' : 'Delete'}
+                  </button>
+                )}
               </div>
             )}
           </div>

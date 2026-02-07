@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
+import { useParams, Link, Navigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { parseJsonSafely, fetchWithRefresh, apiClient } from '../utils/http';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
@@ -12,16 +13,34 @@ const FIELD_TYPES = [
 
 export default function AdminCategoryFields() {
   const { slug } = useParams();
+  const { currentUser } = useSelector((state) => state.user);
   const [category, setCategory] = useState(null);
   const [fields, setFields] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [hasPermission, setHasPermission] = useState(null); // null = loading
+
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (currentUser?.role === 'admin') {
+        setHasPermission(true);
+        return;
+      }
+      try {
+        const result = await apiClient.get('/user/my-permissions');
+        setHasPermission(result?.permissions?.updateCategory === true);
+      } catch {
+        setHasPermission(false);
+      }
+    };
+    checkPermission();
+  }, [currentUser]);
 
   useEffect(() => {
     const fetchCategory = async () => {
-      if (!slug) return;
+      if (!slug || hasPermission === false) return;
       try {
         setLoading(true);
         const res = await fetchWithRefresh(`/api/category/by-slug/${slug}`);
@@ -39,7 +58,7 @@ export default function AdminCategoryFields() {
       }
     };
     fetchCategory();
-  }, [slug]);
+  }, [slug, hasPermission]);
 
   const addField = () => {
     const newField = {
@@ -153,7 +172,11 @@ export default function AdminCategoryFields() {
     }
   };
 
-  if (loading) {
+  if (hasPermission === false) {
+    return <Navigate to='/unauthorized' replace />;
+  }
+
+  if (hasPermission === null || loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
