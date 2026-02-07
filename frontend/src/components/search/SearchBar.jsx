@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HiSearch, HiX, HiLocationMarker, HiHome, HiOfficeBuilding, HiClock } from 'react-icons/hi';
+import { apiClient } from '../../utils/http';
 
 // Debounce utility
 function useDebounce(value, delay) {
@@ -60,8 +61,7 @@ export default function SearchBar({
 
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/listing/suggestions?q=${encodeURIComponent(debouncedQuery)}&limit=8`);
-        const data = await res.json();
+        const data = await apiClient.get(`/listing/suggestions?q=${encodeURIComponent(debouncedQuery)}&limit=8`);
         if (data.success && data.data?.suggestions) {
           setSuggestions(data.data.suggestions);
         }
@@ -80,8 +80,7 @@ export default function SearchBar({
     if (popularSearches) return;
 
     try {
-      const res = await fetch('/api/listing/popular-searches?limit=6');
-      const data = await res.json();
+      const data = await apiClient.get('/listing/popular-searches?limit=6');
       if (data.success) {
         setPopularSearches(data.data);
       }

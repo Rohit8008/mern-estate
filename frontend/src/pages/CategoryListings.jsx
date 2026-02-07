@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import ListingItem from '../components/ListingItem';
-import { parseJsonSafely } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 
 export default function CategoryListings() {
@@ -17,8 +17,7 @@ export default function CategoryListings() {
     const fetchListings = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/listing/get?category=${encodeURIComponent(slug)}&limit=24`);
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get(`/listing/get?category=${encodeURIComponent(slug)}&limit=24`);
         const items = data?.data?.listings || [];
         setListings(items);
         setLoading(false);

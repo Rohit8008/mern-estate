@@ -11,7 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { parseJsonSafely, fetchWithRefresh, handleApiResponse } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { io } from 'socket.io-client';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
@@ -97,8 +97,7 @@ export default function UpdateListing() {
   useEffect(() => {
     const fetchListing = async () => {
       const listingId = params.listingId;
-      const res = await fetch(`/api/listing/get/${listingId}`);
-      const data = await parseJsonSafely(res);
+      const data = await apiClient.get(`/listing/get/${listingId}`);
       if (data.success === false) {
         console.log(data.message);
         return;
@@ -112,8 +111,7 @@ export default function UpdateListing() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch('/api/category/list');
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get('/category/list');
         if (Array.isArray(data)) {
           let cats = data;
           if (currentUser?.role === 'employee' && currentUser.assignedCategories?.length) {
@@ -128,8 +126,7 @@ export default function UpdateListing() {
     const fetchOwners = async () => {
       try {
         setOwnersLoading(true);
-        const res = await fetch('/api/owner/list', { credentials: 'include' });
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get('/owner/list');
         if (Array.isArray(data)) {
           const activeOwners = data.filter(owner => owner.active);
           setOwners(activeOwners);
@@ -217,8 +214,7 @@ export default function UpdateListing() {
         return;
       }
       try {
-        const res = await fetch(`/api/category/by-slug/${formData.category}`);
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get(`/category/by-slug/${formData.category}`);
         const fields = Array.isArray(data?.fields) ? data.fields : [];
         setCategoryFields(fields);
         setSelectedCategory(data);
@@ -256,13 +252,8 @@ export default function UpdateListing() {
     for (let i = 0; i < fileList.length; i++) {
       form.append('images', fileList[i]);
     }
-    const res = await fetch('/api/upload/multiple', {
-      method: 'POST',
-      credentials: 'include',
-      body: form,
-    });
-    const data = await parseJsonSafely(res);
-    if (!res.ok || !data.urls) throw new Error('upload_failed');
+    const data = await apiClient.upload('/upload/multiple', form);
+    if (!data.urls) throw new Error('upload_failed');
     return data.urls;
   };
 
@@ -336,12 +327,7 @@ export default function UpdateListing() {
     
     try {
       setCreatingOwner(true);
-      const res = await fetchWithRefresh('/api/owner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOwner),
-      });
-      const data = await handleApiResponse(res);
+      const data = await apiClient.post('/owner', newOwner);
       if (data && data._id) {
         setOwners(prev => [data, ...prev]);
         setNewOwner({ name: '', email: '', phone: '', companyName: '' });
@@ -362,13 +348,7 @@ export default function UpdateListing() {
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
-      const res = await fetch('/api/category/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name: newCategoryName.trim() }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
       if (data && data.slug) {
         setCategories((prev) => [...prev, data]);
         setFormData(prev => ({ ...prev, category: data.slug }));
@@ -426,15 +406,7 @@ export default function UpdateListing() {
         await handleGeocodeAddress();
       }
 
-      const res = await fetch(`/api/listing/update/${params.listingId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(submitData),
-      });
-      const data = await parseJsonSafely(res);
+      const data = await apiClient.post(`/listing/update/${params.listingId}`, submitData);
       setLoading(false);
       if (data.success === false) {
         setError(data.message);

@@ -1,5 +1,15 @@
 import PropertyType from '../models/propertyType.model.js';
 import { asyncHandler, ValidationError, NotFoundError } from '../utils/error.js';
+import { config } from '../config/environment.js';
+import { getCache } from '../utils/cache.js';
+
+const CACHE_TTL_MS = (Number(config?.cache?.ttl) > 0 ? Number(config.cache.ttl) : 300) * 1000;
+const MAX_CACHE_SIZE = Number(config?.cache?.maxSize) > 0 ? Number(config.cache.maxSize) : 100;
+const cache = getCache({ ttlMs: CACHE_TTL_MS, maxSize: MAX_CACHE_SIZE });
+
+function clearPropertyTypeCache() {
+  cache.clearByPrefix('propertyType:');
+}
 
 export const getAllPropertyTypes = asyncHandler(async (req, res) => {
   const { includeInactive } = req.query;
@@ -9,9 +19,21 @@ export const getAllPropertyTypes = asyncHandler(async (req, res) => {
     query.isActive = true;
   }
 
+  const cacheKey = `propertyType:list:${includeInactive === 'true' ? 'all' : 'active'}`;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      data: cached,
+      count: cached.length,
+    });
+  }
+
   const propertyTypes = await PropertyType.find(query)
     .sort({ order: 1, name: 1 })
     .lean();
+
+  cache.set(cacheKey, propertyTypes);
 
   res.status(200).json({
     success: true,
@@ -23,11 +45,22 @@ export const getAllPropertyTypes = asyncHandler(async (req, res) => {
 export const getPropertyTypeBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
 
+  const cacheKey = `propertyType:slug:${slug}`;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return res.status(200).json({
+      success: true,
+      data: cached,
+    });
+  }
+
   const propertyType = await PropertyType.findOne({ slug, isActive: true, isDeleted: { $ne: true } }).lean();
 
   if (!propertyType) {
     throw new NotFoundError('Property type not found');
   }
+
+  cache.set(cacheKey, propertyType);
 
   res.status(200).json({
     success: true,
@@ -64,6 +97,8 @@ export const createPropertyType = asyncHandler(async (req, res) => {
   });
 
   await propertyType.save();
+
+  clearPropertyTypeCache();
 
   res.status(201).json({
     success: true,
@@ -103,6 +138,8 @@ export const updatePropertyType = asyncHandler(async (req, res) => {
 
   await propertyType.save();
 
+  clearPropertyTypeCache();
+
   res.status(200).json({
     success: true,
     data: propertyType,
@@ -128,6 +165,8 @@ export const deletePropertyType = asyncHandler(async (req, res) => {
     deletedAt: new Date(),
     deletedBy: req.user?.id || null,
   });
+
+  clearPropertyTypeCache();
 
   res.status(200).json({
     success: true,
@@ -261,6 +300,8 @@ export const seedDefaultPropertyTypes = asyncHandler(async (req, res) => {
       results.push(propertyType);
     }
   }
+
+  clearPropertyTypeCache();
 
   res.status(200).json({
     success: true,

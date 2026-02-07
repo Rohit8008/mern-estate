@@ -1,7 +1,7 @@
 import Listing from '../models/listing.model.js';
 import BuyerRequirement from '../models/buyerRequirement.model.js';
 import User from '../models/user.model.js';
-import { asyncHandler, sendSuccessResponse } from '../utils/error.js';
+import { asyncHandler, sendSuccessResponse, AuthorizationError } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 
 // Get dashboard analytics

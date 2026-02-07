@@ -13,7 +13,7 @@ import {
 } from '../redux/user/userSlice';
 import { useDispatch } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
   HiX,
@@ -67,13 +67,8 @@ export default function Profile() {
       setFilePerc(10);
       const form = new FormData();
       form.append('image', file);
-      const res = await fetch('/api/upload/single', {
-        method: 'POST',
-        credentials: 'include',
-        body: form,
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok || !data.url) throw new Error(data?.message || 'Upload failed');
+      const data = await apiClient.upload('/upload/single', form);
+      if (!data.url) throw new Error(data?.message || 'Upload failed');
       setFormData({ ...formData, avatar: data.url });
       setFilePerc(100);
     } catch (e) {
@@ -102,20 +97,11 @@ export default function Profile() {
       setPasswordError('');
       setPasswordSuccess(false);
       
-      const res = await fetch('/api/auth/reset-password-with-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: currentUser.email,
-          otp: passwordData.oldPassword, // Using old password as OTP for simplicity
-          newPassword: passwordData.newPassword,
-        }),
+      const data = await apiClient.post('/auth/reset-password-with-otp', {
+        email: currentUser.email,
+        otp: passwordData.oldPassword, // Using old password as OTP for simplicity
+        newPassword: passwordData.newPassword,
       });
-      
-      const data = await parseJsonSafely(res);
       if (data.success === false) {
         setPasswordError(data.message || 'Password change failed');
         showNotification(data.message || 'Password change failed', 'error');
@@ -136,15 +122,7 @@ export default function Profile() {
     try {
       dispatch(updateUserStart());
       const payload = { ...formData };
-      const res = await fetch(`/api/user/update/${currentUser._id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const data = await parseJsonSafely(res);
+      const data = await apiClient.post(`/user/update/${currentUser._id}`, payload);
       if (data.success === false) {
         dispatch(updateUserFailure(data.message));
         showNotification(data.message || 'Failed to update profile', 'error');
@@ -165,17 +143,9 @@ export default function Profile() {
   const handleDeleteUser = async () => {
     try {
       dispatch(deleteUserStart());
-      
-      const res = await fetch(`/api/user/delete/${currentUser._id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const data = await parseJsonSafely(res);
-      if (data.success === false) {
-        dispatch(deleteUserFailure(data.message));
-        return;
-      }
-      dispatch(deleteUserSuccess(data));
+
+      await apiClient.delete(`/user/delete/${currentUser._id}`);
+      dispatch(deleteUserSuccess({ success: true }));
     } catch (error) {
       dispatch(deleteUserFailure(error.message));
     }
@@ -184,15 +154,7 @@ export default function Profile() {
   const handleSignOut = async () => {
     try {
       dispatch(signOutUserStart());
-      const res = await fetch('/api/auth/signout', {
-        method: 'GET',
-        credentials: 'include',
-      });
-      const data = await parseJsonSafely(res);
-      if (data.success === false) {
-        dispatch(signOutUserFailure(data.message));
-        return;
-      }
+      await apiClient.get('/auth/signout');
       dispatch(signOutUserSuccess());
       
       // Clear any stored data
@@ -214,8 +176,7 @@ export default function Profile() {
   const handleShowListings = async () => {
     try {
       setShowListingsError(false);
-      const res = await fetchWithRefresh(`/api/user/listings/${currentUser._id}`);
-      const data = await parseJsonSafely(res);
+      const data = await apiClient.get(`/user/listings/${currentUser._id}`);
       if (data.success === false) {
         setShowListingsError(true);
         return;
@@ -229,11 +190,7 @@ export default function Profile() {
 
   const handleListingDelete = async (listingId) => {
     try {
-      const res = await fetch(`/api/listing/delete/${listingId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const data = await parseJsonSafely(res);
+      const data = await apiClient.delete(`/listing/delete/${listingId}`);
       if (data.success === false) {
         console.log(data.message);
         return;

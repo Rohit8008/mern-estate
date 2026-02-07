@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchWithRefresh, parseJsonSafely, handleApiResponse } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { 
   HiOutlinePlus, 
   HiOutlinePencil, 
@@ -13,13 +13,42 @@ import {
   HiOutlineEyeOff
 } from 'react-icons/hi';
 
+// --- Local cache helpers ---
+const CACHE_KEYS = {
+  roles: 'rm_cache_roles',
+  users: 'rm_cache_users',
+  permissions: 'rm_cache_permissions',
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const readCache = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const writeCache = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch { /* quota exceeded – ignore */ }
+};
+
 const RoleManagement = () => {
-  const [roles, setRoles] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [permissions, setPermissions] = useState({});
+  const [roles, setRoles] = useState(() => readCache(CACHE_KEYS.roles) || []);
+  const [users, setUsers] = useState(() => readCache(CACHE_KEYS.users) || []);
+  const [permissions, setPermissions] = useState(() => readCache(CACHE_KEYS.permissions) || {});
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('roles');
-  
+
   // Role form state
   const [showRoleForm, setShowRoleForm] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
@@ -35,17 +64,19 @@ const RoleManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('');
 
+  // Only hit API if cache is empty/expired — not on every mount
   useEffect(() => {
-    fetchRoles();
-    fetchUsers();
-    fetchPermissions();
+    if (!readCache(CACHE_KEYS.roles)) fetchRoles();
+    if (!readCache(CACHE_KEYS.users)) fetchUsers();
+    if (!readCache(CACHE_KEYS.permissions)) fetchPermissions();
   }, []);
 
   const fetchRoles = async () => {
     try {
-      const res = await fetchWithRefresh('/api/roles');
-      const data = await parseJsonSafely(res);
-      setRoles((data && data.data && Array.isArray(data.data.roles)) ? data.data.roles : []);
+      const data = await apiClient.get('/roles');
+      const rolesData = (data && data.data && Array.isArray(data.data.roles)) ? data.data.roles : [];
+      setRoles(rolesData);
+      writeCache(CACHE_KEYS.roles, rolesData);
     } catch (error) {
       console.error('Error fetching roles:', error);
     }
@@ -53,11 +84,10 @@ const RoleManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/user/list', { credentials: 'include' });
-      const data = await res.json();
-      console.log('Fetched users:', data); // Debug log
-      // The API returns users directly as an array, not wrapped in a 'users' property
-      setUsers(Array.isArray(data) ? data : []);
+      const data = await apiClient.get('/user/list');
+      const usersData = Array.isArray(data) ? data : [];
+      setUsers(usersData);
+      writeCache(CACHE_KEYS.users, usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -65,9 +95,10 @@ const RoleManagement = () => {
 
   const fetchPermissions = async () => {
     try {
-      const res = await fetchWithRefresh('/api/roles/permissions');
-      const data = await parseJsonSafely(res);
-      setPermissions((data && data.data) ? data.data : {});
+      const data = await apiClient.get('/roles/permissions');
+      const permsData = (data && data.data) ? data.data : {};
+      setPermissions(permsData);
+      writeCache(CACHE_KEYS.permissions, permsData);
     } catch (error) {
       console.error('Error fetching permissions:', error);
     }
@@ -79,12 +110,7 @@ const RoleManagement = () => {
     setRoleFormError('');
     
     try {
-      const res = await fetchWithRefresh('/api/roles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(roleForm)
-      });
-      await handleApiResponse(res);
+      await apiClient.post('/roles', roleForm);
       setShowRoleForm(false);
       setRoleForm({ name: '', description: '', permissions: {} });
       fetchRoles();
@@ -102,12 +128,7 @@ const RoleManagement = () => {
     setRoleFormError('');
     
     try {
-      const res = await fetchWithRefresh(`/api/roles/${editingRole._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(roleForm)
-      });
-      await handleApiResponse(res);
+      await apiClient.put(`/roles/${editingRole._id}`, roleForm);
       setShowRoleForm(false);
       setEditingRole(null);
       setRoleForm({ name: '', description: '', permissions: {} });
@@ -124,28 +145,20 @@ const RoleManagement = () => {
     if (!confirm('Are you sure you want to delete this role?')) return;
     
     try {
-      let res = await fetch(`/api/roles/${roleId}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        const data = text ? JSON.parse(text) : {};
-        const msg = data?.message || 'Failed to delete role.';
+      try {
+        await apiClient.delete(`/roles/${roleId}`);
+      } catch (err) {
+        const msg = err?.message || 'Failed to delete role.';
         // If role is assigned to users, offer force delete
-        if (res.status === 400 && /assigned to this role/i.test(msg)) {
+        if (/assigned to this role/i.test(msg)) {
           const proceed = confirm(
             `${msg}\n\nDo you want to force delete this role? This will unassign it from all users and remove it.`
           );
           if (!proceed) return;
-          res = await fetch(`/api/roles/${roleId}?force=true`, {
-            method: 'DELETE',
-            credentials: 'include'
-          });
-          if (!res.ok) {
-            const t2 = await res.text();
-            const d2 = t2 ? JSON.parse(t2) : {};
-            alert(d2?.message || 'Force delete failed.');
+          try {
+            await apiClient.delete(`/roles/${roleId}?force=true`);
+          } catch (e2) {
+            alert(e2?.message || 'Force delete failed.');
             return;
           }
         } else {
@@ -166,22 +179,14 @@ const RoleManagement = () => {
     if (!selectedUser || !selectedRole) return;
     
     try {
-      const res = await fetch('/api/roles/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          userId: selectedUser._id,
-          roleId: selectedRole
-        })
+      await apiClient.post('/roles/assign', {
+        userId: selectedUser._id,
+        roleId: selectedRole
       });
-      
-      if (res.ok) {
-        setShowUserRoleModal(false);
-        setSelectedUser(null);
-        setSelectedRole('');
-        fetchUsers();
-      }
+      setShowUserRoleModal(false);
+      setSelectedUser(null);
+      setSelectedRole('');
+      fetchUsers();
     } catch (error) {
       console.error('Error assigning role:', error);
     }
@@ -189,16 +194,8 @@ const RoleManagement = () => {
 
   const handleRemoveRole = async (userId) => {
     try {
-      const res = await fetch('/api/roles/remove', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ userId })
-      });
-      
-      if (res.ok) {
-        fetchUsers();
-      }
+      await apiClient.post('/roles/remove', { userId });
+      fetchUsers();
     } catch (error) {
       console.error('Error removing role:', error);
     }

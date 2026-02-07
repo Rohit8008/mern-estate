@@ -198,6 +198,22 @@ export class ApiClient {
   async delete(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
+
+  async upload(endpoint, formData, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    try {
+      const response = await fetchWithRefresh(url, {
+        ...options,
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header - browser sets it with boundary for FormData
+      });
+      return await handleApiResponse(response);
+    } catch (error) {
+      console.error('Upload request failed:', error);
+      throw error;
+    }
+  }
 }
 
 // Create default API client instance

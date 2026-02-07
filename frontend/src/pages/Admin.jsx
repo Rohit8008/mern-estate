@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { fetchWithRefresh, handleApiResponse } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineUpload, HiOutlineKey } from 'react-icons/hi';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useSelector } from 'react-redux';
@@ -34,9 +34,12 @@ export default function Admin() {
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listSearch, setListSearch] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [editingUser, setEditingUser] = useState(null);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [showUserManageModal, setShowUserManageModal] = useState(false);
+  const [managingUser, setManagingUser] = useState(null);
+  const [manageRole, setManageRole] = useState('buyer');
+  const [manageCategories, setManageCategories] = useState([]);
+  const [managePassword, setManagePassword] = useState('');
+  const [managePasswordConfirm, setManagePasswordConfirm] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -57,23 +60,18 @@ export default function Admin() {
       try {
         setOwnersLoading(true);
         setListingsLoading(true);
-        const [uRes, cRes, lRes, oRes, lsRes] = await Promise.all([
-          fetch('/api/user/list', { credentials: 'include' }),
-          fetch('/api/category/list'),
-          fetch(`/api/user/security/logs?limit=${pageSize}&skip=${logPage*pageSize}`, { credentials: 'include' }),
-          fetch('/api/owner/list', { credentials: 'include' }),
-          fetch('/api/listing/get?limit=50&order=desc', { credentials: 'include' }),
+        const [uJson, cJson, lJson, oJson, lsJson] = await Promise.all([
+          apiClient.get('/user/list'),
+          apiClient.get('/category/list'),
+          apiClient.get(`/user/security/logs?limit=${pageSize}&skip=${logPage*pageSize}`),
+          apiClient.get('/owner/list'),
+          apiClient.get('/listing/get?limit=50&order=desc'),
         ]);
-        const [uData, cData, lText, oText, lsText] = await Promise.all([uRes.text(), cRes.text(), lRes.text(), oRes.text(), lsRes.text()]);
-        const uJson = uData ? JSON.parse(uData) : [];
-        const cJson = cData ? JSON.parse(cData) : [];
-        const lJson = lText ? JSON.parse(lText) : { logs: [], total: 0 };
-        const oJson = oText ? JSON.parse(oText) : [];
-        const lsJson = lsText ? JSON.parse(lsText) : { success: true, data: { listings: [] } };
-        setUsers(uJson || []);
-        setCategories(cJson || []);
-        setLogs(Array.isArray(lJson.logs) ? lJson.logs : []);
-        setLogsTotal(Number(lJson.total) || 0);
+
+        setUsers(Array.isArray(uJson) ? uJson : []);
+        setCategories(Array.isArray(cJson) ? cJson : []);
+        setLogs(Array.isArray(lJson?.logs) ? lJson.logs : []);
+        setLogsTotal(Number(lJson?.total) || 0);
         setOwners(Array.isArray(oJson) ? oJson : []);
         setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
       } catch (error) {
@@ -91,9 +89,7 @@ export default function Admin() {
   useEffect(() => {
     const refreshListings = async () => {
       try {
-        const lsRes = await fetch('/api/listing/get?limit=50&order=desc', { credentials: 'include' });
-        const lsText = await lsRes.text();
-        const lsJson = lsText ? JSON.parse(lsText) : { success: true, data: { listings: [] } };
+        const lsJson = await apiClient.get('/listing/get?limit=50&order=desc');
         setListings(Array.isArray(lsJson?.data?.listings) ? lsJson.data.listings : []);
       } catch (error) {
         console.error('Error refreshing listings:', error);
@@ -121,9 +117,7 @@ export default function Admin() {
     });
     const handleOwnersChanged = async () => {
       try {
-        const oRes = await fetch('/api/owner/list', { credentials: 'include' });
-        const oText = await oRes.text();
-        const oJson = oText ? JSON.parse(oText) : [];
+        const oJson = await apiClient.get('/owner/list');
         setOwners(Array.isArray(oJson) ? oJson : []);
       } catch (error) {
         console.error(error);
@@ -139,13 +133,7 @@ export default function Admin() {
   const updateUser = async (id, role, assignedCategories) => {
     try {
       setSaving(true);
-      const res = await fetch(`/api/user/role/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ role, assignedCategories }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post(`/user/role/${id}`, { role, assignedCategories });
       if (data && data._id) {
         setUsers((prev) => prev.map((u) => (u._id === id ? data : u)));
       }
@@ -156,27 +144,57 @@ export default function Admin() {
     }
   };
 
-  const resetEmployeePassword = async (user) => {
+  const openUserManageModal = (user) => {
+    if (!user) return;
+    setManagingUser(user);
+    setManageRole(user.role || 'buyer');
+    setManageCategories([...(user.assignedCategories || [])]);
+    setManagePassword('');
+    setManagePasswordConfirm('');
+    setShowUserManageModal(true);
+  };
+
+  const closeUserManageModal = () => {
+    setShowUserManageModal(false);
+    setManagingUser(null);
+    setManageRole('buyer');
+    setManageCategories([]);
+    setManagePassword('');
+    setManagePasswordConfirm('');
+  };
+
+  const toggleManageCategory = (slug) => {
+    setManageCategories((prev) => {
+      if (prev.includes(slug)) return prev.filter((x) => x !== slug);
+      return [...prev, slug];
+    });
+  };
+
+  const saveManagedUser = async () => {
+    if (!managingUser) return;
+    if (managingUser.role === 'admin' && managingUser._id !== currentUser._id) {
+      window.alert('Cannot modify another admin.');
+      return;
+    }
+    const roleToSave = managingUser.role === 'admin' ? 'admin' : manageRole;
+    await updateUser(managingUser._id, roleToSave, manageCategories);
+    setManagingUser((prev) => (prev ? { ...prev, role: roleToSave, assignedCategories: manageCategories } : prev));
+  };
+
+  const saveManagedPassword = async () => {
+    if (!isAdmin) return;
+    if (!managingUser || managingUser.role !== 'employee') return;
+    if (!managePassword) return;
+    if (managePassword !== managePasswordConfirm) {
+      window.alert('Passwords do not match');
+      return;
+    }
     try {
-      if (!isAdmin) return;
-      if (!user || user.role !== 'employee') return;
-
-      const nextPassword = window.prompt(`Set a new password for ${user.username || user.email || 'employee'}:`);
-      if (!nextPassword) return;
-
       setSaving(true);
-      const res = await fetch(`/api/user/admin/set-employee-password/${user._id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ newPassword: nextPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        window.alert(data?.message || 'Failed to update password');
-        return;
-      }
+      await apiClient.post(`/user/admin/set-employee-password/${managingUser._id}`, { newPassword: managePassword });
       window.alert('Password updated successfully');
+      setManagePassword('');
+      setManagePasswordConfirm('');
     } catch (error) {
       console.error(error);
       window.alert('Failed to update password');
@@ -189,13 +207,7 @@ export default function Admin() {
     if (!newOwner.name.trim()) return;
     try {
       setCreating(true);
-      const res = await fetchWithRefresh('/api/owner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(newOwner),
-      });
-      const data = await handleApiResponse(res);
+      const data = await apiClient.post('/owner', newOwner);
       if (data && data._id) {
         setOwners((prev) => [data, ...prev]);
         setNewOwner({ name: '', email: '', phone: '', companyName: '' });
@@ -209,8 +221,7 @@ export default function Admin() {
 
   const deleteOwnerById = async (id) => {
     try {
-      const res = await fetch(`/api/owner/${id}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
+      const data = await apiClient.delete(`/owner/${id}`);
       if (data && data.success) setOwners((prev) => prev.filter((o) => o._id !== id));
     } catch (error) {
       console.error(error);
@@ -219,13 +230,7 @@ export default function Admin() {
 
   const toggleOwnerActive = async (owner) => {
     try {
-      const res = await fetch(`/api/owner/${owner._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ active: !owner.active }),
-      });
-      const data = await res.json();
+      const data = await apiClient.put(`/owner/${owner._id}`, { active: !owner.active });
       if (data && data._id) setOwners((prev) => prev.map((o) => (o._id === data._id ? data : o)));
     } catch (error) {
       console.error(error);
@@ -235,13 +240,7 @@ export default function Admin() {
   const toggleUserStatus = async (userId, currentStatus) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
     try {
-      const res = await fetch(`/api/user/admin/toggle-status/${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post(`/user/admin/toggle-status/${userId}`, { status: newStatus });
       if (data && data.success) {
         setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, status: newStatus } : u));
       } else {
@@ -446,20 +445,12 @@ export default function Admin() {
         return;
       }
 
-      const res = await fetch('/api/listing/bulk-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ listings }),
-      });
-
-      const data = await res.json();
+      const data = await apiClient.post('/listing/bulk-import', { listings });
 
       if (data.success) {
         setImportResults(data.data);
         // Refresh listings
-        const listRes = await fetch('/api/listing/get?limit=200', { credentials: 'include' });
-        const listData = await listRes.json();
+        const listData = await apiClient.get('/listing/get?limit=200');
         setListings(Array.isArray(listData?.data?.listings) ? listData.data.listings : []);
       } else {
         alert(data.message || 'Import failed');
@@ -486,41 +477,6 @@ export default function Admin() {
     document.body.removeChild(link);
   };
 
-  const openCategoryModal = (user) => {
-    setEditingUser(user);
-    setSelectedCategories([...(user.assignedCategories || [])]);
-    setShowCategoryModal(true);
-  };
-
-  const closeCategoryModal = () => {
-    setEditingUser(null);
-    setSelectedCategories([]);
-    setShowCategoryModal(false);
-  };
-
-  const handleCategoryToggle = (categorySlug) => {
-    setSelectedCategories(prev => {
-      if (prev.includes(categorySlug)) {
-        return prev.filter(cat => cat !== categorySlug);
-      } else {
-        return [...prev, categorySlug];
-      }
-    });
-  };
-
-  const saveCategoryAssignment = async () => {
-    if (!editingUser) return;
-    
-    try {
-      setSaving(true);
-      await updateUser(editingUser._id, editingUser.role, selectedCategories);
-      closeCategoryModal();
-    } catch (error) {
-      console.error('Error updating categories:', error);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <main className='max-w-7xl mx-auto px-4 py-6'>
@@ -807,13 +763,7 @@ export default function Admin() {
                   }
                   try {
                     setCreating(true);
-                    const res = await fetch('/api/category/create', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      credentials: 'include',
-                      body: JSON.stringify({ name: newCategoryName.trim() }),
-                    });
-                    const data = await res.json();
+                    const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
                     if (data && data.slug) {
                       setCategories((prev) => [...prev, data]);
                       setNewCategoryName('');
@@ -850,18 +800,9 @@ export default function Admin() {
                       onClick={async () => {
                         if (confirm('Are you sure you want to delete this category?')) {
                           try {
-                            const res = await fetch(`/api/category/delete/${category._id}`, {
-                              method: 'DELETE',
-                              credentials: 'include',
-                            });
-                            const data = await res.json();
-                            if (res.ok) {
-                              setCategories((prev) => prev.filter((c) => c._id !== category._id));
-                              alert('Category deleted successfully!');
-                            } else {
-                              console.error('Failed to delete category:', data);
-                              alert(data?.message || 'Failed to delete category');
-                            }
+                            await apiClient.delete(`/category/delete/${category._id}`);
+                            setCategories((prev) => prev.filter((c) => c._id !== category._id));
+                            alert('Category deleted successfully!');
                           } catch (error) {
                             console.error('Error deleting category:', error);
                             alert('Error deleting category. Please try again.');
@@ -928,11 +869,9 @@ export default function Admin() {
                 if (logFilters.status !== 'all') params.set('status', logFilters.status);
                 if (logFilters.since) params.set('since', logFilters.since);
                 if (logFilters.until) params.set('until', logFilters.until);
-                const res = await fetch(`/api/user/security/logs?${params.toString()}`, { credentials: 'include' });
-                const text = await res.text();
-                const data = text ? JSON.parse(text) : { logs: [], total: 0 };
-                setLogs(Array.isArray(data.logs) ? data.logs : []);
-                setLogsTotal(Number(data.total) || 0);
+                const data = await apiClient.get(`/user/security/logs?${params.toString()}`);
+                setLogs(Array.isArray(data?.logs) ? data.logs : []);
+                setLogsTotal(Number(data?.total) || 0);
               } catch (error) {
                 console.error(error);
               }
@@ -944,11 +883,9 @@ export default function Admin() {
               try {
                 setLogFilters({ method: 'all', status: 'all', email: '', since: '', until: '' });
                 setLogPage(0);
-                const res = await fetch(`/api/user/security/logs?limit=${pageSize}`, { credentials: 'include' });
-                const text = await res.text();
-                const data = text ? JSON.parse(text) : { logs: [], total: 0 };
-                setLogs(Array.isArray(data.logs) ? data.logs : []);
-                setLogsTotal(Number(data.total) || 0);
+                const data = await apiClient.get(`/user/security/logs?limit=${pageSize}`);
+                setLogs(Array.isArray(data?.logs) ? data.logs : []);
+                setLogsTotal(Number(data?.total) || 0);
               } catch (error) {
                 console.error(error);
               }
@@ -1147,13 +1084,7 @@ export default function Admin() {
                 onClick={async () => {
                   try {
                     setCreating(true);
-                    const res = await fetch('/api/user/employee', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      credentials: 'include',
-                      body: JSON.stringify(newUser),
-                    });
-                    const data = await res.json();
+                    const data = await apiClient.post('/user/employee', newUser);
                     if (data && data._id) {
                       setUsers((prev) => [data, ...prev]);
                       setNewUser({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
@@ -1255,22 +1186,14 @@ export default function Admin() {
                         )}
                       </td>
                       <td className='p-3'>
-                        <select
-                          value={user.role || 'buyer'}
-                          onChange={(e) => updateUser(user._id, e.target.value, user.assignedCategories || [])}
-                          disabled={saving}
-                          className={`px-2 py-1 rounded border text-sm ${
-                            user.role === 'admin' ? 'bg-red-50 border-red-200' :
-                            user.role === 'employee' ? 'bg-blue-50 border-blue-200' :
-                            user.role === 'seller' ? 'bg-green-50 border-green-200' :
-                            'bg-gray-50 border-gray-200'
-                          }`}
-                        >
-                          <option value='buyer'>Buyer</option>
-                          <option value='seller'>Seller</option>
-                          <option value='employee'>Employee</option>
-                          <option value='admin'>Admin</option>
-                        </select>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                          user.role === 'employee' ? 'bg-blue-100 text-blue-800' :
+                          user.role === 'seller' ? 'bg-green-100 text-green-800' :
+                          'bg-slate-100 text-slate-800'
+                        }`}>
+                          {user.role || 'buyer'}
+                        </span>
                       </td>
                       <td className='p-3'>
                         <div className='flex flex-wrap gap-1'>
@@ -1299,20 +1222,11 @@ export default function Admin() {
                       <td className='p-3'>
                         <div className='flex items-center gap-2'>
                           <button
-                            onClick={() => openCategoryModal(user)}
-                            className='px-2 py-1 text-xs rounded border hover:bg-slate-50'
+                            onClick={() => openUserManageModal(user)}
+                            className='px-3 py-1.5 text-xs rounded-lg border bg-white hover:bg-slate-50'
                           >
-                            Edit Categories
+                            View & Manage
                           </button>
-                          {isAdmin && user.role === 'employee' && (
-                            <button
-                              disabled={saving}
-                              onClick={() => resetEmployeePassword(user)}
-                              className='px-2 py-1 text-xs rounded border hover:bg-slate-50'
-                            >
-                              Reset Password
-                            </button>
-                          )}
                           {user.role !== 'admin' && (
                             <button
                               onClick={() => toggleUserStatus(user._id, user.status || 'active')}
@@ -1343,68 +1257,166 @@ export default function Admin() {
         </>
       )}
 
-        {/* Category Assignment Modal */}
-        {showCategoryModal && editingUser && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden">
-              <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold text-slate-800">
-                  Assign Categories to {editingUser.username}
-                </h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Select the categories this user can access
-                </p>
+        {showUserManageModal && managingUser && (
+          <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
+            <div className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden'>
+              <div className='p-6 border-b flex items-start justify-between gap-4'>
+                <div>
+                  <div className='text-xs uppercase tracking-wide text-slate-500'>User Details</div>
+                  <div className='text-xl font-semibold text-slate-900'>{managingUser.username || 'N/A'}</div>
+                  <div className='text-sm text-slate-600'>{managingUser.email}</div>
+                </div>
+                <button
+                  onClick={closeUserManageModal}
+                  disabled={saving}
+                  className='px-3 py-2 rounded-lg border text-sm hover:bg-slate-50 disabled:opacity-50'
+                >
+                  Close
+                </button>
               </div>
-              
-              <div className="p-6 max-h-96 overflow-y-auto">
-                {categories.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <p>No categories available</p>
-                    <p className="text-sm mt-1">Create categories first to assign them to users</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {categories.map((category) => (
-                      <label
-                        key={category._id}
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-slate-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedCategories.includes(category.slug)}
-                          onChange={() => handleCategoryToggle(category.slug)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium text-slate-800">{category.name}</div>
-                          <div className="text-sm text-slate-500">Slug: {category.slug}</div>
-                          {category.fields && category.fields.length > 0 && (
-                            <div className="text-xs text-slate-400 mt-1">
-                              {category.fields.length} field{category.fields.length !== 1 ? 's' : ''}
-                            </div>
-                          )}
+
+              <div className='p-6 overflow-auto'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                  <div className='rounded-xl border p-4'>
+                    <div className='text-sm font-semibold text-slate-800 mb-3'>Overview</div>
+                    <div className='space-y-2 text-sm'>
+                      <div className='flex items-center justify-between gap-3'>
+                        <div className='text-slate-500'>User ID</div>
+                        <div className='font-mono text-slate-800'>{managingUser._id}</div>
+                      </div>
+                      <div className='flex items-center justify-between gap-3'>
+                        <div className='text-slate-500'>Phone</div>
+                        <div className='text-slate-800'>{managingUser.phone || '-'}</div>
+                      </div>
+                      <div className='flex items-center justify-between gap-3'>
+                        <div className='text-slate-500'>Status</div>
+                        <div className='text-slate-800'>{managingUser.status || 'active'}</div>
+                      </div>
+                      <div className='flex items-center justify-between gap-3'>
+                        <div className='text-slate-500'>Created</div>
+                        <div className='text-slate-800'>
+                          {managingUser.createdAt ? new Date(managingUser.createdAt).toLocaleString() : 'N/A'}
                         </div>
-                      </label>
-                    ))}
+                      </div>
+                      <div className='flex items-center justify-between gap-3'>
+                        <div className='text-slate-500'>Role</div>
+                        <div className='text-slate-800'>{managingUser.role || 'buyer'}</div>
+                      </div>
+                    </div>
+                    <div className='mt-4 flex items-center gap-2'>
+                      {managingUser.role !== 'admin' && (
+                        <button
+                          onClick={async () => {
+                            await toggleUserStatus(managingUser._id, managingUser.status || 'active');
+                            const nextStatus = (managingUser.status || 'active') === 'active' ? 'inactive' : 'active';
+                            setManagingUser((prev) => (prev ? { ...prev, status: nextStatus } : prev));
+                          }}
+                          disabled={saving}
+                          className={`px-3 py-2 rounded-lg border text-sm disabled:opacity-50 ${
+                            (managingUser.status || 'active') === 'active'
+                              ? 'text-orange-700 hover:bg-orange-50'
+                              : 'text-green-700 hover:bg-green-50'
+                          }`}
+                        >
+                          {(managingUser.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className='rounded-xl border p-4'>
+                    <div className='text-sm font-semibold text-slate-800 mb-3'>Update Properties</div>
+                    <div className='space-y-4'>
+                      <div>
+                        <div className='text-xs font-medium text-slate-600 mb-1'>Role</div>
+                        {managingUser.role === 'admin' ? (
+                          <div>
+                            <div className='w-full px-3 py-2 rounded-lg border text-sm bg-slate-100 text-slate-500 cursor-not-allowed'>Admin</div>
+                            <p className='text-xs text-amber-600 mt-1'>Admin roles cannot be changed.</p>
+                          </div>
+                        ) : (
+                          <select
+                            value={manageRole}
+                            onChange={(e) => setManageRole(e.target.value)}
+                            disabled={saving}
+                            className='w-full px-3 py-2 rounded-lg border text-sm'
+                          >
+                            <option value='buyer'>Buyer</option>
+                            <option value='seller'>Seller</option>
+                            <option value='employee'>Employee</option>
+                          </select>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className='text-xs font-medium text-slate-600 mb-2'>Assigned Categories</div>
+                        <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
+                          {categories.map((c) => (
+                            <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
+                              <input
+                                type='checkbox'
+                                checked={manageCategories.includes(c.slug)}
+                                onChange={() => toggleManageCategory(c.slug)}
+                                disabled={saving}
+                              />
+                              <span>{c.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className='flex justify-end gap-3'>
+                        <button
+                          onClick={closeUserManageModal}
+                          disabled={saving}
+                          className='px-4 py-2 rounded-lg border text-sm hover:bg-slate-50 disabled:opacity-50'
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={saveManagedUser}
+                          disabled={saving}
+                          className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm hover:opacity-95 disabled:opacity-50'
+                        >
+                          {saving ? 'Saving…' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {isAdmin && managingUser.role === 'employee' && (
+                  <div className='mt-6 rounded-xl border p-4'>
+                    <div className='text-sm font-semibold text-slate-800 mb-3'>Reset Password</div>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                      <input
+                        className='px-3 py-2 rounded-lg border text-sm'
+                        type='password'
+                        placeholder='New password'
+                        value={managePassword}
+                        onChange={(e) => setManagePassword(e.target.value)}
+                        disabled={saving}
+                      />
+                      <input
+                        className='px-3 py-2 rounded-lg border text-sm'
+                        type='password'
+                        placeholder='Confirm new password'
+                        value={managePasswordConfirm}
+                        onChange={(e) => setManagePasswordConfirm(e.target.value)}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div className='mt-3 flex justify-end'>
+                      <button
+                        onClick={saveManagedPassword}
+                        disabled={saving || !managePassword}
+                        className='px-4 py-2 rounded-lg border text-sm hover:bg-slate-50 disabled:opacity-50'
+                      >
+                        {saving ? 'Updating…' : 'Update Password'}
+                      </button>
+                    </div>
                   </div>
                 )}
-              </div>
-              
-              <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
-                <button
-                  onClick={closeCategoryModal}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveCategoryAssignment}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
               </div>
             </div>
           </div>

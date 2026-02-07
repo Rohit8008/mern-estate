@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { apiClient } from '../utils/http';
 
 export default function UserProfile() {
   const { userId } = useParams();
@@ -11,8 +12,7 @@ export default function UserProfile() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/user/public/${userId}`);
-        const data = await res.json();
+        const data = await apiClient.get(`/user/public/${userId}`);
         if (data.success === false) {
           setError(data.message || 'Failed to fetch user');
         } else {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { HiFilter, HiX, HiChevronDown, HiChevronUp, HiHome, HiOfficeBuilding, HiCurrencyRupee } from 'react-icons/hi';
+import { apiClient } from '../../utils/http';
 
 export default function SearchFilters({ filters, onChange, onClear, className = '' }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -10,8 +11,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const res = await fetch('/api/listing/popular-searches?limit=10');
-        const data = await res.json();
+        const data = await apiClient.get('/listing/popular-searches?limit=10');
         if (data.success && data.data) {
           setPopularCities(data.data.popularCities || []);
           setPropertyTypes(data.data.popularPropertyTypes || []);

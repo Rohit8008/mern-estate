@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import Chat from './Chat';
 import { createSocket } from '../config/socket';
+import { apiClient } from '../utils/http';
 
 export default function Messages() {
   // Removed individual inbox/sent lists per request
@@ -29,8 +30,7 @@ export default function Messages() {
     (async () => {
       try {
         setLoadingOnline(true);
-        const res = await fetch('/api/message/online-users', { credentials: 'include' });
-        const data = await res.json();
+        const data = await apiClient.get('/message/online-users');
         setOnlineUsersList(Array.isArray(data) ? data : []);
       } catch (_) {
         setOnlineUsersList([]);
@@ -49,8 +49,7 @@ export default function Messages() {
     searchTimerRef.current = setTimeout(async () => {
       try {
         setSearching(true);
-        const res = await fetch(`/api/user/search?q=${encodeURIComponent(q.trim())}`, { credentials: 'include' });
-        const data = await res.json();
+        const data = await apiClient.get(`/user/search?q=${encodeURIComponent(q.trim())}`);
         setSearchResults(Array.isArray(data) ? data : []);
       } catch (_) {
         setSearchResults([]);
@@ -71,8 +70,7 @@ export default function Messages() {
     const load = async () => {
       try {
         setLoading(true);
-        const cRes = await fetch('/api/message/conversations', { credentials: 'include' });
-        const cData = await cRes.json();
+        const cData = await apiClient.get('/message/conversations');
         // Ensure conversations is always an array
         setConversations(Array.isArray(cData) ? cData : []);
       } catch (error) {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiClient } from '../utils/http';
 
 export default function PasswordReset() {
   const navigate = useNavigate();
@@ -75,11 +76,7 @@ export default function PasswordReset() {
       (async () => {
         try {
           setLoading(true);
-          const res = await fetch('/api/user/password/request-otp', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: e })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.message || 'Failed');
+          const data = await apiClient.post('/user/password/request-otp', { email: e });
           setMessage(`OTP sent to ${data.to || 'your email'}` + (data.devOtp ? ` (dev: ${data.devOtp})` : ''));
           setStep(2);
           setEmailLocked(true);
@@ -109,13 +106,8 @@ export default function PasswordReset() {
   const requestOtp = async () => {
     try {
       setLoading(true); setError(''); setMessage('');
-      const res = await fetch('/api/user/password/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok || data?.success === false) throw new Error(data?.message || 'Failed');
+      const data = await apiClient.post('/user/password/request-otp', { email });
+      if (data?.success === false) throw new Error(data?.message || 'Failed');
       setMessage(`OTP sent to ${data.to || 'your email'}` + (data.devOtp ? ` (dev: ${data.devOtp})` : ''));
       setStep(2);
       setEmailLocked(true);
@@ -128,13 +120,8 @@ export default function PasswordReset() {
   const resetPassword = async () => {
     try {
       setLoading(true); setError(''); setMessage('');
-      const res = await fetch('/api/user/password/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp, newPassword: password }),
-      });
-      const data = await res.json();
-      if (!res.ok || data?.success === false) throw new Error(data?.message || 'Failed');
+      const data = await apiClient.post('/user/password/reset', { email, otp, newPassword: password });
+      if (data?.success === false) throw new Error(data?.message || 'Failed');
       setMessage('Password updated. You can sign in with your new password.');
       setStep(3);
     } catch (e) {

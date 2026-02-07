@@ -5,7 +5,8 @@ import {
   errorHandler, 
   AppError, 
   ValidationError, 
-  AuthenticationError, 
+  AuthenticationError,
+  AuthorizationError,
   ConflictError,
   asyncHandler,
   sendSuccessResponse,
@@ -504,4 +505,37 @@ export const signOut = asyncHandler(async (req, res, next) => {
     .clearCookie('refresh_token', clearRefreshCookieOptions)
     .status(200)
     .json({ success: true, message: 'User signed out successfully!' });
+});
+
+export const signOutAll = asyncHandler(async (req, res, next) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+  const userAgent = req.headers['user-agent'] || '';
+
+  const clearCookieOptions = { ...cookieOptions };
+  delete clearCookieOptions.maxAge;
+
+  const clearRefreshCookieOptions = { ...refreshCookieOptions };
+  delete clearRefreshCookieOptions.maxAge;
+
+  if (req.user?.id) {
+    try {
+      await User.findByIdAndUpdate(req.user.id, { $set: { refreshTokens: [] } });
+    } catch (_) {}
+
+    logSecurityEvent({
+      email: req.user.email,
+      method: 'logout',
+      status: 'success',
+      reason: 'User signed out from all devices',
+      ip: clientIP,
+      userAgent: userAgent,
+      path: req.originalUrl,
+    });
+  }
+
+  res
+    .clearCookie('access_token', clearCookieOptions)
+    .clearCookie('refresh_token', clearRefreshCookieOptions)
+    .status(200)
+    .json({ success: true, message: 'Signed out from all devices' });
 });

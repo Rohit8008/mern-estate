@@ -2,6 +2,7 @@ import express from 'express';
 import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, me, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
+import { validateBody, userRouteValidation } from '../middleware/validation.js';
 
 
 const router = express.Router();
@@ -41,18 +42,18 @@ router.get('/security/logs', verifyToken, requireAdmin, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch logs' });
   }
 })
-router.post('/employee', verifyToken, requireAdmin, createEmployee)
-router.post('/update/:id', verifyToken, updateUser)
+router.post('/employee', verifyToken, requireAdmin, validateBody(userRouteValidation.createEmployee), createEmployee)
+router.post('/update/:id', verifyToken, validateBody(userRouteValidation.updateProfile), updateUser)
 router.delete('/delete/:id', verifyToken, deleteUser)
 router.delete('/admin/delete/:id', verifyToken, requireAdmin, adminDeleteUser)
-router.post('/admin/toggle-status/:id', verifyToken, requireAdmin, adminToggleUserStatus)
-router.post('/admin/set-employee-password/:id', verifyToken, requireAdmin, adminSetEmployeePassword)
+router.post('/admin/toggle-status/:id', verifyToken, requireAdmin, validateBody(userRouteValidation.adminToggleUserStatus), adminToggleUserStatus)
+router.post('/admin/set-employee-password/:id', verifyToken, requireAdmin, validateBody(userRouteValidation.adminSetEmployeePassword), adminSetEmployeePassword)
 router.get('/search', verifyToken, searchUsers)
 router.get('/listings/:id', verifyToken, getUserListings)
 router.get('/:id', verifyToken, getUser)
 router.get('/public/:id', getUserPublic)
-router.post('/role/:id', verifyToken, setUserRole)
-router.post('/password/request-otp', requestPasswordReset)
-router.post('/password/reset', resetPasswordWithOtp)
+router.post('/role/:id', verifyToken, validateBody(userRouteValidation.setUserRole), setUserRole)
+router.post('/password/request-otp', validateBody(userRouteValidation.requestPasswordOtp), requestPasswordReset)
+router.post('/password/reset', validateBody(userRouteValidation.resetPasswordWithOtp), resetPasswordWithOtp)
 
 export default router;

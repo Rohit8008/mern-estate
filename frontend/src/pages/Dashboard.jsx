@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { StatsCard, StatsSkeleton } from '@/components/ui/StatsCard';
 import { formatPrice, formatDate, getStatusColor } from '@/lib/utils';
+import { apiClient } from '../utils/http';
 
 export default function Dashboard() {
   const { currentUser } = useSelector((state) => state.user);
@@ -16,8 +17,7 @@ export default function Dashboard() {
   const fetchDashboardAnalytics = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dashboard/analytics');
-      const data = await response.json();
+      const data = await apiClient.get('/dashboard/analytics');
       
       if (data.success) {
         setAnalytics(data.data);

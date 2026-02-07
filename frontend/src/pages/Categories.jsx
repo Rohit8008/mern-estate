@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { parseJsonSafely } from '../utils/http';
+import { apiClient } from '../utils/http';
 
 export default function Categories() {
   const { currentUser } = useSelector((state) => state.user);
@@ -16,8 +16,7 @@ export default function Categories() {
     const fetchCategories = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/category/list');
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get('/category/list');
         if (Array.isArray(data)) {
           // Employees only see their assigned categories
           if (currentUser?.role === 'employee' && currentUser.assignedCategories?.length) {
@@ -57,13 +56,7 @@ export default function Categories() {
             try {
               setCreating(true);
               setError(''); // Clear any previous errors
-              const res = await fetch('/api/category/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ name: newCategoryName.trim() }),
-              });
-              const data = await parseJsonSafely(res);
+              const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
               if (data && data.slug) {
                 setCategories((prev) => [...prev, data]);
                 setNewCategoryName('');
@@ -111,12 +104,7 @@ export default function Categories() {
                     if (!ok) return;
                     try {
                       setDeletingId(c._id);
-                      const res = await fetch(`/api/category/delete/${c._id}`, {
-                        method: 'DELETE',
-                        credentials: 'include',
-                      });
-                      const data = await parseJsonSafely(res);
-                      if (!res.ok || data?.success === false) throw new Error(data?.message || 'Failed');
+                      await apiClient.delete(`/category/delete/${c._id}`);
                       setCategories((prev) => prev.filter((x) => x._id !== c._id));
                     } catch (e) {
                       alert(e.message || 'Failed to delete');

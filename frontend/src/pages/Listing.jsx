@@ -20,7 +20,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaEdit, FaTrash } from 'react-icons/fa';
-import { parseJsonSafely } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 
 const defaultIcon = new L.Icon({
@@ -54,8 +54,7 @@ export default function Listing() {
     const fetchListing = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/listing/get/${params.listingId}`);
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get(`/listing/get/${params.listingId}`);
         if (data.success === false) {
           setError(true);
           setLoading(false);
@@ -76,8 +75,7 @@ export default function Listing() {
     const fetchCategory = async () => {
       if (!listing?.category) { setCategoryFields([]); return; }
       try {
-        const res = await fetch(`/api/category/by-slug/${listing.category}`);
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get(`/category/by-slug/${listing.category}`);
         setCategoryFields(Array.isArray(data?.fields) ? data.fields : []);
       } catch (_) {
         setCategoryFields([]);
@@ -90,8 +88,7 @@ export default function Listing() {
     const fetchPropertyType = async () => {
       if (!listing?.propertyType) { setPropertyTypeData(null); return; }
       try {
-        const res = await fetch(`/api/property-types/${listing.propertyType}`);
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get(`/property-types/${listing.propertyType}`);
         setPropertyTypeData(data?.data || data || null);
       } catch (_) {
         setPropertyTypeData(null);
@@ -470,11 +467,7 @@ export default function Listing() {
                         const confirmed = window.confirm('Are you sure you want to delete this listing?');
                         if (!confirmed) return;
                         try {
-                          const res = await fetch(`/api/listing/delete/${listing._id}`, {
-                            method: 'DELETE',
-                            credentials: 'include',
-                          });
-                          const data = await parseJsonSafely(res);
+                          const data = await apiClient.delete(`/listing/delete/${listing._id}`);
                           if (data.success === false) return;
                           // Trigger cache invalidation event
                           window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));

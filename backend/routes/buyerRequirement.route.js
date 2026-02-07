@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifyToken } from '../utils/verifyUser.js';
-import { validateBuyerRequirement } from '../middleware/validation.js';
+import { validateBody, buyerRequirementValidation } from '../middleware/validation.js';
 import {
   createBuyerRequirement,
   getBuyerRequirements,
@@ -20,7 +20,7 @@ const router = express.Router();
 router.use(verifyToken);
 
 // Create buyer requirement
-router.post('/', validateBuyerRequirement, createBuyerRequirement);
+router.post('/', validateBody(buyerRequirementValidation.create), createBuyerRequirement);
 
 // Get all buyer requirements for the user
 router.get('/', getBuyerRequirements);
@@ -32,7 +32,7 @@ router.get('/stats', getBuyerStats);
 router.get('/:id', getBuyerRequirement);
 
 // Update buyer requirement
-router.put('/:id', validateBuyerRequirement, updateBuyerRequirement);
+router.put('/:id', validateBody(buyerRequirementValidation.update), updateBuyerRequirement);
 
 // Delete buyer requirement
 router.delete('/:id', deleteBuyerRequirement);

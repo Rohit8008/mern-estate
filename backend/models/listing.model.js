@@ -207,7 +207,6 @@ listingSchema.index({ category: 1 }); // Category filter
 listingSchema.index({ userRef: 1 }); // User listings
 listingSchema.index({ createdAt: -1 }); // Default sort
 listingSchema.index({ regularPrice: 1, createdAt: -1 }); // Price sort with secondary sort
-listingSchema.index({ location: '2dsphere' }); // Geospatial queries
 listingSchema.index({ city: 1, locality: 1 });
 listingSchema.index({ status: 1, assignedAgent: 1, createdAt: -1 });
 listingSchema.index({ propertyCategory: 1, regularPrice: 1, createdAt: -1 });

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { signOutUserSuccess } from '../redux/user/userSlice';
+import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAppearance } from '../contexts/useAppearance';
 import PropTypes from 'prop-types';
@@ -104,7 +105,7 @@ export default function Settings() {
     if (!confirm('This will sign you out from all devices including this one. Continue?')) return;
     try {
       // In a real app, this would call an API to invalidate all sessions
-      await fetch('/api/auth/signout-all', { method: 'POST', credentials: 'include' }).catch(() => {});
+      await apiClient.post('/auth/signout-all', {}).catch(() => {});
       dispatch(signOutUserSuccess());
       localStorage.removeItem('persist:root');
       sessionStorage.clear();

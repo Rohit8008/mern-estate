@@ -33,13 +33,59 @@ export const verifyToken = async (req, res, next) => {
 
       req.user = { 
         id: String(user._id), 
+        email: user.email,
+        username: user.username,
+        status: user.status,
         role: user.role, 
         assignedCategories: user.assignedCategories,
         assignedRole: user.assignedRole ? String(user.assignedRole) : null,
       };
-      next();
+
+      return next();
     } catch (_) {
       return next(new AuthenticationError('Auth lookup failed'));
+    }
+  });
+};
+
+export const tryVerifyToken = async (req, res, next) => {
+  const token = req.cookies.access_token;
+  if (!token) return next();
+
+  jwt.verify(token, config.jwt.secret, async (err, payload) => {
+    if (err) return next();
+    try {
+      const user = await User.findById(payload.id).select('-password');
+      if (!user) return next();
+
+      if (user.role === 'employee' && !user.assignedRole) {
+        try {
+          const defaultEmployeeRole = await Role.findOne({
+            name: { $regex: /^employee$/i },
+            isSystem: true,
+            isDeleted: { $ne: true },
+          }).select('_id');
+
+          if (defaultEmployeeRole?._id) {
+            user.assignedRole = defaultEmployeeRole._id;
+            await user.save();
+          }
+        } catch (_) {}
+      }
+
+      req.user = {
+        id: String(user._id),
+        email: user.email,
+        username: user.username,
+        status: user.status,
+        role: user.role,
+        assignedCategories: user.assignedCategories,
+        assignedRole: user.assignedRole ? String(user.assignedRole) : null,
+      };
+
+      return next();
+    } catch (_) {
+      return next();
     }
   });
 };

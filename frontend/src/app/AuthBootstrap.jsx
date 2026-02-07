@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 
 import { signInSuccess, signOutUserSuccess } from '../redux/user/userSlice';
-import { parseJsonSafely, API_BASE_URL } from '../utils/http';
+import { apiClient } from '../utils/http';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
 
 export default function AuthBootstrap() {
@@ -13,16 +13,11 @@ export default function AuthBootstrap() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/user/me`, { credentials: 'include' });
-
-        if (res.ok) {
-          const data = await parseJsonSafely(res);
-          if (data && data._id) {
-            dispatch(signInSuccess(data));
-            return;
-          }
+        const data = await apiClient.get('/user/me');
+        if (data && data._id) {
+          dispatch(signInSuccess(data));
+          return;
         }
-
         dispatch(signOutUserSuccess());
       } catch (error) {
         console.error('Auth bootstrap error:', error);

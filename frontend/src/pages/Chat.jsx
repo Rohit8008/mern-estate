@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { createSocket } from '../config/socket';
+import { apiClient } from '../utils/http';
 
 export default function Chat({ otherIdProp }) {
   const { otherId: otherIdParam } = useParams();
@@ -22,8 +23,7 @@ export default function Chat({ otherIdProp }) {
   const load = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/message/thread/${otherId}`, { credentials: 'include' });
-      const data = await res.json();
+      const data = await apiClient.get(`/message/thread/${otherId}`);
       setMessages(data || []);
     } catch (error) {
       console.error('Error loading thread:', error);
@@ -36,19 +36,13 @@ export default function Chat({ otherIdProp }) {
     // mark as read on open
     (async () => {
       try {
-        await fetch('/api/message/read', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ otherId }),
-        });
+        await apiClient.post('/message/read', { otherId });
       } catch (_) {}
     })();
     // fetch other user info
     (async () => {
       try {
-        const res = await fetch(`/api/user/public/${otherId}`);
-        const data = await res.json();
+        const data = await apiClient.get(`/user/public/${otherId}`);
         if (!data?.success) setOtherUser(data);
       } catch (_) {}
     })();
@@ -65,12 +59,7 @@ export default function Chat({ otherIdProp }) {
         // actively mark as read when chat is open and message arrives
         (async () => {
           try {
-            await fetch('/api/message/read', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ otherId }),
-            });
+            await apiClient.post('/message/read', { otherId });
           } catch (_) {}
         })();
       }
@@ -124,13 +113,7 @@ export default function Chat({ otherIdProp }) {
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      const res = await fetch('/api/message/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ receiverId: otherId, content: input }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post('/message/send', { receiverId: otherId, content: input });
       if (data && data._id) {
         setInput('');
         // replace tmp with persisted id for tick states

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { parseJsonSafely } from '../utils/http';
+import { apiClient } from '../utils/http';
 
 export default function Contact({ listing }) {
   const [landlord, setLandlord] = useState(null);
@@ -19,8 +19,7 @@ export default function Contact({ listing }) {
   useEffect(() => {
     const fetchLandlord = async () => {
       try {
-        const res = await fetch(`/api/user/public/${listing.userRef}`);
-        const data = await parseJsonSafely(res);
+        const data = await apiClient.get(`/user/public/${listing.userRef}`);
         setLandlord(data);
       } catch (error) {
         console.log(error);
@@ -126,13 +125,7 @@ export default function Contact({ listing }) {
                 }
                 setSending(true);
                 setStatus('');
-                const res = await fetch('/api/message/send', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
-                  body: JSON.stringify({ receiverId: landlord._id, listingId: listing._id, content: message }),
-                });
-                const data = await parseJsonSafely(res);
+                const data = await apiClient.post('/message/send', { receiverId: landlord._id, listingId: listing._id, content: message });
                 if (data && data._id) {
                   setMessage('');
                   setStatus('Message sent');

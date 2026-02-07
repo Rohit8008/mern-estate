@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiClient } from '../utils/http';
 import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaTwitter, FaLinkedin, FaInstagram } from 'react-icons/fa';
 
 export default function Footer() {
@@ -16,12 +17,7 @@ export default function Footer() {
     setLoading(true);
     setSubStatus({ type: '', message: '' });
     try {
-      const res = await fetch('/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post('/newsletter/subscribe', { email });
       if (data.success) {
         setSubStatus({ type: 'success', message: data.message });
         setEmail('');

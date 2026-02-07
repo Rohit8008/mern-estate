@@ -3,6 +3,8 @@ import User from '../models/user.model.js';
 import Owner from '../models/owner.model.js';
 import Category from '../models/category.model.js';
 import { io } from '../index.js';
+import { config } from '../config/environment.js';
+import { getCache } from '../utils/cache.js';
 import {
   errorHandler,
   AppError,
@@ -23,31 +25,20 @@ import {
   highlightMatches,
 } from '../utils/search.js';
 
-// In-memory cache for search suggestions (simple LRU-like cache)
-const searchCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_SIZE = 100;
+const CACHE_TTL_MS = (Number(config?.cache?.ttl) > 0 ? Number(config.cache.ttl) : 300) * 1000;
+const MAX_CACHE_SIZE = Number(config?.cache?.maxSize) > 0 ? Number(config.cache.maxSize) : 100;
+const cache = getCache({ ttlMs: CACHE_TTL_MS, maxSize: MAX_CACHE_SIZE });
 
 function getCachedResults(key) {
-  const cached = searchCache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-  searchCache.delete(key);
-  return null;
+  return cache.get(key);
 }
 
 function setCachedResults(key, data) {
-  if (searchCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = searchCache.keys().next().value;
-    searchCache.delete(firstKey);
-  }
-  searchCache.set(key, { data, timestamp: Date.now() });
+  cache.set(key, data);
 }
 
-// Clear all search cache (called when listings are created, updated, or deleted)
 function clearSearchCache() {
-  searchCache.clear();
+  cache.clearByPrefix('listing:');
   logger.info('Search cache cleared');
 }
 
@@ -849,7 +840,7 @@ export const searchListings = asyncHandler(async (req, res, next) => {
   const skip = (Math.max(parseInt(page) || 1, 1) - 1) * limit;
 
   // Check cache for identical queries
-  const cacheKey = JSON.stringify({ searchTerm, fuzzyLevel, limit, page, sort, order, type, minPrice, maxPrice, city, locality });
+  const cacheKey = `listing:search:${JSON.stringify({ searchTerm, fuzzyLevel, limit, page, sort, order, type, minPrice, maxPrice, city, locality })}`;
   const cachedResult = getCachedResults(cacheKey);
   if (cachedResult) {
     logger.info('Search cache hit', { searchTerm, responseTime: `${Date.now() - startTime}ms` });
@@ -1027,7 +1018,7 @@ export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
   const termLower = searchTerm.toLowerCase().trim();
 
   // Check cache
-  const cacheKey = `suggestions:${termLower}`;
+  const cacheKey = `listing:suggestions:${termLower}`;
   const cached = getCachedResults(cacheKey);
   if (cached) {
     return sendSuccessResponse(res, cached, 'Suggestions (cached)');
@@ -1126,6 +1117,12 @@ export const getPopularSearches = asyncHandler(async (req, res, next) => {
   const { limit: rawLimit = 10 } = req.query;
   const limit = Math.min(parseInt(rawLimit) || 10, 20);
 
+  const cacheKey = `listing:popular:${limit}`;
+  const cached = getCachedResults(cacheKey);
+  if (cached) {
+    return sendSuccessResponse(res, cached, 'Popular searches (cached)');
+  }
+
   // Get popular cities
   const popularCities = await Listing.aggregate([
     { $match: { isDeleted: { $ne: true }, city: { $ne: '' } } },
@@ -1163,10 +1160,13 @@ export const getPopularSearches = asyncHandler(async (req, res, next) => {
     }
   ]);
 
-  sendSuccessResponse(res, {
+  const result = {
     popularCities: popularCities.map(c => ({ name: c._id, count: c.count })),
     popularLocalities: popularLocalities.map(l => ({ name: l._id, count: l.count })),
     popularPropertyTypes: popularPropertyTypes.map(p => ({ name: p._id, count: p.count })),
     priceStats: priceStats[0] || { minPrice: 0, maxPrice: 0, avgPrice: 0 },
-  }, 'Popular searches');
+  };
+
+  setCachedResults(cacheKey, result);
+  sendSuccessResponse(res, result, 'Popular searches');
 });

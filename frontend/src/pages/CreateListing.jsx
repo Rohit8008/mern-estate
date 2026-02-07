@@ -433,15 +433,7 @@ export default function CreateListing() {
         userRef: currentUser._id,
       };
 
-      const res = await fetch('/api/listing/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(mergedData),
-      });
-
-      const data = await res.json();
+      const data = await apiClient.post('/listing/create', mergedData);
       setLoading(false);
       if (data.success === false) {
         setError(data.message);

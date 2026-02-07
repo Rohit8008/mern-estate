@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiClient } from '../utils/http';
 
 function parseCSV(text) {
   const rows = [];
@@ -113,8 +114,7 @@ export default function AdminImport() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/category/list');
-        const data = await res.json();
+        const data = await apiClient.get('/category/list');
         setCategories(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -126,8 +126,7 @@ export default function AdminImport() {
     (async () => {
       if (!selectedCategory) { setCategoryFields([]); return; }
       try {
-        const res = await fetch(`/api/category/by-slug/${selectedCategory}`);
-        const data = await res.json();
+        const data = await apiClient.get(`/category/by-slug/${selectedCategory}`);
         setCategoryFields(Array.isArray(data?.fields) ? data.fields : []);
       } catch (error) { 
         console.error('Error fetching category fields:', error);
@@ -195,9 +194,9 @@ export default function AdminImport() {
     const concurrency = 3;
     let index = 0;
     const workers = new Array(concurrency).fill(0).map(async () => {
-      while (true) {
+      while (index < csvRows.length) {
         const i = index++;
-        if (i >= csvRows.length) return;
+        if (i >= csvRows.length) break;
         const row = csvRows[i];
         const payload = {
           name: row[0] && String(row[0]).trim() ? String(row[0]).trim() : `Listing ${i + 1}`,
@@ -230,14 +229,8 @@ export default function AdminImport() {
         if (!payload.address && payload.attributes.address) payload.address = payload.attributes.address;
         if (!payload.name) payload.name = payload.address || `Listing ${i + 1}`;
         try {
-          const res = await fetch('/api/listing/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          if (!res.ok || data?.success === false) throw new Error(data?.message || 'Failed');
+          const data = await apiClient.post('/listing/create', payload);
+          if (data?.success === false) throw new Error(data?.message || 'Failed');
           setProgress((p) => ({ ...p, done: p.done + 1 }));
         } catch (e) {
           console.error(`Error importing row ${i + 2}:`, e);
