@@ -576,11 +576,11 @@ export const buyerRequirementValidation = {
     buyerEmail: Joi.string()
       .email()
       .max(254)
-      .required()
+      .optional()
+      .allow('')
       .messages({
         'string.email': 'Please provide a valid email address',
         'string.max': 'Email cannot exceed 254 characters',
-        'any.required': 'Buyer email is required',
       }),
     buyerPhone: Joi.string()
       .pattern(/^[\+]?[1-9][\d]{0,15}$/)
@@ -590,13 +590,11 @@ export const buyerRequirementValidation = {
         'any.required': 'Buyer phone is required',
       }),
     preferredLocation: Joi.string()
-      .min(2)
       .max(200)
-      .required()
+      .optional()
+      .allow('')
       .messages({
-        'string.min': 'Location must be at least 2 characters long',
         'string.max': 'Location cannot exceed 200 characters',
-        'any.required': 'Preferred location is required',
       }),
     propertyType: Joi.string()
       .valid('sale', 'rent')

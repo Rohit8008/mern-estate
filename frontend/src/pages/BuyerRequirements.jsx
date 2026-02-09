@@ -190,10 +190,9 @@ export default function BuyerRequirements() {
                   </div>
 
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Email *</label>
+                    <label className='block text-sm font-medium text-gray-700 mb-1'>Email</label>
                     <input
                       type='email'
-                      required
                       className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                       value={formData.buyerEmail}
                       onChange={(e) => setFormData({...formData, buyerEmail: e.target.value})}
@@ -233,10 +232,9 @@ export default function BuyerRequirements() {
                   </div>
 
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Preferred Location *</label>
+                    <label className='block text-sm font-medium text-gray-700 mb-1'>Preferred Location</label>
                     <input
                       type='text'
-                      required
                       className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                       value={formData.preferredLocation}
                       onChange={(e) => setFormData({...formData, preferredLocation: e.target.value})}
