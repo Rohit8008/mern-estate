@@ -4,14 +4,21 @@ import { apiClient, fetchWithRefresh, handleApiResponse, parseJsonSafely } from 
 import { FaPhone, FaEnvelope, FaWhatsapp, FaCalendar, FaPlus, FaCheck, FaRupeeSign } from 'react-icons/fa';
 
 const DEAL_STAGES = [
-  { id: 'initial_contact', label: 'Initial Contact', color: 'bg-slate-100' },
-  { id: 'site_visit_scheduled', label: 'Visit Scheduled', color: 'bg-blue-100' },
-  { id: 'site_visit_done', label: 'Visit Done', color: 'bg-indigo-100' },
-  { id: 'negotiation', label: 'Negotiation', color: 'bg-purple-100' },
-  { id: 'documentation', label: 'Documentation', color: 'bg-amber-100' },
-  { id: 'payment_pending', label: 'Payment Pending', color: 'bg-orange-100' },
-  { id: 'closed_won', label: 'Won', color: 'bg-green-100' },
-  { id: 'closed_lost', label: 'Lost', color: 'bg-red-100' },
+  // Professional stages
+  { id: 'new_lead', label: 'New Lead', color: 'bg-slate-100' },
+  { id: 'contacted', label: 'Contacted', color: 'bg-blue-100' },
+  { id: 'qualified', label: 'Qualified', color: 'bg-indigo-100' },
+  { id: 'site_visit_scheduled', label: 'Site Visit Scheduled', color: 'bg-purple-100' },
+  { id: 'negotiation', label: 'Negotiation', color: 'bg-amber-100' },
+  { id: 'booking_token', label: 'Booking / Token', color: 'bg-orange-100' },
+  { id: 'documentation', label: 'Documentation', color: 'bg-yellow-100' },
+  { id: 'closed_won', label: 'Closed (Won)', color: 'bg-green-100' },
+  { id: 'closed_lost', label: 'Closed (Lost)', color: 'bg-red-100' },
+
+  // Legacy stages (keep selectable for existing data)
+  { id: 'initial_contact', label: 'Initial Contact (Legacy)', color: 'bg-slate-100' },
+  { id: 'site_visit_done', label: 'Site Visit Done (Legacy)', color: 'bg-indigo-100' },
+  { id: 'payment_pending', label: 'Payment Pending (Legacy)', color: 'bg-orange-100' },
 ];
 
 const FOLLOW_UP_TYPES = [
@@ -31,6 +38,9 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+
+  const [timeline, setTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
 
   const [docs, setDocs] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -163,6 +173,24 @@ export default function ClientDetail() {
   useEffect(() => { loadDocs(); }, [docQuery]);
   useEffect(() => { loadTasks(); }, [taskQuery]);
 
+  async function loadTimeline() {
+    setTimelineLoading(true);
+    try {
+      const data = await apiClient.get(`/activity?entityType=client&entityId=${id}&limit=100`);
+      setTimeline(data?.data?.items || []);
+    } catch (e) {
+      setTimeline([]);
+    } finally {
+      setTimelineLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'timeline') {
+      loadTimeline();
+    }
+  }, [activeTab, id]);
+
   async function handleUpload(e) {
     e.preventDefault();
     const file = e.currentTarget.elements.file.files[0];
@@ -232,7 +260,8 @@ export default function ClientDetail() {
     { id: 'overview', label: 'Overview' },
     { id: 'deals', label: `Deals (${client.deals?.length || 0})` },
     { id: 'followups', label: `Follow-ups (${client.followUps?.filter(f => !f.completed).length || 0})` },
-    { id: 'communications', label: `Activity (${client.communications?.length || 0})` },
+    { id: 'timeline', label: 'Timeline' },
+    { id: 'communications', label: `Calls/Notes (${client.communications?.length || 0})` },
     { id: 'documents', label: 'Documents' },
   ];
 
@@ -332,6 +361,42 @@ export default function ClientDetail() {
                   <p className="text-sm whitespace-pre-wrap">{client.requirements}</p>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Timeline Tab */}
+        {activeTab === 'timeline' && (
+          <div className="bg-white rounded-lg border p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Timeline</h3>
+              <button
+                onClick={loadTimeline}
+                className="px-3 py-2 border rounded text-sm hover:bg-slate-50"
+                disabled={timelineLoading}
+              >
+                Refresh
+              </button>
+            </div>
+
+            {timelineLoading && <div className="text-sm text-slate-500">Loading timeline...</div>}
+
+            {!timelineLoading && timeline.length === 0 && (
+              <div className="text-sm text-slate-500">No timeline events yet.</div>
+            )}
+
+            <div className="space-y-3">
+              {timeline.map((ev) => (
+                <div key={ev._id} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="font-medium text-sm">{ev.message || ev.action}</div>
+                    <div className="text-xs text-slate-500">{new Date(ev.createdAt).toLocaleString()}</div>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {ev.createdBy?.username ? `By ${ev.createdBy.username}` : ''}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

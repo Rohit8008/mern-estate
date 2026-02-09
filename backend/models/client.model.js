@@ -6,10 +6,15 @@ const dealSchema = new mongoose.Schema({
   stage: {
     type: String,
     enum: [
+      // Professional stages (preferred)
+      'new_lead',
+      'contacted',
+      'qualified',
       'initial_contact',
       'site_visit_scheduled',
       'site_visit_done',
       'negotiation',
+      'booking_token',
       'documentation',
       'payment_pending',
       'closed_won',

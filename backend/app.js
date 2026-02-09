@@ -28,6 +28,7 @@ import analyticsRouter from './routes/analytics.route.js';
 import dashboardRouter from './routes/dashboard.route.js';
 import propertyTypeRouter from './routes/propertyType.route.js';
 import subscriberRouter from './routes/subscriber.route.js';
+import activityRouter from './routes/activity.route.js';
 
 import {
   securityHeaders,
@@ -92,6 +93,7 @@ export function createApp() {
   app.use('/api/crm', crmRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/dashboard', dashboardRouter);
+  app.use('/api/activity', activityRouter);
   app.use('/api/newsletter', subscriberRouter);
 
   app.use(express.static(path.join(__dirname, '/frontend/dist')));

@@ -15,6 +15,7 @@ import {
   getPipeline,
   addFollowUp,
   completeFollowUp,
+  getFollowUpsRange,
   getUpcomingFollowUps,
   addCommunication,
   getCommunications,
@@ -44,6 +45,9 @@ router.patch('/:id/deals/:dealId/commission', validateBody(crmValidation.updateC
 
 // Get upcoming follow-ups (for dashboard)
 router.get('/follow-ups/upcoming', getUpcomingFollowUps);
+
+// Get follow-ups within a date range (for calendar)
+router.get('/follow-ups/range', getFollowUpsRange);
 
 // Add a follow-up to a client
 router.post('/:id/follow-ups', validateBody(crmValidation.addFollowUp), addFollowUp);

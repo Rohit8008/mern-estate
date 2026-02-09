@@ -43,6 +43,30 @@ export default function DesktopNav({ currentUser, isBuyerViewMode, isActive }) {
       )}
       {(currentUser?.role === 'admin' || currentUser?.role === 'employee') && !isBuyerViewMode && (
         <Link
+          to='/deals'
+          className={`${
+            isActive('/deals')
+              ? 'bg-gradient-to-r from-slate-50 to-slate-100 text-slate-800 border border-slate-200'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          } px-4 py-2 rounded-xl font-semibold transition-all duration-200 hover:shadow-md`}
+        >
+          Deals
+        </Link>
+      )}
+      {(currentUser?.role === 'admin' || currentUser?.role === 'employee') && !isBuyerViewMode && (
+        <Link
+          to='/calendar'
+          className={`${
+            isActive('/calendar')
+              ? 'bg-gradient-to-r from-cyan-50 to-sky-50 text-sky-700 border border-sky-200'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          } px-4 py-2 rounded-xl font-semibold transition-all duration-200 hover:shadow-md`}
+        >
+          Calendar
+        </Link>
+      )}
+      {(currentUser?.role === 'admin' || currentUser?.role === 'employee') && !isBuyerViewMode && (
+        <Link
           to='/buyer-requirements'
           className={`${
             isActive('/buyer-requirements')

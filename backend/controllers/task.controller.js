@@ -3,6 +3,7 @@ import Client from '../models/client.model.js';
 import Listing from '../models/listing.model.js';
 import { errorHandler } from '../utils/error.js';
 import { sendMail } from '../utils/mailer.js';
+import { logActivity } from '../utils/activity.js';
 
 function canAccessUser(user, targetUserId) {
   return user.role === 'admin' || String(user.id) === String(targetUserId);
@@ -40,6 +41,31 @@ export const createTask = async (req, res, next) => {
       reminders: payload.reminders || [],
     });
 
+    try {
+      await logActivity({
+        entityType: 'task',
+        entityId: doc._id,
+        action: 'task_created',
+        message: `Task created: ${doc.title}`,
+        meta: { status: doc.status, priority: doc.priority, dueAt: doc.dueAt, assignedTo: doc.assignedTo, related: doc.related },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
+
+    // Also log to client timeline if task is related to a client
+    if (doc.related?.kind === 'client' && doc.related?.clientId) {
+      try {
+        await logActivity({
+          entityType: 'client',
+          entityId: doc.related.clientId,
+          action: 'task_created',
+          message: `Task created: ${doc.title}`,
+          meta: { taskId: doc._id, status: doc.status, priority: doc.priority, dueAt: doc.dueAt },
+          createdBy: req.user.id,
+        });
+      } catch (_) {}
+    }
+
     // Notify by email (best-effort)
     if (doc.dueAt) {
       sendMail({
@@ -57,7 +83,7 @@ export const createTask = async (req, res, next) => {
 
 export const listTasks = async (req, res, next) => {
   try {
-    const { q, status, assignedTo, page = 1, limit = 20, kind, clientId, listingId } = req.query;
+    const { q, status, assignedTo, page = 1, limit = 20, kind, clientId, listingId, dueFrom, dueTo } = req.query;
     const filter = { isDeleted: { $ne: true } };
 
     if (q) filter.$text = { $search: q };
@@ -65,6 +91,12 @@ export const listTasks = async (req, res, next) => {
     if (kind) filter['related.kind'] = kind;
     if (clientId) filter['related.clientId'] = clientId;
     if (listingId) filter['related.listingId'] = listingId;
+
+    if (dueFrom || dueTo) {
+      filter.dueAt = {};
+      if (dueFrom) filter.dueAt.$gte = new Date(String(dueFrom));
+      if (dueTo) filter.dueAt.$lte = new Date(String(dueTo));
+    }
 
     if (req.user.role === 'admin') {
       if (assignedTo) filter.assignedTo = assignedTo;
@@ -111,7 +143,45 @@ export const updateTask = async (req, res, next) => {
     const updates = { ...req.body };
     if (req.user.role !== 'admin') delete updates.assignedTo;
 
+    const prev = {
+      status: doc.status,
+      dueAt: doc.dueAt,
+      priority: doc.priority,
+      title: doc.title,
+      description: doc.description,
+    };
     const updated = await Task.findByIdAndUpdate(req.params.id, updates, { new: true });
+
+    try {
+      const statusChanged = updates.status && updates.status !== prev.status;
+      await logActivity({
+        entityType: 'task',
+        entityId: updated._id,
+        action: statusChanged ? 'task_status_updated' : 'task_updated',
+        message: statusChanged
+          ? `Task status changed from ${prev.status} to ${updated.status}`
+          : 'Task updated',
+        meta: { before: prev, after: { status: updated.status, dueAt: updated.dueAt, priority: updated.priority } },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
+
+    if (updated.related?.kind === 'client' && updated.related?.clientId) {
+      try {
+        const statusChanged = updates.status && updates.status !== prev.status;
+        await logActivity({
+          entityType: 'client',
+          entityId: updated.related.clientId,
+          action: statusChanged ? 'task_status_updated' : 'task_updated',
+          message: statusChanged
+            ? `Task status changed: ${updated.title} (${prev.status} → ${updated.status})`
+            : `Task updated: ${updated.title}`,
+          meta: { taskId: updated._id, before: prev, after: { status: updated.status, dueAt: updated.dueAt, priority: updated.priority } },
+          createdBy: req.user.id,
+        });
+      } catch (_) {}
+    }
+
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -123,11 +193,38 @@ export const deleteTask = async (req, res, next) => {
     const doc = await Task.findById(req.params.id);
     if (!doc) return next(errorHandler(404, 'Task not found'));
     if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, 'Forbidden'));
+
+    const clientId = doc.related?.kind === 'client' ? doc.related?.clientId : null;
     await Task.findByIdAndUpdate(req.params.id, {
       isDeleted: true,
       deletedAt: new Date(),
       deletedBy: req.user.id,
     });
+
+    try {
+      await logActivity({
+        entityType: 'task',
+        entityId: doc._id,
+        action: 'task_deleted',
+        message: `Task deleted: ${doc.title}`,
+        meta: { related: doc.related },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
+
+    if (clientId) {
+      try {
+        await logActivity({
+          entityType: 'client',
+          entityId: clientId,
+          action: 'task_deleted',
+          message: `Task deleted: ${doc.title}`,
+          meta: { taskId: doc._id },
+          createdBy: req.user.id,
+        });
+      } catch (_) {}
+    }
+
     res.json({ success: true, message: 'Task deleted' });
   } catch (err) {
     next(err);

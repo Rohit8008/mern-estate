@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FaHome, FaUser, FaMapMarkerAlt, FaShieldAlt, FaHandshake, FaCog } from 'react-icons/fa';
+import { FaHome, FaUser, FaMapMarkerAlt, FaShieldAlt, FaHandshake, FaCog, FaChartLine, FaCalendarAlt } from 'react-icons/fa';
 import PropTypes from 'prop-types';
 
 export default function MobileMenu({
@@ -69,6 +69,34 @@ export default function MobileMenu({
             >
               <FaUser className='w-5 h-5' />
               Clients
+            </Link>
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'employee') && !isBuyerViewMode && (
+            <Link
+              onClick={onClose}
+              to='/deals'
+              className={`${
+                isActive('/deals')
+                  ? 'bg-gradient-to-r from-slate-50 to-slate-100 text-slate-800 border-slate-300'
+                  : 'text-gray-700 hover:bg-gray-50'
+              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+            >
+              <FaChartLine className='w-5 h-5' />
+              Deals
+            </Link>
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'employee') && !isBuyerViewMode && (
+            <Link
+              onClick={onClose}
+              to='/calendar'
+              className={`${
+                isActive('/calendar')
+                  ? 'bg-gradient-to-r from-cyan-50 to-sky-100 text-sky-800 border-sky-300'
+                  : 'text-gray-700 hover:bg-gray-50'
+              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+            >
+              <FaCalendarAlt className='w-5 h-5' />
+              Calendar
             </Link>
           )}
           {(currentUser?.role === 'admin' || currentUser?.role === 'employee') && !isBuyerViewMode && (

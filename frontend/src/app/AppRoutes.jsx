@@ -26,6 +26,8 @@ import NotFound from '../pages/NotFound';
 import BuyerRequirements from '../pages/BuyerRequirements';
 import Clients from '../pages/Clients';
 import ClientDetail from '../pages/ClientDetail';
+import DealsBoard from '../pages/DealsBoard';
+import Calendar from '../pages/Calendar';
 import AdminDashboard from '../pages/AdminDashboard';
 import TeamDashboard from '../pages/TeamDashboard';
 import Analytics from '../pages/Analytics';
@@ -48,6 +50,8 @@ export default function AppRoutes() {
         <Route path='/category/:slug' element={<CategoryListings />} />
         <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
         <Route path='/dashboard' element={<TeamDashboard />} />
+        <Route path='/calendar' element={<Calendar />} />
+        <Route path='/deals' element={<DealsBoard />} />
         <Route path='/clients' element={<Clients />} />
         <Route path='/clients/:id' element={<ClientDetail />} />
       </Route>

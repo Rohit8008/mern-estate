@@ -8,6 +8,7 @@
 import Client from '../models/client.model.js';
 import { errorHandler, AppError, NotFoundError } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
+import { logActivity } from '../utils/activity.js';
 
 // ============= DEAL MANAGEMENT =============
 
@@ -56,6 +57,17 @@ export const addDeal = async (req, res, next) => {
     client.deals.push(deal);
     await client.save();
 
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'deal_created',
+        message: `Deal created in stage ${deal.stage}`,
+        meta: { dealId: client.deals[client.deals.length - 1]._id, stage: deal.stage, value: deal.value },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
+
     logger.info('Deal added', { clientId: id, dealId: client.deals[client.deals.length - 1]._id });
 
     res.status(201).json({
@@ -65,6 +77,71 @@ export const addDeal = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+export const getFollowUpsRange = async (req, res, next) => {
+  try {
+    const { from, to, includeCompleted } = req.query;
+    if (!from || !to) {
+      return next(errorHandler(400, 'from and to are required'));
+    }
+
+    const start = new Date(String(from));
+    const end = new Date(String(to));
+
+    const matchStage = {
+      'followUps.dueAt': { $gte: start, $lte: end },
+    };
+
+    if (!String(includeCompleted || '').toLowerCase().includes('true')) {
+      matchStage['followUps.completed'] = false;
+    }
+
+    if (req.user.role !== 'admin') {
+      matchStage.assignedTo = req.user.id;
+    }
+
+    const clients = await Client.find(matchStage)
+      .select('name email phone followUps assignedTo')
+      .populate('assignedTo', 'username email')
+      .lean();
+
+    const items = [];
+    clients.forEach((c) => {
+      (c.followUps || [])
+        .filter((f) => {
+          const due = new Date(f.dueAt);
+          if (due < start || due > end) return false;
+          if (!String(includeCompleted || '').toLowerCase().includes('true') && f.completed) return false;
+          return true;
+        })
+        .forEach((f) => {
+          items.push({
+            clientId: c._id,
+            clientName: c.name,
+            assignedTo: c.assignedTo,
+            followUpId: f._id,
+            dueAt: f.dueAt,
+            type: f.type,
+            notes: f.notes,
+            completed: !!f.completed,
+            completedAt: f.completedAt || null,
+          });
+        });
+    });
+
+    items.sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
+
+    res.json({
+      success: true,
+      data: {
+        total: items.length,
+        items,
+      },
+    });
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -82,10 +159,17 @@ export const updateDealStage = async (req, res, next) => {
       return next(new NotFoundError('Client not found'));
     }
 
+    // Check authorization
+    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
+      return next(new AppError('Not authorized to modify this client', 403));
+    }
+
     const deal = client.deals.id(dealId);
     if (!deal) {
       return next(new NotFoundError('Deal not found'));
     }
+
+    const prevStage = deal.stage;
 
     // Add to stage history
     deal.stageHistory.push({
@@ -108,6 +192,17 @@ export const updateDealStage = async (req, res, next) => {
     }
 
     await client.save();
+
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'deal_stage_updated',
+        message: `Deal stage moved from ${prevStage} to ${stage}`,
+        meta: { dealId, from: prevStage, to: stage, notes: notes || '' },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
 
     logger.info('Deal stage updated', { clientId: id, dealId, newStage: stage });
 
@@ -135,6 +230,11 @@ export const updateCommission = async (req, res, next) => {
       return next(new NotFoundError('Client not found'));
     }
 
+    // Check authorization
+    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
+      return next(new AppError('Not authorized to modify this client', 403));
+    }
+
     const deal = client.deals.id(dealId);
     if (!deal) {
       return next(new NotFoundError('Deal not found'));
@@ -150,6 +250,17 @@ export const updateCommission = async (req, res, next) => {
     }
 
     await client.save();
+
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'deal_commission_updated',
+        message: 'Deal commission updated',
+        meta: { dealId, commission: deal.commission },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
 
     logger.info('Commission updated', { clientId: id, dealId, commission: deal.commission });
 
@@ -200,18 +311,27 @@ export const getPipeline = async (req, res, next) => {
 
     // Define stage order
     const stageOrder = [
-      'initial_contact',
+      // Professional stages (preferred)
+      'new_lead',
+      'contacted',
+      'qualified',
       'site_visit_scheduled',
-      'site_visit_done',
       'negotiation',
+      'booking_token',
       'documentation',
-      'payment_pending',
       'closed_won',
       'closed_lost',
+
+      // Legacy stages (keep for backward compatibility)
+      'initial_contact',
+      'site_visit_done',
+      'payment_pending',
     ];
 
+    const uniqueStageOrder = Array.from(new Set(stageOrder));
+
     // Sort by stage order and add empty stages
-    const sortedPipeline = stageOrder.map(stage => {
+    const sortedPipeline = uniqueStageOrder.map(stage => {
       const found = pipeline.find(p => p._id === stage);
       return found || { _id: stage, count: 0, totalValue: 0, deals: [] };
     });
@@ -240,6 +360,11 @@ export const addFollowUp = async (req, res, next) => {
       return next(new NotFoundError('Client not found'));
     }
 
+    // Check authorization
+    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
+      return next(new AppError('Not authorized to modify this client', 403));
+    }
+
     const followUp = {
       dueAt: req.body.dueAt,
       type: req.body.type || 'call',
@@ -249,6 +374,17 @@ export const addFollowUp = async (req, res, next) => {
 
     client.followUps.push(followUp);
     await client.save();
+
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'followup_created',
+        message: `Follow-up scheduled (${followUp.type})`,
+        meta: { followUpId: client.followUps[client.followUps.length - 1]._id, dueAt: followUp.dueAt, type: followUp.type },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
 
     logger.info('Follow-up added', { clientId: id, dueAt: followUp.dueAt });
 
@@ -276,6 +412,11 @@ export const completeFollowUp = async (req, res, next) => {
       return next(new NotFoundError('Client not found'));
     }
 
+    // Check authorization
+    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
+      return next(new AppError('Not authorized to modify this client', 403));
+    }
+
     const followUp = client.followUps.id(followUpId);
     if (!followUp) {
       return next(new NotFoundError('Follow-up not found'));
@@ -300,6 +441,17 @@ export const completeFollowUp = async (req, res, next) => {
     }
 
     await client.save();
+
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'followup_completed',
+        message: `Follow-up completed (${followUp.type})`,
+        meta: { followUpId, outcome: outcome || '', notes: notes || '' },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
 
     logger.info('Follow-up completed', { clientId: id, followUpId });
 
@@ -393,6 +545,11 @@ export const addCommunication = async (req, res, next) => {
       return next(new NotFoundError('Client not found'));
     }
 
+    // Check authorization
+    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
+      return next(new AppError('Not authorized to modify this client', 403));
+    }
+
     const communication = {
       type: req.body.type,
       direction: req.body.direction || 'outbound',
@@ -410,6 +567,17 @@ export const addCommunication = async (req, res, next) => {
     client.calculateScore();
 
     await client.save();
+
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'communication_logged',
+        message: `Communication logged: ${communication.type}`,
+        meta: { type: communication.type, direction: communication.direction, summary: communication.summary },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
 
     logger.info('Communication logged', { clientId: id, type: communication.type });
 
