@@ -12,6 +12,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { apiClient } from '../utils/http';
+import { SOCKET_URL } from '../config/socket';
 import { io } from 'socket.io-client';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
@@ -143,9 +144,9 @@ export default function UpdateListing() {
     }
 
     // Realtime owners refresh
-    const socket = io('http://localhost:3000', {
+    const socket = io(SOCKET_URL, {
       withCredentials: true,
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
     });
     const handleOwnersChanged = () => fetchOwners();
     socket.on('owners:changed', handleOwnersChanged);

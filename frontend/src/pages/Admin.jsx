@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+import { SOCKET_URL } from '../config/socket';
 import { apiClient } from '../utils/http';
 import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineUpload, HiOutlineKey } from 'react-icons/hi';
 import { useBuyerView } from '../contexts/BuyerViewContext';
@@ -145,9 +145,9 @@ export default function Admin() {
   useEffect(() => {
     if (isBuyerViewRestricted || !canViewOwners) return;
 
-    const socket = io('http://localhost:3000', {
+    const socket = io(SOCKET_URL, {
       withCredentials: true,
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
     });
     const handleOwnersChanged = async () => {
       try {

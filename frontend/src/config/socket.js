@@ -12,7 +12,13 @@ const getSocketUrl = () => {
     return import.meta.env.VITE_SOCKET_URL;
   }
 
-  // In production, use same origin (empty string for relative connection)
+  // Use the API URL (backend) if available — needed when frontend and backend
+  // are deployed as separate services (e.g. on Render)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // In production, use same origin (works only if frontend is served by backend)
   if (import.meta.env.PROD) {
     return '';
   }
