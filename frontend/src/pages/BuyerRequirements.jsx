@@ -57,12 +57,25 @@ export default function BuyerRequirements() {
     e.preventDefault();
     setLoading(true);
     try {
+      // Clean up payload: remove empty strings from optional fields
+      const payload = { ...formData };
+      ['minPrice', 'maxPrice', 'minBedrooms', 'minBathrooms'].forEach((key) => {
+        if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
+          delete payload[key];
+        } else {
+          payload[key] = Number(payload[key]);
+        }
+      });
+      ['buyerEmail', 'preferredLocation', 'preferredArea', 'additionalRequirements', 'budget', 'timeline', 'notes'].forEach((key) => {
+        if (payload[key] === '') delete payload[key];
+      });
+
       const response = await fetchWithRefresh('/api/buyer-requirements', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       
       if (response.ok) {

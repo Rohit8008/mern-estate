@@ -607,6 +607,7 @@ export const buyerRequirementValidation = {
       .min(0)
       .max(1000000000)
       .optional()
+      .allow('', null)
       .messages({
         'number.min': 'Minimum price cannot be negative',
         'number.max': 'Minimum price cannot exceed 1 billion',
@@ -615,6 +616,7 @@ export const buyerRequirementValidation = {
       .min(0)
       .max(1000000000)
       .optional()
+      .allow('', null)
       .messages({
         'number.min': 'Maximum price cannot be negative',
         'number.max': 'Maximum price cannot exceed 1 billion',
@@ -624,6 +626,7 @@ export const buyerRequirementValidation = {
       .min(0)
       .max(20)
       .optional()
+      .allow('', null)
       .messages({
         'number.integer': 'Bedrooms must be a whole number',
         'number.min': 'Bedrooms cannot be negative',
@@ -634,6 +637,7 @@ export const buyerRequirementValidation = {
       .min(0)
       .max(20)
       .optional()
+      .allow('', null)
       .messages({
         'number.integer': 'Bathrooms must be a whole number',
         'number.min': 'Bathrooms cannot be negative',
@@ -679,35 +683,40 @@ export const buyerRequirementValidation = {
     buyerEmail: Joi.string()
       .email()
       .max(254)
-      .optional(),
+      .optional()
+      .allow(''),
     buyerPhone: Joi.string()
       .pattern(/^[\+]?[1-9][\d]{0,15}$/)
       .optional(),
     preferredLocation: Joi.string()
-      .min(2)
       .max(200)
-      .optional(),
+      .optional()
+      .allow(''),
     propertyType: Joi.string()
       .valid('sale', 'rent')
       .optional(),
     minPrice: Joi.number()
       .min(0)
       .max(1000000000)
-      .optional(),
+      .optional()
+      .allow('', null),
     maxPrice: Joi.number()
       .min(0)
       .max(1000000000)
-      .optional(),
+      .optional()
+      .allow('', null),
     minBedrooms: Joi.number()
       .integer()
       .min(0)
       .max(20)
-      .optional(),
+      .optional()
+      .allow('', null),
     minBathrooms: Joi.number()
       .integer()
       .min(0)
       .max(20)
-      .optional(),
+      .optional()
+      .allow('', null),
     preferredArea: Joi.string()
       .max(200)
       .optional(),
