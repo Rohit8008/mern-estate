@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { BuyerViewProvider } from './contexts/BuyerViewContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { AppearanceProvider } from './contexts/AppearanceProvider';
+import { UiModeProvider } from './contexts/UiModeProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import ApiErrorToastListener from './app/ApiErrorToastListener';
@@ -16,16 +17,18 @@ export default function App() {
     <ErrorBoundary>
       <AppearanceProvider>
         <NotificationProvider>
-          <BuyerViewProvider>
-            <BrowserRouter>
-              <AuthBootstrap />
-              <ApiErrorToastListener />
-              <PushNotificationsListener />
-              <AppShell>
-                <AppRoutes />
-              </AppShell>
-            </BrowserRouter>
-          </BuyerViewProvider>
+          <UiModeProvider>
+            <BuyerViewProvider>
+              <BrowserRouter>
+                <AuthBootstrap />
+                <ApiErrorToastListener />
+                <PushNotificationsListener />
+                <AppShell>
+                  <AppRoutes />
+                </AppShell>
+              </BrowserRouter>
+            </BuyerViewProvider>
+          </UiModeProvider>
         </NotificationProvider>
       </AppearanceProvider>
     </ErrorBoundary>

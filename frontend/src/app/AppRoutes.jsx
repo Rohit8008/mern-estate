@@ -5,6 +5,7 @@ import SignIn from '../pages/SignIn';
 import SignUp from '../pages/SignUp';
 import Profile from '../pages/Profile';
 import PrivateRoute from '../components/PrivateRoute';
+import CrmShell from './CrmShell';
 import SellerRoute from '../components/SellerRoute';
 import CreateListing from '../pages/CreateListing';
 import UpdateListing from '../pages/UpdateListing';
@@ -25,16 +26,24 @@ import Unauthorized from '../pages/Unauthorized';
 import NotFound from '../pages/NotFound';
 import BuyerRequirements from '../pages/BuyerRequirements';
 import Clients from '../pages/Clients';
+import ClientsLegacy from '../pages/ClientsLegacy';
 import ClientDetail from '../pages/ClientDetail';
 import DealsBoard from '../pages/DealsBoard';
+import DealsLegacy from '../pages/DealsLegacy';
 import Calendar from '../pages/Calendar';
+import CalendarLegacy from '../pages/CalendarLegacy';
+import PropertiesBoard from '../pages/PropertiesBoard';
+import PropertiesLegacy from '../pages/PropertiesLegacy';
 import AdminDashboard from '../pages/AdminDashboard';
 import TeamDashboard from '../pages/TeamDashboard';
 import Analytics from '../pages/Analytics';
 import PropertyTypeManagement from '../pages/PropertyTypeManagement';
 import Settings from '../pages/Settings';
+import { useUiMode } from '../contexts/useUiMode';
 
 export default function AppRoutes() {
+  const { isMinimal } = useUiMode();
+
   return (
     <Routes>
       <Route path='/' element={<Home />} />
@@ -49,14 +58,30 @@ export default function AppRoutes() {
         <Route path='/categories' element={<Categories />} />
         <Route path='/category/:slug' element={<CategoryListings />} />
         <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
-        <Route path='/dashboard' element={<TeamDashboard />} />
-        <Route path='/calendar' element={<Calendar />} />
-        <Route path='/deals' element={<DealsBoard />} />
-        <Route path='/clients' element={<Clients />} />
-        <Route path='/clients/:id' element={<ClientDetail />} />
+
+        {isMinimal ? (
+          <Route element={<CrmShell />}>
+            <Route path='/dashboard' element={<TeamDashboard />} />
+            <Route path='/properties' element={<PropertiesBoard />} />
+            <Route path='/calendar' element={<Calendar />} />
+            <Route path='/deals' element={<DealsBoard />} />
+            <Route path='/clients' element={<Clients />} />
+            <Route path='/clients/:id' element={<ClientDetail />} />
+            <Route path='/buyer-requirements' element={<BuyerRequirements />} />
+          </Route>
+        ) : (
+          <>
+            <Route path='/dashboard' element={<TeamDashboard />} />
+            <Route path='/properties' element={<PropertiesLegacy />} />
+            <Route path='/calendar' element={<CalendarLegacy />} />
+            <Route path='/deals' element={<DealsLegacy />} />
+            <Route path='/clients' element={<ClientsLegacy />} />
+            <Route path='/clients/:id' element={<ClientDetail />} />
+            <Route path='/buyer-requirements' element={<BuyerRequirements />} />
+          </>
+        )}
       </Route>
 
-      <Route path='/buyer-requirements' element={<BuyerRequirements />} />
       <Route path='/user/:userId' element={<UserProfile />} />
 
       <Route element={<PrivateRoute />}>

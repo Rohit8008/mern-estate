@@ -5,6 +5,7 @@ import { signOutUserSuccess } from '../redux/user/userSlice';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAppearance } from '../contexts/useAppearance';
+import { useUiMode } from '../contexts/useUiMode';
 import PropTypes from 'prop-types';
 import {
   HiBell,
@@ -28,6 +29,7 @@ export default function Settings() {
   const dispatch = useDispatch();
   const { showSuccess, showError } = useNotification();
   const { themePreference, setTheme, compactMode, setCompactMode } = useAppearance();
+  const { isMinimal, setUiMode } = useUiMode();
 
   // Settings state
   const [settings, setSettings] = useState({
@@ -471,6 +473,12 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className='divide-y divide-gray-100'>
+                    <ToggleSwitch
+                      enabled={isMinimal}
+                      onToggle={() => setUiMode(isMinimal ? 'legacy' : 'minimal')}
+                      label='Minimal UI (New)'
+                      description='Enable the new minimal, Monday-style CRM layout. Turn off to use legacy UI.'
+                    />
                     <ToggleSwitch
                       enabled={compactMode}
                       onToggle={handleCompactModeToggle}

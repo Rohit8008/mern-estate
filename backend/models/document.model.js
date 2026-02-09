@@ -23,7 +23,9 @@ const documentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-documentSchema.index({ title: 'text', tags: 1, 'related.kind': 1 });
+documentSchema.index({ title: 'text' });
+documentSchema.index({ tags: 1 });
+documentSchema.index({ 'related.kind': 1 });
 
 const Document = mongoose.model('Document', documentSchema);
 export default Document;

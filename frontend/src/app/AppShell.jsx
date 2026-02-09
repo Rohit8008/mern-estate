@@ -2,20 +2,25 @@ import { useLocation } from 'react-router-dom';
 
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { useUiMode } from '../contexts/useUiMode';
+import MinimalHeader from '../components/MinimalHeader';
 
 export default function AppShell({ children }) {
   const location = useLocation();
+  const { isMinimal } = useUiMode();
 
   const noFooterPages = ['/sign-in', '/sign-up', '/forgot-password', '/unauthorized'];
-  const showFooter = !noFooterPages.includes(location.pathname);
+  const crmPrefixes = ['/dashboard', '/properties', '/clients', '/deals', '/calendar', '/buyer-requirements'];
+  const isCrmRoute = crmPrefixes.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
+  const showFooter = (!isMinimal || !isCrmRoute) && !noFooterPages.includes(location.pathname);
 
   return (
     <>
-      <Header />
-      <div className='pt-16 min-h-screen bg-gradient-to-b from-slate-50 to-white'>
+      {isMinimal ? (!isCrmRoute && <MinimalHeader />) : <Header />}
+      <div className={`${isMinimal && isCrmRoute ? '' : 'pt-16'} min-h-screen bg-gradient-to-b from-slate-50 to-white`}>
         {children}
       </div>
-      {showFooter && <Footer />}
+      {!isMinimal && showFooter && <Footer />}
     </>
   );
 }

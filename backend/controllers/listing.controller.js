@@ -33,6 +33,16 @@ function getCachedResults(key) {
   return cache.get(key);
 }
 
+function shouldPopulate(req, key) {
+  const raw = String(req.query.populate || '');
+  if (!raw) return false;
+  const parts = raw
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return parts.includes(key);
+}
+
 function setCachedResults(key, data) {
   cache.set(key, data);
 }
@@ -224,7 +234,10 @@ export const updateListing = async (req, res, next) => {
       listing.category &&
       req.user.assignedCategories?.includes(listing.category)
     )) {
-      return next(errorHandler(403, 'You can only update your own listings!'));
+      // Also allow the assigned agent to update (board moves, status changes)
+      if (!(req.user.role === 'employee' && listing.assignedAgent && String(listing.assignedAgent) === String(req.user.id))) {
+        return next(errorHandler(403, 'You can only update your own listings!'));
+      }
     }
   }
 
@@ -394,13 +407,87 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
     query.status = status;
   }
 
+  // Additional filters (subset of getListings)
+  const city = req.query.city;
+  if (city && city.trim() && city !== 'all') {
+    query.city = { $regex: city.trim(), $options: 'i' };
+  }
+
+  const locality = req.query.locality;
+  if (locality && locality.trim() && locality !== 'all') {
+    query.locality = { $regex: locality.trim(), $options: 'i' };
+  }
+
+  const propertyCategory = req.query.propertyCategory;
+  if (propertyCategory && propertyCategory !== 'all') {
+    query.propertyCategory = propertyCategory;
+  }
+
+  const propertyType = req.query.propertyType;
+  if (propertyType && propertyType !== 'all') {
+    query.propertyType = propertyType;
+  }
+
+  const type = req.query.type;
+  if (type && type !== 'all') {
+    query.type = type;
+  }
+
+  const category = req.query.category;
+  if (category && category !== 'all') {
+    query.category = category;
+  }
+
+  const ownerId = req.query.ownerId;
+  if (ownerId && ownerId !== 'all') {
+    query.ownerIds = ownerId;
+  }
+
+  const minBedrooms = parseInt(req.query.minBedrooms);
+  if (!isNaN(minBedrooms)) {
+    query.bedrooms = { $gte: minBedrooms };
+  }
+
+  const minBathrooms = parseInt(req.query.minBathrooms);
+  if (!isNaN(minBathrooms)) {
+    query.bathrooms = { $gte: minBathrooms };
+  }
+
+  const minPrice = parseInt(req.query.minPrice);
+  const maxPrice = parseInt(req.query.maxPrice);
+  if (!isNaN(minPrice) || !isNaN(maxPrice)) {
+    query.regularPrice = {};
+    if (!isNaN(minPrice)) query.regularPrice.$gte = minPrice;
+    if (!isNaN(maxPrice)) query.regularPrice.$lte = maxPrice;
+  }
+
+  const booleanFilters = ['offer', 'furnished', 'parking'];
+  booleanFilters.forEach((filter) => {
+    const value = req.query[filter];
+    if (value !== undefined && value !== 'false') {
+      query[filter] = value === 'true';
+    }
+  });
+
+  // Basic searchTerm for assigned-only endpoint
+  const searchTerm = req.query.searchTerm;
+  if (searchTerm && String(searchTerm).trim()) {
+    const safe = String(searchTerm).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(safe, 'i');
+    query.$or = [{ name: re }, { address: re }, { city: re }, { locality: re }, { areaName: re }, { propertyNo: re }];
+  }
+
   const [listings, totalCount] = await Promise.all([
-    Listing.find(query)
-      .select('-__v')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(startIndex)
-      .lean(),
+    (async () => {
+      let qy = Listing.find(query).select('-__v').sort({ createdAt: -1 }).limit(limit).skip(startIndex);
+      if (shouldPopulate(req, 'agent')) {
+        qy = qy.populate('assignedAgent', 'username avatar role');
+      }
+      if (shouldPopulate(req, 'owners')) {
+        qy = qy.populate('ownerIds', 'name email phone companyName');
+      }
+      return qy.lean();
+    })(),
     Listing.countDocuments(query)
   ]);
 
@@ -583,6 +670,12 @@ export const getListings = asyncHandler(async (req, res, next) => {
   if (category && category !== 'all') {
     query.category = category;
   }
+
+  // Owner filter
+  const ownerId = req.query.ownerId;
+  if (ownerId && ownerId !== 'all') {
+    query.ownerIds = ownerId;
+  }
   
   // Advanced fuzzy search functionality
   const searchTerm = req.query.searchTerm;
@@ -643,12 +736,20 @@ export const getListings = asyncHandler(async (req, res, next) => {
   
   // Execute query with performance optimizations
   const [listings, totalCount] = await Promise.all([
-    Listing.find(query)
-      .select('-__v') // Exclude version field
-      .sort(sortObj)
-      .limit(limit)
-      .skip(startIndex)
-      .lean(), // Use lean() for better performance
+    (async () => {
+      let qy = Listing.find(query)
+        .select('-__v') // Exclude version field
+        .sort(sortObj)
+        .limit(limit)
+        .skip(startIndex);
+      if (shouldPopulate(req, 'agent')) {
+        qy = qy.populate('assignedAgent', 'username avatar role');
+      }
+      if (shouldPopulate(req, 'owners')) {
+        qy = qy.populate('ownerIds', 'name email phone companyName');
+      }
+      return qy.lean(); // Use lean() for better performance
+    })(),
     Listing.countDocuments(query)
   ]);
   

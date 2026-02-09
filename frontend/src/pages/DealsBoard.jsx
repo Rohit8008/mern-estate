@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import SavedViewsBar from '../components/SavedViewsBar';
 
 const STAGES = [
   { id: 'new_lead', label: 'New Lead', header: 'bg-slate-50 text-slate-700 border-slate-200' },
@@ -40,6 +41,25 @@ export default function DealsBoard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [dragOverStage, setDragOverStage] = useState('');
+
+  const getCurrentQueryString = () => {
+    // Deals board currently has no query-driven filters; keep placeholder for saved views
+    try {
+      return window.location.search.replace(/^\?/, '');
+    } catch (_) {
+      return '';
+    }
+  };
+
+  const applyQueryString = (qs) => {
+    try {
+      const url = new URL(window.location.href);
+      url.search = String(qs || '');
+      window.history.pushState({}, '', url.toString());
+      // No query-based filters yet; placeholder for future.
+    } catch (_) {}
+  };
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -65,6 +85,35 @@ export default function DealsBoard() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function onDragStart(e, payload) {
+    try {
+      e.dataTransfer.setData('application/json', JSON.stringify(payload));
+      e.dataTransfer.effectAllowed = 'move';
+    } catch (_) {}
+  }
+
+  function onDragOver(e, stageId) {
+    e.preventDefault();
+    if (dragOverStage !== stageId) setDragOverStage(stageId);
+    try {
+      e.dataTransfer.dropEffect = 'move';
+    } catch (_) {}
+  }
+
+  async function onDrop(e, stageId) {
+    e.preventDefault();
+    setDragOverStage('');
+    let payload = null;
+    try {
+      payload = JSON.parse(e.dataTransfer.getData('application/json') || 'null');
+    } catch (_) {
+      payload = null;
+    }
+    if (!payload?.clientId || !payload?.dealId) return;
+    if (!stageId || payload.fromStage === stageId) return;
+    await moveDeal({ clientId: payload.clientId, dealId: payload.dealId, toStage: stageId });
   }
 
   useEffect(() => {
@@ -124,7 +173,12 @@ export default function DealsBoard() {
             <p className='text-slate-600 mt-1'>Pipeline overview by stage (assigned-only)</p>
           </div>
 
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+            <SavedViewsBar
+              namespace='deals'
+              getCurrentQueryString={getCurrentQueryString}
+              onApplyQueryString={applyQueryString}
+            />
             <Link
               to='/clients'
               className='px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold'
@@ -161,9 +215,27 @@ export default function DealsBoard() {
                     </div>
                   </div>
 
-                  <div className='p-3 space-y-3 bg-white'>
+                  <div
+                    className={`p-3 space-y-3 bg-white transition-colors ${
+                      dragOverStage === col.id ? 'bg-slate-50/60' : ''
+                    }`}
+                    onDragOver={(e) => onDragOver(e, col.id)}
+                    onDragLeave={() => setDragOverStage('')}
+                    onDrop={(e) => onDrop(e, col.id)}
+                  >
                     {(col.deals || []).map((d) => (
-                      <div key={d.dealId} className='rounded-xl border border-slate-200 bg-white p-3 shadow-sm'>
+                      <div
+                        key={d.dealId}
+                        className='rounded-xl border border-slate-200 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing'
+                        draggable
+                        onDragStart={(e) =>
+                          onDragStart(e, {
+                            clientId: d.clientId,
+                            dealId: d.dealId,
+                            fromStage: col.id,
+                          })
+                        }
+                      >
                         <div className='flex items-start justify-between gap-3'>
                           <div>
                             <Link
