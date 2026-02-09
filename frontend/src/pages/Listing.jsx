@@ -455,7 +455,9 @@ export default function Listing() {
                  !isBuyerViewMode &&
                  (currentUser.role === 'admin' || 
                   currentUser.role === 'employee' || 
-                  (currentUser.role === 'seller' && listing.userRef === currentUser._id)) && (
+                  (currentUser.role === 'seller' &&
+                    ((typeof listing.userRef === 'string' && listing.userRef === currentUser._id) ||
+                      (listing.userRef && typeof listing.userRef === 'object' && listing.userRef._id === currentUser._id)))) && (
                   <div className='flex gap-3 mt-5'>
                     <Link to={`/update-listing/${listing._id}`} className='w-1/2'>
                       <button className='w-full flex items-center justify-center gap-2 bg-green-700 text-white rounded-lg uppercase hover:opacity-95 p-3'>

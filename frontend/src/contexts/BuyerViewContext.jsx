@@ -28,7 +28,7 @@ export const BuyerViewProvider = ({ children }) => {
   }, [isBuyerViewMode]);
 
   const toggleBuyerViewMode = () => {
-    setIsBuyerViewMode(!isBuyerViewMode);
+    setIsBuyerViewMode((prev) => !prev);
   };
 
   const value = {

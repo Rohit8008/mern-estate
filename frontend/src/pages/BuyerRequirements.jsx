@@ -16,8 +16,10 @@ export default function BuyerRequirements() {
   
   console.log('BuyerRequirements - currentUser:', currentUser);
 
-  // Form state
-  const [formData, setFormData] = useState({
+  const [editingId, setEditingId] = useState(null);
+  const [viewingRequirement, setViewingRequirement] = useState(null);
+
+  const emptyForm = {
     buyerName: '',
     buyerEmail: '',
     buyerPhone: '',
@@ -32,7 +34,10 @@ export default function BuyerRequirements() {
     budget: '',
     timeline: '',
     notes: ''
-  });
+  };
+
+  // Form state
+  const [formData, setFormData] = useState(emptyForm);
 
   useEffect(() => {
     fetchBuyerRequirements();
@@ -53,57 +58,80 @@ export default function BuyerRequirements() {
     }
   };
 
+  const cleanPayload = (data) => {
+    const payload = { ...data };
+    ['minPrice', 'maxPrice', 'minBedrooms', 'minBathrooms'].forEach((key) => {
+      if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
+        delete payload[key];
+      } else {
+        payload[key] = Number(payload[key]);
+      }
+    });
+    ['buyerEmail', 'preferredLocation', 'preferredArea', 'additionalRequirements', 'budget', 'timeline', 'notes'].forEach((key) => {
+      if (payload[key] === '') delete payload[key];
+    });
+    return payload;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
-      // Clean up payload: remove empty strings from optional fields
-      const payload = { ...formData };
-      ['minPrice', 'maxPrice', 'minBedrooms', 'minBathrooms'].forEach((key) => {
-        if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
-          delete payload[key];
-        } else {
-          payload[key] = Number(payload[key]);
-        }
-      });
-      ['buyerEmail', 'preferredLocation', 'preferredArea', 'additionalRequirements', 'budget', 'timeline', 'notes'].forEach((key) => {
-        if (payload[key] === '') delete payload[key];
-      });
+      const payload = cleanPayload(formData);
+      const isEditing = !!editingId;
+      const url = isEditing ? `/api/buyer-requirements/${editingId}` : '/api/buyer-requirements';
+      const method = isEditing ? 'PUT' : 'POST';
 
-      const response = await fetchWithRefresh('/api/buyer-requirements', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetchWithRefresh(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      
+
       if (response.ok) {
         setShowForm(false);
-        setFormData({
-          buyerName: '',
-          buyerEmail: '',
-          buyerPhone: '',
-          preferredLocation: '',
-          propertyType: 'sale',
-          minPrice: '',
-          maxPrice: '',
-          minBedrooms: '',
-          minBathrooms: '',
-          preferredArea: '',
-          additionalRequirements: '',
-          budget: '',
-          timeline: '',
-          notes: ''
-        });
+        setEditingId(null);
+        setFormData(emptyForm);
         fetchBuyerRequirements();
+      } else {
+        const errData = await parseJsonSafely(response);
+        setError(errData?.message || `Failed to ${isEditing ? 'update' : 'create'} buyer requirement`);
       }
     } catch (error) {
-      console.error('Error creating buyer requirement:', error);
-      setError('Failed to create buyer requirement');
+      console.error('Error saving buyer requirement:', error);
+      setError(`Failed to ${editingId ? 'update' : 'create'} buyer requirement`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = (requirement) => {
+    setEditingId(requirement._id);
+    setViewingRequirement(null);
+    setFormData({
+      buyerName: requirement.buyerName || '',
+      buyerEmail: requirement.buyerEmail || '',
+      buyerPhone: requirement.buyerPhone || '',
+      preferredLocation: requirement.preferredLocation || '',
+      propertyType: requirement.propertyType || 'sale',
+      minPrice: requirement.minPrice || '',
+      maxPrice: requirement.maxPrice || '',
+      minBedrooms: requirement.minBedrooms || '',
+      minBathrooms: requirement.minBathrooms || '',
+      preferredArea: requirement.preferredArea || '',
+      additionalRequirements: requirement.additionalRequirements || '',
+      budget: requirement.budget || '',
+      timeline: requirement.timeline || '',
+      notes: requirement.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleCancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFormData(emptyForm);
   };
 
   const handleDelete = async (id) => {
