@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { FaPlus, FaSearch, FaFilter, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt, FaHome, FaBed, FaBath, FaDollarSign, FaCalendarAlt, FaEdit, FaTrash, FaEye } from 'react-icons/fa';
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
+import { useBuyerView } from '../contexts/BuyerViewContext';
 
 export default function BuyerRequirements() {
   console.log('BuyerRequirements component is rendering');
@@ -13,6 +14,7 @@ export default function BuyerRequirements() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const { currentUser } = useSelector((state) => state.user);
+  const { isBuyerViewMode } = useBuyerView();
   
   console.log('BuyerRequirements - currentUser:', currentUser);
 
@@ -134,6 +136,12 @@ export default function BuyerRequirements() {
     setFormData(emptyForm);
   };
 
+  const handleView = (requirement) => {
+    setViewingRequirement(requirement);
+    setEditingId(null);
+    setShowForm(false);
+  };
+
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this buyer requirement?')) {
       try {
@@ -149,9 +157,10 @@ export default function BuyerRequirements() {
   };
 
   const filteredRequirements = buyerRequirements.filter(requirement => {
-    const matchesSearch = requirement.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         requirement.preferredLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         requirement.additionalRequirements.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = (searchTerm || '').toLowerCase();
+    const matchesSearch = (requirement?.buyerName || '').toLowerCase().includes(q) ||
+                         (requirement?.preferredLocation || '').toLowerCase().includes(q) ||
+                         (requirement?.additionalRequirements || '').toLowerCase().includes(q);
     
     const matchesFilter = filterType === 'all' || requirement.propertyType === filterType;
     
@@ -196,15 +205,99 @@ export default function BuyerRequirements() {
             </div>
 
             {/* Add Button */}
-            <button
-              onClick={() => setShowForm(true)}
-              className='bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2'
-            >
-              <FaPlus className='w-4 h-4' />
-              Add Buyer Requirement
-            </button>
+            {!isBuyerViewMode && (
+              <button
+                onClick={() => setShowForm(true)}
+                className='bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2'
+              >
+                <FaPlus className='w-4 h-4' />
+                Add Buyer Requirement
+              </button>
+            )}
           </div>
         </div>
+
+        {viewingRequirement && (
+          <div className='fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50'>
+            <div className='bg-white rounded-lg shadow-xl border border-gray-200 p-6 w-full max-w-2xl'>
+              <div className='flex items-start justify-between gap-4 mb-4'>
+                <div>
+                  <h2 className='text-xl font-semibold text-gray-900'>Buyer Requirement</h2>
+                  <p className='text-gray-600 text-sm'>Details</p>
+                </div>
+                <button
+                  onClick={() => setViewingRequirement(null)}
+                  className='px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700'
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
+                <div>
+                  <div className='text-gray-500'>Name</div>
+                  <div className='font-medium text-gray-900'>{viewingRequirement.buyerName || '-'}</div>
+                </div>
+                <div>
+                  <div className='text-gray-500'>Phone</div>
+                  <div className='font-medium text-gray-900'>{viewingRequirement.buyerPhone || '-'}</div>
+                </div>
+                <div>
+                  <div className='text-gray-500'>Email</div>
+                  <div className='font-medium text-gray-900'>{viewingRequirement.buyerEmail || '-'}</div>
+                </div>
+                <div>
+                  <div className='text-gray-500'>Location</div>
+                  <div className='font-medium text-gray-900'>{viewingRequirement.preferredLocation || '-'}</div>
+                </div>
+                <div>
+                  <div className='text-gray-500'>Type</div>
+                  <div className='font-medium text-gray-900'>{viewingRequirement.propertyType || '-'}</div>
+                </div>
+                <div>
+                  <div className='text-gray-500'>Budget</div>
+                  <div className='font-medium text-gray-900'>{viewingRequirement.budget || '-'}</div>
+                </div>
+              </div>
+
+              {(viewingRequirement.additionalRequirements || viewingRequirement.notes) && (
+                <div className='mt-4 space-y-3'>
+                  {viewingRequirement.additionalRequirements && (
+                    <div>
+                      <div className='text-gray-500 text-sm mb-1'>Additional Requirements</div>
+                      <div className='bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 text-sm'>
+                        {viewingRequirement.additionalRequirements}
+                      </div>
+                    </div>
+                  )}
+                  {viewingRequirement.notes && (
+                    <div>
+                      <div className='text-gray-500 text-sm mb-1'>Notes</div>
+                      <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 text-gray-800 text-sm'>
+                        {viewingRequirement.notes}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isBuyerViewMode && (
+                <div className='flex justify-end gap-3 mt-6'>
+                  <button
+                    onClick={() => {
+                      const req = viewingRequirement;
+                      setViewingRequirement(null);
+                      handleEdit(req);
+                    }}
+                    className='px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg'
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Add Buyer Requirement Form */}
         {showForm && (
@@ -503,26 +596,30 @@ export default function BuyerRequirements() {
 
                 <div className='flex items-center gap-2 ml-4'>
                   <button
-                    onClick={() => {/* Handle view matches */}}
+                    onClick={() => handleView(requirement)}
                     className='p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors'
-                    title='View matching properties'
+                    title='View requirement'
                   >
                     <FaEye className='w-4 h-4' />
                   </button>
-                  <button
-                    onClick={() => {/* Handle edit */}}
-                    className='p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors'
-                    title='Edit requirement'
-                  >
-                    <FaEdit className='w-4 h-4' />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(requirement._id)}
-                    className='p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors'
-                    title='Delete requirement'
-                  >
-                    <FaTrash className='w-4 h-4' />
-                  </button>
+                  {!isBuyerViewMode && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(requirement)}
+                        className='p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors'
+                        title='Edit requirement'
+                      >
+                        <FaEdit className='w-4 h-4' />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(requirement._id)}
+                        className='p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors'
+                        title='Delete requirement'
+                      >
+                        <FaTrash className='w-4 h-4' />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
