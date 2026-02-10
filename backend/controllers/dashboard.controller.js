@@ -19,6 +19,15 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
     buyerQuery.assignedAgent = req.user.id;
   }
 
+  // Admin can filter by specific agent IDs
+  if (isAdmin && req.query.agentIds) {
+    const agentIds = req.query.agentIds.split(',').filter(Boolean);
+    if (agentIds.length > 0) {
+      listingQuery.$or = [{ assignedAgent: { $in: agentIds } }, { userRef: { $in: agentIds } }];
+      buyerQuery.$or = [{ assignedAgent: { $in: agentIds } }, { createdBy: { $in: agentIds } }];
+    }
+  }
+
   // Parallel queries for better performance
   const [
     totalProperties,
@@ -112,6 +121,14 @@ export const getPropertyStats = asyncHandler(async (req, res, next) => {
   const listingQuery = { isDeleted: false };
   if (isEmployee && !isAdmin) {
     listingQuery.assignedAgent = req.user.id;
+  }
+
+  // Admin can filter by specific agent IDs
+  if (isAdmin && req.query.agentIds) {
+    const agentIds = req.query.agentIds.split(',').filter(Boolean);
+    if (agentIds.length > 0) {
+      listingQuery.$or = [{ assignedAgent: { $in: agentIds } }, { userRef: { $in: agentIds } }];
+    }
   }
 
   const [

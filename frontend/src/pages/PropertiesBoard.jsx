@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
@@ -27,6 +27,136 @@ const STATUS_STYLE = {
   under_negotiation: { stripe: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border-amber-200' },
   sold: { stripe: 'bg-slate-500', pill: 'bg-slate-100 text-slate-800 border-slate-200' },
 };
+
+// Demo properties for Monday-style display when no real data
+const DEMO_PROPERTIES = [
+  {
+    _id: 'demo-p1',
+    name: 'Property 1',
+    address: 'Empire State Building, West 34th Street',
+    city: 'New York',
+    locality: 'Manhattan',
+    regularPrice: 450000,
+    bedrooms: 3,
+    bathrooms: 2,
+    status: 'available',
+    propertyType: 'House',
+    assignedAgent: { _id: 'a1', username: 'Ross' },
+    ownerIds: [{ _id: 'o1', name: 'John Smith' }],
+    imageUrls: [],
+    latitude: 40.7484,
+    longitude: -73.9857,
+    isDemo: true,
+  },
+  {
+    _id: 'demo-p2',
+    name: 'Property 2',
+    address: '221B Baker Street',
+    city: 'London',
+    locality: 'Westminster',
+    regularPrice: 320000,
+    bedrooms: 2,
+    bathrooms: 1,
+    status: 'available',
+    propertyType: 'Apartment',
+    assignedAgent: { _id: 'a2', username: 'Sarah' },
+    ownerIds: [{ _id: 'o2', name: 'Mary Johnson' }],
+    imageUrls: [],
+    latitude: 51.5238,
+    longitude: -0.1586,
+    isDemo: true,
+  },
+  {
+    _id: 'demo-p3',
+    name: 'Property 3',
+    address: '742 Evergreen Terrace',
+    city: 'Springfield',
+    locality: 'Downtown',
+    regularPrice: 185000,
+    bedrooms: 4,
+    bathrooms: 2,
+    status: 'under_negotiation',
+    propertyType: 'House',
+    assignedAgent: { _id: 'a1', username: 'Ross' },
+    ownerIds: [{ _id: 'o3', name: 'Homer Simpson' }],
+    imageUrls: [],
+    latitude: 39.7817,
+    longitude: -89.6501,
+    isDemo: true,
+  },
+  {
+    _id: 'demo-p4',
+    name: 'Property 4',
+    address: '1600 Pennsylvania Avenue',
+    city: 'Washington',
+    locality: 'DC',
+    regularPrice: 750000,
+    bedrooms: 5,
+    bathrooms: 4,
+    status: 'under_negotiation',
+    propertyType: 'Villa',
+    assignedAgent: { _id: 'a2', username: 'Sarah' },
+    ownerIds: [{ _id: 'o4', name: 'Government' }],
+    imageUrls: [],
+    latitude: 38.8977,
+    longitude: -77.0365,
+    isDemo: true,
+  },
+  {
+    _id: 'demo-p5',
+    name: 'Property 5',
+    address: '350 Fifth Avenue',
+    city: 'New York',
+    locality: 'Midtown',
+    regularPrice: 520000,
+    bedrooms: 2,
+    bathrooms: 2,
+    status: 'sold',
+    propertyType: 'Apartment',
+    assignedAgent: { _id: 'a1', username: 'Ross' },
+    ownerIds: [{ _id: 'o5', name: 'Empire Inc' }],
+    imageUrls: [],
+    latitude: 40.7484,
+    longitude: -73.9857,
+    isDemo: true,
+  },
+  {
+    _id: 'demo-p6',
+    name: 'Property 6',
+    address: '10 Downing Street',
+    city: 'London',
+    locality: 'Westminster',
+    regularPrice: 890000,
+    bedrooms: 6,
+    bathrooms: 5,
+    status: 'sold',
+    propertyType: 'House',
+    assignedAgent: { _id: 'a2', username: 'Sarah' },
+    ownerIds: [{ _id: 'o6', name: 'UK Gov' }],
+    imageUrls: [],
+    latitude: 51.5034,
+    longitude: -0.1276,
+    isDemo: true,
+  },
+  {
+    _id: 'demo-p7',
+    name: 'Property 7',
+    address: '1 Infinite Loop',
+    city: 'Cupertino',
+    locality: 'Silicon Valley',
+    regularPrice: 1200000,
+    bedrooms: 4,
+    bathrooms: 3,
+    status: 'sold',
+    propertyType: 'Office',
+    assignedAgent: { _id: 'a1', username: 'Ross' },
+    ownerIds: [{ _id: 'o7', name: 'Tech Corp' }],
+    imageUrls: [],
+    latitude: 37.3318,
+    longitude: -122.0312,
+    isDemo: true,
+  },
+];
 
 function classNames(...xs) {
   return xs.filter(Boolean).join(' ');
@@ -81,6 +211,19 @@ export default function PropertiesBoard() {
   const [owners, setOwners] = useState([]);
   const [filesQ, setFilesQ] = useState('');
   const [dragOverStatus, setDragOverStatus] = useState('');
+  // Inline editing: { id: listingId, field: 'status'|'agent'|'owner' }
+  const [editingCell, setEditingCell] = useState(null);
+
+  // Close inline dropdown on outside click
+  const closeInlineEdit = useCallback((e) => {
+    if (editingCell && !e.target.closest('[data-inline-dropdown]')) {
+      setEditingCell(null);
+    }
+  }, [editingCell]);
+  useEffect(() => {
+    if (editingCell) document.addEventListener('mousedown', closeInlineEdit);
+    return () => document.removeEventListener('mousedown', closeInlineEdit);
+  }, [editingCell, closeInlineEdit]);
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -187,12 +330,17 @@ export default function PropertiesBoard() {
         const listings = data?.data?.listings || [];
         let normalized = Array.isArray(listings) ? listings : [];
 
+        // If no real data, show demo properties
+        if (normalized.length === 0) {
+          normalized = DEMO_PROPERTIES;
+        }
+
         if (!mounted) return;
         setItems(normalized);
       } catch (e) {
         if (!mounted) return;
-        setItems([]);
-        setError(e?.message || 'Failed to load properties');
+        setItems(DEMO_PROPERTIES);
+        setError(e?.message || 'Failed to load properties (showing demo data)');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -213,6 +361,51 @@ export default function PropertiesBoard() {
       setItems(Array.isArray(listings) ? listings : []);
     } catch (e) {
       setError(e?.message || 'Failed to update status');
+    }
+  }
+
+  // Inline update: status, agent, or owner — optimistic UI
+  async function inlineUpdate(listingId, field, value) {
+    setEditingCell(null);
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it._id !== listingId) return it;
+        if (field === 'status') return { ...it, status: value };
+        if (field === 'agent') {
+          const agent = agents.find((a) => a._id === value) || null;
+          return { ...it, assignedAgent: agent ? { _id: agent._id, username: agent.username, avatar: agent.avatar } : null };
+        }
+        if (field === 'owner') {
+          const owner = owners.find((o) => o._id === value) || null;
+          return { ...it, ownerIds: owner ? [owner] : [] };
+        }
+        return it;
+      })
+    );
+
+    try {
+      if (field === 'status') {
+        await apiClient.post(`/listing/update/${listingId}`, { status: value });
+      } else if (field === 'agent') {
+        if (value) {
+          await apiClient.post('/listing/assign-agent', { listingId, agentId: value });
+        } else {
+          await apiClient.post('/listing/unassign-agent', { listingId });
+        }
+      } else if (field === 'owner') {
+        await apiClient.post(`/listing/update/${listingId}`, { ownerIds: value ? [value] : [] });
+      }
+    } catch (e) {
+      setError(e?.message || `Failed to update ${field}`);
+      // Revert on error — refetch
+      try {
+        const isEmployee = currentUser?.role === 'employee';
+        const endpoint = isEmployee ? `/listing/my-assigned${adminQuery}` : `/listing/get${adminQuery}`;
+        const data = await apiClient.get(endpoint);
+        const listings = data?.data?.listings || [];
+        setItems(Array.isArray(listings) ? listings : []);
+      } catch (_) {}
     }
   }
 
@@ -366,48 +559,56 @@ export default function PropertiesBoard() {
 
   return (
     <div className='space-y-4'>
-      <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
-        <div>
-          <h1 className='text-2xl md:text-3xl font-bold text-slate-900'>Properties</h1>
-          <p className='text-slate-600 mt-1'>Board-style views for listings (assigned-only for employees)</p>
+      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+        <div className='flex items-center gap-3'>
+          <h1 className='text-xl font-bold text-slate-900'>Properties</h1>
+          <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full'>
+            {items.length}
+          </span>
         </div>
         <div className='flex items-center gap-2'>
           <Link
             to='/create-listing'
-            className='px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold'
+            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-2 shadow-sm transition-colors'
           >
+            <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 4v16m8-8H4' /></svg>
             New property
           </Link>
         </div>
       </div>
 
-      <div className='bg-white border border-slate-200 rounded-2xl overflow-hidden'>
-        <div className='px-4 py-3 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3'>
-          <div className='flex items-center gap-2 overflow-x-auto'>
+      <div className='bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden'>
+        <div className='px-4 py-2.5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center gap-3'>
+          <div className='flex items-center gap-1'>
             {VIEW_TABS.map((t) => (
               <button
                 key={t.id}
                 type='button'
                 onClick={() => setParam('view', t.id)}
                 className={classNames(
-                  'px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap',
-                  view === t.id ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+                  'px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors',
+                  view === t.id ? 'bg-[#cce5ff] text-[#0073ea]' : 'text-slate-600 hover:bg-slate-100'
                 )}
               >
                 {t.label}
               </button>
             ))}
           </div>
+          
+          <div className='h-6 w-px bg-slate-200 hidden lg:block' />
 
-          <div className='flex flex-col md:flex-row md:items-center gap-2'>
-            <input
-              className='w-full md:w-[320px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white'
-              placeholder='Search name, address, city, locality'
-              value={q}
-              onChange={(e) => setParam('q', e.target.value)}
-            />
+          <div className='flex flex-col md:flex-row md:items-center gap-2 flex-1'>
+            <div className='relative w-full md:w-[280px]'>
+              <svg className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /></svg>
+              <input
+                className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all placeholder:text-slate-400'
+                placeholder='Search properties...'
+                value={q}
+                onChange={(e) => setParam('q', e.target.value)}
+              />
+            </div>
             <select
-              className='w-full md:w-[220px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
+              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none transition-all'
               value={status}
               onChange={(e) => setParam('status', e.target.value)}
             >
@@ -421,7 +622,7 @@ export default function PropertiesBoard() {
 
             {currentUser?.role === 'admin' && (
               <select
-                className='w-full md:w-[220px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
+                className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none transition-all'
                 value={assignedAgent}
                 onChange={(e) => setParam('assignedAgent', e.target.value)}
               >
@@ -436,7 +637,7 @@ export default function PropertiesBoard() {
             )}
 
             <select
-              className='w-full md:w-[220px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
+              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none transition-all'
               value={ownerId}
               onChange={(e) => setParam('ownerId', e.target.value)}
               disabled={owners.length === 0}
@@ -452,17 +653,20 @@ export default function PropertiesBoard() {
             <button
               type='button'
               onClick={() => setFiltersOpen(true)}
-              className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold'
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
+              <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' /></svg>
               Filters
             </button>
-            <button
-              type='button'
-              onClick={clearAllFilters}
-              className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold'
-            >
-              Clear
-            </button>
+            {(q || status || assignedAgent || ownerId || city || locality || minPrice || maxPrice) && (
+              <button
+                type='button'
+                onClick={clearAllFilters}
+                className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
           <div className='w-full lg:w-auto'>
@@ -475,105 +679,287 @@ export default function PropertiesBoard() {
         </div>
 
         {error && (
-          <div className='px-4 py-3 text-sm bg-rose-50 border-b border-rose-200 text-rose-800'>
+          <div className='px-4 py-2.5 text-sm bg-rose-50 border-b border-rose-200 text-rose-700 flex items-center gap-2'>
+            <svg className='w-4 h-4 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' /></svg>
             {error}
           </div>
         )}
         {loading && (
-          <div className='px-4 py-3 text-sm text-slate-600 border-b border-slate-200'>Loading…</div>
+          <div className='divide-y divide-slate-100'>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className='flex items-center gap-4 px-4 py-3 animate-pulse'>
+                <div className='w-10 h-10 rounded-lg bg-slate-200 flex-shrink-0' />
+                <div className='flex-1 space-y-2'>
+                  <div className='h-3.5 bg-slate-200 rounded w-1/3' />
+                  <div className='h-2.5 bg-slate-100 rounded w-1/4' />
+                </div>
+                <div className='h-3.5 bg-slate-200 rounded w-16' />
+                <div className='h-3.5 bg-slate-200 rounded w-20' />
+                <div className='h-6 bg-slate-100 rounded-full w-20' />
+              </div>
+            ))}
+          </div>
         )}
 
         {view === 'table' && (
           <div className='overflow-x-auto'>
             <table className='min-w-full text-sm'>
-              <thead className='bg-slate-50 border-b border-slate-200'>
-                <tr>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Property</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Address</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Type</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Price</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Agent</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Owner</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Status</th>
-                  <th className='text-left px-4 py-3 font-semibold text-slate-600'>Actions</th>
+              <thead className='bg-slate-50/80 sticky top-0 z-10'>
+                <tr className='border-b border-slate-200'>
+                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[280px]'>Property</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Location</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Type</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Price</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Agent</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Owner</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Status</th>
+                  <th className='text-right px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[100px]'></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className='divide-y divide-slate-100'>
                 {STATUS_ORDER.map((s) => {
                   const rows = groups.get(s) || [];
                   if (rows.length === 0) return null;
                   const stripe = STATUS_STYLE[s]?.stripe || 'bg-slate-300';
-                  const pill = STATUS_STYLE[s]?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
+                  const totalPrice = rows.reduce((acc, x) => acc + (Number(x.regularPrice) || 0), 0);
 
                   return (
-                    <>
-                      <tr key={`${s}-header`} className='bg-white'>
-                        <td colSpan={6} className='px-0'>
-                          <div className='flex items-center gap-3 px-4 py-3 border-t border-slate-200 bg-white'>
-                            <div className={`w-1.5 h-6 rounded-full ${stripe}`} />
-                            <div className='text-sm font-bold text-slate-900'>
-                              {STATUS_LABEL[s] || s}
-                              <span className='text-slate-500 font-semibold ml-2'>({rows.length})</span>
-                            </div>
+                    <>{/* eslint-disable-next-line react/jsx-key */}
+                      <tr key={`${s}-header`}>
+                        <td colSpan={8} className='px-0 py-0'>
+                          <div className='flex items-center gap-3 px-4 py-2.5 bg-slate-50/60 border-y border-slate-200'>
+                            <div className={`w-1 h-5 rounded-full ${stripe}`} />
+                            <span className='text-[13px] font-bold text-slate-800'>{STATUS_LABEL[s] || s}</span>
+                            <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full'>{rows.length}</span>
+                            <span className='text-xs text-slate-400 ml-auto'>{formatCurrency(totalPrice)}</span>
                           </div>
                         </td>
                       </tr>
 
-                      {rows.map((x) => (
-                        <tr key={x._id} className='border-t border-slate-100 hover:bg-slate-50'>
-                          <td className='px-4 py-3 font-semibold text-slate-900'>
-                            <button
-                              type='button'
-                              className='text-left hover:underline'
-                              onClick={() => {
-                                setFilesQ('');
-                                setQuickView(x);
-                              }}
-                            >
-                              {x.name}
-                            </button>
-                          </td>
-                          <td className='px-4 py-3 text-slate-700'>
-                            {[x.address, x.city, x.locality].filter(Boolean).join(', ') || '-'}
-                          </td>
-                          <td className='px-4 py-3 text-slate-700'>{x.propertyType || x.type || '-'}</td>
-                          <td className='px-4 py-3 text-slate-700'>{formatCurrency(x.regularPrice)}</td>
-                          <td className='px-4 py-3 text-slate-700'>
-                            {x?.assignedAgent?.username || (x.assignedAgent ? 'Assigned' : '-')}
-                          </td>
-                          <td className='px-4 py-3 text-slate-700'>
-                            {Array.isArray(x?.ownerIds) && x.ownerIds.length > 0 ? (x.ownerIds[0]?.name || 'Owner') : '-'}
-                          </td>
-                          <td className='px-4 py-3'>
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg border text-xs font-semibold ${pill}`}>
-                              {(x.status || '').toString()}
-                            </span>
-                          </td>
-                          <td className='px-4 py-3'>
-                            <Link
-                              to={`/listing/${x._id}`}
-                              className='text-indigo-600 hover:underline font-semibold'
-                              target='_blank'
-                              rel='noreferrer'
-                            >
-                              Open
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
+                      {rows.map((x) => {
+                        const thumb = Array.isArray(x.imageUrls) && x.imageUrls[0];
+                        const ownerName = Array.isArray(x?.ownerIds) && x.ownerIds.length > 0 ? (x.ownerIds[0]?.name || 'Owner') : null;
+                        const agentName = x?.assignedAgent?.username;
+                        const pill = STATUS_STYLE[x.status || 'available']?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
+
+                        return (
+                          <tr
+                            key={x._id}
+                            className='group hover:bg-blue-50/40 transition-colors cursor-pointer'
+                            onClick={() => { setFilesQ(''); setQuickView(x); }}
+                          >
+                            <td className='pl-4 pr-2 py-2.5'>
+                              <div className='flex items-center gap-3'>
+                                <div className='w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200'>
+                                  {thumb ? (
+                                    <img src={thumb} alt='' className='w-full h-full object-cover' loading='lazy' />
+                                  ) : (
+                                    <div className='w-full h-full flex items-center justify-center text-slate-300'>
+                                      <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z' /></svg>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className='min-w-0'>
+                                  <div className='font-semibold text-slate-900 truncate text-[13px] group-hover:text-blue-700 transition-colors'>{x.name}</div>
+                                  {(x.bedrooms || x.bathrooms) && (
+                                    <div className='text-[11px] text-slate-400 mt-0.5'>
+                                      {x.bedrooms ? `${x.bedrooms} bed` : ''}{x.bedrooms && x.bathrooms ? ' · ' : ''}{x.bathrooms ? `${x.bathrooms} bath` : ''}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className='px-3 py-2.5'>
+                              <div className='text-slate-700 text-[13px] truncate max-w-[200px]'>{x.city || '-'}</div>
+                              {x.locality && <div className='text-[11px] text-slate-400 truncate'>{x.locality}</div>}
+                            </td>
+                            <td className='px-3 py-2.5'>
+                              <span className='text-[12px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-md capitalize'>{x.propertyType || x.type || '-'}</span>
+                            </td>
+                            <td className='px-3 py-2.5'>
+                              <div className='font-semibold text-slate-900 text-[13px]'>{formatCurrency(x.regularPrice)}</div>
+                              {x.discountPrice > 0 && x.discountPrice < x.regularPrice && (
+                                <div className='text-[11px] text-emerald-600 font-medium'>{formatCurrency(x.discountPrice)}</div>
+                              )}
+                            </td>
+                            {/* Agent — inline editable */}
+                            <td className='px-3 py-2.5'>
+                              <div className='relative' data-inline-dropdown>
+                                <button
+                                  type='button'
+                                  onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'agent' ? null : { id: x._id, field: 'agent' }); }}
+                                  className='flex items-center gap-2 rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left'
+                                  title='Click to assign agent'
+                                >
+                                  {agentName ? (
+                                    <>
+                                      <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
+                                        {agentName[0]?.toUpperCase()}
+                                      </div>
+                                      <span className='text-[13px] text-slate-700 truncate'>{agentName}</span>
+                                    </>
+                                  ) : (
+                                    <span className='text-[12px] text-slate-400 italic'>+ Assign</span>
+                                  )}
+                                </button>
+                                {editingCell?.id === x._id && editingCell?.field === 'agent' && (
+                                  <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 max-h-56 overflow-y-auto' onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type='button'
+                                      onClick={() => inlineUpdate(x._id, 'agent', null)}
+                                      className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
+                                    >
+                                      Unassigned
+                                    </button>
+                                    {agents.map((a) => (
+                                      <button
+                                        key={a._id}
+                                        type='button'
+                                        onClick={() => inlineUpdate(x._id, 'agent', a._id)}
+                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 ${x.assignedAgent?._id === a._id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+                                      >
+                                        <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
+                                          {(a.username?.[0] || '?').toUpperCase()}
+                                        </div>
+                                        {a.username}
+                                        {x.assignedAgent?._id === a._id && <svg className='w-4 h-4 ml-auto text-blue-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                      </button>
+                                    ))}
+                                    {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>No agents available</div>}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            {/* Owner — inline editable */}
+                            <td className='px-3 py-2.5'>
+                              <div className='relative' data-inline-dropdown>
+                                <button
+                                  type='button'
+                                  onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'owner' ? null : { id: x._id, field: 'owner' }); }}
+                                  className='rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left truncate block'
+                                  title='Click to assign owner'
+                                >
+                                  {ownerName ? (
+                                    <span className='text-[13px] text-slate-700 truncate block max-w-[140px]'>{ownerName}</span>
+                                  ) : (
+                                    <span className='text-[12px] text-slate-400 italic'>+ Assign</span>
+                                  )}
+                                </button>
+                                {editingCell?.id === x._id && editingCell?.field === 'owner' && (
+                                  <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 max-h-56 overflow-y-auto' onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type='button'
+                                      onClick={() => inlineUpdate(x._id, 'owner', null)}
+                                      className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
+                                    >
+                                      No owner
+                                    </button>
+                                    {owners.map((o) => {
+                                      const isActive = Array.isArray(x?.ownerIds) && x.ownerIds.some((ow) => ow?._id === o._id);
+                                      return (
+                                        <button
+                                          key={o._id}
+                                          type='button'
+                                          onClick={() => inlineUpdate(x._id, 'owner', o._id)}
+                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+                                        >
+                                          <span className='truncate'>{o.name || o.email || o._id}</span>
+                                          {isActive && <svg className='w-4 h-4 ml-auto text-blue-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                        </button>
+                                      );
+                                    })}
+                                    {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>No owners available</div>}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            {/* Status — inline editable */}
+                            <td className='px-3 py-2.5'>
+                              <div className='relative' data-inline-dropdown>
+                                <button
+                                  type='button'
+                                  onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'status' ? null : { id: x._id, field: 'status' }); }}
+                                  className='rounded-lg px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-100 transition-colors'
+                                  title='Click to change status'
+                                >
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border capitalize ${pill}`}>
+                                    {(x.status || 'available').replace('_', ' ')}
+                                  </span>
+                                </button>
+                                {editingCell?.id === x._id && editingCell?.field === 'status' && (
+                                  <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1' onClick={(e) => e.stopPropagation()}>
+                                    {STATUS_ORDER.map((st) => {
+                                      const stPill = STATUS_STYLE[st]?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
+                                      const stStripe = STATUS_STYLE[st]?.stripe || 'bg-slate-300';
+                                      return (
+                                        <button
+                                          key={st}
+                                          type='button'
+                                          onClick={() => inlineUpdate(x._id, 'status', st)}
+                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2.5 ${x.status === st ? 'bg-slate-50 font-medium' : ''}`}
+                                        >
+                                          <div className={`w-2 h-2 rounded-full ${stStripe}`} />
+                                          <span className='capitalize'>{(STATUS_LABEL[st] || st).replace('_', ' ')}</span>
+                                          {x.status === st && <svg className='w-4 h-4 ml-auto text-blue-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className='px-4 py-2.5 text-right'>
+                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                                <button
+                                  type='button'
+                                  onClick={(e) => { e.stopPropagation(); setFilesQ(''); setQuickView(x); }}
+                                  className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+                                  title='Quick view'
+                                >
+                                  <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' /></svg>
+                                </button>
+                                <Link
+                                  to={`/listing/${x._id}`}
+                                  target='_blank'
+                                  rel='noreferrer'
+                                  onClick={(e) => e.stopPropagation()}
+                                  className='p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors'
+                                  title='Open in new tab'
+                                >
+                                  <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14' /></svg>
+                                </Link>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </>
                   );
                 })}
 
                 {items.length === 0 && !loading && (
                   <tr>
-                    <td className='px-4 py-10 text-center text-slate-500' colSpan={8}>
-                      No properties found
+                    <td className='px-4 py-16 text-center' colSpan={8}>
+                      <div className='flex flex-col items-center gap-3'>
+                        <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
+                          <svg className='w-6 h-6 text-slate-400' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z' /></svg>
+                        </div>
+                        <p className='text-slate-500 text-sm'>No properties found</p>
+                        <Link to='/create-listing' className='text-sm font-medium text-blue-600 hover:text-blue-700'>+ Add your first property</Link>
+                      </div>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+
+            {/* Footer summary */}
+            {items.length > 0 && (
+              <div className='px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between'>
+                <span className='text-xs text-slate-500'>{items.length} propert{items.length === 1 ? 'y' : 'ies'} total</span>
+                <span className='text-xs text-slate-500'>Total value: <span className='font-semibold text-slate-700'>{formatCurrency(items.reduce((a, x) => a + (Number(x.regularPrice) || 0), 0))}</span></span>
+              </div>
+            )}
           </div>
         )}
 

@@ -19,7 +19,9 @@ import {
   HiX,
   HiCheck,
   HiEye,
-  HiEyeOff
+  HiEyeOff,
+  HiCog,
+  HiLogout,
 } from 'react-icons/hi';
 export default function Profile() {
   const fileRef = useRef(null);
@@ -290,32 +292,33 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Header */}
-      <div className='bg-white shadow-sm border-b border-gray-200'>
-        <div className='max-w-6xl mx-auto px-4 sm:px-6 lg:px-8'>
-          <div className='flex justify-between items-center py-6'>
-            <div>
-              <h1 className='text-2xl font-bold text-gray-900'>Profile Settings</h1>
-              <p className='text-sm text-gray-600 mt-1'>
-                Manage your account settings and preferences
-              </p>
-            </div>
-            <div className='flex items-center space-x-3'>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                isAdmin ? 'bg-red-100 text-red-800' :
-                isEmployee ? 'bg-blue-100 text-blue-800' :
-                'bg-green-100 text-green-800'
-              }`}>
-                {isAdmin ? 'Admin' : isEmployee ? 'Employee' : 'User'}
-              </span>
-              <button
-                onClick={handleSignOut}
-                className='px-4 py-2 text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors'
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
+      {/* Header - Monday.com Style */}
+      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6'>
+        <div className='flex items-center gap-3'>
+          <h1 className='text-xl font-bold text-slate-900'>My Profile</h1>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+            isAdmin ? 'bg-rose-100 text-rose-700' :
+            isEmployee ? 'bg-blue-100 text-blue-700' :
+            'bg-emerald-100 text-emerald-700'
+          }`}>
+            {isAdmin ? 'Admin' : isEmployee ? 'Employee' : 'User'}
+          </span>
+        </div>
+        <div className='flex items-center gap-2'>
+          <Link
+            to='/settings'
+            className='px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-2 transition-colors'
+          >
+            <HiCog className='w-4 h-4' />
+            Settings
+          </Link>
+          <button
+            onClick={handleSignOut}
+            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-2 transition-colors'
+          >
+            <HiLogout className='w-4 h-4' />
+            Sign Out
+          </button>
         </div>
       </div>
 

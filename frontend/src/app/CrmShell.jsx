@@ -30,11 +30,13 @@ export default function CrmShell() {
   };
 
   const nav = [
-    { to: '/dashboard', label: 'Dashboard', icon: FaClipboardList, active: isActive('/dashboard') },
+    { to: '/dashboard', label: 'Dashboard', icon: FaChartLine, active: isActive('/dashboard') },
     { to: '/properties', label: 'Properties', icon: FaClipboardList, active: isActive('/properties') },
-    { to: '/clients', label: 'Contacts', icon: FaUsers, active: isActive('/clients') },
+    { to: '/contacts', label: 'Contacts', icon: FaUsers, active: isActive('/contacts') },
+    { to: '/clients', label: 'Clients', icon: FaUser, active: isActive('/clients') && !isActive('/contacts') },
     { to: '/deals', label: 'Pipeline', icon: FaChartLine, active: isActive('/deals') },
-    { to: '/calendar', label: 'Tasks', icon: FaCalendarAlt, active: isActive('/calendar') },
+    { to: '/tasks', label: 'Tasks', icon: FaCalendarAlt, active: isActive('/tasks') },
+    { to: '/calendar', label: 'Calendar', icon: FaCalendarAlt, active: isActive('/calendar') },
     { to: '/buyer-requirements', label: 'Buyers', icon: FaUser, active: isActive('/buyer-requirements') },
   ];
 

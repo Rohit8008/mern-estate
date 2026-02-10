@@ -27,6 +27,9 @@ import NotFound from '../pages/NotFound';
 import BuyerRequirements from '../pages/BuyerRequirements';
 import Clients from '../pages/Clients';
 import ClientsLegacy from '../pages/ClientsLegacy';
+import ContactsBoard from '../pages/ContactsBoard';
+import TasksBoard from '../pages/TasksBoard';
+import AgencyDashboard from '../pages/AgencyDashboard';
 import ClientDetail from '../pages/ClientDetail';
 import DealsBoard from '../pages/DealsBoard';
 import DealsLegacy from '../pages/DealsLegacy';
@@ -61,11 +64,13 @@ export default function AppRoutes() {
 
         {isMinimal ? (
           <Route element={<CrmShell />}>
-            <Route path='/dashboard' element={<TeamDashboard />} />
+            <Route path='/dashboard' element={<AgencyDashboard />} />
             <Route path='/properties' element={<PropertiesBoard />} />
             <Route path='/calendar' element={<Calendar />} />
+            <Route path='/tasks' element={<TasksBoard />} />
             <Route path='/deals' element={<DealsBoard />} />
             <Route path='/clients' element={<Clients />} />
+            <Route path='/contacts' element={<ContactsBoard />} />
             <Route path='/clients/:id' element={<ClientDetail />} />
             <Route path='/buyer-requirements' element={<BuyerRequirements />} />
           </Route>
