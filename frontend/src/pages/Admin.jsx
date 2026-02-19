@@ -612,14 +612,14 @@ export default function Admin() {
           <div className='p-3 bg-gradient-to-br from-purple-50 to-white rounded-lg border'>
             <div className='text-xs text-purple-600 font-medium'>Total Sale Value</div>
             <div className='text-lg font-bold text-purple-800'>
-              ₹{listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + (l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
+              ₹{listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
             </div>
             <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'sale').length} properties</div>
           </div>
           <div className='p-3 bg-gradient-to-br from-blue-50 to-white rounded-lg border'>
             <div className='text-xs text-blue-600 font-medium'>Monthly Rent Value</div>
             <div className='text-lg font-bold text-blue-800'>
-              ₹{listings.filter(l => l.type === 'rent').reduce((sum, l) => sum + (l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
+              ₹{listings.filter(l => l.type === 'rent').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
             </div>
             <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'rent').length} properties</div>
           </div>
@@ -636,7 +636,7 @@ export default function Admin() {
             <div className='text-xs text-amber-600 font-medium'>Avg. Sale Price</div>
             <div className='text-lg font-bold text-amber-800'>
               ₹{listings.filter(l => l.type === 'sale').length > 0
-                ? Math.round(listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + (l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0)), 0) / listings.filter(l => l.type === 'sale').length).toLocaleString('en-IN')
+                ? Math.round(listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0) / listings.filter(l => l.type === 'sale').length).toLocaleString('en-IN')
                 : 0}
             </div>
             <div className='text-xs text-slate-500'>per property</div>
@@ -652,7 +652,7 @@ export default function Admin() {
                 const cat = l.category || 'uncategorized';
                 if (!acc[cat]) acc[cat] = { count: 0, value: 0 };
                 acc[cat].count++;
-                acc[cat].value += l.offer ? (l.discountPrice || 0) : (l.regularPrice || 0);
+                acc[cat].value += (l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0);
                 return acc;
               }, {});
               const maxCount = Math.max(...Object.values(categoryData).map(c => c.count), 1);
@@ -747,7 +747,7 @@ export default function Admin() {
                 })
                 .map((l) => {
                   const id = String(l._id).slice(-4).toUpperCase();
-                  const price = l.offer ? l.discountPrice : l.regularPrice;
+                  const price = (l.offer && l.discountPrice) ? l.discountPrice : l.regularPrice;
                   return (
                     <tr key={l._id} className='border-b hover:bg-slate-50'>
                       <td className='p-2'>#{id}</td>
@@ -1088,12 +1088,15 @@ export default function Admin() {
               <input
                 className='border p-2 rounded'
                 placeholder='Username'
+                autoComplete='off'
                 value={newUser.username}
                 onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
               />
               <input
                 className='border p-2 rounded'
                 placeholder='Email'
+                type='email'
+                autoComplete='off'
                 value={newUser.email}
                 onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
               />
@@ -1101,6 +1104,7 @@ export default function Admin() {
                 className='border p-2 rounded'
                 placeholder='Password'
                 type='password'
+                autoComplete='new-password'
                 value={newUser.password}
                 onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
               />
@@ -1108,6 +1112,7 @@ export default function Admin() {
                 className='border p-2 rounded'
                 placeholder='Phone/Mobile Number'
                 type='tel'
+                autoComplete='off'
                 value={newUser.phone}
                 onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
               />

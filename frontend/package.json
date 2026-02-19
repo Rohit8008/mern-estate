@@ -19,6 +19,10 @@
     "@reduxjs/toolkit": "^1.9.5",
     "@sentry/react": "^10.38.0",
     "apexcharts": "^5.3.6",
+    "baseline-browser-mapping": "^2.9.19",
+    "caniuse-lite": "^1.0.30001770",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "firebase": "^10.3.1",
     "leaflet": "^1.9.4",
     "prop-types": "^15.8.1",
@@ -32,6 +36,7 @@
     "redux-persist": "^6.0.0",
     "socket.io-client": "^4.8.1",
     "swiper": "^10.2.0",
+    "tailwind-merge": "^3.5.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

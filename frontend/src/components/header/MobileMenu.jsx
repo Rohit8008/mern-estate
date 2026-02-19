@@ -19,11 +19,10 @@ export default function MobileMenu({
           <Link
             onClick={onClose}
             to='/'
-            className={`${
-              isActive('/')
+            className={`${isActive('/')
                 ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-blue-300'
                 : 'text-gray-700 hover:bg-gray-50'
-            } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
           >
             <FaHome className='w-5 h-5' />
             Home
@@ -32,11 +31,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/search'
-              className={`${
-                isActive('/search')
+              className={`${isActive('/search')
                   ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-blue-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaHome className='w-5 h-5' />
               Properties
@@ -47,11 +45,10 @@ export default function MobileMenu({
               <Link
                 onClick={onClose}
                 to='/create-listing'
-                className={`${
-                  isActive('/create-listing')
+                className={`${isActive('/create-listing')
                     ? 'bg-gradient-to-r from-green-50 to-green-100 text-green-700 border-green-300'
                     : 'text-gray-700 hover:bg-gray-50'
-                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                  } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
               >
                 <FaHome className='w-5 h-5' />
                 Add Property
@@ -61,11 +58,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/clients'
-              className={`${
-                isActive('/clients')
+              className={`${isActive('/clients')
                   ? 'bg-gradient-to-r from-teal-50 to-teal-100 text-teal-700 border-teal-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaUser className='w-5 h-5' />
               Clients
@@ -75,11 +71,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/deals'
-              className={`${
-                isActive('/deals')
+              className={`${isActive('/deals')
                   ? 'bg-gradient-to-r from-slate-50 to-slate-100 text-slate-800 border-slate-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaChartLine className='w-5 h-5' />
               Deals
@@ -89,11 +84,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/calendar'
-              className={`${
-                isActive('/calendar')
+              className={`${isActive('/calendar')
                   ? 'bg-gradient-to-r from-cyan-50 to-sky-100 text-sky-800 border-sky-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaCalendarAlt className='w-5 h-5' />
               Calendar
@@ -103,11 +97,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/buyer-requirements'
-              className={`${
-                isActive('/buyer-requirements')
+              className={`${isActive('/buyer-requirements')
                   ? 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border-purple-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaUser className='w-5 h-5' />
               Buyers
@@ -117,11 +110,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/categories'
-              className={`${
-                isActive('/categories')
+              className={`${isActive('/categories')
                   ? 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-700 border-orange-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaMapMarkerAlt className='w-5 h-5' />
               Categories
@@ -131,11 +123,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/messages'
-              className={`${
-                isActive('/messages')
+              className={`${isActive('/messages')
                   ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border-blue-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent relative`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent relative`}
             >
               <FaHandshake className='w-5 h-5' />
               Messages
@@ -150,11 +141,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/settings'
-              className={`${
-                isActive('/settings')
+              className={`${isActive('/settings')
                   ? 'bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 border-slate-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaCog className='w-5 h-5' />
               Settings
@@ -164,11 +154,10 @@ export default function MobileMenu({
             <Link
               onClick={onClose}
               to='/admin'
-              className={`${
-                isActive('/admin')
+              className={`${isActive('/admin')
                   ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-700 border-red-300'
                   : 'text-gray-700 hover:bg-gray-50'
-              } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
+                } flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent`}
             >
               <FaShieldAlt className='w-5 h-5' />
               {currentUser?.role === 'admin' ? 'Admin' : 'Employee'}

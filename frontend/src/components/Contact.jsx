@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { apiClient } from '../utils/http';
+import { apiClient, normalizeImageUrl } from '../utils/http';
 
 export default function Contact({ listing }) {
   const [landlord, setLandlord] = useState(null);
@@ -53,7 +53,7 @@ export default function Contact({ listing }) {
 
           <div className='flex items-center gap-3 border rounded-lg p-3 bg-white'>
             <img
-              src={listing.imageUrls?.[0] || 'https://placehold.co/64x64'}
+              src={normalizeImageUrl(listing.imageUrls?.[0]) || 'https://placehold.co/64x64'}
               alt='listing'
               className='w-16 h-16 rounded object-cover'
             />

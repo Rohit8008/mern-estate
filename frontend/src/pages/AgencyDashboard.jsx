@@ -12,7 +12,7 @@ import {
   HiArrowsExpand, HiSwitchHorizontal,
 } from 'react-icons/hi';
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const STATUS_COLORS = {
   available: '#f59e0b',
@@ -87,7 +87,7 @@ function loadWidgetsFromStorage() {
 }
 
 function saveWidgetsToStorage(widgets) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets)); } catch { }
 }
 
 function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats, teamMembers, fmt, resolveData, statusBreakdown, monthlyTrend, isDragOver, onDragStart, onDragOver, onDragLeave, onDrop }) {
@@ -306,9 +306,8 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`bg-white border-2 rounded-xl p-5 flex flex-col overflow-hidden transition-all ${
-        isDragOver ? 'border-blue-400 bg-blue-50/40 scale-[1.02]' : 'border-slate-200'
-      } ${widget.span === 'lg' ? 'col-span-1 lg:col-span-2' : 'col-span-1'}`}
+      className={`bg-white border-2 rounded-xl p-5 flex flex-col overflow-hidden transition-all ${isDragOver ? 'border-blue-400 bg-blue-50/40 scale-[1.02]' : 'border-slate-200'
+        } ${widget.span === 'lg' ? 'col-span-1 lg:col-span-2' : 'col-span-1'}`}
     >
       <div className='flex items-center justify-between mb-3 flex-shrink-0'>
         <div className='flex items-center gap-2 cursor-grab active:cursor-grabbing flex-1 min-w-0'>
@@ -651,7 +650,7 @@ export default function AgencyDashboard() {
       {/* Loading skeleton */}
       {loading && (
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-          {[1,2,3,4].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className='bg-white border border-slate-200 rounded-xl p-5 animate-pulse'>
               <div className='h-4 bg-slate-200 rounded w-2/3 mb-3'></div>
               <div className='h-8 bg-slate-200 rounded w-1/2 mb-2'></div>
@@ -849,11 +848,10 @@ export default function AgencyDashboard() {
                         <p className='font-medium text-slate-900 text-sm truncate'>{l.name}</p>
                         <p className='text-xs text-slate-500 truncate'>{l.city || 'N/A'}{l.locality ? `, ${l.locality}` : ''}</p>
                       </div>
-                      <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                        l.status === 'available' ? 'bg-green-100 text-green-700' :
-                        l.status === 'sold' ? 'bg-blue-100 text-blue-700' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>{(l.status || '').replace('_', ' ')}</span>
+                      <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${l.status === 'available' ? 'bg-green-100 text-green-700' :
+                          l.status === 'sold' ? 'bg-blue-100 text-blue-700' :
+                            'bg-amber-100 text-amber-700'
+                        }`}>{(l.status || '').replace('_', ' ')}</span>
                     </div>
                   )) : (
                     <p className='text-slate-400 text-sm text-center py-4'>No recent listings</p>
@@ -875,11 +873,10 @@ export default function AgencyDashboard() {
                         <p className='font-medium text-slate-900 text-sm truncate'>{b.buyerName}</p>
                         <p className='text-xs text-slate-500 truncate'>{b.buyerPhone || 'No phone'}</p>
                       </div>
-                      <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                        b.status === 'active' ? 'bg-green-100 text-green-700' :
-                        b.status === 'matched' ? 'bg-blue-100 text-blue-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>{b.status}</span>
+                      <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${b.status === 'active' ? 'bg-green-100 text-green-700' :
+                          b.status === 'matched' ? 'bg-blue-100 text-blue-700' :
+                            'bg-slate-100 text-slate-700'
+                        }`}>{b.status}</span>
                     </div>
                   )) : (
                     <p className='text-slate-400 text-sm text-center py-4'>No recent buyers</p>

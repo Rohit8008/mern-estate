@@ -306,7 +306,7 @@ export default function Search() {
             <svg className='w-full h-full' xmlns='http://www.w3.org/2000/svg'>
               <defs>
                 <pattern id='grid' width='40' height='40' patternUnits='userSpaceOnUse'>
-                  <path d='M 40 0 L 0 0 0 40' fill='none' stroke='white' strokeWidth='1'/>
+                  <path d='M 40 0 L 0 0 0 40' fill='none' stroke='white' strokeWidth='1' />
                 </pattern>
               </defs>
               <rect width='100%' height='100%' fill='url(#grid)' />
@@ -505,22 +505,20 @@ export default function Search() {
                     <div className='flex bg-slate-100 rounded-lg p-1'>
                       <button
                         onClick={() => setViewAndSyncUrl('grid')}
-                        className={`p-2 rounded-md transition-all ${
-                          view === 'grid'
+                        className={`p-2 rounded-md transition-all ${view === 'grid'
                             ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
-                        }`}
+                          }`}
                         title="Grid view"
                       >
                         <HiViewGrid className='w-5 h-5' />
                       </button>
                       <button
                         onClick={() => setViewAndSyncUrl('list')}
-                        className={`p-2 rounded-md transition-all ${
-                          view === 'list'
+                        className={`p-2 rounded-md transition-all ${view === 'list'
                             ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
-                        }`}
+                          }`}
                         title="List view"
                       >
                         <HiViewList className='w-5 h-5' />
@@ -559,9 +557,8 @@ export default function Search() {
                     {Array.from({ length: 6 }).map((_, idx) => (
                       <div
                         key={idx}
-                        className={`bg-slate-50 rounded-xl overflow-hidden animate-pulse ${
-                          view === 'list' ? 'flex' : ''
-                        }`}
+                        className={`bg-slate-50 rounded-xl overflow-hidden animate-pulse ${view === 'list' ? 'flex' : ''
+                          }`}
                       >
                         <div className={`bg-slate-200 ${view === 'list' ? 'w-72 h-48' : 'h-52 w-full'}`} />
                         <div className='p-5 flex-1 space-y-3'>

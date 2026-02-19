@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { apiClient } from '../utils/http';
+import { apiClient, normalizeImageUrl } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
@@ -28,135 +28,6 @@ const STATUS_STYLE = {
   sold: { stripe: 'bg-slate-500', pill: 'bg-slate-100 text-slate-800 border-slate-200' },
 };
 
-// Demo properties for Monday-style display when no real data
-const DEMO_PROPERTIES = [
-  {
-    _id: 'demo-p1',
-    name: 'Property 1',
-    address: 'Empire State Building, West 34th Street',
-    city: 'New York',
-    locality: 'Manhattan',
-    regularPrice: 450000,
-    bedrooms: 3,
-    bathrooms: 2,
-    status: 'available',
-    propertyType: 'House',
-    assignedAgent: { _id: 'a1', username: 'Ross' },
-    ownerIds: [{ _id: 'o1', name: 'John Smith' }],
-    imageUrls: [],
-    latitude: 40.7484,
-    longitude: -73.9857,
-    isDemo: true,
-  },
-  {
-    _id: 'demo-p2',
-    name: 'Property 2',
-    address: '221B Baker Street',
-    city: 'London',
-    locality: 'Westminster',
-    regularPrice: 320000,
-    bedrooms: 2,
-    bathrooms: 1,
-    status: 'available',
-    propertyType: 'Apartment',
-    assignedAgent: { _id: 'a2', username: 'Sarah' },
-    ownerIds: [{ _id: 'o2', name: 'Mary Johnson' }],
-    imageUrls: [],
-    latitude: 51.5238,
-    longitude: -0.1586,
-    isDemo: true,
-  },
-  {
-    _id: 'demo-p3',
-    name: 'Property 3',
-    address: '742 Evergreen Terrace',
-    city: 'Springfield',
-    locality: 'Downtown',
-    regularPrice: 185000,
-    bedrooms: 4,
-    bathrooms: 2,
-    status: 'under_negotiation',
-    propertyType: 'House',
-    assignedAgent: { _id: 'a1', username: 'Ross' },
-    ownerIds: [{ _id: 'o3', name: 'Homer Simpson' }],
-    imageUrls: [],
-    latitude: 39.7817,
-    longitude: -89.6501,
-    isDemo: true,
-  },
-  {
-    _id: 'demo-p4',
-    name: 'Property 4',
-    address: '1600 Pennsylvania Avenue',
-    city: 'Washington',
-    locality: 'DC',
-    regularPrice: 750000,
-    bedrooms: 5,
-    bathrooms: 4,
-    status: 'under_negotiation',
-    propertyType: 'Villa',
-    assignedAgent: { _id: 'a2', username: 'Sarah' },
-    ownerIds: [{ _id: 'o4', name: 'Government' }],
-    imageUrls: [],
-    latitude: 38.8977,
-    longitude: -77.0365,
-    isDemo: true,
-  },
-  {
-    _id: 'demo-p5',
-    name: 'Property 5',
-    address: '350 Fifth Avenue',
-    city: 'New York',
-    locality: 'Midtown',
-    regularPrice: 520000,
-    bedrooms: 2,
-    bathrooms: 2,
-    status: 'sold',
-    propertyType: 'Apartment',
-    assignedAgent: { _id: 'a1', username: 'Ross' },
-    ownerIds: [{ _id: 'o5', name: 'Empire Inc' }],
-    imageUrls: [],
-    latitude: 40.7484,
-    longitude: -73.9857,
-    isDemo: true,
-  },
-  {
-    _id: 'demo-p6',
-    name: 'Property 6',
-    address: '10 Downing Street',
-    city: 'London',
-    locality: 'Westminster',
-    regularPrice: 890000,
-    bedrooms: 6,
-    bathrooms: 5,
-    status: 'sold',
-    propertyType: 'House',
-    assignedAgent: { _id: 'a2', username: 'Sarah' },
-    ownerIds: [{ _id: 'o6', name: 'UK Gov' }],
-    imageUrls: [],
-    latitude: 51.5034,
-    longitude: -0.1276,
-    isDemo: true,
-  },
-  {
-    _id: 'demo-p7',
-    name: 'Property 7',
-    address: '1 Infinite Loop',
-    city: 'Cupertino',
-    locality: 'Silicon Valley',
-    regularPrice: 1200000,
-    bedrooms: 4,
-    bathrooms: 3,
-    status: 'sold',
-    propertyType: 'Office',
-    assignedAgent: { _id: 'a1', username: 'Ross' },
-    ownerIds: [{ _id: 'o7', name: 'Tech Corp' }],
-    imageUrls: [],
-    latitude: 37.3318,
-    longitude: -122.0312,
-    isDemo: true,
-  },
-];
 
 function classNames(...xs) {
   return xs.filter(Boolean).join(' ');
@@ -330,17 +201,12 @@ export default function PropertiesBoard() {
         const listings = data?.data?.listings || [];
         let normalized = Array.isArray(listings) ? listings : [];
 
-        // If no real data, show demo properties
-        if (normalized.length === 0) {
-          normalized = DEMO_PROPERTIES;
-        }
-
         if (!mounted) return;
         setItems(normalized);
       } catch (e) {
         if (!mounted) return;
-        setItems(DEMO_PROPERTIES);
-        setError(e?.message || 'Failed to load properties (showing demo data)');
+        setItems([]);
+        setError(e?.message || 'Failed to load properties');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -509,7 +375,7 @@ export default function PropertiesBoard() {
         city: x.city,
         locality: x.locality,
         price: x.regularPrice,
-        image: Array.isArray(x.imageUrls) ? x.imageUrls[0] : null,
+        image: Array.isArray(x.imageUrls) ? normalizeImageUrl(x.imageUrls[0]) : null,
         raw: x,
       }));
 
@@ -536,7 +402,7 @@ export default function PropertiesBoard() {
     if (!quickView) return [];
     const x = quickView;
     const files = [];
-    const urls = Array.isArray(x?.imageUrls) ? x.imageUrls : [];
+    const urls = Array.isArray(x?.imageUrls) ? x.imageUrls.map(normalizeImageUrl) : [];
     urls.forEach((u, idx) => {
       if (!u) return;
       files.push({
@@ -737,7 +603,7 @@ export default function PropertiesBoard() {
                       </tr>
 
                       {rows.map((x) => {
-                        const thumb = Array.isArray(x.imageUrls) && x.imageUrls[0];
+                        const thumb = Array.isArray(x.imageUrls) && normalizeImageUrl(x.imageUrls[0]);
                         const ownerName = Array.isArray(x?.ownerIds) && x.ownerIds.length > 0 ? (x.ownerIds[0]?.name || 'Owner') : null;
                         const agentName = x?.assignedAgent?.username;
                         const pill = STATUS_STYLE[x.status || 'available']?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
@@ -1050,7 +916,7 @@ export default function PropertiesBoard() {
                   <div className='aspect-[16/9] bg-slate-100'>
                     {Array.isArray(x.imageUrls) && x.imageUrls[0] ? (
                       <img
-                        src={x.imageUrls[0]}
+                        src={normalizeImageUrl(x.imageUrls[0])}
                         alt={x.name}
                         className='w-full h-full object-cover'
                         loading='lazy'

@@ -285,7 +285,7 @@ export const updateListing = async (req, res, next) => {
       const count = await Owner.countDocuments({ _id: { $in: req.body.ownerIds } });
       if (count !== req.body.ownerIds.length) return next(errorHandler(400, 'One or more owners are invalid'));
     }
-    const updatedListing = await Listing.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updatedListing = await Listing.findByIdAndUpdate(req.params.id, req.body, { new: true, lean: true });
     const category = updatedListing?.category || listing?.category;
 
     await emitListingUpdate('updated', updatedListing, category);
@@ -299,23 +299,23 @@ export const updateListing = async (req, res, next) => {
 
 export const getListing = async (req, res, next) => {
   try {
-    const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).lean();
     if (!listing) {
       return next(errorHandler(404, 'Listing not found!'));
     }
     let owner = null;
     try {
       if (listing.userRef) {
-        owner = await User.findById(listing.userRef).select('username avatar _id');
+        owner = await User.findById(listing.userRef).select('username avatar _id').lean();
       }
     } catch (_) {}
     let owners = [];
     try {
       if (Array.isArray(listing.ownerIds) && listing.ownerIds.length > 0) {
-        owners = await Owner.find({ _id: { $in: listing.ownerIds } }).select('name email phone companyName _id');
+        owners = await Owner.find({ _id: { $in: listing.ownerIds } }).select('name email phone companyName _id').lean();
       }
     } catch (_) {}
-    res.status(200).json({ ...(listing._doc || {}), owner, owners });
+    res.status(200).json({ ...listing, owner, owners });
   } catch (error) {
     next(error);
   }

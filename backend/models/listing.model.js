@@ -100,6 +100,18 @@ const listingSchema = new mongoose.Schema(
       index: true,
       trim: true,
     },
+    state: {
+      type: String,
+      required: false,
+      default: '',
+      trim: true,
+    },
+    pincode: {
+      type: String,
+      required: false,
+      default: '',
+      trim: true,
+    },
     areaSqFt: {
       type: Number,
       required: false,
@@ -126,7 +138,6 @@ const listingSchema = new mongoose.Schema(
     },
     propertyType: {
       type: String,
-      enum: ['apartment', 'villa', 'house', 'other', ''],
       default: '',
       index: true,
     },

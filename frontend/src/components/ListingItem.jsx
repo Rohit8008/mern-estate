@@ -5,6 +5,7 @@ import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import Badge from './ui/Badge';
 import { cn } from '../utils/cn';
+import { normalizeImageUrl } from '../utils/http';
 
 export default function ListingItem({ listing, layout = 'grid' }) {
   const { currentUser } = useSelector((state) => state.user);
@@ -25,7 +26,7 @@ export default function ListingItem({ listing, layout = 'grid' }) {
         <div className={cn('relative overflow-hidden', layout === 'list' ? 'md:w-80 md:flex-shrink-0' : '')}>
           <img
             src={
-              listing.imageUrls[0] ||
+              normalizeImageUrl(listing.imageUrls[0]) ||
               'https://53.fs1.hubspotusercontent-na1.net/hub/53/hubfs/Sales_Blog/real-estate-business-compressor.jpg?width=595&height=400&name=real-estate-business-compressor.jpg'
             }
             alt={listing.name}
@@ -52,14 +53,14 @@ export default function ListingItem({ listing, layout = 'grid' }) {
           {!isBuyer && (
             <div className='mb-4'>
               <div className='text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1'>
-                ₹{listing.offer
+                ₹{listing.offer && listing.discountPrice
                   ? listing.discountPrice.toLocaleString('en-IN')
                   : listing.regularPrice.toLocaleString('en-IN')}
                 {listing.type === 'rent' && (
                   <span className='text-lg font-normal text-gray-600'> / month</span>
                 )}
               </div>
-              {listing.offer && (
+              {listing.offer && listing.discountPrice > 0 && (
                 <div className='text-sm text-gray-500 line-through'>
                   ₹{listing.regularPrice.toLocaleString('en-IN')}
                 </div>
@@ -70,14 +71,14 @@ export default function ListingItem({ listing, layout = 'grid' }) {
           {/* Show "Contact for Price" for buyers */}
           {isBuyer && (
             <div className='mb-4'>
-              <div className='text-2xl font-bold text-blue-700 mb-1'>
-                <svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <div className='flex items-center gap-2 text-base font-bold text-indigo-700 mb-1'>
+                <svg className='w-4 h-4 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                   <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' />
                 </svg>
                 Contact for Price
               </div>
-              <div className='text-sm text-gray-500'>
-                Get in touch to know the pricing details
+              <div className='text-xs text-gray-500'>
+                Enquire to know pricing details
               </div>
             </div>
           )}
@@ -114,11 +115,11 @@ export default function ListingItem({ listing, layout = 'grid' }) {
 
           {/* Footer */}
           <div className='flex items-center justify-between pt-3 border-t border-gray-100'>
-            <span className='text-xs text-gray-500'>
-              {isBuyer ? 'View Details' : 'Show to Buyer'}
+            <span className='text-xs font-medium text-indigo-600'>
+              {isBuyer ? 'View Details →' : 'Show to Buyer →'}
             </span>
             <span className='text-xs text-gray-400'>
-              {new Date(listing.createdAt).toLocaleDateString()}
+              {new Date(listing.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
           </div>
         </div>

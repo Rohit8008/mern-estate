@@ -13,7 +13,7 @@ import {
 } from '../redux/user/userSlice';
 import { useDispatch } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { apiClient } from '../utils/http';
+import { apiClient, normalizeImageUrl } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
   HiX,
@@ -46,11 +46,10 @@ export default function Profile() {
 
   // Function to show popup
   const showNotification = (message, type = 'success') => {
-    console.log('Showing popup:', message, type); // Debug log
     setPopupMessage(message);
     setPopupType(type);
     setShowPopup(true);
-    
+
     setTimeout(() => {
       setShowPopup(false);
     }, 4000);
@@ -98,7 +97,7 @@ export default function Profile() {
     try {
       setPasswordError('');
       setPasswordSuccess(false);
-      
+
       const data = await apiClient.post('/auth/reset-password-with-otp', {
         email: currentUser.email,
         otp: passwordData.oldPassword, // Using old password as OTP for simplicity
@@ -109,7 +108,7 @@ export default function Profile() {
         showNotification(data.message || 'Password change failed', 'error');
         return;
       }
-      
+
       setPasswordSuccess(true);
       setPasswordData({ oldPassword: '', newPassword: '' });
       showNotification('Password changed successfully!', 'success');
@@ -140,7 +139,7 @@ export default function Profile() {
     }
   };
 
-  
+
 
   const handleDeleteUser = async () => {
     try {
@@ -158,11 +157,11 @@ export default function Profile() {
       dispatch(signOutUserStart());
       await apiClient.get('/auth/signout');
       dispatch(signOutUserSuccess());
-      
+
       // Clear any stored data
       localStorage.removeItem('persist:root');
       sessionStorage.clear();
-      
+
       // Navigate to home
       window.location.href = '/';
     } catch (error) {
@@ -193,10 +192,7 @@ export default function Profile() {
   const handleListingDelete = async (listingId) => {
     try {
       const data = await apiClient.delete(`/listing/delete/${listingId}`);
-      if (data.success === false) {
-        console.log(data.message);
-        return;
-      }
+      if (data.success === false) return;
 
       // Trigger cache invalidation event
       window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listingId } }));
@@ -204,8 +200,8 @@ export default function Profile() {
       setUserListings((prev) =>
         prev.filter((listing) => listing._id !== listingId)
       );
-    } catch (error) {
-      console.log(error.message);
+    } catch {
+      // silently ignore
     }
   };
   // Role-based UI components
@@ -213,108 +209,49 @@ export default function Profile() {
   const isEmployee = currentUser?.role === 'employee';
   const isUser = currentUser?.role === 'user';
 
-  // Debug popup state
-  console.log('Popup state:', showPopup, popupMessage, popupType);
-
   return (
     <div>
-      {/* Simple Popup Notification */}
+      {/* Toast Notification */}
       {showPopup && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: 9999,
-            backgroundColor: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            padding: '16px',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-            borderLeft: `4px solid ${popupType === 'success' ? '#10b981' : '#ef4444'}`,
-            maxWidth: '400px',
-            minWidth: '300px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-            <div style={{ marginRight: '12px', flexShrink: 0 }}>
-              {popupType === 'success' ? (
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  backgroundColor: '#dcfce7',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <HiCheck style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                </div>
-              ) : (
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  backgroundColor: '#fecaca',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <HiX style={{ width: '16px', height: '16px', color: '#dc2626' }} />
-                </div>
-              )}
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{
-                margin: 0,
-                fontSize: '14px',
-                fontWeight: '500',
-                color: popupType === 'success' ? '#166534' : '#991b1b'
-              }}>
-                {popupMessage}
-              </p>
-            </div>
-            <div style={{ marginLeft: '16px', flexShrink: 0 }}>
-              <button
-                onClick={() => setShowPopup(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#9ca3af',
-                  padding: '4px'
-                }}
-              >
-                <HiX style={{ width: '20px', height: '20px' }} />
-              </button>
-            </div>
+        <div className={`fixed top-5 right-5 z-[9999] flex items-start gap-3 bg-white border rounded-xl px-4 py-3.5 shadow-xl min-w-[300px] max-w-sm ${popupType === 'success' ? 'border-l-4 border-l-emerald-500 border-slate-200' : 'border-l-4 border-l-red-500 border-slate-200'
+          }`}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${popupType === 'success' ? 'bg-emerald-100' : 'bg-red-100'
+            }`}>
+            {popupType === 'success'
+              ? <HiCheck className='w-3.5 h-3.5 text-emerald-600' />
+              : <HiX className='w-3.5 h-3.5 text-red-600' />}
           </div>
+          <p className={`flex-1 text-sm font-medium ${popupType === 'success' ? 'text-emerald-800' : 'text-red-800'}`}>
+            {popupMessage}
+          </p>
+          <button onClick={() => setShowPopup(false)} className='text-slate-400 hover:text-slate-600 flex-shrink-0 p-0.5'>
+            <HiX className='w-4 h-4' />
+          </button>
         </div>
       )}
 
-      {/* Header - Monday.com Style */}
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6'>
+      {/* Page Header */}
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6'>
         <div className='flex items-center gap-3'>
           <h1 className='text-xl font-bold text-slate-900'>My Profile</h1>
-          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-            isAdmin ? 'bg-rose-100 text-rose-700' :
-            isEmployee ? 'bg-blue-100 text-blue-700' :
-            'bg-emerald-100 text-emerald-700'
-          }`}>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${isAdmin ? 'bg-rose-100 text-rose-700' :
+              isEmployee ? 'bg-indigo-100 text-indigo-700' :
+                'bg-emerald-100 text-emerald-700'
+            }`}>
             {isAdmin ? 'Admin' : isEmployee ? 'Employee' : 'User'}
           </span>
         </div>
         <div className='flex items-center gap-2'>
           <Link
             to='/settings'
-            className='px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-2 transition-colors'
+            className='inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors'
           >
             <HiCog className='w-4 h-4' />
             Settings
           </Link>
           <button
             onClick={handleSignOut}
-            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-2 transition-colors'
+            className='inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold transition-colors'
           >
             <HiLogout className='w-4 h-4' />
             Sign Out
@@ -323,12 +260,12 @@ export default function Profile() {
       </div>
 
       {/* Main Content */}
-      <div className='max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
+      <div>
         <div className='grid grid-cols-1 xl:grid-cols-3 gap-8'>
           {/* Left Column - Profile Picture & Quick Actions */}
           <div className='xl:col-span-1 space-y-6'>
             {/* Profile Picture Card */}
-            <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
+            <div className='bg-white rounded-2xl border border-slate-200 p-6'>
               <div className='flex flex-col items-center'>
                 <div className='relative mb-4'>
                   <img
@@ -345,16 +282,16 @@ export default function Profile() {
                     <HiX className='w-3 h-3' />
                   </button>
                 </div>
-        <input
-          onChange={(e) => setFile(e.target.files[0])}
-          type='file'
-          ref={fileRef}
-          hidden
-          accept='image/*'
-        />
+                <input
+                  onChange={(e) => setFile(e.target.files[0])}
+                  type='file'
+                  ref={fileRef}
+                  hidden
+                  accept='image/*'
+                />
                 <button
-          onClick={() => fileRef.current.click()}
-                  className='w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium'
+                  onClick={() => fileRef.current.click()}
+                  className='w-full bg-indigo-600 text-white py-2 px-4 rounded-xl hover:bg-indigo-700 transition-colors text-sm font-semibold'
                 >
                   Change Photo
                 </button>
@@ -377,27 +314,27 @@ export default function Profile() {
             </div>
 
             {/* Quick Actions */}
-            <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
-              <h3 className='text-lg font-semibold text-gray-900 mb-4'>Quick Actions</h3>
+            <div className='bg-white rounded-2xl border border-slate-200 p-6'>
+              <h3 className='text-sm font-semibold text-slate-800 mb-4'>Quick Actions</h3>
               <div className='space-y-3'>
                 {!isBuyerViewMode && (currentUser.role === 'admin' || currentUser.role === 'employee' || currentUser.role === 'seller') && (
                   <Link
                     to='/create-listing'
-                    className='w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium text-center block'
+                    className='w-full bg-emerald-600 text-white py-2 px-4 rounded-xl hover:bg-emerald-700 transition-colors text-sm font-semibold text-center block'
                   >
                     Create New Listing
                   </Link>
                 )}
                 <button
                   onClick={handleShowListings}
-                  className='w-full bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium'
+                  className='w-full bg-slate-700 text-white py-2 px-4 rounded-xl hover:bg-slate-800 transition-colors text-sm font-semibold'
                 >
                   View My Listings
                 </button>
                 {!isBuyerViewMode && isAdmin && (
                   <Link
                     to='/admin'
-                    className='w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium text-center block'
+                    className='w-full bg-rose-600 text-white py-2 px-4 rounded-xl hover:bg-rose-700 transition-colors text-sm font-semibold text-center block'
                   >
                     Admin Dashboard
                   </Link>
@@ -405,7 +342,7 @@ export default function Profile() {
                 {!isBuyerViewMode && isEmployee && (
                   <Link
                     to='/admin'
-                    className='w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium text-center block'
+                    className='w-full bg-indigo-600 text-white py-2 px-4 rounded-xl hover:bg-indigo-700 transition-colors text-sm font-semibold text-center block'
                   >
                     Employee Dashboard
                   </Link>
@@ -414,52 +351,52 @@ export default function Profile() {
             </div>
 
             {/* Password Change */}
-            <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
-              <h3 className='text-lg font-semibold text-gray-900 mb-4'>Change Password</h3>
+            <div className='bg-white rounded-2xl border border-slate-200 p-6'>
+              <h3 className='text-sm font-semibold text-slate-800 mb-4'>Change Password</h3>
               <form onSubmit={handlePasswordSubmit} className='space-y-4'>
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Current Password</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Current Password</label>
                   <div className='relative'>
                     <input
                       type={showPassword.old ? 'text' : 'password'}
                       id='oldPassword'
                       value={passwordData.oldPassword}
                       onChange={handlePasswordChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm'
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter current password'
                     />
                     <button
                       type='button'
                       onClick={() => setShowPassword({ ...showPassword, old: !showPassword.old })}
-                      className='absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600'
+                      className='absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600'
                     >
                       {showPassword.old ? <HiEyeOff className='w-4 h-4' /> : <HiEye className='w-4 h-4' />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>New Password</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>New Password</label>
                   <div className='relative'>
                     <input
                       type={showPassword.new ? 'text' : 'password'}
                       id='newPassword'
                       value={passwordData.newPassword}
                       onChange={handlePasswordChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm'
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter new password'
                     />
-          <button
-            type='button'
+                    <button
+                      type='button'
                       onClick={() => setShowPassword({ ...showPassword, new: !showPassword.new })}
-                      className='absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600'
-          >
+                      className='absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600'
+                    >
                       {showPassword.new ? <HiEyeOff className='w-4 h-4' /> : <HiEye className='w-4 h-4' />}
-          </button>
-        </div>
+                    </button>
+                  </div>
                 </div>
                 <button
                   type='submit'
-                  className='w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium'
+                  className='w-full bg-indigo-600 text-white py-2 px-4 rounded-xl hover:bg-indigo-700 transition-colors text-sm font-semibold'
                 >
                   Update Password
                 </button>
@@ -473,7 +410,7 @@ export default function Profile() {
             </div>
 
             {/* Danger Zone */}
-            <div className='bg-white rounded-lg shadow-sm border border-red-200 p-6'>
+            <div className='bg-white rounded-lg shadow-sm border border-red-200 rounded-2xl p-6'>
               <h3 className='text-lg font-semibold text-red-600 mb-2'>Danger Zone</h3>
               <p className='text-sm text-gray-500 mb-4'>
                 Once you delete your account, there is no going back. All your data will be permanently removed.
@@ -484,7 +421,7 @@ export default function Profile() {
                     handleDeleteUser();
                   }
                 }}
-                className='w-full py-2 px-4 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors'
+                className='w-full py-2 px-4 text-sm font-medium text-red-600 border border-red-300 rounded-xl hover:bg-red-50 transition-colors'
               >
                 Delete My Account
               </button>
@@ -495,71 +432,71 @@ export default function Profile() {
           <div className='xl:col-span-2'>
             <form onSubmit={handleSubmit} className='space-y-6'>
               {/* Basic Information */}
-              <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
-                <h3 className='text-lg font-semibold text-gray-900 mb-4'>Basic Information</h3>
+              <div className='bg-white rounded-2xl border border-slate-200 p-6'>
+                <h3 className='text-sm font-semibold text-slate-800 mb-4'>Basic Information</h3>
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Username *</label>
-          <input
-            type='text'
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Username *</label>
+                    <input
+                      type='text'
                       id='username'
-            defaultValue={currentUser.username}
-            onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      defaultValue={currentUser.username}
+                      onChange={handleChange}
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter username'
                       required
-          />
-        </div>
-                  <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Email *</label>
-        <input
-          type='email'
-          id='email'
-          defaultValue={currentUser.email}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed'
-          disabled
-        />
+                    />
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>First Name</label>
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Email *</label>
+                    <input
+                      type='email'
+                      id='email'
+                      defaultValue={currentUser.email}
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed'
+                      disabled
+                    />
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>First Name</label>
                     <input
                       type='text'
                       id='firstName'
                       defaultValue={currentUser.firstName || ''}
                       onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter first name'
                     />
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Last Name</label>
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Last Name</label>
                     <input
                       type='text'
                       id='lastName'
                       defaultValue={currentUser.lastName || ''}
                       onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter last name'
                     />
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Phone Number</label>
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Phone Number</label>
                     <input
                       type='tel'
                       id='phone'
                       value={phoneInput}
                       onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='+1 (555) 123-4567'
                     />
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Role</label>
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Role</label>
                     <select
                       id='role'
                       defaultValue={currentUser.role || 'user'}
                       onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       disabled={true}
                     >
                       <option value='user'>User</option>
@@ -574,94 +511,94 @@ export default function Profile() {
               </div>
 
               {/* Address Information */}
-              <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
-                <h3 className='text-lg font-semibold text-gray-900 mb-4'>Address Information</h3>
+              <div className='bg-white rounded-2xl border border-slate-200 p-6'>
+                <h3 className='text-sm font-semibold text-slate-800 mb-4'>Address Information</h3>
                 <div className='space-y-4'>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Address Line 1</label>
-          <input
-            type='text'
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Address Line 1</label>
+                    <input
+                      type='text'
                       id='addressLine1'
-            defaultValue={currentUser.addressLine1 || ''}
-            onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      defaultValue={currentUser.addressLine1 || ''}
+                      onChange={handleChange}
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter address line 1'
-          />
+                    />
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Address Line 2</label>
-          <input
-            type='text'
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Address Line 2</label>
+                    <input
+                      type='text'
                       id='addressLine2'
-            defaultValue={currentUser.addressLine2 || ''}
-            onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      defaultValue={currentUser.addressLine2 || ''}
+                      onChange={handleChange}
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter address line 2'
-          />
+                    />
                   </div>
                   <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-2'>City</label>
-          <input
-            type='text'
+                      <label className='block text-sm font-medium text-slate-700 mb-2'>City</label>
+                      <input
+                        type='text'
                         id='city'
-            defaultValue={currentUser.city || ''}
-            onChange={handleChange}
-                        className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        defaultValue={currentUser.city || ''}
+                        onChange={handleChange}
+                        className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                         placeholder='Enter city'
-          />
+                      />
                     </div>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-2'>State</label>
-          <input
-            type='text'
+                      <label className='block text-sm font-medium text-slate-700 mb-2'>State</label>
+                      <input
+                        type='text'
                         id='state'
-            defaultValue={currentUser.state || ''}
-            onChange={handleChange}
-                        className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        defaultValue={currentUser.state || ''}
+                        onChange={handleChange}
+                        className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                         placeholder='Enter state'
-          />
+                      />
                     </div>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-2'>Postal Code</label>
-          <input
-            type='text'
+                      <label className='block text-sm font-medium text-slate-700 mb-2'>Postal Code</label>
+                      <input
+                        type='text'
                         id='postalCode'
-            defaultValue={currentUser.postalCode || ''}
-            onChange={handleChange}
-                        className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        defaultValue={currentUser.postalCode || ''}
+                        onChange={handleChange}
+                        className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                         placeholder='Enter postal code'
-          />
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>Country</label>
-          <input
-            type='text'
+                    <label className='block text-sm font-medium text-slate-700 mb-2'>Country</label>
+                    <input
+                      type='text'
                       id='country'
-            defaultValue={currentUser.country || ''}
-            onChange={handleChange}
-                      className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      defaultValue={currentUser.country || ''}
+                      onChange={handleChange}
+                      className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                       placeholder='Enter country'
-          />
+                    />
                   </div>
                 </div>
-        </div>
-        
+              </div>
+
               {/* Bio Section */}
-              <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
-                <h3 className='text-lg font-semibold text-gray-900 mb-4'>About You</h3>
+              <div className='bg-white rounded-2xl border border-slate-200 p-6'>
+                <h3 className='text-sm font-semibold text-slate-800 mb-4'>About You</h3>
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-2'>Biography</label>
-        <textarea
+                  <label className='block text-sm font-medium text-slate-700 mb-2'>Biography</label>
+                  <textarea
                     id='bio'
-          defaultValue={currentUser.bio || ''}
-          onChange={handleChange}
+                    defaultValue={currentUser.bio || ''}
+                    onChange={handleChange}
                     rows={4}
-                    className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    className='w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-all'
                     placeholder='Tell us about yourself...'
-          maxLength={500}
-        />
+                    maxLength={500}
+                  />
                   <p className='text-sm text-gray-500 mt-1'>
                     {currentUser.bio?.length || 0}/500 characters
                   </p>
@@ -670,15 +607,15 @@ export default function Profile() {
 
               {/* Save Button */}
               <div className='flex justify-end'>
-        <button
+                <button
                   type='submit'
-          disabled={loading}
-                  className='px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium'
-        >
+                  disabled={loading}
+                  className='px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors font-semibold text-sm'
+                >
                   {loading ? 'Saving...' : 'Save Changes'}
-        </button>
+                </button>
               </div>
-      </form>
+            </form>
           </div>
         </div>
 
@@ -686,39 +623,39 @@ export default function Profile() {
         {/* Listings Section */}
         {userListings && userListings.length > 0 && (
           <div className='mt-8'>
-            <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
+            <div className='bg-white rounded-2xl border border-slate-200 p-6'>
               <div className='flex justify-between items-center mb-6'>
-                <h2 className='text-xl font-semibold text-gray-900'>Your Listings</h2>
+                <h2 className='text-base font-semibold text-slate-900'>Your Listings</h2>
                 <button
                   onClick={handleShowListings}
                   className='text-blue-600 hover:text-blue-700 font-medium text-sm'
                 >
                   Refresh Listings
                 </button>
-      </div>
+              </div>
 
               {showListingsError && (
                 <p className='text-red-600 mb-4'>Error loading listings</p>
               )}
 
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-          {userListings.map((listing) => (
-            <div
-              key={listing._id}
-                    className='bg-gray-50 rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow'
-            >
-              <Link to={`/listing/${listing._id}`}>
-                <img
-                  src={listing.imageUrls[0]}
-                  alt='listing cover'
+                {userListings.map((listing) => (
+                  <div
+                    key={listing._id}
+                    className='bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow'
+                  >
+                    <Link to={`/listing/${listing._id}`}>
+                      <img
+                        src={normalizeImageUrl(listing.imageUrls[0])}
+                        alt='listing cover'
                         className='w-full h-48 object-cover'
-                />
-              </Link>
+                      />
+                    </Link>
                     <div className='p-4'>
-              <Link
-                        className='text-gray-900 font-semibold hover:text-blue-600 transition-colors'
-                to={`/listing/${listing._id}`}
-              >
+                      <Link
+                        className='text-slate-900 font-semibold hover:text-indigo-600 transition-colors'
+                        to={`/listing/${listing._id}`}
+                      >
                         <h3 className='truncate'>{listing.name}</h3>
                       </Link>
                       <div className='flex justify-between items-center mt-3'>
@@ -726,23 +663,23 @@ export default function Profile() {
                           ${listing.regularPrice?.toLocaleString()}
                         </span>
                         <div className='flex space-x-2'>
-                          {!isBuyerViewMode && (currentUser.role === 'admin' || 
-                            currentUser.role === 'employee' || 
+                          {!isBuyerViewMode && (currentUser.role === 'admin' ||
+                            currentUser.role === 'employee' ||
                             (currentUser.role === 'seller' && listing.userRef === currentUser._id)) && (
-                            <>
-                              <Link to={`/update-listing/${listing._id}`}>
-                                <button className='text-blue-600 hover:text-blue-700 text-sm font-medium'>
-                                  Edit
+                              <>
+                                <Link to={`/update-listing/${listing._id}`}>
+                                  <button className='text-blue-600 hover:text-blue-700 text-sm font-medium'>
+                                    Edit
+                                  </button>
+                                </Link>
+                                <button
+                                  onClick={() => handleListingDelete(listing._id)}
+                                  className='text-red-600 hover:text-red-700 text-sm font-medium'
+                                >
+                                  Delete
                                 </button>
-                              </Link>
-                              <button
-                                onClick={() => handleListingDelete(listing._id)}
-                                className='text-red-600 hover:text-red-700 text-sm font-medium'
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
+                              </>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -750,8 +687,8 @@ export default function Profile() {
                 ))}
               </div>
             </div>
-        </div>
-      )}
+          </div>
+        )}
       </div>
     </div>
   );

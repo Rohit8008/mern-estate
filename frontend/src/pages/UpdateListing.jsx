@@ -1,48 +1,88 @@
 import { useEffect, useState, useRef } from 'react';
-import {
-  getDownloadURL,
-  getStorage,
-  ref,
-  uploadBytesResumable,
-} from 'firebase/storage';
-import { app } from '../firebase';
 import { useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { apiClient } from '../utils/http';
-import { SOCKET_URL } from '../config/socket';
-import { io } from 'socket.io-client';
+import { apiClient, normalizeImageUrl } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
+import PropertyTypeFields from '../components/PropertyTypeFields';
 
-const defaultIcon = new L.Icon({
-  iconUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  iconRetinaUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  shadowUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
+// Fix for default markers in react-leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
+
+const customIcon = new L.Icon({
+  iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+    <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="12" fill="#3B82F6" stroke="#FFFFFF" stroke-width="3"/>
+      <circle cx="16" cy="16" r="6" fill="#FFFFFF"/>
+    </svg>
+  `),
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -16]
+});
+
+const defaultCenter = [28.6139, 77.2090];
+
+const tileLayers = {
+  street: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors'
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© Esri'
+  },
+  terrain: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenTopoMap'
+  }
+};
+
+function LocationPicker({ onLocationSelect }) {
+  useMapEvents({
+    click: (e) => {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+function FlyToLocation({ lat, lng, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat && lng) {
+      map.flyTo([lat, lng], zoom || map.getZoom(), { duration: 1 });
+    }
+  }, [lat, lng, zoom, map]);
+  return null;
+}
 
 export default function UpdateListing() {
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
   const navigate = useNavigate();
   const params = useParams();
-  const fileInputRef = useRef(null);
-  
-  const [files, setFiles] = useState(null);
+
+  const [files, setFiles] = useState([]);
   const [formData, setFormData] = useState({
     imageUrls: [],
     name: '',
     description: '',
     address: '',
+    city: '',
+    locality: '',
+    state: '',
+    pincode: '',
     type: 'sale',
-    propertyType: 'house',
+    propertyType: '',
     customPropertyType: '',
     bedrooms: 1,
     bathrooms: 1,
@@ -54,263 +94,254 @@ export default function UpdateListing() {
     category: '',
     attributes: {},
     ownerIds: [],
-    location: {
-      lat: null,
-      lng: null,
-    },
-    // New fields
-    areaName: '',
-    plotSize: '',
-    sqYard: '',
-    sqYardRate: '',
-    totalValue: '',
-    propertyNo: '',
-    remarks: '',
-    otherAttachment: null,
+    location: { lat: null, lng: null },
   });
+
   const [imageUploadError, setImageUploadError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fetchingListing, setFetchingListing] = useState(true);
+
   const [categories, setCategories] = useState([]);
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [propertyTypes, setPropertyTypes] = useState([]);
+  const [selectedPropertyType, setSelectedPropertyType] = useState(null);
+  const [propertyTypeFields, setPropertyTypeFields] = useState({});
+
+  const [owners, setOwners] = useState([]);
+  const [ownerSearchQuery, setOwnerSearchQuery] = useState('');
+  const [showCreateOwner, setShowCreateOwner] = useState(false);
+  const [creatingOwner, setCreatingOwner] = useState(false);
+  const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '', companyName: '' });
+
   const [geocoding, setGeocoding] = useState(false);
   const [geoStatus, setGeoStatus] = useState('');
-  const [categoryFields, setCategoryFields] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [owners, setOwners] = useState([]);
-  const [ownersQuery, setOwnersQuery] = useState('');
-  const [ownersLoading, setOwnersLoading] = useState(false);
-  const [showCreateOwner, setShowCreateOwner] = useState(false);
-  const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '', companyName: '' });
-  const [creatingOwner, setCreatingOwner] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionIdx, setSuggestionIdx] = useState(-1);
+  const [mapLayer, setMapLayer] = useState('street');
 
   useEffect(() => {
-    if (!currentUser) {
-      navigate('/sign-in');
-    }
-    // Redirect buyers away from update listing page
-    if (currentUser && (currentUser.role === 'buyer' || isBuyerViewMode)) {
-      navigate('/unauthorized');
-    }
+    if (!currentUser) navigate('/sign-in');
+    if (currentUser && (currentUser.role === 'buyer' || isBuyerViewMode)) navigate('/unauthorized');
   }, [currentUser, navigate, isBuyerViewMode]);
 
+  // Fetch existing listing
   useEffect(() => {
     const fetchListing = async () => {
-      const listingId = params.listingId;
-      const data = await apiClient.get(`/listing/get/${listingId}`);
-      if (data.success === false) {
-        console.log(data.message);
-        return;
+      try {
+        setFetchingListing(true);
+        const data = await apiClient.get(`/listing/get/${params.listingId}`);
+        if (data.success === false) return;
+        setFormData(prev => ({ ...prev, ...data }));
+        if (data.propertyTypeFields) setPropertyTypeFields(data.propertyTypeFields);
+      } finally {
+        setFetchingListing(false);
       }
-      setFormData(data);
     };
-
     fetchListing();
   }, [params.listingId]);
 
+  // Fetch categories, owners, property types in parallel
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const data = await apiClient.get('/category/list');
-        if (Array.isArray(data)) {
-          let cats = data;
-          if (currentUser?.role === 'employee' && currentUser.assignedCategories?.length) {
-            cats = data.filter((c) => currentUser.assignedCategories.includes(c.slug));
-          }
-          setCategories(cats);
+    const fetchInitialData = async () => {
+      const [catResult, ownerResult, ptResult] = await Promise.allSettled([
+        apiClient.get('/category/list'),
+        apiClient.get('/owner/list'),
+        apiClient.get('/property-types/list'),
+      ]);
+
+      if (catResult.status === 'fulfilled') {
+        const all = catResult.value.data || catResult.value || [];
+        if (currentUser?.role === 'employee') {
+          const allowed = Array.isArray(currentUser.assignedCategories)
+            ? currentUser.assignedCategories : [];
+          setCategories(all.filter((c) => allowed.includes(c.slug)));
+        } else {
+          setCategories(all);
         }
-      } catch (e) {}
-    };
-    fetchCategories();
-    
-    const fetchOwners = async () => {
-      try {
-        setOwnersLoading(true);
-        const data = await apiClient.get('/owner/list');
-        if (Array.isArray(data)) {
-          const activeOwners = data.filter(owner => owner.active);
-          setOwners(activeOwners);
-        }
-      } catch (error) {
-        console.error('Error fetching owners:', error);
-      } finally {
-        setOwnersLoading(false);
+      }
+
+      if (ownerResult.status === 'fulfilled') {
+        setOwners(ownerResult.value.data || ownerResult.value || []);
+      }
+
+      if (ptResult.status === 'fulfilled') {
+        setPropertyTypes(ptResult.value.data || []);
       }
     };
+    fetchInitialData();
+  }, [currentUser?.role, currentUser?.assignedCategories]);
 
-    if (currentUser) {
-      fetchOwners();
-    }
-
-    // Realtime owners refresh
-    const socket = io(SOCKET_URL, {
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-    });
-    const handleOwnersChanged = () => fetchOwners();
-    socket.on('owners:changed', handleOwnersChanged);
-    return () => {
-      socket.off('owners:changed', handleOwnersChanged);
-      socket.close();
-    };
-  }, [currentUser]);
-
-  // Auto-calculation for size and price
+  // Resolve selected category when formData.category or categories list changes
   useEffect(() => {
-    const calculateTotalValue = () => {
-      const sqYard = parseFloat(formData.sqYard) || 0;
-      const sqYardRate = parseFloat(formData.sqYardRate) || 0;
-      
-      if (sqYard > 0 && sqYardRate > 0) {
-        const total = sqYard * sqYardRate;
-        setFormData(prev => ({
-          ...prev,
-          totalValue: total.toString(),
-          regularPrice: Math.round(total)
-        }));
-      }
-    };
-
-    calculateTotalValue();
-  }, [formData.sqYard, formData.sqYardRate]);
-
-  // Helper function to determine if residential fields should be shown
-  const shouldShowResidentialFields = () => {
-    const residentialTypes = ['house', 'flat'];
-    const nonResidentialTypes = ['plot', 'factory', 'shelter', 'other'];
-    
-    // Get the actual property type (including custom type)
-    const actualPropertyType = formData.propertyType === 'other' ? formData.customPropertyType : formData.propertyType;
-    
-    // Show residential fields only for house and flat
-    if (residentialTypes.includes(actualPropertyType)) {
-      return true;
-    }
-    
-    // Hide residential fields for non-residential types
-    if (nonResidentialTypes.includes(formData.propertyType)) {
-      return false;
-    }
-    
-    // For custom property types, check if they sound residential
-    if (formData.propertyType === 'other' && actualPropertyType) {
-      const residentialKeywords = ['house', 'flat', 'apartment', 'villa', 'home', 'residential'];
-      const isResidential = residentialKeywords.some(keyword => 
-        actualPropertyType.toLowerCase().includes(keyword)
-      );
-      return isResidential;
-    }
-    
-    // Default to showing fields for any other types
-    return true;
-  };
-
-  // Load category field definitions when category changes
-  useEffect(() => {
-    const loadCategoryFields = async () => {
-      if (!formData.category) {
-        setCategoryFields([]);
-        setSelectedCategory(null);
-        return;
-      }
-      try {
-        const data = await apiClient.get(`/category/by-slug/${formData.category}`);
-        const fields = Array.isArray(data?.fields) ? data.fields : [];
-        setCategoryFields(fields);
-        setSelectedCategory(data);
-      } catch (_) {
-        setCategoryFields([]);
-        setSelectedCategory(null);
-      }
-    };
-    loadCategoryFields();
-  }, [formData.category]);
-
-  const handleImageSubmit = async (e) => {
-    if (files.length > 0 && files.length + formData.imageUrls.length < 7) {
-      setUploading(true);
-      setImageUploadError(false);
-      try {
-        const uploadedUrls = await uploadImagesToBackend(files);
-        setFormData({
-          ...formData,
-          imageUrls: formData.imageUrls.concat(uploadedUrls),
-        });
-        setUploading(false);
-      } catch (err) {
-        setImageUploadError('Image upload failed (2 mb max per image)');
-        setUploading(false);
+    if (formData.category && categories.length > 0) {
+      const cat = categories.find(c => c.slug === formData.category);
+      if (cat) {
+        setSelectedCategory(cat);
+      } else {
+        // Category not in list — fetch it directly
+        apiClient.get(`/category/by-slug/${formData.category}`)
+          .then(data => { if (data) setSelectedCategory(data); })
+          .catch(() => setSelectedCategory(null));
       }
     } else {
-      setImageUploadError('You can only upload 6 images per listing');
-      setUploading(false);
+      setSelectedCategory(null);
+    }
+  }, [formData.category, categories]);
+
+  // Resolve selected property type
+  useEffect(() => {
+    if (formData.propertyType && propertyTypes.length > 0) {
+      const pt = propertyTypes.find(p => p.slug === formData.propertyType);
+      setSelectedPropertyType(pt || null);
+    }
+  }, [formData.propertyType, propertyTypes]);
+
+  // ---- Geocoding helpers (use backend proxy) ----
+
+  const handleLocationSelect = (lat, lng) => {
+    setFormData(prev => ({ ...prev, location: { lat, lng } }));
+    setError(false);
+    reverseGeocode(lat, lng);
+  };
+
+  const geocodeAddress = async (address) => {
+    if (!address || address.length < 3) return;
+    try {
+      setGeocoding(true);
+      setGeoStatus('Finding location...');
+      const res = await apiClient.get(`/geocode/search?q=${encodeURIComponent(address)}&limit=1`);
+      const results = res?.data || [];
+      if (results.length > 0) {
+        const r = results[0];
+        setFormData(prev => ({
+          ...prev,
+          location: { lat: r.lat, lng: r.lng },
+          city: r.city || prev.city,
+          locality: r.locality || prev.locality,
+          state: r.state || prev.state,
+          pincode: r.pincode || prev.pincode,
+        }));
+        setGeoStatus('Location found!');
+      } else {
+        setGeoStatus('Location not found');
+      }
+      setTimeout(() => setGeoStatus(''), 2500);
+    } catch {
+      setGeoStatus('Error finding location');
+      setTimeout(() => setGeoStatus(''), 3000);
+    } finally {
+      setGeocoding(false);
     }
   };
 
-  const uploadImagesToBackend = async (fileList) => {
-    const form = new FormData();
-    for (let i = 0; i < fileList.length; i++) {
-      form.append('images', fileList[i]);
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const res = await apiClient.get(`/geocode/reverse?lat=${lat}&lng=${lng}`);
+      const r = res?.data;
+      if (r) {
+        setFormData(prev => ({
+          ...prev,
+          address: r.address || prev.address,
+          city: r.city || prev.city,
+          locality: r.locality || prev.locality,
+          state: r.state || prev.state,
+          pincode: r.pincode || prev.pincode,
+        }));
+      }
+    } catch {
+      // silent
     }
-    const data = await apiClient.upload('/upload/multiple', form);
-    if (!data.urls) throw new Error('upload_failed');
-    return data.urls;
   };
 
-  const handleRemoveImage = (index) => {
+  const searchAddress = async (query) => {
+    if (!query || query.length < 3) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/geocode/search?q=${encodeURIComponent(query)}&limit=5`);
+      setAddressSuggestions(res?.data || []);
+      setShowSuggestions(true);
+    } catch {
+      setAddressSuggestions([]);
+    }
+  };
+
+  const debouncedSearch = useRef(null);
+  const handleAddressChange = (e) => {
+    const value = e.target.value;
+    setFormData(prev => ({ ...prev, address: value }));
+    if (debouncedSearch.current) clearTimeout(debouncedSearch.current);
+    debouncedSearch.current = setTimeout(() => searchAddress(value), 300);
+  };
+
+  const handleAddressKeyDown = (e) => {
+    if (!showSuggestions || addressSuggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSuggestionIdx(prev => Math.min(prev + 1, addressSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSuggestionIdx(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && suggestionIdx >= 0) {
+      e.preventDefault();
+      selectSuggestion(addressSuggestions[suggestionIdx]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSuggestionIdx(-1);
+    }
+  };
+
+  const selectSuggestion = (s) => {
     setFormData(prev => ({
       ...prev,
-      imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+      address: s.address || s.displayName,
+      city: s.city || prev.city,
+      locality: s.locality || prev.locality,
+      state: s.state || prev.state,
+      pincode: s.pincode || prev.pincode,
+      location: { lat: s.lat, lng: s.lng },
     }));
+    setShowSuggestions(false);
+    setSuggestionIdx(-1);
+    setAddressSuggestions([]);
+    setGeoStatus('Location found!');
+    setTimeout(() => setGeoStatus(''), 2000);
   };
+
+  // ---- Handlers ----
 
   const handleChange = (e) => {
     if (e.target.id === 'sale' || e.target.id === 'rent') {
-      setFormData(prev => ({
-        ...prev,
-        type: e.target.id,
-      }));
+      setFormData(prev => ({ ...prev, type: e.target.id }));
     } else if (e.target.id === 'parking' || e.target.id === 'furnished' || e.target.id === 'offer') {
-      setFormData(prev => ({
-        ...prev,
-        [e.target.id]: e.target.checked,
-      }));
-    } else if (e.target.name === 'propertyType') {
-      setFormData(prev => ({
-        ...prev,
-        propertyType: e.target.value,
-      }));
-    } else if (e.target.id === 'customPropertyType') {
-      setFormData(prev => ({
-        ...prev,
-        customPropertyType: e.target.value,
-      }));
+      setFormData(prev => ({ ...prev, [e.target.id]: e.target.checked }));
+    } else if (e.target.type === 'select-one') {
+      if (e.target.name === 'propertyType') {
+        const pt = propertyTypes.find(p => p.slug === e.target.value);
+        setSelectedPropertyType(pt || null);
+        setPropertyTypeFields({});
+        setFormData(prev => ({ ...prev, propertyType: e.target.value }));
+      } else if (e.target.name === 'category') {
+        const cat = categories.find(c => c.slug === e.target.value);
+        setSelectedCategory(cat || null);
+        setFormData(prev => ({ ...prev, category: e.target.value, attributes: {} }));
+      } else {
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+      }
     } else if (e.target.type === 'number') {
-      setFormData(prev => ({
-        ...prev,
-        [e.target.id]: parseInt(e.target.value),
-      }));
-    } else if (e.target.type === 'file') {
-      setFormData(prev => ({
-        ...prev,
-        [e.target.id]: e.target.files[0],
-      }));
+      setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [e.target.id]: e.target.value,
-      }));
+      setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
     }
   };
 
-  const handleOwnerChange = (ownerId, isChecked) => {
-    setFormData(prev => ({
-      ...prev,
-      ownerIds: isChecked
-        ? [...prev.ownerIds, ownerId]
-        : prev.ownerIds.filter(id => id !== ownerId)
-    }));
+  const handlePropertyTypeFieldChange = (fieldKey, value) => {
+    setPropertyTypeFields(prev => ({ ...prev, [fieldKey]: value }));
   };
 
   const handleCategoryFieldChange = (fieldKey, value) => {
@@ -320,42 +351,40 @@ export default function UpdateListing() {
     }));
   };
 
-  const createOwner = async () => {
-    if (!newOwner.name.trim()) {
-      alert('Owner name is required');
-      return;
-    }
-    
-    try {
-      setCreatingOwner(true);
-      const data = await apiClient.post('/owner', newOwner);
-      if (data && data._id) {
-        setOwners(prev => [data, ...prev]);
-        setNewOwner({ name: '', email: '', phone: '', companyName: '' });
-        setShowCreateOwner(false);
-        // Auto-select the newly created owner
-        setFormData(prev => ({
-          ...prev,
-          ownerIds: [...prev.ownerIds, data._id]
-        }));
+  const handleImageSubmit = async () => {
+    if (files && files.length > 0) {
+      setUploading(true);
+      setImageUploadError(false);
+      const promises = [];
+      for (let i = 0; i < files.length; i++) {
+        promises.push(storeImage(files[i]));
       }
-    } catch (error) {
-      console.error('Error creating owner:', error);
-    } finally {
-      setCreatingOwner(false);
+      try {
+        const urls = await Promise.all(promises);
+        setFormData(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...urls] }));
+        setImageUploadError(false);
+      } catch {
+        setImageUploadError('Image upload failed (2 mb max per image)');
+      } finally {
+        setUploading(false);
+      }
+    } else {
+      setImageUploadError('Please select at least one image');
     }
   };
 
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) return;
-    try {
-      const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
-      if (data && data.slug) {
-        setCategories((prev) => [...prev, data]);
-        setFormData(prev => ({ ...prev, category: data.slug }));
-        setNewCategoryName('');
-      }
-    } catch (e) {}
+  const storeImage = async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await apiClient.upload('/upload/single', formData);
+    return response.url;
+  };
+
+  const handleRemoveImage = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -368,299 +397,453 @@ export default function UpdateListing() {
       setLoading(true);
       setError(false);
 
-      // Handle other attachment upload if present
-      let otherAttachmentUrl = '';
-      if (formData.otherAttachment) {
-        try {
-          const attachmentUrl = await storeImage(formData.otherAttachment);
-          otherAttachmentUrl = attachmentUrl;
-        } catch (error) {
-          console.error('Error uploading attachment:', error);
-          setError('Failed to upload attachment. Please try again.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Prepare form data with conditional fields
-      const submitData = {
+      const mergedData = {
         ...formData,
+        bedrooms: propertyTypeFields.bedrooms ?? formData.bedrooms,
+        bathrooms: propertyTypeFields.bathrooms ?? formData.bathrooms,
+        parking: propertyTypeFields.parking ?? formData.parking,
+        furnished: propertyTypeFields.furnished ?? formData.furnished,
+        propertyTypeFields: propertyTypeFields,
         userRef: currentUser._id,
-        propertyType: formData.propertyType === 'other' ? formData.customPropertyType : formData.propertyType,
-        otherAttachment: otherAttachmentUrl,
       };
-      
-      // For non-residential properties, provide default values for required fields
-      if (!shouldShowResidentialFields()) {
-        submitData.bedrooms = 0;
-        submitData.bathrooms = 0;
-        submitData.parking = false;
-        submitData.furnished = false;
-      }
-      
-      // Ensure description is not empty (required field)
-      if (!submitData.description || submitData.description.trim() === '') {
-        submitData.description = 'No description provided';
-      }
 
-      if (formData.address && (!formData.location || !formData.location.lat)) {
-        await handleGeocodeAddress();
-      }
-
-      const data = await apiClient.post(`/listing/update/${params.listingId}`, submitData);
+      const data = await apiClient.post(`/listing/update/${params.listingId}`, mergedData);
       setLoading(false);
       if (data.success === false) {
         setError(data.message);
       } else {
-        // Trigger cache invalidation event
         window.dispatchEvent(new CustomEvent('listing-updated', { detail: { id: data._id } }));
         navigate(`/listing/${data._id}`);
       }
-    } catch (error) {
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
       setLoading(false);
     }
   };
-  const handleUseCurrentLocation = () => {
-    if (!navigator.geolocation) return;
-    setGeocoding(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setFormData({
-          ...formData,
-          location: { lat: latitude, lng: longitude },
-        });
-        setGeocoding(false);
-      },
-      () => setGeocoding(false),
-      { enableHighAccuracy: true, timeout: 10000 }
+
+  if (fetchingListing) {
+    return (
+      <main className='flex items-center justify-center py-20'>
+        <div className='flex items-center gap-3 text-gray-500'>
+          <div className='w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin'></div>
+          Loading listing...
+        </div>
+      </main>
     );
-  };
+  }
 
-  const storeImage = async (file) => {
-    return new Promise((resolve, reject) => {
-      const storage = getStorage(app);
-      const fileName = new Date().getTime() + file.name;
-      const storageRef = ref(storage, fileName);
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log('Upload is ' + progress + '% done');
-        },
-        (error) => {
-          reject(error);
-        },
-        () => {
-          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-            resolve(downloadURL);
-          });
-        }
-      );
-    });
-  };
-
-  const handleGeocodeAddress = async () => {
-    if (!formData.address) return;
-    try {
-      setGeocoding(true);
-      setGeoStatus('Geocoding address...');
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        formData.address
-      )}`;
-      const res = await fetch(url, {
-        headers: { 'Accept-Language': 'en' },
-      });
-      const data = await res.json();
-      if (Array.isArray(data) && data[0]) {
-        setFormData({
-          ...formData,
-          location: { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) },
-        });
-        setGeoStatus('Location found!');
-      } else {
-        setGeoStatus('Location not found');
-      }
-    } catch (error) {
-      setGeoStatus('Geocoding failed');
-    } finally {
-      setGeocoding(false);
-    }
-  };
   return (
     <main>
-      {/* Minimal Header */}
-      <div className='text-center mb-6'>
-        <h1 className='text-2xl font-semibold text-gray-900 mb-2'>
-          Update Property Listing
-        </h1>
-        <p className='text-gray-600'>
-          Modify your property listing details
-        </p>
-      </div>
-      
-      {/* Main Form Container */}
-      <div className='bg-white rounded-lg shadow-sm border border-gray-200'>
-        <form onSubmit={handleSubmit} className='p-4 space-y-4'>
-          <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-            {/* Left Column */}
-            <div className='space-y-4'>
-              {/* Property Name */}
-              <div>
-                <label htmlFor='name' className='block text-sm font-medium text-gray-700 mb-1'>
-                  Property Name *
-                </label>
-                <input
-                  type='text'
-                  placeholder='e.g., Beautiful 3BR House in Downtown'
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  id='name'
-                  maxLength='62'
-                  minLength='10'
-                  required
-                  onChange={handleChange}
-                  value={formData.name}
-                />
+      <div className='max-w-6xl mx-auto'>
+        <div className='text-center mb-8'>
+          <h1 className='text-4xl font-bold text-gray-900 mb-3'>Update Property Listing</h1>
+          <p className='text-lg text-gray-600 max-w-2xl mx-auto'>
+            Modify your property listing details
+          </p>
+        </div>
+
+        <div className='bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden'>
+          <form onSubmit={handleSubmit} className='p-8'>
+            <div className='space-y-8'>
+              {/* Basic Information */}
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                <div>
+                  <label htmlFor='name' className='block text-sm font-medium text-gray-700 mb-2'>
+                    Property Name *
+                  </label>
+                  <input
+                    type='text'
+                    placeholder='Enter property name'
+                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                    id='name'
+                    maxLength='62'
+                    minLength='2'
+                    required
+                    onChange={handleChange}
+                    value={formData.name}
+                  />
+                </div>
+
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-2'>
+                    Property Type *
+                  </label>
+                  <select
+                    name='propertyType'
+                    value={formData.propertyType}
+                    onChange={handleChange}
+                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                    required
+                  >
+                    <option value=''>Select Property Type</option>
+                    {propertyTypes.map((type) => (
+                      <option key={type._id} value={type.slug}>
+                        {type.icon} {type.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPropertyType && (
+                    <p className='text-xs text-gray-500 mt-1'>{selectedPropertyType.description}</p>
+                  )}
+                </div>
               </div>
-          
+
               {/* Description */}
               <div>
-                <label htmlFor='description' className='block text-sm font-medium text-gray-700 mb-1'>
+                <label htmlFor='description' className='block text-sm font-medium text-gray-700 mb-2'>
                   Description
                 </label>
                 <textarea
-                  placeholder='Describe your property in detail...'
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none'
+                  placeholder='Describe the property...'
+                  className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors'
                   id='description'
-                  rows='4'
+                  rows={4}
                   onChange={handleChange}
                   value={formData.description}
                 />
               </div>
 
-              {/* Address */}
-              <div>
-                <label htmlFor='address' className='block text-sm font-medium text-gray-700 mb-1'>
-                  Address *
-                </label>
-                <input
-                  type='text'
-                  placeholder='Enter the full address'
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  id='address'
-                  required
-                  onChange={handleChange}
-                  value={formData.address}
-                />
+              {/* Listing Type */}
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-2'>
+                    Listing Type *
+                  </label>
+                  <select
+                    name='type'
+                    value={formData.type}
+                    onChange={handleChange}
+                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                  >
+                    <option value='sale'>Sell</option>
+                    <option value='rent'>Rent</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Location Actions */}
-              <div className='flex gap-2 flex-wrap'>
-                <button
-                  type='button'
-                  onClick={handleGeocodeAddress}
-                  className='px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-60'
-                  disabled={geocoding}
-                >
-                  {geocoding ? 'Working...' : 'Find Location'}
-                </button>
-                <button
-                  type='button'
-                  onClick={handleUseCurrentLocation}
-                  className='px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-60'
-                  disabled={geocoding}
-                >
-                  {geocoding ? 'Working...' : 'Use Current Location'}
-                </button>
-                {geoStatus && (
-                  <span className='text-sm text-slate-500 self-center'>{geoStatus}</span>
-                )}
-              </div>
-              {/* Property Type */}
-              <div>
-                <label className='block text-sm font-medium text-gray-700 mb-2'>
-                  Property Type *
-                </label>
-                <div className='grid grid-cols-3 gap-1'>
-                  {['house', 'flat', 'plot', 'factory', 'shelter', 'other'].map((type) => (
-                    <label key={type} className={`flex items-center gap-1 cursor-pointer p-2 rounded border text-sm transition-colors ${
-                      formData.propertyType === type 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}>
-                      <input
-                        type='radio'
-                        name='propertyType'
-                        value={type}
-                        checked={formData.propertyType === type}
-                        onChange={handleChange}
-                        className='sr-only'
-                      />
-                      <span className='capitalize'>{type}</span>
-                    </label>
-                  ))}
+              {/* Dynamic Property Type Fields */}
+              {selectedPropertyType && selectedPropertyType.fields && selectedPropertyType.fields.length > 0 && (
+                <PropertyTypeFields
+                  fields={selectedPropertyType.fields}
+                  values={propertyTypeFields}
+                  onChange={handlePropertyTypeFieldChange}
+                />
+              )}
+
+              {/* Pricing */}
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                <div>
+                  <label htmlFor='regularPrice' className='block text-sm font-medium text-gray-700 mb-2'>
+                    Price (₹) *
+                  </label>
+                  <input
+                    type='number'
+                    id='regularPrice'
+                    min='0'
+                    required
+                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
+                    onChange={handleChange}
+                    value={formData.regularPrice}
+                  />
                 </div>
-                {formData.propertyType === 'other' && (
-                  <div className='mt-2'>
+
+                {formData.offer && (
+                  <div>
+                    <label htmlFor='discountPrice' className='block text-sm font-medium text-gray-700 mb-2'>
+                      Discount Price (₹)
+                    </label>
                     <input
-                      type='text'
-                      id='customPropertyType'
-                      placeholder='Specify property type'
-                      value={formData.customPropertyType}
+                      type='number'
+                      id='discountPrice'
+                      min='0'
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
                       onChange={handleChange}
-                      className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                      value={formData.discountPrice}
                     />
                   </div>
                 )}
               </div>
 
-              {/* Plot Size */}
-              <div>
-                <label htmlFor='plotSize' className='block text-sm font-medium text-gray-700 mb-1'>
-                  Plot Size *
-                </label>
-                <input
-                  type='text'
-                  placeholder='e.g., 200 sq yards, 1 acre, 5000 sq ft'
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  id='plotSize'
-                  required
-                  onChange={handleChange}
-                  value={formData.plotSize}
-                />
+              {/* Address */}
+              <div className='space-y-4'>
+                <div>
+                  <label htmlFor='address' className='block text-sm font-medium text-gray-700 mb-2'>
+                    Address *
+                  </label>
+                  <div className='relative'>
+                    <textarea
+                      placeholder='Start typing your address...'
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors'
+                      id='address'
+                      rows={2}
+                      required
+                      onChange={handleAddressChange}
+                      onKeyDown={handleAddressKeyDown}
+                      value={formData.address}
+                      onFocus={() => { if (addressSuggestions.length) setShowSuggestions(true); }}
+                      onBlur={() => setTimeout(() => { setShowSuggestions(false); setSuggestionIdx(-1); }, 180)}
+                    />
+
+                    {/* Address Suggestions */}
+                    {showSuggestions && addressSuggestions.length > 0 && (
+                      <div className='absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto'>
+                        {addressSuggestions.map((s, index) => (
+                          <div
+                            key={index}
+                            className={`p-3 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
+                              index === suggestionIdx ? 'bg-blue-50' : 'hover:bg-gray-50'
+                            }`}
+                            onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
+                            onMouseEnter={() => setSuggestionIdx(index)}
+                          >
+                            <div className='text-sm font-medium text-gray-900'>
+                              {s.address || s.displayName}
+                            </div>
+                            <div className='text-xs text-gray-500 mt-1'>
+                              {[s.locality, s.city, s.state, s.pincode].filter(Boolean).join(', ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Geocoding Status */}
+                    {geoStatus && (
+                      <div className='mt-2 flex items-center gap-2 text-sm'>
+                        {geocoding ? (
+                          <>
+                            <svg className='animate-spin w-4 h-4 text-blue-600' fill='none' viewBox='0 0 24 24'>
+                              <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
+                              <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
+                            </svg>
+                            <span className='text-blue-600'>{geoStatus}</span>
+                          </>
+                        ) : (
+                          <span className='text-green-600'>{geoStatus}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Find on Map / Use My Location */}
+                    <div className='mt-3 flex gap-3'>
+                      <button
+                        type='button'
+                        onClick={() => {
+                          const parts = [formData.address, formData.city, formData.state, formData.pincode].filter(Boolean);
+                          if (parts.length > 0) {
+                            geocodeAddress(parts.join(', ') + ', India');
+                          } else {
+                            setGeoStatus('Please enter an address first');
+                            setTimeout(() => setGeoStatus(''), 3000);
+                          }
+                        }}
+                        disabled={geocoding || !formData.address}
+                        className='px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2'
+                      >
+                        <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+                        </svg>
+                        {geocoding ? 'Finding...' : 'Find on Map'}
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() => {
+                          navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                              const { latitude, longitude } = position.coords;
+                              setFormData(prev => ({ ...prev, location: { lat: latitude, lng: longitude } }));
+                              reverseGeocode(latitude, longitude);
+                              setGeoStatus('Current location found!');
+                              setTimeout(() => setGeoStatus(''), 2000);
+                            },
+                            () => {
+                              setGeoStatus('Unable to get current location');
+                              setTimeout(() => setGeoStatus(''), 3000);
+                            }
+                          );
+                        }}
+                        className='px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2'
+                      >
+                        <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+                        </svg>
+                        Use My Location
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* City, Locality, State, Pincode */}
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
+                    <label htmlFor='city' className='block text-sm font-medium text-gray-700 mb-2'>City *</label>
+                    <input type='text' placeholder='City' id='city' required
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                      onChange={handleChange} value={formData.city} />
+                  </div>
+                  <div>
+                    <label htmlFor='locality' className='block text-sm font-medium text-gray-700 mb-2'>Locality</label>
+                    <input type='text' placeholder='Neighbourhood / Suburb' id='locality'
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                      onChange={handleChange} value={formData.locality || ''} />
+                  </div>
+                  <div>
+                    <label htmlFor='state' className='block text-sm font-medium text-gray-700 mb-2'>State *</label>
+                    <input type='text' placeholder='State' id='state' required
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                      onChange={handleChange} value={formData.state} />
+                  </div>
+                  <div>
+                    <label htmlFor='pincode' className='block text-sm font-medium text-gray-700 mb-2'>Pincode *</label>
+                    <input type='text' placeholder='Pincode' id='pincode' required
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                      onChange={handleChange} value={formData.pincode} />
+                  </div>
+                </div>
               </div>
 
-              {/* Area Name */}
+              {/* Map */}
               <div>
-                <label htmlFor='areaName' className='block text-sm font-medium text-gray-700 mb-1'>
-                  Area Name *
-                </label>
-                <input
-                  type='text'
-                  placeholder='e.g., Civil Lines, DLF Phase 1'
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  id='areaName'
-                  required
-                  onChange={handleChange}
-                  value={formData.areaName}
-                />
+                <label className='block text-sm font-medium text-gray-700 mb-2'>Property Location on Map</label>
+                <div className='border border-gray-200 rounded-lg overflow-hidden shadow-sm'>
+                  <div className='bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-gray-200'>
+                    <div className='flex items-center justify-between'>
+                      <div className='flex items-center gap-3'>
+                        <div className='w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center'>
+                          <svg className='w-4 h-4 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className='text-sm font-semibold text-gray-800'>Property Location</h3>
+                          <p className='text-xs text-gray-600'>Click on the map to set the exact location</p>
+                        </div>
+                      </div>
+                      {formData.location?.lat && formData.location?.lng && (
+                        <div className='flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium'>
+                          <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                          </svg>
+                          Location Set
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className='p-4'>
+                    <div className='h-80 w-full rounded-lg overflow-hidden border border-gray-200 relative'>
+                      <MapContainer
+                        center={formData.location?.lat && formData.location?.lng
+                          ? [formData.location.lat, formData.location.lng]
+                          : defaultCenter}
+                        zoom={12}
+                        style={{ height: '100%', width: '100%' }}
+                        className='z-0'
+                        zoomControl={false}
+                        scrollWheelZoom={true}
+                      >
+                        <TileLayer
+                          attribution={tileLayers[mapLayer].attribution}
+                          url={tileLayers[mapLayer].url}
+                        />
+                        <ZoomControl position='bottomright' />
+                        <FlyToLocation lat={formData.location?.lat} lng={formData.location?.lng} zoom={15} />
+                        <LocationPicker onLocationSelect={handleLocationSelect} />
+                        {formData.location?.lat && formData.location?.lng && (
+                          <Marker position={[formData.location.lat, formData.location.lng]} icon={customIcon}>
+                            <Popup>{formData.address || 'Selected location'}</Popup>
+                          </Marker>
+                        )}
+                      </MapContainer>
+                    </div>
+
+                    {/* Map Layer Switcher */}
+                    <div className='mt-3 flex justify-center'>
+                      <div className='bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden'>
+                        <div className='flex'>
+                          {Object.keys(tileLayers).map((layer) => (
+                            <button
+                              key={layer}
+                              type='button'
+                              onClick={() => setMapLayer(layer)}
+                              className={`px-3 py-2 text-xs font-medium transition-colors ${
+                                mapLayer === layer
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {layer === 'street' && 'Street'}
+                              {layer === 'satellite' && 'Satellite'}
+                              {layer === 'terrain' && 'Terrain'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category and Features */}
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-2'>Category *</label>
+                  <select
+                    name='category'
+                    value={formData.category}
+                    onChange={handleChange}
+                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                    required
+                  >
+                    <option value=''>Select category</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c.slug}>{c.name}</option>
+                    ))}
+                  </select>
+                  {selectedCategory && (
+                    <p className='text-xs text-gray-500 mt-1'>
+                      {selectedCategory.fields?.length || 0} additional fields for this category
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-2'>Features</label>
+                  <div className='flex flex-wrap gap-3'>
+                    <label className='flex items-center'>
+                      <input type='checkbox' id='parking' checked={formData.parking} onChange={handleChange}
+                        className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' />
+                      <span className='ml-2 text-sm text-gray-700'>Parking</span>
+                    </label>
+                    <label className='flex items-center'>
+                      <input type='checkbox' id='furnished' checked={formData.furnished} onChange={handleChange}
+                        className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' />
+                      <span className='ml-2 text-sm text-gray-700'>Furnished</span>
+                    </label>
+                    <label className='flex items-center'>
+                      <input type='checkbox' id='offer' checked={formData.offer} onChange={handleChange}
+                        className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' />
+                      <span className='ml-2 text-sm text-gray-700'>Offer</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Dynamic Category Fields */}
               {selectedCategory && selectedCategory.fields && selectedCategory.fields.length > 0 && (
-                <div className='border rounded-lg p-4 bg-gray-50'>
-                  <div className='flex items-center gap-3 mb-4'>
-                    <div className='w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center'>
-                      <svg className='w-4 h-4 text-indigo-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <div className='border-t border-gray-200 pt-8'>
+                  <div className='flex items-center gap-3 mb-6'>
+                    <div className='w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center'>
+                      <svg className='w-5 h-5 text-indigo-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                         <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
                       </svg>
                     </div>
                     <div>
-                      <h3 className='font-semibold text-gray-800'>{selectedCategory.name} Details</h3>
-                      <p className='text-xs text-gray-500'>Fill in the specific details for this category</p>
+                      <h2 className='text-xl font-semibold text-gray-900'>{selectedCategory.name} Details</h2>
+                      <p className='text-sm text-gray-500'>Fill in the specific details for your {selectedCategory.name.toLowerCase()} listing</p>
                     </div>
                   </div>
                   <DynamicCategoryFields
@@ -670,449 +853,212 @@ export default function UpdateListing() {
                   />
                 </div>
               )}
-              {/* Location Coordinates */}
-              <div className='grid grid-cols-2 gap-2'>
-                <div>
-                  <label className='block text-xs text-gray-600 mb-1'>Latitude</label>
-                  <input
-                    type='number'
-                    step='any'
-                    placeholder='Latitude'
-                    className='w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    value={formData.location?.lat ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        location: {
-                          lat: e.target.value ? parseFloat(e.target.value) : null,
-                          lng: formData.location?.lng ?? null,
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className='block text-xs text-gray-600 mb-1'>Longitude</label>
-                  <input
-                    type='number'
-                    step='any'
-                    placeholder='Longitude'
-                    className='w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    value={formData.location?.lng ?? ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        location: {
-                          lat: formData.location?.lat ?? null,
-                          lng: e.target.value ? parseFloat(e.target.value) : null,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              
-              <div className='flex gap-2'>
-                <button
-                  type='button'
-                  onClick={() =>
-                    setFormData({
-                      ...formData,
-                      location: { lat: null, lng: null },
-                    })
-                  }
-                  className='px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50'
-                >
-                  Clear Location
-                </button>
-              </div>
-              
-              {formData.location && formData.location.lat && formData.location.lng && (
-                <div className='w-full h-56 rounded-lg overflow-hidden border border-gray-300'>
-                  <MapContainer
-                    center={[formData.location.lat, formData.location.lng]}
-                    zoom={14}
-                    style={{ height: '100%', width: '100%' }}
-                    scrollWheelZoom={false}
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-                    />
-                    <Marker
-                      position={[formData.location.lat, formData.location.lng]}
-                      icon={defaultIcon}
-                    >
-                      <Popup>{formData.address || 'Selected location'}</Popup>
-                    </Marker>
-                  </MapContainer>
-                </div>
-              )}
-            </div>
-              
-            {/* Right Column */}
-            <div className='space-y-4'>
-              {/* Bedrooms & Bathrooms */}
-              {shouldShowResidentialFields() && (
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-2'>
-                    Rooms & Amenities
-                  </label>
-                  <div className='grid grid-cols-2 gap-2'>
-                    <div>
-                      <label htmlFor='bedrooms' className='block text-xs text-gray-600 mb-1'>Bedrooms</label>
-                      <input
-                        type='number'
-                        id='bedrooms'
-                        min='1'
-                        max='10'
-                        required
-                        className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                        onChange={handleChange}
-                        value={formData.bedrooms}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor='bathrooms' className='block text-xs text-gray-600 mb-1'>Bathrooms</label>
-                      <input
-                        type='number'
-                        id='bathrooms'
-                        min='1'
-                        max='10'
-                        required
-                        className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                        onChange={handleChange}
-                        value={formData.bathrooms}
-                      />
-                    </div>
-                  </div>
-                  <div className='flex gap-4 mt-3'>
-                    <label className='flex items-center gap-2 cursor-pointer'>
-                      <input
-                        type='checkbox'
-                        id='parking'
-                        className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                        onChange={handleChange}
-                        checked={formData.parking}
-                      />
-                      <span className='text-sm'>Parking</span>
-                    </label>
-                    <label className='flex items-center gap-2 cursor-pointer'>
-                      <input
-                        type='checkbox'
-                        id='furnished'
-                        className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                        onChange={handleChange}
-                        checked={formData.furnished}
-                      />
-                      <span className='text-sm'>Furnished</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-              {/* Price */}
+
+              {/* Image Upload */}
               <div>
-                <label htmlFor='regularPrice' className='block text-sm font-medium text-gray-700 mb-2'>
-                  Price (₹) *
-                </label>
-                <input
-                  type='number'
-                  id='regularPrice'
-                  min='0'
-                  required
-                  className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  onChange={handleChange}
-                  value={formData.regularPrice}
-                />
-                {formData.offer && (
-                  <div className='mt-2'>
-                    <label htmlFor='discountPrice' className='block text-sm font-medium text-gray-700 mb-1'>
-                      Discounted Price (₹) *
-                    </label>
-                    <input
-                      type='number'
-                      id='discountPrice'
-                      min='0'
-                      required
-                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                      onChange={handleChange}
-                      value={formData.discountPrice}
-                    />
+                <label className='block text-sm font-medium text-gray-700 mb-2'>Images</label>
+                <div className='border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors'>
+                  <input type='file' id='images' accept='image/*' multiple className='hidden'
+                    onChange={(e) => setFiles(e.target.files)} />
+                  <label htmlFor='images' className='cursor-pointer'>
+                    <svg className='mx-auto h-12 w-12 text-gray-400' stroke='currentColor' fill='none' viewBox='0 0 48 48'>
+                      <path d='M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02' strokeWidth={2} strokeLinecap='round' strokeLinejoin='round' />
+                    </svg>
+                    <div className='mt-2'>
+                      <p className='text-sm text-gray-600'>
+                        <span className='font-medium text-blue-600 hover:text-blue-500'>Click to upload</span> or drag and drop
+                      </p>
+                      <p className='text-xs text-gray-500'>PNG, JPG, GIF up to 10MB each</p>
+                    </div>
+                  </label>
+                </div>
+
+                {files && files.length > 0 && (
+                  <div className='mt-4'>
+                    <div className='flex items-center justify-between mb-2'>
+                      <p className='text-sm font-medium text-gray-700'>
+                        {files.length} file{files.length !== 1 ? 's' : ''} selected
+                      </p>
+                      <button type='button' onClick={handleImageSubmit} disabled={uploading}
+                        className='px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors'>
+                        {uploading ? 'Uploading...' : 'Upload Images'}
+                      </button>
+                    </div>
                   </div>
+                )}
+
+                {formData.imageUrls && formData.imageUrls.length > 0 && (
+                  <div className='mt-4'>
+                    <p className='text-sm font-medium text-gray-700 mb-2'>Uploaded Images:</p>
+                    <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+                      {formData.imageUrls.map((url, index) => (
+                        <div key={index} className='relative'>
+                          <img src={normalizeImageUrl(url)} alt={`Uploaded ${index + 1}`}
+                            className='w-full h-24 object-cover rounded-lg border border-gray-200' />
+                          <button type='button' onClick={() => handleRemoveImage(index)}
+                            className='absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors'>
+                            ×
+                          </button>
+                          {index === 0 && (
+                            <div className='absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded'>Cover</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {imageUploadError && (
+                  <p className='text-sm text-red-600 mt-2'>{imageUploadError}</p>
                 )}
               </div>
 
-              {/* Property Type Selection */}
+              {/* Property Owners */}
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-2'>
-                  Listing Type *
-                </label>
-                <div className='flex gap-4'>
-                  <label className='flex items-center gap-2 cursor-pointer'>
-                    <input
-                      type='radio'
-                      id='sale'
-                      name='type'
-                      checked={formData.type === 'sale'}
-                      onChange={handleChange}
-                      className='w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500'
-                    />
-                    <span className='text-sm'>For Sale</span>
-                  </label>
-                  <label className='flex items-center gap-2 cursor-pointer'>
-                    <input
-                      type='radio'
-                      id='rent'
-                      name='type'
-                      checked={formData.type === 'rent'}
-                      onChange={handleChange}
-                      className='w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500'
-                    />
-                    <span className='text-sm'>For Rent</span>
-                  </label>
+                <label className='block text-sm font-medium text-gray-700 mb-2'>Property Owner(s)</label>
+                <div className='space-y-4'>
+                  <div className='flex items-center justify-between'>
+                    <p className='text-sm text-gray-600'>Select property owners for this listing</p>
+                    <button type='button' onClick={() => setShowCreateOwner(!showCreateOwner)}
+                      className='px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors'>
+                      {showCreateOwner ? 'Cancel' : 'Add New Owner'}
+                    </button>
+                  </div>
+
+                  <input type='text' placeholder='Search owners by name, email, or company...'
+                    value={ownerSearchQuery} onChange={(e) => setOwnerSearchQuery(e.target.value)}
+                    className='w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors' />
+
+                  <div className='border border-gray-200 rounded-lg overflow-hidden'>
+                    <div className='max-h-60 overflow-y-auto'>
+                      {owners.length === 0 ? (
+                        <div className='p-6 text-center text-gray-500 text-sm'>No owners found</div>
+                      ) : (
+                        owners
+                          .filter((o) => {
+                            const q = ownerSearchQuery.toLowerCase();
+                            return o.name?.toLowerCase().includes(q)
+                              || (o.companyName && o.companyName.toLowerCase().includes(q))
+                              || (o.email && o.email.toLowerCase().includes(q));
+                          })
+                          .map((owner) => (
+                            <label key={owner._id} className={`flex items-center gap-4 p-4 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
+                              (formData.ownerIds || []).includes(owner._id)
+                                ? 'bg-indigo-50 border-l-4 border-indigo-500'
+                                : 'hover:bg-gray-50'
+                            }`}>
+                              <input type='checkbox'
+                                checked={(formData.ownerIds || []).includes(owner._id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData(prev => ({ ...prev, ownerIds: [...(prev.ownerIds || []), owner._id] }));
+                                  } else {
+                                    setFormData(prev => ({ ...prev, ownerIds: (prev.ownerIds || []).filter(id => id !== owner._id) }));
+                                  }
+                                }}
+                                className='w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500' />
+                              <div className='flex-1 min-w-0'>
+                                <div className='font-medium text-gray-900 truncate'>{owner.name}</div>
+                                {owner.companyName && <div className='text-sm text-gray-600 truncate'>{owner.companyName}</div>}
+                                {owner.email && <div className='text-sm text-gray-500 truncate'>{owner.email}</div>}
+                              </div>
+                            </label>
+                          ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Offer Checkbox */}
-              <div>
-                <label className='flex items-center gap-2 cursor-pointer'>
-                  <input
-                    type='checkbox'
-                    id='offer'
-                    className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                    onChange={handleChange}
-                    checked={formData.offer}
-                  />
-                  <span className='text-sm font-medium text-gray-700'>Special Offer Available</span>
-                </label>
-              </div>
-              {/* Category */}
-              <div>
-                <label className='block text-sm font-medium text-gray-700 mb-2'>
-                  Category
-                </label>
-                <select
-                  id='category'
-                  className='w-full border border-gray-300 rounded px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
-                  value={formData.category}
-                  onChange={(e) =>
-                    setFormData(prev => ({ ...prev, category: e.target.value }))
-                  }
-                >
-                  <option value=''>Select category</option>
-                  {categories.map((c) => (
-                    <option key={c._id} value={c.slug}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <div className='flex gap-2 mt-2'>
-                  <input
-                    type='text'
-                    placeholder='Add new category (e.g., DLF, M3M)'
-                    className='flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                  />
-                  <button
-                    type='button'
-                    onClick={handleCreateCategory}
-                    className='px-3 py-2 text-blue-700 border border-blue-700 rounded text-sm hover:bg-blue-50'
-                  >
-                    Add
+              {/* Create New Owner */}
+              {showCreateOwner && (
+                <div className='bg-gray-50 rounded-lg p-6 border border-gray-200'>
+                  <h3 className='text-lg font-semibold text-gray-900 mb-4'>Create New Owner</h3>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-2'>Owner Name *</label>
+                      <input type='text' placeholder='Enter owner name' value={newOwner.name}
+                        onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
+                        className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors' />
+                    </div>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-2'>Email</label>
+                      <input type='email' placeholder='Enter email' value={newOwner.email}
+                        onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })}
+                        className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors' />
+                    </div>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-2'>Phone</label>
+                      <input type='tel' placeholder='Enter phone' value={newOwner.phone}
+                        onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
+                        className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors' />
+                    </div>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-2'>Company Name</label>
+                      <input type='text' placeholder='Enter company name' value={newOwner.companyName}
+                        onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })}
+                        className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors' />
+                    </div>
+                  </div>
+                  <div className='flex gap-3 mt-4'>
+                    <button type='button' disabled={creatingOwner || !newOwner.name}
+                      onClick={async () => {
+                        try {
+                          setCreatingOwner(true);
+                          const data = await apiClient.post('/owner/', newOwner);
+                          const created = data.data || data;
+                          setOwners(prev => [...prev, created]);
+                          setFormData(prev => ({ ...prev, ownerIds: [...(prev.ownerIds || []), created._id] }));
+                          setNewOwner({ name: '', email: '', phone: '', companyName: '' });
+                          setShowCreateOwner(false);
+                        } finally {
+                          setCreatingOwner(false);
+                        }
+                      }}
+                      className='px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors'>
+                      {creatingOwner ? 'Creating...' : 'Create Owner'}
+                    </button>
+                    <button type='button'
+                      onClick={() => { setShowCreateOwner(false); setNewOwner({ name: '', email: '', phone: '', companyName: '' }); }}
+                      className='px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors'>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit */}
+              <div className='pt-8 border-t border-gray-200'>
+                <div className='flex flex-col sm:flex-row items-center justify-between gap-4'>
+                  <div className='text-center sm:text-left'>
+                    <h3 className='text-lg font-semibold text-gray-900 mb-1'>Ready to Update?</h3>
+                    <p className='text-sm text-gray-600'>Review your changes and submit to update the listing.</p>
+                  </div>
+                  <button type='submit' disabled={loading || uploading}
+                    className='px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-3 min-w-[200px] justify-center'>
+                    {loading ? (
+                      <>
+                        <svg className='animate-spin w-5 h-5' fill='none' viewBox='0 0 24 24'>
+                          <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
+                          <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
+                        </svg>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                        </svg>
+                        Update Listing
+                      </>
+                    )}
                   </button>
                 </div>
-              </div>
-
-              {/* Owner Selection */}
-              {currentUser?.role === 'admin' && (
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-2'>
-                    Property Owners
-                  </label>
-                  <input
-                    type='text'
-                    placeholder='Search owners by name or email'
-                    className='w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    value={ownersQuery}
-                    onChange={(e) => setOwnersQuery(e.target.value)}
-                  />
-                  <div className='max-h-32 overflow-auto border border-gray-300 rounded mt-2 p-2 space-y-1 bg-gray-50'>
-                    {owners
-                      .filter((o) => {
-                        if (!ownersQuery.trim()) return true;
-                        const q = ownersQuery.toLowerCase();
-                        return (
-                          String(o.name || '').toLowerCase().includes(q) ||
-                          String(o.email || '').toLowerCase().includes(q)
-                        );
-                      })
-                      .map((o) => {
-                        const checked = (formData.ownerIds || []).includes(o._id);
-                        return (
-                          <label key={o._id} className='flex items-center gap-2 text-sm'>
-                            <input
-                              type='checkbox'
-                              checked={checked}
-                              onChange={(e) => handleOwnerChange(o._id, e.target.checked)}
-                              className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                            />
-                            <span className='truncate'>{o.name}{o.companyName ? ` • ${o.companyName}` : ''}</span>
-                            {o.email && <span className='text-slate-500 truncate'>({o.email})</span>}
-                          </label>
-                        );
-                      })}
-                    {owners.length === 0 && (
-                      <div className='text-sm text-slate-500'>No owners found. Create owners in Admin.</div>
-                    )}
-                  </div>
-                  {(formData.ownerIds || []).length > 0 && (
-                    <div className='text-xs text-slate-600 mt-1'>Selected: {(formData.ownerIds || []).length}</div>
-                  )}
-                </div>
-              )}
-
-              {/* Images */}
-              <div>
-                <label className='block text-sm font-medium text-gray-700 mb-3'>
-                  Images <span className='text-gray-500 text-sm'>(Optional)</span>
-                </label>
-                
-                {/* Image Upload */}
-                <div className='space-y-4'>
-                  {/* Upload Section */}
-                  <div className='bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-4 border border-gray-200'>
-                    <div className='flex items-center gap-3 mb-3'>
-                      <div className='w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center'>
-                        <svg className='w-4 h-4 text-blue-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' />
-                        </svg>
-                      </div>
-                      <h3 className='text-lg font-semibold text-gray-900'>Upload Images <span className='text-gray-500 text-sm font-normal'>(Optional)</span></h3>
-                    </div>
-                    
-                    <div className='space-y-3'>
-                      {/* File Input */}
-                      <div className='relative'>
-                        <input
-                          onChange={(e) => {
-                            setFiles(e.target.files);
-                          }}
-                          className='w-full border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-all duration-300 cursor-pointer'
-                          type='file'
-                          id='images'
-                          accept='image/*'
-                          multiple
-                        />
-                        <div className='absolute inset-0 flex flex-col items-center justify-center pointer-events-none'>
-                          <svg className='w-6 h-6 text-gray-400 mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' />
-                          </svg>
-                          <p className='text-sm text-gray-600 font-medium'>Click to select images</p>
-                          <p className='text-xs text-gray-500'>or drag and drop</p>
-                        </div>
-                      </div>
-                      
-                      {/* Action Buttons */}
-                      <div className='flex gap-2'>
-                        <button
-                          type='button'
-                          disabled={uploading || !files || files.length === 0}
-                          onClick={handleImageSubmit}
-                          className='flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium'
-                        >
-                          {uploading ? (
-                            <>
-                              <svg className='w-4 h-4 mr-2 animate-spin' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' />
-                              </svg>
-                              Uploading...
-                            </>
-                          ) : (
-                            <>
-                              <svg className='w-4 h-4 mr-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' />
-                              </svg>
-                              Upload Images (Optional)
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Error Message */}
-                  {imageUploadError && (
-                    <div className='text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3'>
-                      {imageUploadError}
-                    </div>
-                  )}
-
-                  {/* Uploaded Images */}
-                  {formData.imageUrls.length > 0 && (
-                    <div className='bg-gradient-to-r from-gray-50 to-green-50 rounded-2xl p-4 border border-gray-200'>
-                      <div className='flex items-center justify-between mb-3'>
-                        <div className='flex items-center gap-3'>
-                          <div className='w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center'>
-                            <svg className='w-4 h-4 text-green-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className='text-lg font-semibold text-gray-900'>Uploaded Images</h3>
-                            <p className='text-sm text-gray-600'>
-                              {formData.imageUrls.length} image{formData.imageUrls.length !== 1 ? 's' : ''} ready for your listing
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className='grid grid-cols-2 sm:grid-cols-3 gap-3'>
-                        {formData.imageUrls.map((url, index) => (
-                          <div key={url} className='relative group'>
-                            <img
-                              src={url}
-                              alt={`Listing ${index + 1}`}
-                              className='w-full h-24 object-cover rounded-lg border border-gray-200'
-                            />
-                            <button
-                              type='button'
-                              onClick={() => handleRemoveImage(index)}
-                              className='absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors'
-                            >
-                              ×
-                            </button>
-                            {index === 0 && (
-                              <div className='absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded'>
-                                Cover
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className='pt-4'>
-                <button
-                  type='submit'
-                  disabled={loading || uploading}
-                  className='w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors'
-                >
-                  {loading ? 'Updating...' : 'Update Listing'}
-                </button>
-                {error && (
-                  <div className='mt-3 p-3 bg-red-50 border border-red-200 rounded-lg'>
-                    <p className='text-red-600 text-sm'>{error}</p>
-                  </div>
-                )}
+                {error && <p className='text-sm text-red-600 mt-4 text-center'>{error}</p>}
               </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </main>
   );

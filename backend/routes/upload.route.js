@@ -32,18 +32,47 @@ const upload = multer({
   },
 });
 
-router.post('/single', verifyToken, upload.single('image'), (req, res) => {
-  const relativePath = `/uploads/${req.file.filename}`;
-  const absoluteUrl = `${req.protocol}://${req.get('host')}${relativePath}`;
-  res.status(201).json({ url: absoluteUrl });
+router.post('/single', verifyToken, (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 2MB.' });
+      }
+      return res.status(400).json({ success: false, message: err.message });
+    } else if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file provided' });
+    }
+    
+    const relativePath = `/uploads/${req.file.filename}`;
+    res.status(201).json({ success: true, url: relativePath });
+  });
 });
 
-router.post('/multiple', verifyToken, upload.array('images', 6), (req, res) => {
-  const urls = req.files.map((f) => {
-    const relativePath = `/uploads/${f.filename}`;
-    return `${req.protocol}://${req.get('host')}${relativePath}`;
+router.post('/multiple', verifyToken, (req, res, next) => {
+  upload.array('images', 6)(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 2MB per image.' });
+      }
+      return res.status(400).json({ success: false, message: err.message });
+    } else if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No image files provided' });
+    }
+    
+    const urls = req.files.map((f) => {
+      const relativePath = `/uploads/${f.filename}`;
+      return `${req.protocol}://${req.get('host')}${relativePath}`;
+    });
+    res.status(201).json({ success: true, urls });
   });
-  res.status(201).json({ urls });
 });
 
 export default router;

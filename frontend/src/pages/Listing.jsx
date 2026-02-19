@@ -20,7 +20,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaEdit, FaTrash } from 'react-icons/fa';
-import { apiClient } from '../utils/http';
+import { apiClient, normalizeImageUrl } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 
 const defaultIcon = new L.Icon({
@@ -35,6 +35,53 @@ const defaultIcon = new L.Icon({
 });
 
 // https://sabe.io/blog/javascript-format-numbers-commas#:~:text=The%20best%20way%20to%20format,format%20the%20number%20with%20commas.
+
+function ShareLocationButton({ lat, lng, name }) {
+  const [copied, setCopied] = useState(false);
+  const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+
+  const handleShare = async () => {
+    // Use native share sheet on mobile if available
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: name,
+          text: `Check out this property location: ${name}`,
+          url: mapsUrl,
+        });
+        return;
+      } catch (_) { }
+    }
+    // Fallback: copy the Google Maps link to clipboard
+    navigator.clipboard.writeText(mapsUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <button
+      onClick={handleShare}
+      className='flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors'
+    >
+      {copied ? (
+        <>
+          <svg className='w-3.5 h-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+          </svg>
+          Link Copied!
+        </>
+      ) : (
+        <>
+          <svg className='w-3.5 h-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z' />
+          </svg>
+          Share Location
+        </>
+      )}
+    </button>
+  );
+}
 
 export default function Listing() {
   SwiperCore.use([Navigation]);
@@ -112,7 +159,7 @@ export default function Listing() {
                   <div
                     className='h-[420px] sm:h-[480px] md:h-[520px] lg:h-[560px] rounded-xl overflow-hidden'
                     style={{
-                      background: `url(${url}) center no-repeat`,
+                      background: `url(${normalizeImageUrl(url)}) center no-repeat`,
                       backgroundSize: 'cover',
                     }}
                   ></div>
@@ -175,11 +222,11 @@ export default function Listing() {
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${listing.type === 'rent' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
                       {listing.type === 'rent' ? 'For Rent' : 'For Sale'}
                     </span>
-                    {listing.offer && (!currentUser?.role || currentUser?.role === 'buyer') ? (
+                    {listing.offer && listing.discountPrice > 0 && (!currentUser?.role || currentUser?.role === 'buyer') ? (
                       <span className='px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800'>
                         Special Offer
                       </span>
-                    ) : listing.offer && (
+                    ) : listing.offer && listing.discountPrice > 0 && (
                       <span className='px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800'>
                         ₹{(+listing.regularPrice - +listing.discountPrice).toLocaleString('en-IN')} OFF
                       </span>
@@ -195,7 +242,7 @@ export default function Listing() {
                   <p className='font-semibold text-black mb-1'>Description</p>
                   <p className='leading-relaxed'>{listing.description}</p>
                 </div>
-                
+
                 {/* Property Owners Section - Hidden in buyer view mode */}
                 {!isBuyerViewMode && listing.owners && listing.owners.length > 0 && (
                   <div className='mt-6 text-slate-800'>
@@ -266,8 +313,8 @@ export default function Listing() {
                   </div>
                 )}
 
-                {/* Quick Info Pills - Only show if no propertyTypeFields or as fallback */}
-                {(!listing.propertyTypeFields || Object.keys(listing.propertyTypeFields).length === 0) && (
+                {/* Quick Info Pills - Only show if no propertyType is set (legacy/untyped listings) */}
+                {!listing.propertyType && (!listing.propertyTypeFields || Object.keys(listing.propertyTypeFields).length === 0) && (
                   <ul className='mt-4 text-green-900 font-semibold text-sm flex flex-wrap items-center gap-3 sm:gap-4'>
                     <li className='flex items-center gap-2 whitespace-nowrap bg-green-50 text-green-800 px-3 py-1 rounded-full'>
                       <FaBed className='text-base' />
@@ -288,7 +335,7 @@ export default function Listing() {
                   </ul>
                 )}
               </div>
-              
+
               {/* New Property Details */}
               {(listing.areaName || listing.plotSize || listing.sqYard || listing.propertyNo || listing.remarks) && (
                 <div className='bg-white rounded-xl shadow p-4 sm:p-6 mt-4'>
@@ -340,9 +387,9 @@ export default function Listing() {
                   {listing.otherAttachment && (
                     <div className='mt-4'>
                       <span className='text-sm font-medium text-slate-600 block mb-2'>Other Documents</span>
-                      <a 
-                        href={listing.otherAttachment} 
-                        target='_blank' 
+                      <a
+                        href={listing.otherAttachment}
+                        target='_blank'
                         rel='noopener noreferrer'
                         className='inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 underline'
                       >
@@ -355,7 +402,7 @@ export default function Listing() {
                   )}
                 </div>
               )}
-              
+
               {listing.attributes && Object.keys(listing.attributes).length > 0 && (
                 <div className='bg-white rounded-xl shadow p-4 sm:p-6 mt-4'>
                   <h2 className='font-semibold text-lg mb-2'>Additional Information</h2>
@@ -377,7 +424,27 @@ export default function Listing() {
                 </div>
               )}
               {listing.location && listing.location.lat && listing.location.lng && (
-                <div className='bg-white rounded-xl shadow p-2'>
+                <div className='bg-white rounded-xl shadow p-4'>
+                  <div className='flex items-center justify-between mb-3'>
+                    <h3 className='font-semibold text-slate-800'>Property Location</h3>
+                    <div className='flex gap-2'>
+                      {/* Open in Google Maps */}
+                      <a
+                        href={`https://www.google.com/maps?q=${listing.location.lat},${listing.location.lng}`}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors'
+                      >
+                        <svg className='w-3.5 h-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+                        </svg>
+                        Open in Maps
+                      </a>
+                      {/* Share location link */}
+                      <ShareLocationButton lat={listing.location.lat} lng={listing.location.lng} name={listing.name} />
+                    </div>
+                  </div>
                   <div className='w-full h-72 rounded-lg overflow-hidden'>
                     <MapContainer
                       center={[listing.location.lat, listing.location.lng]}
@@ -423,7 +490,7 @@ export default function Listing() {
                   // Show actual price for agents/employees
                   <div className='text-3xl font-bold text-slate-900'>
                     ₹{' '}
-                    {listing.offer
+                    {listing.offer && listing.discountPrice
                       ? listing.discountPrice.toLocaleString('en-IN')
                       : listing.regularPrice.toLocaleString('en-IN')}
                     <span className='text-base font-medium text-slate-500'>
@@ -432,7 +499,7 @@ export default function Listing() {
                   </div>
                 )}
                 {(!currentUser?.role || currentUser?.role === 'buyer') ? null : (
-                  listing.offer && (
+                  listing.offer && listing.discountPrice > 0 && (
                     <div className='text-sm text-slate-500 line-through mt-2'>
                       ₹{listing.regularPrice.toLocaleString('en-IN')}
                     </div>
@@ -451,42 +518,42 @@ export default function Listing() {
                     <Contact listing={listing} />
                   </div>
                 )}
-                {currentUser && 
-                 !isBuyerViewMode &&
-                 (currentUser.role === 'admin' || 
-                  currentUser.role === 'employee' || 
-                  (currentUser.role === 'seller' &&
-                    ((typeof listing.userRef === 'string' && listing.userRef === currentUser._id) ||
-                      (listing.userRef && typeof listing.userRef === 'object' && listing.userRef._id === currentUser._id)))) && (
-                  <div className='flex gap-3 mt-5'>
-                    <Link to={`/update-listing/${listing._id}`} className='w-1/2'>
-                      <button className='w-full flex items-center justify-center gap-2 bg-green-700 text-white rounded-lg uppercase hover:opacity-95 p-3'>
-                        <FaEdit /> Edit
+                {currentUser &&
+                  !isBuyerViewMode &&
+                  (currentUser.role === 'admin' ||
+                    currentUser.role === 'employee' ||
+                    (currentUser.role === 'seller' &&
+                      ((typeof listing.userRef === 'string' && listing.userRef === currentUser._id) ||
+                        (listing.userRef && typeof listing.userRef === 'object' && listing.userRef._id === currentUser._id)))) && (
+                    <div className='flex gap-3 mt-5'>
+                      <Link to={`/update-listing/${listing._id}`} className='w-1/2'>
+                        <button className='w-full flex items-center justify-center gap-2 bg-green-700 text-white rounded-lg uppercase hover:opacity-95 p-3'>
+                          <FaEdit /> Edit
+                        </button>
+                      </Link>
+                      <button
+                        onClick={async () => {
+                          const confirmed = window.confirm('Are you sure you want to delete this listing?');
+                          if (!confirmed) return;
+                          try {
+                            const data = await apiClient.delete(`/listing/delete/${listing._id}`);
+                            if (data.success === false) return;
+                            // Trigger cache invalidation event
+                            window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));
+                            // Go back to previous page, or to search if no history
+                            if (window.history.length > 2) {
+                              navigate(-1);
+                            } else {
+                              navigate('/search');
+                            }
+                          } catch (_) { }
+                        }}
+                        className='w-1/2 flex items-center justify-center gap-2 bg-red-700 text-white rounded-lg uppercase hover:opacity-95 p-3'
+                      >
+                        <FaTrash /> Delete
                       </button>
-                    </Link>
-                    <button
-                      onClick={async () => {
-                        const confirmed = window.confirm('Are you sure you want to delete this listing?');
-                        if (!confirmed) return;
-                        try {
-                          const data = await apiClient.delete(`/listing/delete/${listing._id}`);
-                          if (data.success === false) return;
-                          // Trigger cache invalidation event
-                          window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));
-                          // Go back to previous page, or to search if no history
-                          if (window.history.length > 2) {
-                            navigate(-1);
-                          } else {
-                            navigate('/search');
-                          }
-                        } catch (_) {}
-                      }}
-                      className='w-1/2 flex items-center justify-center gap-2 bg-red-700 text-white rounded-lg uppercase hover:opacity-95 p-3'
-                    >
-                      <FaTrash /> Delete
-                    </button>
-                  </div>
-                )}
+                    </div>
+                  )}
               </div>
             </div>
           </div>

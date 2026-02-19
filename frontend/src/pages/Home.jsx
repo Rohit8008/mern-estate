@@ -35,7 +35,7 @@ export default function Home() {
     const fetchAllListings = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         const [offerRes, rentRes, saleRes] = await Promise.all([
           fetchWithRefresh('/api/listing/get?offer=true&limit=4'),
@@ -82,23 +82,23 @@ export default function Home() {
       <section className='relative bg-gradient-to-br from-blue-50 via-white to-indigo-50 overflow-hidden'>
         {/* Background Pattern */}
         <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23e0e7ff" fill-opacity="0.1"%3E%3Ccircle cx="30" cy="30" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
-        
+
         <div className='relative max-w-7xl mx-auto px-4 py-24 lg:py-32'>
           <div className='text-center max-w-4xl mx-auto'>
             <div className='inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium mb-8'>
               <FaStar className='w-4 h-4' />
               Trusted by 10,000+ clients
             </div>
-            
+
             <h1 className='text-5xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight'>
               Find Your Dream
               <span className='bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent'> Property</span>
             </h1>
-            
+
             <p className='text-xl lg:text-2xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed'>
               Discover exceptional properties, connect with trusted agents, and make your real estate dreams a reality with RealVista.
             </p>
-            
+
             {/* Enhanced Search Bar */}
             <div className='max-w-3xl mx-auto mb-12'>
               <form onSubmit={handleSearch} className='relative'>
@@ -152,7 +152,7 @@ export default function Home() {
               We provide comprehensive real estate solutions with cutting-edge technology and personalized service.
             </p>
           </div>
-          
+
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8'>
             <div className='text-center group'>
               <div className='w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
@@ -161,7 +161,7 @@ export default function Home() {
               <h3 className='text-xl font-semibold text-gray-900 mb-3'>Smart Search</h3>
               <p className='text-gray-600'>Advanced filtering and AI-powered recommendations to find your perfect property.</p>
             </div>
-            
+
             <div className='text-center group'>
               <div className='w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
                 <FaShieldAlt className='w-8 h-8 text-white' />
@@ -169,7 +169,7 @@ export default function Home() {
               <h3 className='text-xl font-semibold text-gray-900 mb-3'>Secure Platform</h3>
               <p className='text-gray-600'>Bank-level security and verified listings ensure safe transactions.</p>
             </div>
-            
+
             <div className='text-center group'>
               <div className='w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
                 <FaHandshake className='w-8 h-8 text-white' />
@@ -177,7 +177,7 @@ export default function Home() {
               <h3 className='text-xl font-semibold text-gray-900 mb-3'>Expert Agents</h3>
               <p className='text-gray-600'>Connect with certified real estate professionals in your area.</p>
             </div>
-            
+
             <div className='text-center group'>
               <div className='w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
                 <FaChartLine className='w-8 h-8 text-white' />
@@ -196,10 +196,10 @@ export default function Home() {
             <h2 className='text-4xl font-bold text-gray-900 mb-4'>Get Started Today</h2>
             <p className='text-xl text-gray-600'>Choose your path to real estate success</p>
           </div>
-          
+
           <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
-            <Link 
-              to='/search' 
+            <Link
+              to='/search'
               className='bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 text-center group border border-gray-100'
             >
               <div className='w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
@@ -214,10 +214,10 @@ export default function Home() {
                 </svg>
               </div>
             </Link>
-            
+
             {!isBuyerViewMode && (currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') ? (
-              <Link 
-                to='/create-listing' 
+              <Link
+                to='/create-listing'
                 className='bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 text-center group border border-gray-100'
               >
                 <div className='w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
@@ -255,9 +255,9 @@ export default function Home() {
                 </Link>
               </div>
             )}
-            
-            <Link 
-              to='/buyer-requirements' 
+
+            <Link
+              to='/buyer-requirements'
               className='bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 text-center group border border-gray-100'
             >
               <div className='w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform'>
@@ -283,7 +283,7 @@ export default function Home() {
             <h2 className='text-4xl font-bold text-gray-900 mb-4'>What Our Clients Say</h2>
             <p className='text-xl text-gray-600'>Real stories from satisfied customers who found their dream properties</p>
           </div>
-          
+
           <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
             <div className='bg-white p-8 rounded-2xl shadow-lg'>
               <div className='flex items-center mb-6'>
@@ -304,7 +304,7 @@ export default function Home() {
                 "RealVista made finding my dream home so easy! The search filters were incredibly helpful, and my agent was professional and knowledgeable. Highly recommended!"
               </p>
             </div>
-            
+
             <div className='bg-white p-8 rounded-2xl shadow-lg'>
               <div className='flex items-center mb-6'>
                 <div className='w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-lg'>
@@ -324,7 +324,7 @@ export default function Home() {
                 "Sold my property in just 2 weeks! The platform connected me with serious buyers and the transaction was smooth and secure. Excellent service!"
               </p>
             </div>
-            
+
             <div className='bg-white p-8 rounded-2xl shadow-lg'>
               <div className='flex items-center mb-6'>
                 <div className='w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg'>
@@ -355,10 +355,10 @@ export default function Home() {
           <p className='text-xl text-blue-100 mb-8 max-w-3xl mx-auto'>
             Join thousands of satisfied customers who have found their perfect properties with RealVista.
           </p>
-          
+
           <div className='flex flex-col sm:flex-row gap-4 justify-center items-center'>
-            <Link 
-              to='/search' 
+            <Link
+              to='/search'
               className='bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-50 transition-colors shadow-lg'
             >
               Browse Properties

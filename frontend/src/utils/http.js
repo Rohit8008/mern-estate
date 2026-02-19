@@ -219,4 +219,21 @@ export class ApiClient {
 // Create default API client instance
 export const apiClient = new ApiClient(`${API_BASE_URL}/api`);
 
+/**
+ * Normalise an image URL so it works in both dev (Vite proxy) and production.
+ * Old listings may have stored absolute localhost URLs like
+ * "http://localhost:3000/uploads/file.jpg". Convert those to relative paths
+ * "/uploads/file.jpg" so the Vite proxy / Express static handler serves them.
+ */
+export function normalizeImageUrl(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+      return u.pathname + u.search;
+    }
+  } catch (_) {}
+  return url;
+}
+
 

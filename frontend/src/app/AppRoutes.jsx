@@ -30,6 +30,9 @@ import ClientsLegacy from '../pages/ClientsLegacy';
 import ContactsBoard from '../pages/ContactsBoard';
 import TasksBoard from '../pages/TasksBoard';
 import AgencyDashboard from '../pages/AgencyDashboard';
+import PortfolioDashboard from '../pages/PortfolioDashboard';
+import Transactions from '../pages/Transactions';
+import ClientReportTemplate from '../pages/ClientReportTemplate';
 import ClientDetail from '../pages/ClientDetail';
 import DealsBoard from '../pages/DealsBoard';
 import DealsLegacy from '../pages/DealsLegacy';
@@ -58,13 +61,11 @@ export default function AppRoutes() {
 
       <Route element={<PrivateRoute />}>
         <Route path='/search' element={<Search />} />
-        <Route path='/categories' element={<Categories />} />
-        <Route path='/category/:slug' element={<CategoryListings />} />
-        <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
 
         {isMinimal ? (
           <Route element={<CrmShell />}>
             <Route path='/dashboard' element={<AgencyDashboard />} />
+            <Route path='/portfolio' element={<PortfolioDashboard />} />
             <Route path='/properties' element={<PropertiesBoard />} />
             <Route path='/calendar' element={<Calendar />} />
             <Route path='/tasks' element={<TasksBoard />} />
@@ -73,6 +74,13 @@ export default function AppRoutes() {
             <Route path='/contacts' element={<ContactsBoard />} />
             <Route path='/clients/:id' element={<ClientDetail />} />
             <Route path='/buyer-requirements' element={<BuyerRequirements />} />
+            <Route path='/transactions' element={<Transactions />} />
+            <Route path='/client-reports' element={<ClientReportTemplate />} />
+            <Route path='/categories' element={<Categories />} />
+            <Route path='/category/:slug' element={<CategoryListings />} />
+            <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
+            <Route path='/create-listing' element={<CreateListing />} />
+            <Route path='/update-listing/:listingId' element={<UpdateListing />} />
           </Route>
         ) : (
           <>
@@ -83,6 +91,9 @@ export default function AppRoutes() {
             <Route path='/clients' element={<ClientsLegacy />} />
             <Route path='/clients/:id' element={<ClientDetail />} />
             <Route path='/buyer-requirements' element={<BuyerRequirements />} />
+            <Route path='/categories' element={<Categories />} />
+            <Route path='/category/:slug' element={<CategoryListings />} />
+            <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
           </>
         )}
       </Route>

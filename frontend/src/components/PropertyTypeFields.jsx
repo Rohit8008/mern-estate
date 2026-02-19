@@ -60,10 +60,19 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
             <input
               type="number"
               value={value}
-              onChange={(e) => handleFieldChange(field.key, e.target.value ? Number(e.target.value) : '')}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === '') {
+                  handleFieldChange(field.key, '');
+                } else {
+                  const num = Number(raw);
+                  handleFieldChange(field.key, isNaN(num) ? raw : num);
+                }
+              }}
               placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
               min={field.min}
               max={field.max}
+              step={field.step ?? 'any'}
               className={`${baseInputClass} ${field.unit ? 'pr-16' : ''}`}
               required={isRequired}
             />

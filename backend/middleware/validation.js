@@ -401,11 +401,10 @@ export const listingValidation = {
         'any.required': 'Property name is required',
       }),
     description: Joi.string()
-      .min(10)
       .max(2000)
       .optional()
+      .allow('')
       .messages({
-        'string.min': 'Description must be at least 10 characters long',
         'string.max': 'Description cannot exceed 2000 characters',
       }),
     address: Joi.string()
@@ -427,11 +426,11 @@ export const listingValidation = {
         'any.required': 'Price is required',
       }),
     discountPrice: Joi.number()
-      .positive()
+      .min(0)
       .max(1000000000)
       .optional()
       .messages({
-        'number.positive': 'Discount price must be a positive number',
+        'number.min': 'Discount price cannot be negative',
         'number.max': 'Discount price cannot exceed 1 billion',
       }),
     bathrooms: Joi.number()
@@ -470,20 +469,21 @@ export const listingValidation = {
     offer: Joi.boolean()
       .optional(),
     imageUrls: Joi.array()
-      .items(Joi.string().uri())
-      .min(1)
+      .items(Joi.string().max(500))
       .max(10)
-      .required()
+      .optional()
+      .default([])
       .messages({
-        'array.min': 'At least one image is required',
         'array.max': 'Cannot upload more than 10 images',
-        'any.required': 'Images are required',
       }),
     category: Joi.string().max(100).optional().allow(''),
     attributes: Joi.object().unknown(true).optional(),
+    propertyTypeFields: Joi.object().unknown(true).optional(),
     ownerIds: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(50).optional(),
     city: Joi.string().max(100).optional().allow(''),
     locality: Joi.string().max(100).optional().allow(''),
+    state: Joi.string().max(100).optional().allow(''),
+    pincode: Joi.string().max(20).optional().allow(''),
     areaSqFt: Joi.number().min(0).optional(),
     status: Joi.string().valid('available', 'sold', 'under_negotiation').optional(),
     assignedAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
@@ -503,9 +503,9 @@ export const listingValidation = {
       .max(100)
       .optional(),
     description: Joi.string()
-      .min(10)
       .max(2000)
-      .optional(),
+      .optional()
+      .allow(''),
     address: Joi.string()
       .min(5)
       .max(200)
@@ -515,7 +515,7 @@ export const listingValidation = {
       .max(1000000000)
       .optional(),
     discountPrice: Joi.number()
-      .positive()
+      .min(0)
       .max(1000000000)
       .optional(),
     bathrooms: Joi.number()
@@ -538,15 +538,17 @@ export const listingValidation = {
     offer: Joi.boolean()
       .optional(),
     imageUrls: Joi.array()
-      .items(Joi.string().uri())
-      .min(1)
+      .items(Joi.string().max(500))
       .max(10)
       .optional(),
     category: Joi.string().max(100).optional().allow(''),
     attributes: Joi.object().unknown(true).optional(),
+    propertyTypeFields: Joi.object().unknown(true).optional(),
     ownerIds: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(50).optional(),
     city: Joi.string().max(100).optional().allow(''),
     locality: Joi.string().max(100).optional().allow(''),
+    state: Joi.string().max(100).optional().allow(''),
+    pincode: Joi.string().max(20).optional().allow(''),
     areaSqFt: Joi.number().min(0).optional(),
     status: Joi.string().valid('available', 'sold', 'under_negotiation').optional(),
     assignedAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),

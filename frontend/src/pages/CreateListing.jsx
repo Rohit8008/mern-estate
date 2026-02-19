@@ -4,10 +4,8 @@ import { useSelector, useDispatch } from 'react-redux';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { app } from '../firebase';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import { apiClient } from '../utils/http';
+import { apiClient, normalizeImageUrl } from '../utils/http';
 import PropertyTypeFields from '../components/PropertyTypeFields';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
 
@@ -17,16 +15,6 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// Enhanced marker icon with better visibility
-const defaultIcon = new L.Icon({
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [32, 52],
-  iconAnchor: [16, 52],
-  popupAnchor: [1, -34],
-  shadowSize: [52, 52]
 });
 
 // Custom marker for better visibility
@@ -42,26 +30,24 @@ const customIcon = new L.Icon({
   popupAnchor: [0, -16]
 });
 
-// Enhanced map component for click handling with better UX
+// Click handler for the map
 function LocationPicker({ onLocationSelect }) {
-  const [isSelecting, setIsSelecting] = useState(false);
-  
   useMapEvents({
     click: (e) => {
-      const { lat, lng } = e.latlng;
-      console.log('Map clicked at:', lat, lng);
-      
-      // Immediately call the location select function
-      onLocationSelect(lat, lng);
-      
-      // Visual feedback
-      setIsSelecting(true);
-      setTimeout(() => {
-        setIsSelecting(false);
-      }, 500);
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
     },
   });
-  
+  return null;
+}
+
+// Smoothly fly to a new location without re-mounting the map
+function FlyToLocation({ lat, lng, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat && lng) {
+      map.flyTo([lat, lng], zoom || map.getZoom(), { duration: 1 });
+    }
+  }, [lat, lng, zoom, map]);
   return null;
 }
 
@@ -158,13 +144,14 @@ export default function CreateListing() {
   const dispatch = useDispatch();
   const { currentUser } = useSelector((state) => state.user);
   const { buyerView } = useBuyerView();
-  
+
   const [files, setFiles] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     address: '',
     city: '',
+    locality: '',
     state: '',
     pincode: '',
     type: 'sale',
@@ -184,7 +171,7 @@ export default function CreateListing() {
     category: '',
     ownerIds: [],
   });
-  
+
   const [imageUploadError, setImageUploadError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -220,7 +207,7 @@ export default function CreateListing() {
     const calculateTotalValue = () => {
       const sqYard = parseFloat(formData.sqYard) || 0;
       const sqYardRate = parseFloat(formData.sqYardRate) || 0;
-      
+
       if (sqYard > 0 && sqYardRate > 0) {
         const total = sqYard * sqYardRate;
         setFormData(prev => ({
@@ -235,13 +222,20 @@ export default function CreateListing() {
   }, [formData.sqYard, formData.sqYardRate]);
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setLoadingCategories(true);
-        console.log('Fetching categories...');
-        const data = await apiClient.get('/category/list');
-        console.log('Categories response:', data);
-        const all = data.data || data || [];
+    const fetchInitialData = async () => {
+      setLoadingCategories(true);
+      setLoadingOwners(true);
+      setLoadingPropertyTypes(true);
+
+      const [catResult, ownerResult, ptResult] = await Promise.allSettled([
+        apiClient.get('/category/list'),
+        apiClient.get('/owner/list'),
+        apiClient.get('/property-types/list'),
+      ]);
+
+      // Categories
+      if (catResult.status === 'fulfilled') {
+        const all = catResult.value.data || catResult.value || [];
         if (currentUser?.role === 'employee') {
           const allowed = Array.isArray(currentUser.assignedCategories)
             ? currentUser.assignedCategories
@@ -250,45 +244,29 @@ export default function CreateListing() {
         } else {
           setCategories(all);
         }
-      } catch (error) {
-        console.log('Error fetching categories:', error.message);
+      } else {
         setCategories([]);
-      } finally {
-        setLoadingCategories(false);
       }
-    };
+      setLoadingCategories(false);
 
-    const fetchOwners = async () => {
-      try {
-        setLoadingOwners(true);
-        console.log('Fetching owners...');
-        const data = await apiClient.get('/owner/list');
-        console.log('Owners response:', data);
-        setOwners(data.data || data || []);
-      } catch (error) {
-        console.log('Error fetching owners:', error.message);
+      // Owners
+      if (ownerResult.status === 'fulfilled') {
+        setOwners(ownerResult.value.data || ownerResult.value || []);
+      } else {
         setOwners([]);
-      } finally {
-        setLoadingOwners(false);
       }
-    };
+      setLoadingOwners(false);
 
-    const fetchPropertyTypes = async () => {
-      try {
-        setLoadingPropertyTypes(true);
-        const data = await apiClient.get('/property-types/list');
-        setPropertyTypes(data.data || []);
-      } catch (error) {
-        console.log('Error fetching property types:', error.message);
+      // Property types
+      if (ptResult.status === 'fulfilled') {
+        setPropertyTypes(ptResult.value.data || []);
+      } else {
         setPropertyTypes([]);
-      } finally {
-        setLoadingPropertyTypes(false);
       }
+      setLoadingPropertyTypes(false);
     };
 
-    fetchCategories();
-    fetchOwners();
-    fetchPropertyTypes();
+    fetchInitialData();
   }, [currentUser?.role, currentUser?.assignedCategories]);
 
   const handleChange = (e) => {
@@ -367,9 +345,9 @@ export default function CreateListing() {
       }
       try {
         const urls = await Promise.all(promises);
-        setFormData({ ...formData, imageUrls: urls });
+        setFormData(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...urls] }));
         setImageUploadError(false);
-      } catch (error) {
+      } catch {
         setImageUploadError('Image upload failed (2 mb max per image)');
       } finally {
         setUploading(false);
@@ -380,27 +358,10 @@ export default function CreateListing() {
   };
 
   const storeImage = async (file) => {
-    return new Promise((resolve, reject) => {
-      const storage = getStorage(app);
-      const fileName = new Date().getTime() + file.name;
-      const storageRef = ref(storage, fileName);
-      const uploadTask = uploadBytesResumable(storageRef, file);
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload is ${progress}% done`);
-        },
-        (error) => {
-          reject(error);
-        },
-        () => {
-          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-            resolve(downloadURL);
-          });
-        }
-      );
-    });
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await apiClient.upload('/upload/single', formData);
+    return response.url;
   };
 
   const handleRemoveImage = (index) => {
@@ -448,50 +409,37 @@ export default function CreateListing() {
     }
   };
 
+  // ---- Geocoding helpers (use backend proxy) ----
+
   const handleLocationSelect = (lat, lng) => {
-    setFormData(prev => ({
-      ...prev,
-      location: { lat, lng }
-    }));
+    setFormData(prev => ({ ...prev, location: { lat, lng } }));
     setError(false);
-    
-    // Reverse geocoding to update address
     reverseGeocode(lat, lng);
   };
 
-  // Geocoding function to convert address to coordinates
   const geocodeAddress = async (address) => {
     if (!address || address.length < 3) return;
-    
     try {
-    setGeocoding(true);
-    setGeoStatus('Finding location...');
-
-      // Using OpenStreetMap Nominatim API (free)
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&countrycodes=in`
-      );
-      
-      const data = await response.json();
-
-      if (data && data.length > 0) {
-        const result = data[0];
-        const lat = parseFloat(result.lat);
-        const lng = parseFloat(result.lon);
-        
+      setGeocoding(true);
+      setGeoStatus('Finding location...');
+      const res = await apiClient.get(`/geocode/search?q=${encodeURIComponent(address)}&limit=1`);
+      const results = res?.data || [];
+      if (results.length > 0) {
+        const r = results[0];
         setFormData(prev => ({
           ...prev,
-          location: { lat, lng }
+          location: { lat: r.lat, lng: r.lng },
+          city: r.city || prev.city,
+          locality: r.locality || prev.locality,
+          state: r.state || prev.state,
+          pincode: r.pincode || prev.pincode,
         }));
-        
         setGeoStatus('Location found!');
-        setTimeout(() => setGeoStatus(''), 2000);
       } else {
         setGeoStatus('Location not found');
-        setTimeout(() => setGeoStatus(''), 3000);
       }
-    } catch (error) {
-      console.error('Geocoding error:', error);
+      setTimeout(() => setGeoStatus(''), 2500);
+    } catch {
       setGeoStatus('Error finding location');
       setTimeout(() => setGeoStatus(''), 3000);
     } finally {
@@ -499,89 +447,88 @@ export default function CreateListing() {
     }
   };
 
-  // Reverse geocoding to convert coordinates to address
   const reverseGeocode = async (lat, lng) => {
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-      );
-
-      const data = await response.json();
-
-      if (data && data.display_name) {
-        const addr = data.address || {};
-        // Extract city, state, pincode
-        const city = addr.city || addr.town || addr.village || addr.county || addr.district || '';
-        const state = addr.state || '';
-        const pincode = addr.postcode || '';
-        // Build a cleaner address
-        const addressParts = [];
-        if (addr.house_number) addressParts.push(addr.house_number);
-        if (addr.road) addressParts.push(addr.road);
-        if (addr.neighbourhood) addressParts.push(addr.neighbourhood);
-        if (addr.suburb) addressParts.push(addr.suburb);
-        const cleanAddress = addressParts.length > 0 ? addressParts.join(', ') : data.display_name.split(',').slice(0, 3).join(',');
-
+      const res = await apiClient.get(`/geocode/reverse?lat=${lat}&lng=${lng}`);
+      const r = res?.data;
+      if (r) {
         setFormData(prev => ({
           ...prev,
-          address: cleanAddress,
-          city: city,
-          state: state,
-          pincode: pincode
+          address: r.address || prev.address,
+          city: r.city || prev.city,
+          locality: r.locality || prev.locality,
+          state: r.state || prev.state,
+          pincode: r.pincode || prev.pincode,
         }));
       }
-    } catch (error) {
-      console.error('Reverse geocoding error:', error);
+    } catch {
+      // silent – user can still type manually
     }
   };
 
-  // Address search with suggestions
   const searchAddress = async (query) => {
     if (!query || query.length < 3) {
       setAddressSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in&addressdetails=1`
-      );
-      
-      const data = await response.json();
-      setAddressSuggestions(data || []);
+      const res = await apiClient.get(`/geocode/search?q=${encodeURIComponent(query)}&limit=5`);
+      setAddressSuggestions(res?.data || []);
       setShowSuggestions(true);
-    } catch (error) {
-      console.error('Address search error:', error);
+    } catch {
       setAddressSuggestions([]);
     }
   };
 
-  // Debounced address search
+  // Debounced address search (300ms for snappier feel)
   const debouncedSearch = useRef(null);
   const handleAddressChange = (e) => {
     const value = e.target.value;
     setFormData(prev => ({ ...prev, address: value }));
-    
-    // Clear previous timeout
-    if (debouncedSearch.current) {
-      clearTimeout(debouncedSearch.current);
-    }
-    
-    // Set new timeout for search
-    debouncedSearch.current = setTimeout(() => {
-      searchAddress(value);
-    }, 500);
+    if (debouncedSearch.current) clearTimeout(debouncedSearch.current);
+    debouncedSearch.current = setTimeout(() => searchAddress(value), 300);
   };
 
-  // Auto-geocode removed - location is set via:
-  // 1. Selecting an address suggestion (auto-fills all fields + location)
-  // 2. Clicking "Find on Map" button
-  // 3. Clicking "Use My Location" button
+  // Keyboard navigation for suggestions
+  const [suggestionIdx, setSuggestionIdx] = useState(-1);
+  const handleAddressKeyDown = (e) => {
+    if (!showSuggestions || addressSuggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSuggestionIdx(prev => Math.min(prev + 1, addressSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSuggestionIdx(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && suggestionIdx >= 0) {
+      e.preventDefault();
+      selectSuggestion(addressSuggestions[suggestionIdx]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSuggestionIdx(-1);
+    }
+  };
+
+  const selectSuggestion = (s) => {
+    setFormData(prev => ({
+      ...prev,
+      address: s.address || s.displayName,
+      city: s.city || prev.city,
+      locality: s.locality || prev.locality,
+      state: s.state || prev.state,
+      pincode: s.pincode || prev.pincode,
+      location: { lat: s.lat, lng: s.lng },
+    }));
+    setShowSuggestions(false);
+    setSuggestionIdx(-1);
+    setAddressSuggestions([]);
+    setGeoStatus('Location found!');
+    setTimeout(() => setGeoStatus(''), 2000);
+  };
 
   return (
-    <main className='min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50'>
-      <div className='max-w-6xl mx-auto px-4 py-8'>
+    <main>
+      <div className='max-w-6xl mx-auto'>
         {/* Clean Header */}
         <div className='text-center mb-8'>
           <h1 className='text-4xl font-bold text-gray-900 mb-3'>
@@ -591,7 +538,7 @@ export default function CreateListing() {
             Fill in your property details to create an attractive listing that will attract potential buyers
           </p>
         </div>
-        
+
         {/* Main Form Container */}
         <div className='bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden'>
           <form onSubmit={handleSubmit} className='p-8'>
@@ -609,13 +556,13 @@ export default function CreateListing() {
                     className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
                     id='name'
                     maxLength='62'
-                    minLength='10'
+                    minLength='2'
                     required
                     onChange={handleChange}
                     value={formData.name}
                   />
                 </div>
-            
+
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-2'>
                     Property Type *
@@ -642,23 +589,23 @@ export default function CreateListing() {
                     <p className='text-xs text-gray-500 mt-1'>{selectedPropertyType.description}</p>
                   )}
                 </div>
-                </div>
-            
-                {/* Description */}
-                <div>
+              </div>
+
+              {/* Description */}
+              <div>
                 <label htmlFor='description' className='block text-sm font-medium text-gray-700 mb-2'>
-                    Description
-                  </label>
-                  <textarea
-                    placeholder='Describe the property...'
+                  Description
+                </label>
+                <textarea
+                  placeholder='Describe the property...'
                   className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors'
-                    id='description'
+                  id='description'
                   rows={4}
-                    onChange={handleChange}
-                    value={formData.description}
-                  />
-                </div>
-                
+                  onChange={handleChange}
+                  value={formData.description}
+                />
+              </div>
+
               {/* Property Details */}
               <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                 <div>
@@ -675,7 +622,7 @@ export default function CreateListing() {
                     <option value='rent'>Rent</option>
                   </select>
                 </div>
-                    </div>
+              </div>
 
               {/* Dynamic Property Type Fields */}
               {selectedPropertyType && selectedPropertyType.fields && selectedPropertyType.fields.length > 0 && (
@@ -692,34 +639,33 @@ export default function CreateListing() {
                   <label htmlFor='regularPrice' className='block text-sm font-medium text-gray-700 mb-2'>
                     Price (₹) *
                   </label>
-              <input
-                type='number'
-                id='regularPrice'
-                min='0'
-                required
+                  <input
+                    type='number'
+                    id='regularPrice'
+                    min='0'
+                    required
                     className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
-                onChange={handleChange}
-                value={formData.regularPrice}
-              />
+                    onChange={handleChange}
+                    value={formData.regularPrice}
+                  />
                 </div>
-                
-            {formData.offer && (
+
+                {formData.offer && (
                   <div>
-                      <label htmlFor='discountPrice' className='block text-sm font-medium text-gray-700 mb-2'>
-                        Discount Price (₹)
-                      </label>
-                <input
-                  type='number'
-                  id='discountPrice'
-                        min='50'
-                  max='10000000'
+                    <label htmlFor='discountPrice' className='block text-sm font-medium text-gray-700 mb-2'>
+                      Discount Price (₹)
+                    </label>
+                    <input
+                      type='number'
+                      id='discountPrice'
+                      min='0'
                       className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
-                  onChange={handleChange}
-                  value={formData.discountPrice}
-                />
-                    </div>
-                  )}
-                </div>
+                      onChange={handleChange}
+                      value={formData.discountPrice}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Location */}
               <div className='space-y-4'>
@@ -732,67 +678,39 @@ export default function CreateListing() {
                       placeholder='Start typing your address...'
                       className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors'
                       id='address'
-                      rows={3}
+                      rows={2}
                       required
                       onChange={handleAddressChange}
+                      onKeyDown={handleAddressKeyDown}
                       value={formData.address}
-                      onFocus={() => setShowSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      onFocus={() => { if (addressSuggestions.length) setShowSuggestions(true); }}
+                      onBlur={() => setTimeout(() => { setShowSuggestions(false); setSuggestionIdx(-1); }, 180)}
                     />
-                    
+
                     {/* Address Suggestions Dropdown */}
                     {showSuggestions && addressSuggestions.length > 0 && (
                       <div className='absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto'>
-                        {addressSuggestions.map((suggestion, index) => (
+                        {addressSuggestions.map((s, index) => (
                           <div
                             key={index}
-                            className='p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0'
-                            onClick={() => {
-                              const lat = parseFloat(suggestion.lat);
-                              const lng = parseFloat(suggestion.lon);
-                              const addr = suggestion.address || {};
-                              // Extract city, state, pincode from suggestion
-                              const city = addr.city || addr.town || addr.village || addr.county || addr.district || '';
-                              const state = addr.state || '';
-                              const pincode = addr.postcode || '';
-                              // Build a cleaner address without duplicating city/state/pincode
-                              const addressParts = [];
-                              if (addr.house_number) addressParts.push(addr.house_number);
-                              if (addr.road) addressParts.push(addr.road);
-                              if (addr.neighbourhood) addressParts.push(addr.neighbourhood);
-                              if (addr.suburb) addressParts.push(addr.suburb);
-                              const cleanAddress = addressParts.length > 0 ? addressParts.join(', ') : suggestion.display_name.split(',').slice(0, 3).join(',');
-
-                              setFormData(prev => ({
-                                ...prev,
-                                address: cleanAddress,
-                                city: city,
-                                state: state,
-                                pincode: pincode,
-                                location: { lat, lng }
-                              }));
-                              setShowSuggestions(false);
-                              setAddressSuggestions([]);
-                              setGeoStatus('Location found!');
-                              setTimeout(() => setGeoStatus(''), 2000);
-                            }}
+                            className={`p-3 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${index === suggestionIdx ? 'bg-blue-50' : 'hover:bg-gray-50'
+                              }`}
+                            onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
+                            onMouseEnter={() => setSuggestionIdx(index)}
                           >
                             <div className='text-sm font-medium text-gray-900'>
-                              {suggestion.display_name}
+                              {s.address || s.displayName}
                             </div>
-                            {suggestion.address && (
-                              <div className='text-xs text-gray-500 mt-1'>
-                                {suggestion.address.city || suggestion.address.town || suggestion.address.village || suggestion.address.county},
-                                {suggestion.address.state}, {suggestion.address.postcode}
-                              </div>
-                            )}
+                            <div className='text-xs text-gray-500 mt-1'>
+                              {[s.locality, s.city, s.state, s.pincode].filter(Boolean).join(', ')}
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
-                    
+
                     {/* Geocoding Status */}
-                  {geoStatus && (
+                    {geoStatus && (
                       <div className='mt-2 flex items-center gap-2 text-sm'>
                         {geocoding ? (
                           <>
@@ -807,11 +725,11 @@ export default function CreateListing() {
                         )}
                       </div>
                     )}
-                    
+
                     {/* Find on Map Button */}
                     <div className='mt-3 flex gap-3'>
-                    <button
-                      type='button'
+                      <button
+                        type='button'
                         onClick={() => {
                           const { address, city, state, pincode } = formData;
                           // Build address from available fields
@@ -826,16 +744,16 @@ export default function CreateListing() {
                         }}
                         disabled={geocoding || !formData.address}
                         className='px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2'
-                    >
-                      <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      >
+                        <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
-                      </svg>
+                        </svg>
                         {geocoding ? 'Finding...' : 'Find on Map'}
-                    </button>
-                      
-                    <button
-                      type='button'
+                      </button>
+
+                      <button
+                        type='button'
                         onClick={() => {
                           navigator.geolocation.getCurrentPosition(
                             (position) => {
@@ -855,14 +773,14 @@ export default function CreateListing() {
                           );
                         }}
                         className='px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2'
-                    >
-                      <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
-                        <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
-                      </svg>
+                      >
+                        <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+                        </svg>
                         Use My Location
-                    </button>
-                  </div>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -909,23 +827,36 @@ export default function CreateListing() {
                     </div>
                   </div>
                 )}
-                
-                <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-                <div>
+
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+                  <div>
                     <label htmlFor='city' className='block text-sm font-medium text-gray-700 mb-2'>
                       City *
-                  </label>
+                    </label>
                     <input
                       type='text'
                       placeholder='City'
                       className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
                       id='city'
                       required
-                    onChange={handleChange}
+                      onChange={handleChange}
                       value={formData.city}
-                  />
+                    />
                   </div>
-                <div>
+                  <div>
+                    <label htmlFor='locality' className='block text-sm font-medium text-gray-700 mb-2'>
+                      Locality
+                    </label>
+                    <input
+                      type='text'
+                      placeholder='Neighbourhood / Suburb'
+                      className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                      id='locality'
+                      onChange={handleChange}
+                      value={formData.locality || ''}
+                    />
+                  </div>
+                  <div>
                     <label htmlFor='state' className='block text-sm font-medium text-gray-700 mb-2'>
                       State *
                     </label>
@@ -943,7 +874,7 @@ export default function CreateListing() {
                     <label htmlFor='pincode' className='block text-sm font-medium text-gray-700 mb-2'>
                       Pincode *
                     </label>
-                        <input
+                    <input
                       type='text'
                       placeholder='Pincode'
                       className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
@@ -953,9 +884,9 @@ export default function CreateListing() {
                       value={formData.pincode}
                     />
                   </div>
-                          </div>
                 </div>
-                
+              </div>
+
               {/* Map Section */}
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-2'>
@@ -981,10 +912,10 @@ export default function CreateListing() {
                           <>
                             <div className='flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium'>
                               <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
-                            </svg>
-                            Location Set
-                          </div>
+                                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                              </svg>
+                              Location Set
+                            </div>
                             <div className='text-xs text-gray-600 font-mono'>
                               {formData.location.lat.toFixed(4)}, {formData.location.lng.toFixed(4)}
                             </div>
@@ -1000,13 +931,12 @@ export default function CreateListing() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Map Container */}
                   <div className='p-4'>
                     <div className='h-80 w-full rounded-lg overflow-hidden border border-gray-200 relative'>
                       <MapContainer
-                        key={`map-${formData.location.lat}-${formData.location.lng}`}
-                        center={formData.location.lat && formData.location.lng ? [formData.location.lat, formData.location.lng] : defaultCenter}
+                        center={defaultCenter}
                         zoom={12}
                         style={{ height: '100%', width: '100%' }}
                         className='z-0'
@@ -1023,8 +953,9 @@ export default function CreateListing() {
                           url={tileLayers[mapLayer].url}
                         />
                         <ZoomControl position="bottomright" />
+                        <FlyToLocation lat={formData.location.lat} lng={formData.location.lng} zoom={15} />
                         <LocationPicker onLocationSelect={handleLocationSelect} />
-                        <MapControls 
+                        <MapControls
                           mapLayer={mapLayer}
                           onLayerChange={setMapLayer}
                           currentLocation={formData.location}
@@ -1073,7 +1004,7 @@ export default function CreateListing() {
                           </Marker>
                         )}
                       </MapContainer>
-                      
+
                       {/* Map Instructions Overlay */}
                       {(!formData.location.lat || !formData.location.lng) && (
                         <div className='absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center pointer-events-none'>
@@ -1084,11 +1015,11 @@ export default function CreateListing() {
                             </svg>
                             <p className='text-sm font-medium text-gray-900 mb-1'>Click on the map</p>
                             <p className='text-xs text-gray-600'>to set your property location</p>
-                    </div>
+                          </div>
                         </div>
                       )}
-                  </div>
-                  
+                    </div>
+
                     {/* Map Layer Switcher */}
                     <div className='mt-3 flex justify-center'>
                       <div className='bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden'>
@@ -1098,11 +1029,10 @@ export default function CreateListing() {
                               key={layer}
                               type='button'
                               onClick={() => setMapLayer(layer)}
-                              className={`px-3 py-2 text-xs font-medium transition-colors ${
-                                mapLayer === layer
+                              className={`px-3 py-2 text-xs font-medium transition-colors ${mapLayer === layer
                                   ? 'bg-blue-500 text-white'
                                   : 'bg-white text-gray-700 hover:bg-gray-50'
-                              }`}
+                                }`}
                               title={`Switch to ${layer} view`}
                             >
                               {layer === 'street' && '🗺️ Street'}
@@ -1110,8 +1040,8 @@ export default function CreateListing() {
                               {layer === 'terrain' && '🏔️ Terrain'}
                             </button>
                           ))}
+                        </div>
                       </div>
-                    </div>
                     </div>
                   </div>
                 </div>
@@ -1149,27 +1079,27 @@ export default function CreateListing() {
                   )}
                 </div>
 
-                  <div>
+                <div>
                   <label className='block text-sm font-medium text-gray-700 mb-2'>
                     Features
-                    </label>
+                  </label>
                   <div className='flex flex-wrap gap-3'>
                     <label className='flex items-center'>
-                    <input
+                      <input
                         type='checkbox'
                         id='parking'
                         checked={formData.parking}
-                      onChange={handleChange}
+                        onChange={handleChange}
                         className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
-                    />
+                      />
                       <span className='ml-2 text-sm text-gray-700'>Parking</span>
                     </label>
                     <label className='flex items-center'>
-                    <input
+                      <input
                         type='checkbox'
                         id='furnished'
                         checked={formData.furnished}
-                      onChange={handleChange}
+                        onChange={handleChange}
                         className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
                       />
                       <span className='ml-2 text-sm text-gray-700'>Furnished</span>
@@ -1186,7 +1116,7 @@ export default function CreateListing() {
                     </label>
                   </div>
                 </div>
-                    </div>
+              </div>
 
               {/* Dynamic Category Fields */}
               {selectedCategory && selectedCategory.fields && selectedCategory.fields.length > 0 && (
@@ -1215,10 +1145,10 @@ export default function CreateListing() {
               )}
 
               {/* Image Upload */}
-                <div>
+              <div>
                 <label className='block text-sm font-medium text-gray-700 mb-2'>
                   Images
-                  </label>
+                </label>
                 <div className='border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors'>
                   <input
                     type='file'
@@ -1237,25 +1167,25 @@ export default function CreateListing() {
                         <span className='font-medium text-blue-600 hover:text-blue-500'>Click to upload</span> or drag and drop
                       </p>
                       <p className='text-xs text-gray-500'>PNG, JPG, GIF up to 10MB each</p>
-                </div>
+                    </div>
                   </label>
-                      </div>
-                
+                </div>
+
                 {files && files.length > 0 && (
                   <div className='mt-4'>
                     <div className='flex items-center justify-between mb-2'>
                       <p className='text-sm font-medium text-gray-700'>
                         {files.length} file{files.length !== 1 ? 's' : ''} selected
                       </p>
-                    <button
-                      type='button'
+                      <button
+                        type='button'
                         onClick={handleImageSubmit}
                         disabled={uploading}
                         className='px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors'
-                    >
+                      >
                         {uploading ? 'Uploading...' : 'Upload Images'}
-                    </button>
-                  </div>
+                      </button>
+                    </div>
 
                     <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
                       {Array.from(files).map((file, index) => (
@@ -1275,12 +1205,12 @@ export default function CreateListing() {
                           >
                             ×
                           </button>
-                          </div>
+                        </div>
                       ))}
-                          </div>
-                          </div>
+                    </div>
+                  </div>
                 )}
-                
+
                 {formData.imageUrls && formData.imageUrls.length > 0 && (
                   <div className='mt-4'>
                     <p className='text-sm font-medium text-gray-700 mb-2'>Uploaded Images:</p>
@@ -1288,7 +1218,7 @@ export default function CreateListing() {
                       {formData.imageUrls.map((url, index) => (
                         <div key={index} className='relative'>
                           <img
-                            src={url}
+                            src={normalizeImageUrl(url)}
                             alt={`Uploaded ${index + 1}`}
                             className='w-full h-24 object-cover rounded-lg border border-gray-200'
                           />
@@ -1304,7 +1234,7 @@ export default function CreateListing() {
                     </div>
                   </div>
                 )}
-                
+
                 {imageUploadError && (
                   <p className='text-sm text-red-600 mt-2'>{imageUploadError}</p>
                 )}
@@ -1325,40 +1255,40 @@ export default function CreateListing() {
                         </p>
                       )}
                     </div>
-                          <button
-                            type='button'
+                    <button
+                      type='button'
                       onClick={() => setShowCreateOwner(!showCreateOwner)}
                       className='px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors'
                     >
                       {showCreateOwner ? 'Cancel' : 'Add New Owner'}
-                          </button>
-                        </div>
+                    </button>
+                  </div>
 
-                    {/* Owner Search */}
-                      <div className='relative'>
-                        <input
-                          type='text'
+                  {/* Owner Search */}
+                  <div className='relative'>
+                    <input
+                      type='text'
                       placeholder='Search owners by name, email, or company...'
-                          value={ownerSearchQuery}
-                          onChange={(e) => setOwnerSearchQuery(e.target.value)}
+                      value={ownerSearchQuery}
+                      onChange={(e) => setOwnerSearchQuery(e.target.value)}
                       className='w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors'
-                        />
+                    />
                     <svg className='absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
-                          </svg>
-                        {ownerSearchQuery && (
-                          <button
-                            type='button'
-                            onClick={() => setOwnerSearchQuery('')}
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+                    </svg>
+                    {ownerSearchQuery && (
+                      <button
+                        type='button'
+                        onClick={() => setOwnerSearchQuery('')}
                         className='absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 hover:text-gray-600'
-                          >
+                      >
                         <svg fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-                            </svg>
-                          </button>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                        </svg>
+                      </button>
                     )}
                   </div>
-                  
+
                   {/* Owner Selection */}
                   <div className='border border-gray-200 rounded-lg overflow-hidden'>
                     <div className='bg-gray-50 px-4 py-2 border-b border-gray-200'>
@@ -1381,7 +1311,7 @@ export default function CreateListing() {
                               <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
                             </svg>
                             Loading owners...
-                        </div>
+                          </div>
                         </div>
                       ) : owners.length === 0 ? (
                         <div className='p-6 text-center text-gray-500'>
@@ -1394,23 +1324,22 @@ export default function CreateListing() {
                       ) : (
                         <>
                           {owners
-                          .filter((owner) => {
-                            const query = ownerSearchQuery.toLowerCase();
-                            return (
-                              owner.name.toLowerCase().includes(query) ||
-                              (owner.companyName && owner.companyName.toLowerCase().includes(query)) ||
-                              (owner.email && owner.email.toLowerCase().includes(query))
-                            );
-                          })
-                          .map((owner) => (
-                              <label key={owner._id} className={`flex items-center gap-4 p-4 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
-                              formData.ownerIds.includes(owner._id) 
-                                  ? 'bg-indigo-50 border-l-4 border-indigo-500' 
+                            .filter((owner) => {
+                              const query = ownerSearchQuery.toLowerCase();
+                              return (
+                                owner.name.toLowerCase().includes(query) ||
+                                (owner.companyName && owner.companyName.toLowerCase().includes(query)) ||
+                                (owner.email && owner.email.toLowerCase().includes(query))
+                              );
+                            })
+                            .map((owner) => (
+                              <label key={owner._id} className={`flex items-center gap-4 p-4 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${formData.ownerIds.includes(owner._id)
+                                  ? 'bg-indigo-50 border-l-4 border-indigo-500'
                                   : 'hover:bg-gray-50'
-                            }`}>
-                              <input
-                                type='checkbox'
-                                checked={formData.ownerIds.includes(owner._id)}
+                                }`}>
+                                <input
+                                  type='checkbox'
+                                  checked={formData.ownerIds.includes(owner._id)}
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setFormData(prev => ({
@@ -1428,120 +1357,120 @@ export default function CreateListing() {
                                 />
                                 <div className='flex-1 min-w-0'>
                                   <div className='font-medium text-gray-900 truncate'>{owner.name}</div>
-                                    {owner.companyName && (
+                                  {owner.companyName && (
                                     <div className='text-sm text-gray-600 truncate'>{owner.companyName}</div>
-                                    )}
-                                    {owner.email && (
+                                  )}
+                                  {owner.email && (
                                     <div className='text-sm text-gray-500 truncate'>{owner.email}</div>
                                   )}
                                   {owner.phone && (
                                     <div className='text-xs text-gray-400 truncate'>{owner.phone}</div>
-                                    )}
-                              </div>
-                              {formData.ownerIds.includes(owner._id) && (
+                                  )}
+                                </div>
+                                {formData.ownerIds.includes(owner._id) && (
                                   <div className='flex-shrink-0'>
                                     <svg className='w-5 h-5 text-indigo-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
-                                  </svg>
-                                </div>
-                              )}
-                            </label>
+                                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
+                                    </svg>
+                                  </div>
+                                )}
+                              </label>
                             ))}
-                          
+
                           {owners.filter((owner) => {
-                          const query = ownerSearchQuery.toLowerCase();
-                          return (
-                            owner.name.toLowerCase().includes(query) ||
-                            (owner.companyName && owner.companyName.toLowerCase().includes(query)) ||
-                            (owner.email && owner.email.toLowerCase().includes(query))
-                          );
+                            const query = ownerSearchQuery.toLowerCase();
+                            return (
+                              owner.name.toLowerCase().includes(query) ||
+                              (owner.companyName && owner.companyName.toLowerCase().includes(query)) ||
+                              (owner.email && owner.email.toLowerCase().includes(query))
+                            );
                           }).length === 0 && ownerSearchQuery && (
-                            <div className='p-6 text-center text-gray-500'>
-                              <svg className='mx-auto h-8 w-8 text-gray-300 mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
-                              </svg>
-                          <div className='text-sm'>No owners found matching "{ownerSearchQuery}"</div>
-                              <div className='text-xs mt-1'>Try a different search term or create a new owner</div>
-                        </div>
-                          )}
+                              <div className='p-6 text-center text-gray-500'>
+                                <svg className='mx-auto h-8 w-8 text-gray-300 mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+                                </svg>
+                                <div className='text-sm'>No owners found matching "{ownerSearchQuery}"</div>
+                                <div className='text-xs mt-1'>Try a different search term or create a new owner</div>
+                              </div>
+                            )}
                         </>
                       )}
                     </div>
-                      </div>
-                    
-                    {formData.ownerIds.length > 0 && (
+                  </div>
+
+                  {formData.ownerIds.length > 0 && (
                     <div className='bg-indigo-50 border border-indigo-200 rounded-lg p-3'>
                       <div className='flex items-center gap-2'>
                         <svg className='w-4 h-4 text-indigo-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
                         </svg>
                         <span className='text-sm font-medium text-indigo-800'>
-                        {formData.ownerIds.length} owner{formData.ownerIds.length !== 1 ? 's' : ''} selected
+                          {formData.ownerIds.length} owner{formData.ownerIds.length !== 1 ? 's' : ''} selected
                         </span>
                       </div>
                     </div>
                   )}
                 </div>
-                </div>
+              </div>
 
               {/* Create New Owner Form */}
               {showCreateOwner && (
                 <div className='bg-gray-50 rounded-lg p-6 border border-gray-200'>
                   <h3 className='text-lg font-semibold text-gray-900 mb-4'>Create New Owner</h3>
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                <div>
+                    <div>
                       <label className='block text-sm font-medium text-gray-700 mb-2'>
                         Owner Name *
-                  </label>
-                  <input
-                    type='text'
+                      </label>
+                      <input
+                        type='text'
                         placeholder='Enter owner name'
                         value={newOwner.name}
                         onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
                         className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors'
-                    required
-                  />
-                </div>
-                <div>
+                        required
+                      />
+                    </div>
+                    <div>
                       <label className='block text-sm font-medium text-gray-700 mb-2'>
                         Email
-                  </label>
-                  <input
+                      </label>
+                      <input
                         type='email'
                         placeholder='Enter email address'
                         value={newOwner.email}
                         onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })}
                         className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors'
-                  />
-                </div>
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-2'>
+                      />
+                    </div>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-2'>
                         Phone
-                    </label>
-                <input
+                      </label>
+                      <input
                         type='tel'
                         placeholder='Enter phone number'
                         value={newOwner.phone}
                         onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
                         className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors'
-                />
-              </div>
-                      <div>
+                      />
+                    </div>
+                    <div>
                       <label className='block text-sm font-medium text-gray-700 mb-2'>
                         Company Name
-                  </label>
-                  <input
-                    type='text'
+                      </label>
+                      <input
+                        type='text'
                         placeholder='Enter company name'
                         value={newOwner.companyName}
                         onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })}
                         className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors'
-                  />
-                </div>
-                </div>
+                      />
+                    </div>
+                  </div>
                   <div className='flex gap-3 mt-4'>
-                          <button
-                            type='button'
+                    <button
+                      type='button'
                       onClick={async () => {
                         try {
                           setCreatingOwner(true);
@@ -1563,20 +1492,20 @@ export default function CreateListing() {
                       className='px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors'
                     >
                       {creatingOwner ? 'Creating...' : 'Create Owner'}
-                          </button>
-                          <button
-                            type='button'
-                            onClick={() => {
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => {
                         setShowCreateOwner(false);
                         setNewOwner({ name: '', email: '', phone: '', companyName: '' });
                       }}
                       className='px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors'
                     >
                       Cancel
-                          </button>
-                    </div>
-              </div>
-                        )}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <div className='pt-8 border-t border-gray-200'>
@@ -1584,18 +1513,18 @@ export default function CreateListing() {
                   <div className='text-center sm:text-left'>
                     <h3 className='text-lg font-semibold text-gray-900 mb-1'>Ready to Create Your Listing?</h3>
                     <p className='text-sm text-gray-600'>Review your information and submit to publish your property listing.</p>
-                        </div>
-                        
-            <button
-              disabled={loading || uploading}
+                  </div>
+
+                  <button
+                    disabled={loading || uploading}
                     className='px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-3 min-w-[200px] justify-center'
-            >
-              {loading ? (
+                  >
+                    {loading ? (
                       <>
-                  <svg className='animate-spin w-5 h-5' fill='none' viewBox='0 0 24 24'>
-                    <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
-                    <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
-                  </svg>
+                        <svg className='animate-spin w-5 h-5' fill='none' viewBox='0 0 24 24'>
+                          <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
+                          <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
+                        </svg>
                         Creating...
                       </>
                     ) : (
@@ -1605,32 +1534,32 @@ export default function CreateListing() {
                         </svg>
                         Create Listing
                       </>
-              )}
-            </button>
+                    )}
+                  </button>
                 </div>
-              
-              {error && (
+
+                {error && (
                   <p className='text-sm text-red-600 mt-4 text-center'>{error}</p>
-              )}
+                )}
               </div>
-          </div>
-        </form>
+            </div>
+          </form>
         </div>
       </div>
-      
+
       {/* Full Screen Map Modal */}
       {showMapFullView && (
         <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4'>
           <div className='bg-white rounded-2xl shadow-2xl w-full h-full max-w-7xl max-h-[90vh] overflow-hidden'>
             <div className='flex items-center justify-between p-4 border-b border-gray-200'>
-                <div className='flex items-center gap-3'>
+              <div className='flex items-center gap-3'>
                 <div className='w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center'>
                   <svg className='w-4 h-4 text-white' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
-                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
-                    </svg>
-                  </div>
-                  <div>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+                  </svg>
+                </div>
+                <div>
                   <h3 className='text-lg font-semibold text-gray-900'>Property Location</h3>
                   <p className='text-sm text-gray-600'>Click anywhere on the map to set the exact location</p>
                   {formData.location.lat && formData.location.lng && (
@@ -1638,24 +1567,23 @@ export default function CreateListing() {
                       Lat: {formData.location.lat.toFixed(6)}, Lng: {formData.location.lng.toFixed(6)}
                     </div>
                   )}
-                  </div>
                 </div>
-                <button
+              </div>
+              <button
                 onClick={() => setShowMapFullView(false)}
                 className='p-2 hover:bg-gray-100 rounded-lg transition-colors'
               >
                 <svg className='w-6 h-6 text-gray-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-                  </svg>
-                </button>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                </svg>
+              </button>
             </div>
-            
+
             {/* Full Map */}
             <div className='h-full relative'>
               <MapContainer
-                key={`fullmap-${formData.location.lat}-${formData.location.lng}`}
                 center={formData.location.lat && formData.location.lng ? [formData.location.lat, formData.location.lng] : defaultCenter}
-                zoom={12}
+                zoom={15}
                 style={{ height: '100%', width: '100%' }}
                 className='z-0'
                 zoomControl={false}
@@ -1671,8 +1599,9 @@ export default function CreateListing() {
                   url={tileLayers[mapLayer].url}
                 />
                 <ZoomControl position="bottomright" />
+                <FlyToLocation lat={formData.location.lat} lng={formData.location.lng} zoom={15} />
                 <LocationPicker onLocationSelect={handleLocationSelect} />
-                <MapControls 
+                <MapControls
                   mapLayer={mapLayer}
                   onLayerChange={setMapLayer}
                   currentLocation={formData.location}
@@ -1721,7 +1650,7 @@ export default function CreateListing() {
                   </Marker>
                 )}
               </MapContainer>
-              
+
               {/* Layer Switcher in Full View */}
               <div className='absolute top-4 right-4'>
                 <div className='bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden'>
@@ -1731,11 +1660,10 @@ export default function CreateListing() {
                         key={layer}
                         type='button'
                         onClick={() => setMapLayer(layer)}
-                        className={`px-4 py-2 text-sm font-medium transition-colors ${
-                          mapLayer === layer
+                        className={`px-4 py-2 text-sm font-medium transition-colors ${mapLayer === layer
                             ? 'bg-blue-500 text-white'
                             : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
+                          }`}
                         title={`Switch to ${layer} view`}
                       >
                         {layer === 'street' && '🗺️ Street'}
@@ -1746,7 +1674,7 @@ export default function CreateListing() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Done Button */}
               <div className='absolute bottom-4 left-1/2 transform -translate-x-1/2'>
                 <button
@@ -1765,6 +1693,6 @@ export default function CreateListing() {
           </div>
         </div>
       )}
-  </main>
+    </main>
   );
 }
