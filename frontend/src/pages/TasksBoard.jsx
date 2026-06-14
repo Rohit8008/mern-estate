@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { PageHeader, Button } from '../design-system';
 import {
   HiPlus, HiSearch, HiX, HiChevronDown, HiChevronRight,
   HiCheck, HiPencil, HiTrash, HiRefresh, HiClock,
@@ -47,6 +49,7 @@ export default function TasksBoard() {
   const [creating, setCreating] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showStatusDropdown, setShowStatusDropdown] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   // Filters
   const q = searchParams.get('q') || '';
@@ -139,7 +142,6 @@ export default function TasksBoard() {
   };
 
   const handleDeleteTask = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
     try {
       await apiClient.delete(`/tasks/${id}`);
       await fetchTasks();
@@ -183,36 +185,25 @@ export default function TasksBoard() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
-        <div className='flex items-center gap-3'>
-          <h1 className='text-xl font-bold text-slate-900'>Tasks</h1>
-          <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full'>
-            {tasks.length}
-          </span>
-        </div>
-        <div className='flex items-center gap-2'>
-          <button
-            onClick={fetchTasks}
-            className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'
-          >
-            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-2 shadow-sm transition-colors'
-          >
-            <HiPlus className='w-4 h-4' />
-            New task
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title='Tasks'
+        description='Manage your team tasks, track progress and meet deadlines'
+        actions={
+          <>
+            <Button variant='secondary' size='sm' icon={HiRefresh} onClick={fetchTasks} className={loading ? '[&>svg]:animate-spin' : ''}>
+              Refresh
+            </Button>
+            <Button variant='primary' size='sm' icon={HiPlus} onClick={() => setShowCreateModal(true)}>
+              New task
+            </Button>
+          </>
+        }
+      />
 
       {/* Board container */}
       <div className='bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden'>
         {/* Toolbar */}
-        <div className='px-4 py-3 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center gap-3'>
+        <div className='px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center gap-3'>
           {/* View tabs */}
           <div className='flex items-center gap-1 bg-slate-100 p-1 rounded-lg'>
             <button
@@ -320,9 +311,10 @@ export default function TasksBoard() {
         {/* Cards View */}
         {!loading && view === 'cards' && (
           <div className='p-4'>
-            {STATUS_ORDER.map((status) => {
+            {tasks.length === 0 && !loading ? null : STATUS_ORDER.map((status) => {
               const items = groupedTasks.get(status) || [];
               if (items.length === 0 && statusFilter && statusFilter !== status) return null;
+              if (items.length === 0 && tasks.length === 0) return null;
               const config = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
               const isCollapsed = collapsedGroups[status];
 
@@ -354,7 +346,7 @@ export default function TasksBoard() {
                           task={task}
                           onSelect={() => setSelectedTask(task)}
                           onEdit={() => openEditModal(task)}
-                          onDelete={() => handleDeleteTask(task._id)}
+                          onDelete={() => setPendingDelete(task._id)}
                           onStatusChange={(newStatus) => handleStatusChange(task._id, newStatus)}
                           showStatusDropdown={showStatusDropdown === task._id}
                           setShowStatusDropdown={setShowStatusDropdown}
@@ -364,7 +356,7 @@ export default function TasksBoard() {
                       {/* Add task card */}
                       <button
                         onClick={() => setShowCreateModal(true)}
-                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors'
+                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-amber-300 hover:text-amber-500 hover:bg-amber-50/30 transition-colors'
                       >
                         <HiPlus className='w-6 h-6 mb-2' />
                         <span className='text-sm font-medium'>Add task</span>
@@ -376,19 +368,15 @@ export default function TasksBoard() {
             })}
 
             {tasks.length === 0 && !loading && (
-              <div className='text-center py-16'>
-                <div className='w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4'>
-                  <HiClipboardList className='w-8 h-8 text-slate-400' />
+              <div className='flex flex-col items-center justify-center py-20 text-center'>
+                <div className='w-16 h-16 rounded-2xl bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center mx-auto mb-5'>
+                  <HiClipboardList className='w-8 h-8 text-amber-500' />
                 </div>
-                <h3 className='text-lg font-semibold text-slate-900 mb-2'>No tasks yet</h3>
-                <p className='text-slate-500 mb-4'>Get started by creating your first task</p>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium inline-flex items-center gap-2'
-                >
-                  <HiPlus className='w-4 h-4' />
-                  Create task
-                </button>
+                <h3 className='text-lg font-semibold text-slate-900 mb-1.5'>No tasks yet</h3>
+                <p className='text-slate-500 text-sm mb-6 max-w-xs'>Create your first task to start tracking work across your team. Assign priorities, set due dates, and monitor progress.</p>
+                <Button variant='primary' size='md' icon={HiPlus} onClick={() => setShowCreateModal(true)}>
+                  Create your first task
+                </Button>
               </div>
             )}
           </div>
@@ -492,7 +480,7 @@ export default function TasksBoard() {
                                   <HiPencil className='w-4 h-4' />
                                 </button>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleDeleteTask(task._id); }}
+                                  onClick={(e) => { e.stopPropagation(); setPendingDelete(task._id); }}
                                   className='p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors'
                                   title='Delete'
                                 >
@@ -543,7 +531,7 @@ export default function TasksBoard() {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onEdit={() => openEditModal(selectedTask)}
-          onDelete={() => handleDeleteTask(selectedTask._id)}
+          onDelete={() => setPendingDelete(selectedTask._id)}
           onStatusChange={(newStatus) => handleStatusChange(selectedTask._id, newStatus)}
           formatDueDate={formatDueDate}
         />
@@ -569,6 +557,14 @@ export default function TasksBoard() {
           title='Edit Task'
         />
       )}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title='Delete task?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={() => { handleDeleteTask(pendingDelete); setPendingDelete(null); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

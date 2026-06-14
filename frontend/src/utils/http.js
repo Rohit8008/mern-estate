@@ -18,53 +18,110 @@ export async function parseJsonSafely(response) {
   }
 }
 
+// Technical patterns that should never reach end users
+const TECHNICAL_PATTERN = /cast to|objectid|mongoose|duplicate key|e11000|jwt|jsonwebtoken|validation error|validatorerror|stack trace|at Object\.|\.js:\d|schema|internal server error|firebase:|auth\//i;
+
+function sanitizeMessage(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  return TECHNICAL_PATTERN.test(raw) ? '' : raw.trim();
+}
+
+// Convert an HTTP status code + raw backend message into a user-friendly string.
+export function toUserMessage(statusCode, rawMessage) {
+  const safe = sanitizeMessage(rawMessage);
+  switch (statusCode) {
+    case 400: return safe || 'Invalid request. Please check your input.';
+    case 401: return safe || 'Your session has expired. Please sign in again.';
+    case 403: return "You don't have permission to do this.";
+    case 404: return safe || 'The requested item was not found.';
+    case 409: return safe || 'A conflict occurred. This item may already exist.';
+    case 422: return safe || 'Please check your input and try again.';
+    case 429: return 'Too many requests. Please wait a moment and try again.';
+    default:
+      if (statusCode >= 500) return 'Something went wrong on our end. Please try again.';
+      return safe || 'An unexpected error occurred.';
+  }
+}
+
 // Enhanced error handling for new backend error format
-export function handleApiError(error, data) {
-  if (data && data.success === false) {
+export function handleApiError(error, data, httpStatus) {
+  // Re-wrap guard: when callers pass the same already-processed error as both
+  // args (e.g. handleApiError(err, err)), just return it as-is so the
+  // already-sanitized message isn't double-processed.
+  if (error && data === error && error.statusCode !== undefined) {
     return {
-      message: data.message || 'An error occurred',
-      type: data.type || 'error',
-      field: data.field || null,
-      statusCode: data.statusCode || 500,
+      message: error.message,
+      type: error.type || 'error',
+      field: error.field || null,
+      statusCode: error.statusCode,
     };
   }
-  
+
+  if (data && data.success === false) {
+    const statusCode = data.statusCode || httpStatus || 500;
+    return {
+      message: toUserMessage(statusCode, data.message),
+      type: data.type || 'error',
+      field: data.field || null,
+      statusCode,
+    };
+  }
+
+  const isNetworkError = !error.message || error.message === 'Failed to fetch' || error.message === 'Network Error';
   return {
-    message: error.message || 'Network error occurred',
+    message: isNetworkError
+      ? 'Connection error. Please check your internet connection.'
+      : toUserMessage(httpStatus || 0, error.message),
     type: 'network',
     field: null,
-    statusCode: 0,
+    statusCode: httpStatus || 0,
   };
 }
 
-// Enhanced response handler
-export async function handleApiResponse(response) {
+// Enhanced response handler.
+// Pass silent=true to suppress the global api-error toast (use when the caller
+// shows its own error feedback so the user doesn't see two notifications).
+export async function handleApiResponse(response, silent = false) {
   const data = await parseJsonSafely(response);
-  
+
   if (!response.ok) {
-    const error = handleApiError(new Error('API Error'), data);
-    try {
-      window.dispatchEvent(new CustomEvent('api-error', {
-        detail: {
-          message: error.message || 'API error occurred',
-          statusCode: error.statusCode || response.status,
-          data,
-          url: response.url,
-          type: error.type || 'error',
-        }
-      }));
-    } catch (_) {}
+    const error = handleApiError(new Error('API Error'), data, response.status);
+    if (!silent) {
+      try {
+        window.dispatchEvent(new CustomEvent('api-error', {
+          detail: {
+            message: error.message,
+            statusCode: response.status,
+            data,
+            url: response.url,
+            type: error.type || 'error',
+          }
+        }));
+      } catch (_) {}
+    }
     throw error;
   }
-  
+
   return data;
 }
 
 // Token refresh utility
 let isRefreshing = false;
 let refreshPromise = null;
+let _userSignedOut = false;
+
+// Call before a user-initiated signout so in-flight 401s don't trigger refresh.
+// Call with false again after a successful signin.
+export function setUserSignedOut(value) {
+  _userSignedOut = value;
+  if (value) {
+    isRefreshing = false;
+    refreshPromise = null;
+  }
+}
 
 export async function refreshAccessToken(shouldRedirect = true) {
+  if (_userSignedOut) return null;
   if (isRefreshing) {
     return refreshPromise;
   }
@@ -124,8 +181,8 @@ export async function fetchWithRefresh(url, options = {}, silent = false) {
     credentials: 'include',
   });
 
-  // If token expired, try to refresh
-  if (response.status === 401) {
+  // If token expired, try to refresh — but not after a user-initiated signout
+  if (response.status === 401 && !_userSignedOut) {
     const refreshData = await refreshAccessToken(!silent);
     if (refreshData) {
       // Retry the original request with new token
@@ -157,18 +214,20 @@ export class ApiClient {
   }
 
   async request(endpoint, options = {}) {
+    // Extract silent before spreading into fetch options so it doesn't leak
+    // into the fetch RequestInit and cause unexpected behaviour.
+    const { silent, ...fetchOptions } = options;
     const url = `${this.baseURL}${endpoint}`;
-    
+
     try {
       const response = await fetchWithRefresh(url, {
-        ...options,
+        ...fetchOptions,
         headers: {
           'Content-Type': 'application/json',
-          ...options.headers,
+          ...fetchOptions.headers,
         },
-      });
-      
-      return await handleApiResponse(response);
+      }, silent);
+      return await handleApiResponse(response, silent);
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
@@ -195,20 +254,29 @@ export class ApiClient {
     });
   }
 
+  async patch(endpoint, data, options = {}) {
+    return this.request(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   async delete(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
   async upload(endpoint, formData, options = {}) {
+    const { silent, ...fetchOptions } = options;
     const url = `${this.baseURL}${endpoint}`;
     try {
       const response = await fetchWithRefresh(url, {
-        ...options,
+        ...fetchOptions,
         method: 'POST',
         body: formData,
         // Don't set Content-Type header - browser sets it with boundary for FormData
-      });
-      return await handleApiResponse(response);
+      }, silent);
+      return await handleApiResponse(response, silent);
     } catch (error) {
       console.error('Upload request failed:', error);
       throw error;

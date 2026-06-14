@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import { fetchWithRefresh, parseJsonSafely } from '../utils/http';
+import { PageHeader, KpiCard, Button } from '../design-system';
 import {
   HiChartBar,
   HiUsers,
@@ -10,13 +10,13 @@ import {
   HiTrendingDown,
   HiClock,
   HiRefresh,
-  HiArrowLeft,
   HiCheckCircle,
   HiExclamationCircle,
   HiFilter,
-  HiDownload
+  HiDownload,
+  HiUserGroup,
+  HiSwitchHorizontal,
 } from 'react-icons/hi';
-import { FaSpinner, FaUserTie, FaHandshake } from 'react-icons/fa';
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState({
@@ -28,73 +28,82 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const isManualRefreshRef = useRef(false);
 
   useEffect(() => {
-    loadData();
-  }, [dateRange, activeTab]);
+    const isRefresh = isManualRefreshRef.current;
+    isManualRefreshRef.current = false;
 
-  async function loadData(isRefresh = false) {
+    let mounted = true;
+    const params = `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
+
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
 
-    try {
-      const params = `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
+    (async () => {
+      try {
+        if (activeTab === 'overview') {
+          const dashboardRes = await fetchWithRefresh(`/api/analytics/dashboard`);
+          if (!mounted) return;
+          const dashboardData = await parseJsonSafely(dashboardRes);
+          if (dashboardData?.success) setData(prev => ({ ...prev, dashboard: dashboardData.data }));
+        }
 
-      if (activeTab === 'overview') {
-        const dashboardRes = await fetchWithRefresh(`/api/analytics/dashboard`);
-        const dashboardData = await parseJsonSafely(dashboardRes);
-        if (dashboardData.success) {
-          setData(prev => ({ ...prev, dashboard: dashboardData.data }));
+        if (activeTab === 'overview' || activeTab === 'properties') {
+          const propertyRes = await fetchWithRefresh(`/api/analytics/properties${params}`);
+          if (!mounted) return;
+          const propertyData = await parseJsonSafely(propertyRes);
+          if (propertyData?.success) setData(prev => ({ ...prev, properties: propertyData.data }));
+        }
+
+        if (activeTab === 'overview' || activeTab === 'sales') {
+          const salesRes = await fetchWithRefresh(`/api/analytics/sales${params}`);
+          if (!mounted) return;
+          const salesData = await parseJsonSafely(salesRes);
+          if (salesData?.success) setData(prev => ({ ...prev, sales: salesData.data }));
+        }
+
+        if (activeTab === 'overview' || activeTab === 'leads') {
+          const leadsRes = await fetchWithRefresh(`/api/analytics/leads/conversion${params}`);
+          if (!mounted) return;
+          const leadsData = await parseJsonSafely(leadsRes);
+          if (leadsData?.success) setData(prev => ({ ...prev, leads: leadsData.data }));
+        }
+
+        if (activeTab === 'overview' || activeTab === 'revenue') {
+          const revenueRes = await fetchWithRefresh(`/api/analytics/revenue${params}`);
+          if (!mounted) return;
+          const revenueData = await parseJsonSafely(revenueRes);
+          if (revenueData?.success) setData(prev => ({ ...prev, revenue: revenueData.data }));
+        }
+
+        if (activeTab === 'agents') {
+          const agentsRes = await fetchWithRefresh(`/api/analytics/agents${params}`);
+          if (!mounted) return;
+          const agentsData = await parseJsonSafely(agentsRes);
+          if (agentsData?.success) setData(prev => ({ ...prev, agents: agentsData.data }));
+        }
+      } catch (err) {
+        if (mounted) {
+          console.error('Failed to load analytics:', err);
+          setError('Failed to load analytics data');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          setRefreshing(false);
         }
       }
+    })();
 
-      if (activeTab === 'overview' || activeTab === 'properties') {
-        const propertyRes = await fetchWithRefresh(`/api/analytics/properties${params}`);
-        const propertyData = await parseJsonSafely(propertyRes);
-        if (propertyData.success) {
-          setData(prev => ({ ...prev, properties: propertyData.data }));
-        }
-      }
+    return () => { mounted = false; };
+  }, [dateRange, activeTab, refreshCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-      if (activeTab === 'overview' || activeTab === 'sales') {
-        const salesRes = await fetchWithRefresh(`/api/analytics/sales${params}`);
-        const salesData = await parseJsonSafely(salesRes);
-        if (salesData.success) {
-          setData(prev => ({ ...prev, sales: salesData.data }));
-        }
-      }
-
-      if (activeTab === 'overview' || activeTab === 'leads') {
-        const leadsRes = await fetchWithRefresh(`/api/analytics/leads/conversion${params}`);
-        const leadsData = await parseJsonSafely(leadsRes);
-        if (leadsData.success) {
-          setData(prev => ({ ...prev, leads: leadsData.data }));
-        }
-      }
-
-      if (activeTab === 'overview' || activeTab === 'revenue') {
-        const revenueRes = await fetchWithRefresh(`/api/analytics/revenue${params}`);
-        const revenueData = await parseJsonSafely(revenueRes);
-        if (revenueData.success) {
-          setData(prev => ({ ...prev, revenue: revenueData.data }));
-        }
-      }
-
-      if (activeTab === 'agents') {
-        const agentsRes = await fetchWithRefresh(`/api/analytics/agents${params}`);
-        const agentsData = await parseJsonSafely(agentsRes);
-        if (agentsData.success) {
-          setData(prev => ({ ...prev, agents: agentsData.data }));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load analytics:', err);
-      setError('Failed to load analytics data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  function loadData(isRefresh = false) {
+    if (isRefresh) isManualRefreshRef.current = true;
+    setRefreshCount(c => c + 1);
   }
 
   const formatCurrency = (amount) => {
@@ -118,10 +127,10 @@ export default function Analytics() {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: HiChartBar },
     { id: 'properties', label: 'Properties', icon: HiHome },
-    { id: 'sales', label: 'Sales', icon: FaHandshake },
+    { id: 'sales', label: 'Sales', icon: HiSwitchHorizontal },
     { id: 'leads', label: 'Leads', icon: HiUsers },
     { id: 'revenue', label: 'Revenue', icon: HiCurrencyRupee },
-    { id: 'agents', label: 'Agents', icon: FaUserTie },
+    { id: 'agents', label: 'Agents', icon: HiUserGroup },
   ];
 
   const quickDateRanges = [
@@ -139,105 +148,84 @@ export default function Analytics() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-4 gap-4">
-            {/* Title and Back Button */}
-            <div className="flex items-center gap-4">
-              <Link
-                to="/admin"
-                className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                <HiArrowLeft className="w-5 h-5 text-slate-600" />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  Track your real estate performance metrics
-                </p>
-              </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Analytics"
+        description="Track your real estate performance metrics"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Quick Date Ranges */}
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+              {quickDateRanges.map(range => {
+                const currentDays = Math.round((new Date(dateRange.endDate) - new Date(dateRange.startDate)) / (1000 * 60 * 60 * 24));
+                const isActive = currentDays === range.days;
+                return (
+                  <button
+                    key={range.days}
+                    onClick={() => setQuickRange(range.days)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                );
+              })}
             </div>
-
-            {/* Controls */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Quick Date Ranges */}
-              <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-                {quickDateRanges.map(range => {
-                  const currentDays = Math.round((new Date(dateRange.endDate) - new Date(dateRange.startDate)) / (1000 * 60 * 60 * 24));
-                  const isActive = currentDays === range.days;
-                  return (
-                    <button
-                      key={range.days}
-                      onClick={() => setQuickRange(range.days)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                        isActive
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Date Pickers */}
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
-                <HiFilter className="w-4 h-4 text-slate-400" />
-                <input
-                  type="date"
-                  value={dateRange.startDate}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  className="text-sm border-none focus:outline-none focus:ring-0 bg-transparent"
-                />
-                <span className="text-slate-300">-</span>
-                <input
-                  type="date"
-                  value={dateRange.endDate}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  className="text-sm border-none focus:outline-none focus:ring-0 bg-transparent"
-                />
-              </div>
-
-              {/* Refresh Button */}
-              <button
-                onClick={() => loadData(true)}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                <HiRefresh className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </button>
+            {/* Date Pickers */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
+              <HiFilter className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                className="text-sm border-none focus:outline-none focus:ring-0 bg-transparent text-slate-700"
+              />
+              <span className="text-slate-300 text-sm">–</span>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                className="text-sm border-none focus:outline-none focus:ring-0 bg-transparent text-slate-700"
+              />
             </div>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={HiRefresh}
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              className={refreshing ? '[&>svg]:animate-spin' : ''}
+            >
+              Refresh
+            </Button>
           </div>
+        }
+      />
 
-          {/* Tabs */}
-          <div className="flex gap-1 overflow-x-auto pb-px -mb-px">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${
-                  activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600 bg-blue-50/50'
-                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="bg-white border border-slate-200 rounded-xl flex overflow-x-auto shadow-sm">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
+              activeTab === tab.id
+                ? 'text-slate-900 border-slate-900 bg-slate-50'
+                : 'text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <FaSpinner className="w-10 h-10 text-blue-600 animate-spin" />
+            <HiRefresh className="w-10 h-10 text-slate-500 animate-spin" />
             <p className="text-slate-500 mt-4">Loading analytics data...</p>
           </div>
         ) : error ? (
@@ -249,7 +237,7 @@ export default function Analytics() {
             <p className="text-slate-500 mb-4">{error}</p>
             <button
               onClick={() => loadData()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
             >
               Try Again
             </button>
@@ -261,39 +249,34 @@ export default function Analytics() {
               <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <MetricCard
+                  <KpiCard
                     title="Total Listings"
                     value={formatNumber(data.dashboard.listings?.total || 0)}
-                    subtitle={`${formatNumber(data.dashboard.listings?.active || 0)} active`}
+                    sub={`${formatNumber(data.dashboard.listings?.active || 0)} active`}
                     icon={HiHome}
-                    gradient="from-blue-500 to-blue-600"
-                    bgGradient="from-blue-50 to-blue-100"
+                    color="blue"
                   />
-                  <MetricCard
+                  <KpiCard
                     title="Total Clients"
                     value={formatNumber(data.dashboard.clients?.total || 0)}
-                    subtitle={`${formatNumber(data.dashboard.clients?.new || 0)} new this month`}
+                    sub={`${formatNumber(data.dashboard.clients?.new || 0)} new this month`}
                     icon={HiUsers}
-                    gradient="from-emerald-500 to-emerald-600"
-                    bgGradient="from-emerald-50 to-emerald-100"
-                    trend={data.dashboard.clients?.new > 0 ? 'up' : null}
+                    color="emerald"
+                    trend={data.dashboard.clients?.new > 0 ? { value: data.dashboard.clients.new, label: 'new' } : undefined}
                   />
-                  <MetricCard
+                  <KpiCard
                     title="Deals Won"
                     value={formatNumber(data.dashboard.deals?.closedWon || 0)}
-                    subtitle={formatCurrency(data.dashboard.deals?.totalValue)}
-                    icon={FaHandshake}
-                    gradient="from-purple-500 to-purple-600"
-                    bgGradient="from-purple-50 to-purple-100"
+                    sub={formatCurrency(data.dashboard.deals?.totalValue)}
+                    icon={HiSwitchHorizontal}
+                    color="purple"
                   />
-                  <MetricCard
+                  <KpiCard
                     title="Follow-ups Due"
                     value={formatNumber(data.dashboard.upcomingFollowUps || 0)}
-                    subtitle="Next 7 days"
+                    sub="Next 7 days"
                     icon={HiClock}
-                    gradient="from-amber-500 to-orange-500"
-                    bgGradient="from-amber-50 to-orange-100"
-                    alert={data.dashboard.upcomingFollowUps > 5}
+                    color="amber"
                   />
                 </div>
 

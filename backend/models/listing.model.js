@@ -21,7 +21,8 @@ const listingSchema = new mongoose.Schema(
     },
     discountPrice: {
       type: Number,
-      required: true,
+      required: false,
+      default: 0,
     },
     bathrooms: {
       type: Number,
@@ -55,8 +56,19 @@ const listingSchema = new mongoose.Schema(
       required: true,
     },
     imageUrls: {
-      type: Array,
+      type: [String],
       required: false,
+      default: [],
+    },
+    voiceNotes: {
+      type: [
+        new mongoose.Schema({
+          url:       { type: String, required: true },
+          label:     { type: String, default: '' },
+          duration:  { type: Number, default: 0 }, // seconds
+          createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        }, { timestamps: true })
+      ],
       default: [],
     },
     category: {
@@ -83,8 +95,10 @@ const listingSchema = new mongoose.Schema(
       index: true,
     },
     userRef: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
       required: true,
+      index: true,
     },
     city: {
       type: String,
@@ -215,7 +229,6 @@ listingSchema.index({ type: 1, offer: 1 }); // Type and offer filters
 listingSchema.index({ furnished: 1, parking: 1 }); // Boolean filters
 listingSchema.index({ bedrooms: 1, bathrooms: 1 }); // Room count filters
 listingSchema.index({ category: 1 }); // Category filter
-listingSchema.index({ userRef: 1 }); // User listings
 listingSchema.index({ createdAt: -1 }); // Default sort
 listingSchema.index({ regularPrice: 1, createdAt: -1 }); // Price sort with secondary sort
 listingSchema.index({ city: 1, locality: 1 });
@@ -265,7 +278,7 @@ listingSchema.pre('save', function(next) {
 
 // Instance methods
 listingSchema.methods.isOwner = function(userId) {
-  return this.userRef === userId;
+  return this.userRef && this.userRef.toString() === userId.toString();
 };
 
 listingSchema.methods.getFormattedPrice = function() {

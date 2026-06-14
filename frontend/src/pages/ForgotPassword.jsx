@@ -23,7 +23,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const data = await apiClient.post('/user/password/request-otp', { email });
+      const data = await apiClient.post('/user/password/request-otp', { email }, { silent: true });
       setMaskedEmail(data.to || email);
       showSuccess(data.message || 'OTP sent to your email');
       setStep(2);
@@ -57,7 +57,7 @@ export default function ForgotPassword() {
         email,
         otp,
         newPassword,
-      });
+      }, { silent: true });
       showSuccess('Password reset successfully! Please sign in.');
       navigate('/sign-in');
     } catch (err) {
@@ -70,7 +70,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4'>
+    <div className='min-h-[calc(100vh-3.5rem)] bg-slate-50 flex items-center justify-center p-4'>
       <div className='max-w-md w-full space-y-8'>
         {/* Header */}
         <div className='text-center'>
@@ -81,10 +81,10 @@ export default function ForgotPassword() {
               </svg>
             </div>
           </div>
-          <h1 className='text-4xl font-bold text-gray-900 mb-2'>
+          <h1 className='text-3xl font-bold text-slate-900 mb-2'>
             {step === 1 ? 'Forgot Password?' : 'Reset Password'}
           </h1>
-          <p className='text-lg text-gray-600'>
+          <p className='text-base text-slate-600'>
             {step === 1
               ? "Enter your email and we'll send you an OTP"
               : `Enter the OTP sent to ${maskedEmail}`}
@@ -92,11 +92,11 @@ export default function ForgotPassword() {
         </div>
 
         {/* Form */}
-        <div className='bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-8'>
+        <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className='space-y-6'>
               <div>
-                <label htmlFor='email' className='block text-sm font-semibold text-gray-700 mb-3'>
+                <label htmlFor='email' className='block text-sm font-semibold text-slate-700 mb-3'>
                   Email address
                 </label>
                 <input
@@ -104,7 +104,7 @@ export default function ForgotPassword() {
                   id='email'
                   value={email}
                   placeholder='Enter your email'
-                  className='w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300'
+                  className='w-full border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200 hover:border-slate-300'
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
@@ -113,7 +113,7 @@ export default function ForgotPassword() {
               <button
                 type='submit'
                 disabled={loading}
-                className='w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
+                className='w-full bg-indigo-600 text-white py-3.5 px-6 rounded-xl font-semibold hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center'
               >
                 {loading ? (
                   <LoadingSpinner size='sm' color='white' text='Sending OTP...' />
@@ -125,7 +125,7 @@ export default function ForgotPassword() {
           ) : (
             <form onSubmit={handleResetPassword} className='space-y-6'>
               <div>
-                <label htmlFor='otp' className='block text-sm font-semibold text-gray-700 mb-3'>
+                <label htmlFor='otp' className='block text-sm font-semibold text-slate-700 mb-3'>
                   Enter OTP
                 </label>
                 <input
@@ -134,14 +134,14 @@ export default function ForgotPassword() {
                   value={otp}
                   placeholder='Enter 6-digit OTP'
                   maxLength={6}
-                  className='w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300 text-center text-2xl tracking-widest font-mono'
+                  className='w-full border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200 hover:border-slate-300 text-center text-2xl tracking-widest font-mono'
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor='newPassword' className='block text-sm font-semibold text-gray-700 mb-3'>
+                <label htmlFor='newPassword' className='block text-sm font-semibold text-slate-700 mb-3'>
                   New Password
                 </label>
                 <input
@@ -149,7 +149,7 @@ export default function ForgotPassword() {
                   id='newPassword'
                   value={newPassword}
                   placeholder='Enter new password'
-                  className='w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300'
+                  className='w-full border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200 hover:border-slate-300'
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={6}
@@ -157,7 +157,7 @@ export default function ForgotPassword() {
               </div>
 
               <div>
-                <label htmlFor='confirmPassword' className='block text-sm font-semibold text-gray-700 mb-3'>
+                <label htmlFor='confirmPassword' className='block text-sm font-semibold text-slate-700 mb-3'>
                   Confirm Password
                 </label>
                 <input
@@ -165,7 +165,7 @@ export default function ForgotPassword() {
                   id='confirmPassword'
                   value={confirmPassword}
                   placeholder='Confirm new password'
-                  className='w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300'
+                  className='w-full border border-slate-200 rounded-xl px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all duration-200 hover:border-slate-300'
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={6}
@@ -175,7 +175,7 @@ export default function ForgotPassword() {
               <button
                 type='submit'
                 disabled={loading}
-                className='w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
+                className='w-full bg-indigo-600 text-white py-3.5 px-6 rounded-xl font-semibold hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center'
               >
                 {loading ? (
                   <LoadingSpinner size='sm' color='white' text='Resetting...' />
@@ -189,7 +189,7 @@ export default function ForgotPassword() {
                 <button
                   type='button'
                   onClick={() => setStep(1)}
-                  className='text-sm text-blue-600 hover:text-blue-800 font-medium'
+                  className='text-sm text-indigo-600 hover:text-indigo-800 font-medium'
                 >
                   Didn't receive OTP? Go back and try again
                 </button>
@@ -213,8 +213,8 @@ export default function ForgotPassword() {
 
           {/* Step indicator */}
           <div className='mt-6 flex justify-center space-x-2'>
-            <div className={`w-2 h-2 rounded-full ${step === 1 ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
-            <div className={`w-2 h-2 rounded-full ${step === 2 ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${step === 1 ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${step === 2 ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
           </div>
         </div>
 
@@ -222,7 +222,7 @@ export default function ForgotPassword() {
         <div className='text-center'>
           <Link
             to='/sign-in'
-            className='text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center'
+            className='text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center justify-center'
           >
             <svg className='w-4 h-4 mr-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 19l-7-7m0 0l7-7m-7 7h18' />

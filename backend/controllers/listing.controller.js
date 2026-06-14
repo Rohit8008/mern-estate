@@ -2,20 +2,20 @@ import Listing from '../models/listing.model.js';
 import User from '../models/user.model.js';
 import Owner from '../models/owner.model.js';
 import Category from '../models/category.model.js';
-import { io } from '../index.js';
+import PropertyType from '../models/propertyType.model.js';
+import { io } from '../socket.js';
 import { config } from '../config/environment.js';
 import { getCache } from '../utils/cache.js';
 import {
   errorHandler,
-  AppError,
   ValidationError,
   NotFoundError,
   AuthorizationError,
   asyncHandler,
   sendSuccessResponse,
-  sendErrorResponse
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
+import { canAccessListing } from '../middleware/permissions.js';
 import {
   tokenize,
   buildFuzzyRegex,
@@ -77,6 +77,98 @@ async function getListingUpdateRecipients(category) {
   }
 }
 
+// Validate dynamic attributes against a category's field definitions
+async function validateCategoryAttributes(cat, attrs) {
+  const fieldDefs = (cat.fields || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  for (const f of fieldDefs) {
+    if (f.required && (attrs[f.key] === undefined || attrs[f.key] === null || attrs[f.key] === '')) {
+      throw new ValidationError(`Missing required field: ${f.label}`, f.key);
+    }
+    if (attrs[f.key] !== undefined) {
+      const val = attrs[f.key];
+      if (f.type === 'number') {
+        const num = Number(val);
+        if (Number.isNaN(num)) throw new ValidationError(`${f.label} must be a number`, f.key);
+        if (f.min !== undefined && num < f.min) throw new ValidationError(`${f.label} must be ≥ ${f.min}`, f.key);
+        if (f.max !== undefined && num > f.max) throw new ValidationError(`${f.label} must be ≤ ${f.max}`, f.key);
+      }
+      if (f.type === 'select') {
+        const options = Array.isArray(f.options) ? f.options : [];
+        if (f.multiple) {
+          if (!Array.isArray(val)) throw new ValidationError(`${f.label} must be an array`, f.key);
+          for (const v of val) {
+            if (!options.includes(v)) throw new ValidationError(`${f.label} has invalid option: ${v}`, f.key);
+          }
+        } else {
+          if (!options.includes(val)) throw new ValidationError(`${f.label} has invalid option`, f.key);
+        }
+      }
+      if (f.pattern && typeof val === 'string') {
+        // B-009: Only suppress SyntaxError (invalid regex in DB); re-throw ValidationErrors.
+        try {
+          const re = new RegExp(f.pattern);
+          if (!re.test(val)) throw new ValidationError(`${f.label} format is invalid`, f.key);
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
+    }
+  }
+}
+
+// Build a whitelisted listing payload from request body.
+// Pass userId to set userRef (create); pass null to omit it (update).
+function buildListingPayload(body, userId) {
+  const payload = {
+    name: body.name,
+    description: body.description,
+    address: body.address,
+    regularPrice: body.regularPrice,
+    discountPrice: body.discountPrice,
+    bathrooms: body.bathrooms,
+    bedrooms: body.bedrooms,
+    furnished: body.furnished,
+    parking: body.parking,
+    type: body.type,
+    offer: body.offer,
+    imageUrls: body.imageUrls,
+    category: body.category,
+    attributes: body.attributes,
+    propertyTypeFields: body.propertyTypeFields,
+    location: body.location,
+    ownerIds: body.ownerIds,
+    city: body.city,
+    locality: body.locality,
+    state: body.state,
+    pincode: body.pincode,
+    areaSqFt: body.areaSqFt,
+    status: body.status,
+    propertyCategory: body.propertyCategory,
+    propertyType: body.propertyType,
+    commercialType: body.commercialType,
+    plotType: body.plotType,
+    areaName: body.areaName,
+    plotSize: body.plotSize,
+    sqYard: body.sqYard,
+    sqYardRate: body.sqYardRate,
+    totalValue: body.totalValue,
+    propertyNo: body.propertyNo,
+    remarks: body.remarks,
+    otherAttachment: body.otherAttachment,
+  };
+  if (userId !== null) payload.userRef = userId;
+  // Strip undefined keys so Mongoose default values are preserved on create
+  return Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined));
+}
+
+const PT_CATEGORY_MAP = { residential: 'residential', commercial: 'commercial', land: 'land', industrial: 'commercial', other: 'unknown' };
+
+async function inferPropertyCategory(propertyTypeSlug) {
+  if (!propertyTypeSlug) return null;
+  const pt = await PropertyType.findOne({ slug: propertyTypeSlug }).select('category').lean();
+  return pt?.category ? (PT_CATEGORY_MAP[pt.category] || 'unknown') : null;
+}
+
 async function emitListingUpdate(action, listing, categoryOverride) {
   try {
     if (!io) return;
@@ -111,47 +203,13 @@ export const createListing = asyncHandler(async (req, res, next) => {
       throw new AuthorizationError('Not allowed for this category');
     }
   }
-  // Always set creator from authenticated user to prevent spoofing
-  req.body.userRef = req.user.id;
-  
   // Validate dynamic attributes
   if (req.body.category) {
     const cat = await Category.findOne({ slug: req.body.category });
-    if (cat) {
-      const fieldDefs = (cat.fields || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const attrs = req.body.attributes || {};
-      for (const f of fieldDefs) {
-        if (f.required && (attrs[f.key] === undefined || attrs[f.key] === null || attrs[f.key] === '')) {
-          throw new ValidationError(`Missing required field: ${f.label}`, f.key);
-        }
-        if (attrs[f.key] !== undefined) {
-          const val = attrs[f.key];
-          if (f.type === 'number') {
-            const num = Number(val);
-            if (Number.isNaN(num)) throw new ValidationError(`${f.label} must be a number`, f.key);
-            if (f.min !== undefined && num < f.min) throw new ValidationError(`${f.label} must be ≥ ${f.min}`, f.key);
-            if (f.max !== undefined && num > f.max) throw new ValidationError(`${f.label} must be ≤ ${f.max}`, f.key);
-          }
-          if (f.type === 'select') {
-            const options = Array.isArray(f.options) ? f.options : [];
-            if (f.multiple) {
-              if (!Array.isArray(val)) throw new ValidationError(`${f.label} must be an array`, f.key);
-              for (const v of val) if (!options.includes(v)) throw new ValidationError(`${f.label} has invalid option: ${v}`, f.key);
-            } else {
-              if (!options.includes(val)) throw new ValidationError(`${f.label} has invalid option`, f.key);
-            }
-          }
-          if (f.pattern && typeof val === 'string') {
-            try {
-              const re = new RegExp(f.pattern);
-              if (!re.test(val)) throw new ValidationError(`${f.label} format is invalid`, f.key);
-            } catch (_) {}
-          }
-        }
-      }
-    }
+    if (!cat) throw new ValidationError('Invalid category', 'category');
+    await validateCategoryAttributes(cat, req.body.attributes || {});
   }
-  
+
   // Validate ownerIds if provided
   if (Array.isArray(req.body.ownerIds) && req.body.ownerIds.length > 0) {
     const count = await Owner.countDocuments({ _id: { $in: req.body.ownerIds } });
@@ -159,8 +217,17 @@ export const createListing = asyncHandler(async (req, res, next) => {
       throw new ValidationError('One or more owners are invalid', 'ownerIds');
     }
   }
-  
-  const listing = await Listing.create(req.body);
+
+  // Whitelist fields — never let the client set system-managed fields
+  const listingData = buildListingPayload(req.body, req.user.id);
+
+  // Auto-infer propertyCategory from propertyType when not explicitly provided
+  if (listingData.propertyType && !listingData.propertyCategory) {
+    const inferred = await inferPropertyCategory(listingData.propertyType);
+    if (inferred) listingData.propertyCategory = inferred;
+  }
+
+  const listing = await Listing.create(listingData);
 
   await emitListingUpdate('created', listing, listing?.category);
   clearSearchCache(); // Clear search cache on listing creation
@@ -177,149 +244,71 @@ export const createListing = asyncHandler(async (req, res, next) => {
   sendSuccessResponse(res, listing, 'Listing created successfully', 201);
 });
 
-export const deleteListing = async (req, res, next) => {
+export const deleteListing = asyncHandler(async (req, res, next) => {
   const listing = await Listing.findById(req.params.id);
+  if (!listing) throw new NotFoundError('Listing not found!');
+  if (req.user.role === 'buyer') throw new AuthorizationError('Buyers are not allowed to delete listings!');
+  if (!canAccessListing(req.user, listing)) throw new AuthorizationError('You can only delete your own listings!');
 
-  if (!listing) {
-    return next(errorHandler(404, 'Listing not found!'));
-  }
+  await Listing.findByIdAndUpdate(req.params.id, { isDeleted: true, deletedAt: new Date() });
+  await emitListingUpdate('deleted', listing, listing?.category);
+  clearSearchCache();
 
-  // Block buyers from deleting any listings
-  if (req.user.role === 'buyer') {
-    return next(errorHandler(403, 'Buyers are not allowed to delete listings!'));
-  }
+  res.status(200).json('Listing has been deleted!');
+});
 
-  // Admins can delete any listing
-  if (req.user.role !== 'admin' && req.user.id !== listing.userRef) {
-    if (!(
-      req.user.role === 'employee' &&
-      listing.category &&
-      req.user.assignedCategories?.includes(listing.category)
-    )) {
-      return next(errorHandler(403, 'You can only delete your own listings!'));
-    }
-  }
-
-  try {
-    // Soft delete
-    await Listing.findByIdAndUpdate(req.params.id, {
-      isDeleted: true,
-      deletedAt: new Date(),
-    });
-
-    await emitListingUpdate('deleted', listing, listing?.category);
-    clearSearchCache(); // Clear search cache on listing deletion
-
-    res.status(200).json('Listing has been deleted!');
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const updateListing = async (req, res, next) => {
+export const updateListing = asyncHandler(async (req, res, next) => {
   const listing = await Listing.findById(req.params.id);
-  if (!listing) {
-    return next(errorHandler(404, 'Listing not found!'));
+  if (!listing) throw new NotFoundError('Listing not found!');
+  if (req.user.role === 'buyer') throw new AuthorizationError('Buyers are not allowed to update listings!');
+  if (!canAccessListing(req.user, listing, { allowAssignedAgent: true })) {
+    throw new AuthorizationError('You can only update your own listings!');
   }
 
-  // Block buyers from updating any listings
-  if (req.user.role === 'buyer') {
-    return next(errorHandler(403, 'Buyers are not allowed to update listings!'));
-  }
-
-  // Admins can update any listing
-  if (req.user.role !== 'admin' && req.user.id !== listing.userRef) {
-    if (!(
-      req.user.role === 'employee' &&
-      listing.category &&
-      req.user.assignedCategories?.includes(listing.category)
-    )) {
-      // Also allow the assigned agent to update (board moves, status changes)
-      if (!(req.user.role === 'employee' && listing.assignedAgent && String(listing.assignedAgent) === String(req.user.id))) {
-        return next(errorHandler(403, 'You can only update your own listings!'));
-      }
+  // Validate dynamic attributes on update
+  if (req.body.category || req.body.attributes) {
+    const categorySlug = req.body.category || listing.category;
+    if (categorySlug) {
+      const cat = await Category.findOne({ slug: categorySlug });
+      if (req.body.category && !cat) throw new ValidationError('Invalid category', 'category');
+      if (cat) await validateCategoryAttributes(cat, req.body.attributes || {});
     }
   }
 
-  try {
-    // Validate dynamic attributes on update as well
-    if (req.body.category || req.body.attributes) {
-      const listingCat = req.body.category || (await Listing.findById(req.params.id))?.category;
-      if (listingCat) {
-        const cat = await Category.findOne({ slug: listingCat });
-        const fieldDefs = (cat?.fields || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        const attrs = req.body.attributes || {};
-        for (const f of fieldDefs) {
-          if (f.required && (attrs[f.key] === undefined || attrs[f.key] === null || attrs[f.key] === '')) {
-            return next(errorHandler(400, `Missing required field: ${f.label}`));
-          }
-          if (attrs[f.key] !== undefined) {
-            const val = attrs[f.key];
-            if (f.type === 'number') {
-              const num = Number(val);
-              if (Number.isNaN(num)) return next(errorHandler(400, `${f.label} must be a number`));
-              if (f.min !== undefined && num < f.min) return next(errorHandler(400, `${f.label} must be ≥ ${f.min}`));
-              if (f.max !== undefined && num > f.max) return next(errorHandler(400, `${f.label} must be ≤ ${f.max}`));
-            }
-            if (f.type === 'select') {
-              const options = Array.isArray(f.options) ? f.options : [];
-              if (f.multiple) {
-                if (!Array.isArray(val)) return next(errorHandler(400, `${f.label} must be an array`));
-                for (const v of val) if (!options.includes(v)) return next(errorHandler(400, `${f.label} has invalid option: ${v}`));
-              } else {
-                if (!options.includes(val)) return next(errorHandler(400, `${f.label} has invalid option`));
-              }
-            }
-            if (f.pattern && typeof val === 'string') {
-              try {
-                const re = new RegExp(f.pattern);
-                if (!re.test(val)) return next(errorHandler(400, `${f.label} format is invalid`));
-              } catch (_) {}
-            }
-          }
-        }
-      }
-    }
-    // Validate ownerIds on update
-    if (Array.isArray(req.body.ownerIds)) {
-      const count = await Owner.countDocuments({ _id: { $in: req.body.ownerIds } });
-      if (count !== req.body.ownerIds.length) return next(errorHandler(400, 'One or more owners are invalid'));
-    }
-    const updatedListing = await Listing.findByIdAndUpdate(req.params.id, req.body, { new: true, lean: true });
-    const category = updatedListing?.category || listing?.category;
-
-    await emitListingUpdate('updated', updatedListing, category);
-    clearSearchCache(); // Clear search cache on listing update
-
-    res.status(200).json(updatedListing);
-  } catch (error) {
-    next(error);
+  // Validate ownerIds on update
+  if (Array.isArray(req.body.ownerIds) && req.body.ownerIds.length > 0) {
+    const count = await Owner.countDocuments({ _id: { $in: req.body.ownerIds } });
+    if (count !== req.body.ownerIds.length) throw new ValidationError('One or more owners are invalid', 'ownerIds');
   }
-};
 
-export const getListing = async (req, res, next) => {
-  try {
-    const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).lean();
-    if (!listing) {
-      return next(errorHandler(404, 'Listing not found!'));
-    }
-    let owner = null;
-    try {
-      if (listing.userRef) {
-        owner = await User.findById(listing.userRef).select('username avatar _id').lean();
-      }
-    } catch (_) {}
-    let owners = [];
-    try {
-      if (Array.isArray(listing.ownerIds) && listing.ownerIds.length > 0) {
-        owners = await Owner.find({ _id: { $in: listing.ownerIds } }).select('name email phone companyName _id').lean();
-      }
-    } catch (_) {}
-    res.status(200).json({ ...listing, owner, owners });
-  } catch (error) {
-    next(error);
+  // Whitelist fields — userRef, assignedAgent, isDeleted, deletedAt are not updatable here
+  const updates = buildListingPayload(req.body, null);
+
+  // Re-infer propertyCategory when propertyType changes and category isn't explicitly set
+  if (updates.propertyType && !updates.propertyCategory) {
+    const inferred = await inferPropertyCategory(updates.propertyType);
+    if (inferred) updates.propertyCategory = inferred;
   }
-};
+
+  const updatedListing = await Listing.findByIdAndUpdate(req.params.id, updates, { new: true, lean: true });
+  const category = updatedListing?.category || listing?.category;
+
+  await emitListingUpdate('updated', updatedListing, category);
+  clearSearchCache();
+
+  res.status(200).json(updatedListing);
+});
+
+export const getListing = asyncHandler(async (req, res, next) => {
+  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+    .populate('userRef', 'username avatar _id')
+    .populate('ownerIds', 'name email phone companyName _id')
+    .lean();
+  if (!listing) throw new NotFoundError('Listing not found!');
+
+  const { userRef: owner, ownerIds: owners, ...rest } = listing;
+  res.status(200).json({ ...rest, owner: owner || null, owners: owners || [] });
+});
 
 // Assign listing to an agent (Admin only)
 export const assignListingToAgent = asyncHandler(async (req, res, next) => {
@@ -1270,4 +1259,36 @@ export const getPopularSearches = asyncHandler(async (req, res, next) => {
 
   setCachedResults(cacheKey, result);
   sendSuccessResponse(res, result, 'Popular searches');
+});
+
+export const addVoiceNote = asyncHandler(async (req, res, next) => {
+  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+  if (!listing) throw new NotFoundError('Listing not found');
+  if (!canAccessListing(req.user, listing, { allowAssignedAgent: true })) {
+    throw new AuthorizationError('Not authorised to add notes to this listing');
+  }
+
+  const { url, label, duration } = req.body;
+  if (!url) throw new ValidationError('url is required', 'url');
+
+  listing.voiceNotes.push({ url, label: label || '', duration: duration || 0, createdBy: req.user.id });
+  await listing.save();
+
+  const note = listing.voiceNotes[listing.voiceNotes.length - 1];
+  res.status(201).json({ success: true, data: note });
+});
+
+export const deleteVoiceNote = asyncHandler(async (req, res, next) => {
+  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+  if (!listing) throw new NotFoundError('Listing not found');
+  if (!canAccessListing(req.user, listing, { allowAssignedAgent: true })) {
+    throw new AuthorizationError('Not authorised');
+  }
+
+  const note = listing.voiceNotes.id(req.params.noteId);
+  if (!note) throw new NotFoundError('Voice note not found');
+
+  note.deleteOne();
+  await listing.save();
+  res.json({ success: true });
 });

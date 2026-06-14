@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import xss from 'xss';
@@ -20,8 +20,7 @@ export const createRateLimit = (windowMs, max, message, extra = {}) => {
     legacyHeaders: false,
     skip: (req) => {
       if (typeof extra.skip === 'function' && extra.skip(req)) return true;
-      // Skip rate limiting for admin users in development
-      return process.env.NODE_ENV === 'development' && req.user?.role === 'admin';
+      return false;
     },
     ...extra,
   });
@@ -36,12 +35,13 @@ export const authRateLimit = createRateLimit(
 
 export const apiRateLimit = createRateLimit(
   config.rateLimit.windowMs,
-  config.rateLimit.maxRequests,
-  'Too many API requests, please slow down.',
+  config.server.isDevelopment ? 5000 : config.rateLimit.maxRequests,
+  'Too many requests. Please wait a moment and try again.',
   {
+    // Key by user ID for authenticated requests so users don't share quotas
+    keyGenerator: (req) => req.user?.id || ipKeyGenerator(req),
     skip: (req) => {
       const url = req.originalUrl || req.url || '';
-      // Exempt refresh endpoint to prevent accidental lockouts
       return url.endsWith('/api/auth/refresh') || url.includes('/api/health/');
     },
   }
@@ -87,10 +87,9 @@ export const securityHeaders = helmet({
 export const mongoSanitization = mongoSanitize({
   replaceWith: '_',
   onSanitize: ({ req, key }) => {
-    console.warn(`MongoDB injection attempt detected: ${key}`, {
+    logger.warn(`MongoDB injection attempt detected: ${key}`, {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      timestamp: new Date().toISOString(),
     });
   },
 });
@@ -126,46 +125,12 @@ const sanitizeObject = (obj) => {
   return sanitized;
 };
 
-// Input validation middleware
-export const validateInput = (schema) => {
-  return (req, res, next) => {
-    const { error } = schema.validate(req.body, { 
-      abortEarly: false,
-      stripUnknown: true,
-      convert: true,
-    });
-    
-    if (error) {
-      const errors = error.details.map(detail => ({
-        field: detail.path.join('.'),
-        message: detail.message,
-        value: detail.context?.value,
-      }));
-      
-      return res.status(400).json({
-        success: false,
-        statusCode: 400,
-        message: 'Validation failed',
-        errors,
-      });
-    }
-    
-    next();
-  };
-};
-
 // Email validation
 export const validateEmail = (email) => {
   return validator.isEmail(email) && 
          validator.isLength(email, { max: 254 }) &&
          !validator.contains(email, '..') &&
          !validator.contains(email, '--');
-};
-
-// Phone validation
-export const validatePhone = (phone) => {
-  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-  return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
 };
 
 // Password strength validation
@@ -192,98 +157,29 @@ export const validatePassword = (password) => {
   };
 };
 
-// File upload validation
-export const validateFileUpload = (allowedTypes, maxSize) => {
-  return (req, res, next) => {
-    if (!req.file) {
-      return next();
-    }
-    
-    const { mimetype, size } = req.file;
-    
-    if (!allowedTypes.includes(mimetype)) {
-      return res.status(400).json({
-        success: false,
-        statusCode: 400,
-        message: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}`,
-      });
-    }
-    
-    if (size > maxSize) {
-      return res.status(400).json({
-        success: false,
-        statusCode: 400,
-        message: `File too large. Maximum size: ${Math.round(maxSize / 1024 / 1024)}MB`,
-      });
-    }
-    
-    next();
-  };
-};
-
-// IP whitelist middleware
-export const ipWhitelist = (allowedIPs) => {
-  return (req, res, next) => {
-    const clientIP = req.ip || req.connection.remoteAddress;
-    
-    if (allowedIPs.includes(clientIP)) {
-      return next();
-    }
-    
-    return res.status(403).json({
-      success: false,
-      statusCode: 403,
-      message: 'Access denied from this IP address',
-    });
-  };
-};
-
 // Request logging middleware
 export const requestLogger = (req, res, next) => {
   const start = Date.now();
-  
+
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const logData = {
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      userId: req.user?.id,
-      timestamp: new Date().toISOString(),
+    const accessData = {
+      method:      req.method,
+      url:         req.originalUrl,
+      status:      res.statusCode,
+      duration_ms: duration,
+      ip:          req.ip,
+      user_agent:  req.get('User-Agent'),
+      user_id:     req.user?.id ?? null,
+      content_length: parseInt(res.get('Content-Length') || '0', 10) || 0,
     };
-    
-    if (res.statusCode >= 400) {
-      console.error('Request Error:', logData);
-    } else {
-      console.log('Request:', logData);
-    }
+    // All HTTP requests → access_logs (used by dashboard HTTP panels)
+    logger.access(accessData);
+    // Errors also land in backend_logs for error-level alerting
+    if (res.statusCode >= 500) logger.error('Request Error', accessData);
+    else if (res.statusCode >= 400) logger.warn('Request Warning', accessData);
   });
-  
+
   next();
 };
 
-// Error boundary middleware
-export const errorBoundary = (err, req, res, next) => {
-  console.error('Unhandled Error:', {
-    error: err.message,
-    stack: err.stack,
-    url: req.originalUrl,
-    method: req.method,
-    ip: req.ip,
-    userId: req.user?.id,
-    timestamp: new Date().toISOString(),
-  });
-  
-  // Don't leak error details in production
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  
-  res.status(err.statusCode || 500).json({
-    success: false,
-    statusCode: err.statusCode || 500,
-    message: isDevelopment ? err.message : 'Internal server error',
-    ...(isDevelopment && { stack: err.stack }),
-  });
-};

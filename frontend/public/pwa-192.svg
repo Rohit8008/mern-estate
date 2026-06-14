@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#2d1b8f"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="40" fill="url(#bg)"/>
+  <!-- Roof -->
+  <polygon points="96,26 173,85 19,85" fill="white"/>
+  <!-- Chimney -->
+  <rect x="128" y="34" width="17" height="36" fill="white"/>
+  <!-- Walls -->
+  <rect x="30" y="84" width="132" height="77" fill="white"/>
+  <!-- Door -->
+  <rect x="79" y="120" width="34" height="41" rx="3" fill="#3730a3"/>
+  <!-- Left window -->
+  <rect x="40" y="96" width="28" height="21" rx="2" fill="#3730a3"/>
+  <!-- Right window -->
+  <rect x="124" y="96" width="28" height="21" rx="2" fill="#3730a3"/>
+  <!-- Brand text -->
+  <text x="96" y="182" font-family="system-ui,-apple-system,sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="rgba(255,255,255,0.7)" letter-spacing="1.5">REAL VISTA</text>
+</svg>

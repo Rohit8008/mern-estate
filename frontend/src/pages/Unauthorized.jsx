@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 
 export default function Unauthorized() {
+  const { currentUser } = useSelector((s) => s.user);
+  const isCrmUser = currentUser?.role === 'admin' || currentUser?.role === 'employee';
+
   return (
     <main className='min-h-[70vh] flex items-center justify-center px-6'>
       <div className='relative w-full max-w-2xl overflow-hidden rounded-2xl border bg-white shadow'>
@@ -12,15 +16,29 @@ export default function Unauthorized() {
             </svg>
           </div>
           <h1 className='text-3xl font-bold text-slate-800 mb-2'>Access Denied</h1>
-          <p className='text-slate-600 mb-6'>You don’t have permission to view this page.</p>
-          <div className='flex flex-wrap items-center justify-center gap-3'>
-            <Link to='/' className='px-4 py-2 rounded-lg bg-slate-800 text-white hover:opacity-95'>Go Home</Link>
-            <Link to='/sign-in' className='px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50'>Sign In</Link>
+          <p className='text-slate-600 mb-1'>You don&apos;t have permission to view this page.</p>
+          {isCrmUser && (
+            <p className='text-sm text-slate-500 mb-6'>Contact your admin to request access.</p>
+          )}
+          <div className='flex flex-wrap items-center justify-center gap-3 mt-6'>
+            {isCrmUser ? (
+              <>
+                <Link to='/tasks' className='px-4 py-2 rounded-lg bg-slate-800 text-white hover:opacity-95 text-sm font-medium'>
+                  Go to Tasks
+                </Link>
+                <Link to='/profile' className='px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium'>
+                  My Profile
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link to='/' className='px-4 py-2 rounded-lg bg-slate-800 text-white hover:opacity-95 text-sm font-medium'>Go Home</Link>
+                <Link to='/sign-in' className='px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium'>Sign In</Link>
+              </>
+            )}
           </div>
         </div>
       </div>
     </main>
   );
 }
-
-

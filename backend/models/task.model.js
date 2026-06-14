@@ -5,8 +5,8 @@ const taskSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
     dueAt: { type: Date, default: null, index: true },
-    status: { type: String, enum: ['todo', 'in_progress', 'done', 'blocked'], default: 'todo', index: true },
-    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+    status: { type: String, enum: ['todo', 'in_progress', 'review', 'done', 'blocked'], default: 'todo', index: true },
+    priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     related: {

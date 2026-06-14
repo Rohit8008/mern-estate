@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useParams } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import SwiperCore from 'swiper';
@@ -22,6 +23,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FaEdit, FaTrash } from 'react-icons/fa';
 import { apiClient, normalizeImageUrl } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import PropertyDocuments from '../components/PropertyDocuments';
+import usePageTitle from '../hooks/usePageTitle';
 
 const defaultIcon = new L.Icon({
   iconUrl:
@@ -86,10 +89,12 @@ function ShareLocationButton({ lat, lng, name }) {
 export default function Listing() {
   SwiperCore.use([Navigation]);
   const [listing, setListing] = useState(null);
+  usePageTitle(listing?.name || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [contact, setContact] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
   const [categoryFields, setCategoryFields] = useState([]);
   const [propertyTypeData, setPropertyTypeData] = useState(null);
   const params = useParams();
@@ -470,6 +475,18 @@ export default function Listing() {
                   </div>
                 </div>
               )}
+            {/* Property Documents — visible to admin/employee only */}
+            {currentUser && !isBuyerViewMode && (currentUser.role === 'admin' || currentUser.role === 'employee') && listing._id && (
+              <PropertyDocuments
+                listingId={listing._id}
+                canEdit={
+                  currentUser.role === 'admin' ||
+                  String(listing.userRef) === String(currentUser._id) ||
+                  (listing.userRef?._id && String(listing.userRef._id) === String(currentUser._id))
+                }
+              />
+            )}
+
             </div>
             <div className='lg:col-span-1'>
               <div className='bg-white rounded-xl shadow p-5 sticky top-24'>
@@ -532,22 +549,7 @@ export default function Listing() {
                         </button>
                       </Link>
                       <button
-                        onClick={async () => {
-                          const confirmed = window.confirm('Are you sure you want to delete this listing?');
-                          if (!confirmed) return;
-                          try {
-                            const data = await apiClient.delete(`/listing/delete/${listing._id}`);
-                            if (data.success === false) return;
-                            // Trigger cache invalidation event
-                            window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));
-                            // Go back to previous page, or to search if no history
-                            if (window.history.length > 2) {
-                              navigate(-1);
-                            } else {
-                              navigate('/search');
-                            }
-                          } catch (_) { }
-                        }}
+                        onClick={() => setPendingDelete(true)}
                         className='w-1/2 flex items-center justify-center gap-2 bg-red-700 text-white rounded-lg uppercase hover:opacity-95 p-3'
                       >
                         <FaTrash /> Delete
@@ -559,6 +561,22 @@ export default function Listing() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete}
+        title='Delete this listing?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={async () => {
+          setPendingDelete(false);
+          try {
+            const data = await apiClient.delete(`/listing/delete/${listing._id}`);
+            if (data.success === false) return;
+            window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));
+            if (window.history.length > 2) { navigate(-1); } else { navigate('/search'); }
+          } catch (_) { }
+        }}
+        onCancel={() => setPendingDelete(false)}
+      />
     </main>
   );
 }

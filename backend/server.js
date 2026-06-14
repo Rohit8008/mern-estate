@@ -4,8 +4,12 @@ import databaseConnection from './config/database.js';
 import { config } from './config/environment.js';
 import { createApp } from './app.js';
 import PropertyType from './models/propertyType.model.js';
+import Message from './models/message.model.js';
+import User from './models/user.model.js';
+import Listing from './models/listing.model.js';
 import { onlineUsers } from './utils/onlineUsers.js';
 import { initSocket, io } from './socket.js';
+import { encryptMessageWithKey, decryptMessageWithKey } from './utils/encryption.js';
 
 export const app = createApp();
 export const server = http.createServer(app);
@@ -102,17 +106,81 @@ export async function startServer() {
   });
 }
 
+// Per-user message rate limiter: max 30 messages/minute
+const messageRateLimiter = new Map();
+function isMessageRateLimited(userId) {
+  const now = Date.now();
+  let bucket = messageRateLimiter.get(userId);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + 60_000 };
+  }
+  bucket.count++;
+  messageRateLimiter.set(userId, bucket);
+  return bucket.count > 30;
+}
+
 export function setupSocket() {
   io.on('connection', (socket) => {
-    const userId = socket.handshake.auth?.userId;
-    if (userId) {
-      socket.join(`user:${userId}`);
-      onlineUsers.add(String(userId));
-      io.emit('presence:update', { userId: String(userId), online: true });
+    // socket.userId is set and verified by the JWT middleware in socket.js.
+    // Any connection that reaches here is authenticated.
+    const userId = socket.userId;
+
+    socket.join(`user:${userId}`);
+    onlineUsers.add(userId);
+    io.emit('presence:update', { userId, online: true });
+    try {
+      socket.emit('presence:bulk', Array.from(onlineUsers));
+    } catch (_) {}
+
+    // Push unread message count immediately on connect / reconnect
+    Message.countDocuments({ receiverId: userId, read: false })
+      .then((count) => { if (count > 0) socket.emit('unread:messages', { count }); })
+      .catch(() => {});
+
+    socket.on('message:send', async (payload, ack) => {
+      const cb = typeof ack === 'function' ? ack : () => {};
+      if (isMessageRateLimited(userId)) return cb({ error: 'Rate limited. Please slow down.' });
       try {
-        socket.emit('presence:bulk', Array.from(onlineUsers));
-      } catch (_) {}
-    }
+        const { receiverId, content, listingId } = payload || {};
+        if (!receiverId || !content) return cb({ error: 'Missing fields' });
+
+        let finalContent = content;
+        if (listingId) {
+          try {
+            const listing = await Listing.findById(listingId).lean();
+            if (listing) {
+              const price = listing.offer ? listing.discountPrice : listing.regularPrice;
+              const suffix = listing.type === 'rent' ? ' / month' : '';
+              const link = `${process.env.PUBLIC_BASE_URL || ''}/listing/${listing._id}`.replace(/\/$/, '');
+              finalContent = `${content}\n\n---\nProperty: ${listing.name}\nAddress: ${listing.address}\nPrice: $${price}${suffix}\nType: ${listing.type}${listing.category ? `\nCategory: ${String(listing.category).toUpperCase()}` : ''}\nLink: ${link}`;
+            }
+          } catch (_) {}
+        }
+
+        const msg = await Message.create({
+          senderId: userId,
+          receiverId,
+          listingId: listingId || '',
+          content: encryptMessageWithKey(finalContent),
+          isEncrypted: true,
+        });
+
+        const sender = await User.findById(userId).select('username firstName lastName').lean();
+        const decrypted = {
+          ...msg.toObject(),
+          content: finalContent,
+          senderName: sender?.firstName && sender?.lastName ? `${sender.firstName} ${sender.lastName}` : null,
+          senderUsername: sender?.username,
+        };
+
+        io.to(`user:${receiverId}`).emit('message:new', decrypted);
+        io.to(`user:${receiverId}`).emit('conversations:update');
+        io.to(`user:${userId}`).emit('conversations:update');
+        cb({ success: true, message: decrypted });
+      } catch (_) {
+        cb({ error: 'Failed to send message' });
+      }
+    });
 
     socket.on('typing', (payload) => {
       const { to } = payload || {};
@@ -125,10 +193,8 @@ export function setupSocket() {
     });
 
     socket.on('disconnect', () => {
-      if (userId) {
-        onlineUsers.delete(String(userId));
-        io.emit('presence:update', { userId: String(userId), online: false });
-      }
+      onlineUsers.delete(userId);
+      io.emit('presence:update', { userId, online: false });
     });
   });
 }

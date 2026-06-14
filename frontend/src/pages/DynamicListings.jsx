@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useParams, useNavigate } from 'react-router-dom';
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import DynamicListingTable from '../components/DynamicListingTable';
@@ -13,6 +14,7 @@ const DynamicListings = () => {
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   useEffect(() => {
     const fetchCategory = async () => {
@@ -51,32 +53,29 @@ const DynamicListings = () => {
     }
   };
 
-  const handleDelete = async (listing) => {
-    // Check if user has permission to delete
-    if (!currentUser || 
-        (currentUser.role !== 'admin' && 
-         currentUser.role !== 'employee' && 
+  const handleDelete = (listing) => {
+    if (!currentUser ||
+        (currentUser.role !== 'admin' &&
+         currentUser.role !== 'employee' &&
          !(currentUser.role === 'seller' && listing.userRef === currentUser._id))) {
-      alert('You do not have permission to delete this listing');
       return;
     }
+    setPendingDelete(listing);
+  };
 
-    if (!confirm(`Delete listing "${listing.name}"?`)) return;
-
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const listing = pendingDelete;
+    setPendingDelete(null);
     try {
       const res = await fetchWithRefresh(`/api/listing/delete/${listing._id}`, {
         method: 'DELETE'
       });
-
       if (res.ok) {
-        // Refresh the page or update state
         window.location.reload();
-      } else {
-        alert('Failed to delete listing');
       }
     } catch (err) {
       console.error('Error deleting listing:', err);
-      alert('Failed to delete listing');
     }
   };
 
@@ -181,6 +180,14 @@ const DynamicListings = () => {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title={`Delete listing?`}
+        description={pendingDelete ? `"${pendingDelete.name}" will be permanently removed.` : ''}
+        confirmLabel='Delete'
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

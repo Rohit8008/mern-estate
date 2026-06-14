@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/socket';
 import { apiClient } from '../utils/http';
-import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineUpload, HiOutlineKey } from 'react-icons/hi';
+import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineUpload, HiOutlineKey, HiX } from 'react-icons/hi';
+import { PageHeader, Button } from '../design-system';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useSelector } from 'react-redux';
+import { usePermissions } from '../contexts/PermissionsContext';
 import RoleManagement from '../components/RoleManagement';
 import PropertyTypeManagement from './PropertyTypeManagement';
 
@@ -13,7 +16,6 @@ export default function Admin() {
   const { isBuyerViewMode } = useBuyerView();
   const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
@@ -24,6 +26,7 @@ export default function Admin() {
   const [logPage, setLogPage] = useState(0);
   const [onlyPhoneChanges, setOnlyPhoneChanges] = useState(false);
   const [usersQuery, setUsersQuery] = useState('');
+  const [pendingDeleteCategory, setPendingDeleteCategory] = useState(null);
   const pageSize = 50;
   // Owners management
   const [owners, setOwners] = useState([]);
@@ -45,7 +48,6 @@ export default function Admin() {
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState(null);
-  const [userPermissions, setUserPermissions] = useState({});
   const totalOwners = owners.length;
   const totalUsers = users.length;
   const totalListings = listings.length;
@@ -53,41 +55,28 @@ export default function Admin() {
   // Role-based access control
   const isAdmin = currentUser?.role === 'admin';
   const isBuyerViewRestricted = Boolean(isBuyerViewMode);
-  // Permission helper — admins have all permissions, employees check their role
-  const hasPerm = (perm) => isAdmin || userPermissions[perm] === true;
+  const { can: hasPerm, ready: permReady } = usePermissions();
 
+  // Core data: categories, listings, owners, users — fires once when permissions are ready.
+  // logPage is intentionally excluded; log pagination has its own effect below.
   useEffect(() => {
-    if (isBuyerViewRestricted) return;
+    if (isBuyerViewRestricted || !permReady) return;
 
+    let cancelled = false;
     const load = async () => {
-      setLoading(true);
       setOwnersLoading(true);
       setListingsLoading(true);
 
-      // Step 1: Fetch permissions first so we know what APIs to call
-      let perms = {};
-      try {
-        const permResult = await apiClient.get('/user/my-permissions');
-        if (permResult?.permissions) {
-          perms = permResult.permissions;
-          setUserPermissions(perms);
-        }
-      } catch (e) {
-        console.error('Failed to fetch permissions:', e);
-      }
-
-      const canView = (perm) => isAdmin || perms[perm] === true;
-
-      // Step 2: Only call APIs the user has permission for
       const calls = [
-        apiClient.get('/category/list'),                    // [0] public
-        apiClient.get('/listing/get?limit=50&order=desc'),  // [1] public
-        canView('viewOwners')
-          ? apiClient.get('/owner/list')                    // [2] needs viewOwners
+        apiClient.get('/category/list'),
+        apiClient.get('/listing/get?limit=50&order=desc'),
+        hasPerm('viewOwners')
+          ? apiClient.get('/owner/list')
           : Promise.resolve([]),
       ];
 
       const results = await Promise.allSettled(calls);
+      if (cancelled) return;
 
       const cJson  = results[0].status === 'fulfilled' ? results[0].value : [];
       const lsJson = results[1].status === 'fulfilled' ? results[1].value : null;
@@ -99,25 +88,37 @@ export default function Admin() {
       setOwnersLoading(false);
       setListingsLoading(false);
 
-      // Admin-only API calls
       if (isAdmin) {
         try {
-          const [uJson, lJson] = await Promise.all([
-            apiClient.get('/user/list'),
-            apiClient.get(`/user/security/logs?limit=${pageSize}&skip=${logPage*pageSize}`),
-          ]);
-          setUsers(Array.isArray(uJson) ? uJson : []);
-          setLogs(Array.isArray(lJson?.logs) ? lJson.logs : []);
-          setLogsTotal(Number(lJson?.total) || 0);
+          const uJson = await apiClient.get('/user/list');
+          if (!cancelled) setUsers(Array.isArray(uJson) ? uJson : []);
         } catch (error) {
           console.error(error);
         }
       }
-
-      setLoading(false);
     };
     load();
-  }, [isBuyerViewRestricted, isAdmin, logPage]);
+    return () => { cancelled = true; };
+  }, [isBuyerViewRestricted, isAdmin, permReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Log pagination: only re-fetches security logs, not the full page data.
+  useEffect(() => {
+    if (!isAdmin || !permReady) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const lJson = await apiClient.get(`/user/security/logs?limit=${pageSize}&skip=${logPage * pageSize}`);
+        if (!cancelled) {
+          setLogs(Array.isArray(lJson?.logs) ? lJson.logs : []);
+          setLogsTotal(Number(lJson?.total) || 0);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdmin, logPage, permReady]);
 
   // Listen for listing changes to refresh data
   useEffect(() => {
@@ -142,7 +143,7 @@ export default function Admin() {
   }, []);
 
   // Realtime owners refresh — only if user has viewOwners permission
-  const canViewOwners = isAdmin || userPermissions.viewOwners === true;
+  const canViewOwners = hasPerm('viewOwners');
   useEffect(() => {
     if (isBuyerViewRestricted || !canViewOwners) return;
 
@@ -514,1106 +515,737 @@ export default function Admin() {
 
 
   return (
-    <main className='max-w-7xl mx-auto px-4 py-6'>
-      {isBuyerViewRestricted ? (
-        <div className='max-w-6xl mx-auto px-4 py-8'>
-          <div className='text-center'>
-            <h1 className='text-2xl font-bold text-gray-800 mb-4'>Access Restricted</h1>
-            <p className='text-gray-600 mb-6'>Admin features are not available in buyer view mode.</p>
-            <p className='text-sm text-gray-500'>Exit buyer view mode to access admin features.</p>
-          </div>
+    <div className='space-y-5'>
+      {isBuyerViewRestricted && (
+        <div className='bg-white border border-slate-200 rounded-xl p-10 text-center shadow-sm'>
+          <h1 className='text-xl font-bold text-slate-900 mb-2'>Access Restricted</h1>
+          <p className='text-sm text-slate-500 mb-1'>Admin features are not available in buyer view mode.</p>
+          <p className='text-xs text-slate-400'>Exit buyer view mode to access admin features.</p>
         </div>
-      ) : null}
+      )}
 
-      {!isBuyerViewRestricted ? (
-      <div className='grid grid-cols-[220px_1fr] gap-6'>
-        <aside className='bg-white rounded-xl shadow border p-3 sticky top-6 h-fit'>
-          <div className='px-2 py-3'>
-            <div className='text-xs uppercase tracking-wide text-slate-500'>{isAdmin ? 'Admin' : 'Employee'}</div>
-            <div className='text-sm font-semibold text-slate-800'>Control Center</div>
-          </div>
-          <nav className='flex flex-col'>
-            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='dashboard'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineViewGrid /> Dashboard</button>
-            <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='listings'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineCollection /> Listings</button>
+      {!isBuyerViewRestricted && (
+        <>
+          <PageHeader
+            title={`${isAdmin ? 'Admin' : 'Employee'} Control Center`}
+            description='Manage listings, users, and system settings'
+            actions={
+              <Button variant='primary' size='sm' icon={HiOutlinePlus} onClick={() => window.location.href = '/create-listing'}>
+                New Listing
+              </Button>
+            }
+          />
+
+          {/* Horizontal tab bar */}
+          <div className='bg-white border border-slate-200 rounded-xl flex gap-1 overflow-x-auto p-1'>
+            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'dashboard' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+              <HiOutlineViewGrid className='w-4 h-4' /> Dashboard
+            </button>
+            <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'listings' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+              <HiOutlineCollection className='w-4 h-4' /> Listings
+            </button>
             {(hasPerm('createCategory') || hasPerm('deleteCategory') || hasPerm('updateCategory')) && (
-              <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='categories'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineTag /> Categories</button>
+              <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'categories' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                <HiOutlineTag className='w-4 h-4' /> Categories
+              </button>
             )}
             {isAdmin && (
-              <button
-                onClick={() => setActiveTab('property-types')}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='property-types'?'bg-slate-100 text-slate-900':'text-slate-700'}`}
-              >
-                <HiOutlineTag /> Property Types
+              <button onClick={() => setActiveTab('property-types')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'property-types' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                <HiOutlineTag className='w-4 h-4' /> Property Types
               </button>
             )}
             {hasPerm('viewOwners') && (
-              <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='owners'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineUserGroup /> Owners</button>
+              <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'owners' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                <HiOutlineUserGroup className='w-4 h-4' /> Owners
+              </button>
             )}
             {isAdmin && (
-              <button onClick={() => setActiveTab('users')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='users'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineClipboardList /> Users</button>
+              <button onClick={() => setActiveTab('users')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'users' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                <HiOutlineClipboardList className='w-4 h-4' /> Users
+              </button>
             )}
             {isAdmin && (
-              <button onClick={() => setActiveTab('roles')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='roles'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineKey /> Roles & Permissions</button>
+              <button onClick={() => setActiveTab('roles')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'roles' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                <HiOutlineKey className='w-4 h-4' /> Roles & Permissions
+              </button>
             )}
             {isAdmin && (
-              <button onClick={() => setActiveTab('logs')} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-slate-50 ${activeTab==='logs'?'bg-slate-100 text-slate-900':'text-slate-700'}`}><HiOutlineShieldCheck /> Security Logs</button>
+              <button onClick={() => setActiveTab('logs')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'logs' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                <HiOutlineShieldCheck className='w-4 h-4' /> Security Logs
+              </button>
             )}
-          </nav>
-        </aside>
-        <section className='space-y-8'>
+          </div>
+
+          {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
-            <>
-              <div className='flex items-center justify-between'>
-                <h1 className='text-2xl font-bold text-slate-800'>{isAdmin ? 'Admin Dashboard' : 'Employee Dashboard'}</h1>
-                <div className='flex items-center gap-2'>
-                  {loading ? <span className='text-sm text-slate-500'>Loading…</span> : null}
-                  <a href='/create-listing' className='inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-sm hover:opacity-95'><HiOutlinePlus /> New Listing</a>
-                </div>
-              </div>
+            <div className='space-y-5'>
               <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : ''} gap-4`}>
-                <div className='bg-white rounded-xl shadow p-4 border'>
-                  <div className='text-xs text-slate-500'>Listings</div>
-                  <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalListings}</div>
-                  <div className='text-xs text-slate-400 mt-1'>Active items</div>
+                <div className='bg-white border border-slate-200 border-t-2 border-t-blue-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+                  <div className='flex items-start justify-between'>
+                    <div>
+                      <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>Listings</div>
+                      <div className='text-2xl font-bold text-slate-900 mt-1'>{totalListings}</div>
+                      <div className='text-xs text-slate-400 mt-0.5'>Active items</div>
+                    </div>
+                    <div className='w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center'>
+                      <HiOutlineCollection className='w-5 h-5 text-blue-500' />
+                    </div>
+                  </div>
                 </div>
                 {hasPerm('viewOwners') && (
-                  <div className='bg-white rounded-xl shadow p-4 border'>
-                    <div className='text-xs text-slate-500'>Owners</div>
-                    <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalOwners}</div>
-                    <div className='text-xs text-slate-400 mt-1'>Registered partners</div>
+                  <div className='bg-white border border-slate-200 border-t-2 border-t-emerald-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+                    <div className='flex items-start justify-between'>
+                      <div>
+                        <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>Owners</div>
+                        <div className='text-2xl font-bold text-slate-900 mt-1'>{totalOwners}</div>
+                        <div className='text-xs text-slate-400 mt-0.5'>Registered partners</div>
+                      </div>
+                      <div className='w-9 h-9 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center'>
+                        <HiOutlineUserGroup className='w-5 h-5 text-emerald-500' />
+                      </div>
+                    </div>
                   </div>
                 )}
                 {isAdmin && (
-                  <div className='bg-white rounded-xl shadow p-4 border'>
-                    <div className='text-xs text-slate-500'>Users</div>
-                    <div className='text-2xl font-semibold text-slate-800 mt-1'>{totalUsers}</div>
-                    <div className='text-xs text-slate-400 mt-1'>Accounts</div>
+                  <div className='bg-white border border-slate-200 border-t-2 border-t-purple-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+                    <div className='flex items-start justify-between'>
+                      <div>
+                        <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>Users</div>
+                        <div className='text-2xl font-bold text-slate-900 mt-1'>{totalUsers}</div>
+                        <div className='text-xs text-slate-400 mt-0.5'>Accounts</div>
+                      </div>
+                      <div className='w-9 h-9 rounded-xl bg-purple-50 ring-1 ring-purple-100 flex items-center justify-center'>
+                        <HiOutlineClipboardList className='w-5 h-5 text-purple-500' />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            </>
-          )}
-      {/* Consolidated budget - Real Data */}
-      {activeTab === 'dashboard' && (
-      <section className='bg-white rounded-xl shadow p-5'>
-        <div className='flex items-center justify-between mb-4'>
-          <div>
-            <h2 className='text-xl font-semibold'>Portfolio Overview</h2>
-            <div className='text-xs text-slate-500'>Listings Value & Distribution</div>
-          </div>
-          <div className='flex gap-4 text-sm'>
-            <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-purple-500'></span>For Sale</div>
-            <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-blue-500'></span>For Rent</div>
-          </div>
-        </div>
-
-        {/* Stats Row */}
-        <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6'>
-          <div className='p-3 bg-gradient-to-br from-purple-50 to-white rounded-lg border'>
-            <div className='text-xs text-purple-600 font-medium'>Total Sale Value</div>
-            <div className='text-lg font-bold text-purple-800'>
-              ₹{listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
-            </div>
-            <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'sale').length} properties</div>
-          </div>
-          <div className='p-3 bg-gradient-to-br from-blue-50 to-white rounded-lg border'>
-            <div className='text-xs text-blue-600 font-medium'>Monthly Rent Value</div>
-            <div className='text-lg font-bold text-blue-800'>
-              ₹{listings.filter(l => l.type === 'rent').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}
-            </div>
-            <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'rent').length} properties</div>
-          </div>
-          <div className='p-3 bg-gradient-to-br from-green-50 to-white rounded-lg border'>
-            <div className='text-xs text-green-600 font-medium'>With Offers</div>
-            <div className='text-lg font-bold text-green-800'>
-              {listings.filter(l => l.offer).length}
-            </div>
-            <div className='text-xs text-slate-500'>
-              ₹{listings.filter(l => l.offer).reduce((sum, l) => sum + ((l.regularPrice || 0) - (l.discountPrice || 0)), 0).toLocaleString('en-IN')} discount
-            </div>
-          </div>
-          <div className='p-3 bg-gradient-to-br from-amber-50 to-white rounded-lg border'>
-            <div className='text-xs text-amber-600 font-medium'>Avg. Sale Price</div>
-            <div className='text-lg font-bold text-amber-800'>
-              ₹{listings.filter(l => l.type === 'sale').length > 0
-                ? Math.round(listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0) / listings.filter(l => l.type === 'sale').length).toLocaleString('en-IN')
-                : 0}
-            </div>
-            <div className='text-xs text-slate-500'>per property</div>
-          </div>
-        </div>
-
-        {/* Category Distribution */}
-        <div className='mb-4'>
-          <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Category</div>
-          <div className='space-y-2'>
-            {(() => {
-              const categoryData = listings.reduce((acc, l) => {
-                const cat = l.category || 'uncategorized';
-                if (!acc[cat]) acc[cat] = { count: 0, value: 0 };
-                acc[cat].count++;
-                acc[cat].value += (l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0);
-                return acc;
-              }, {});
-              const maxCount = Math.max(...Object.values(categoryData).map(c => c.count), 1);
-              return Object.entries(categoryData).map(([cat, data]) => (
-                <div key={cat} className='flex items-center gap-3'>
-                  <div className='w-24 text-xs text-slate-600 truncate capitalize'>{cat}</div>
-                  <div className='flex-1 h-6 bg-slate-100 rounded-full overflow-hidden'>
-                    <div
-                      className='h-full bg-gradient-to-r from-sky-500 to-blue-600 rounded-full flex items-center justify-end pr-2'
-                      style={{ width: `${(data.count / maxCount) * 100}%`, minWidth: '40px' }}
-                    >
-                      <span className='text-xs text-white font-medium'>{data.count}</span>
-                    </div>
+              {/* Portfolio Overview */}
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+                <div className='flex items-center justify-between mb-4'>
+                  <div>
+                    <h2 className='text-base font-semibold text-slate-900'>Portfolio Overview</h2>
+                    <div className='text-xs text-slate-500 mt-0.5'>Listings value & distribution</div>
                   </div>
-                  <div className='w-28 text-xs text-slate-500 text-right'>₹{data.value.toLocaleString('en-IN')}</div>
+                  <div className='flex gap-4'>
+                    <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-purple-500'></span><span className='text-xs text-slate-600'>For Sale</span></div>
+                    <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-blue-500'></span><span className='text-xs text-slate-600'>For Rent</span></div>
+                  </div>
                 </div>
-              ));
-            })()}
-            {listings.length === 0 && (
-              <div className='text-sm text-slate-400 text-center py-4'>No listings data available</div>
-            )}
-          </div>
-        </div>
 
-        {/* Property Type Distribution */}
-        <div>
-          <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Property Type</div>
-          <div className='flex flex-wrap gap-2'>
-            {(() => {
-              const typeData = listings.reduce((acc, l) => {
-                const type = l.propertyType || 'other';
-                if (!acc[type]) acc[type] = 0;
-                acc[type]++;
-                return acc;
-              }, {});
-              const colors = ['bg-purple-100 text-purple-800', 'bg-blue-100 text-blue-800', 'bg-green-100 text-green-800', 'bg-amber-100 text-amber-800', 'bg-red-100 text-red-800', 'bg-pink-100 text-pink-800'];
-              return Object.entries(typeData).map(([type, count], idx) => (
-                <span key={type} className={`px-3 py-1.5 rounded-full text-xs font-medium ${colors[idx % colors.length]}`}>
-                  {type}: {count}
-                </span>
-              ));
-            })()}
-            {listings.length === 0 && (
-              <span className='text-sm text-slate-400'>No data</span>
-            )}
-          </div>
-        </div>
-      </section>
-      )}
-      {/* Listings overview table */}
-      {activeTab === 'listings' && (
-      <section className='bg-white rounded-xl shadow p-5'>
-        <div className='flex items-center justify-between mb-3'>
-          <h2 className='text-xl font-semibold'>All listings</h2>
-          <div className='flex gap-2 items-center'>
-            <div className='relative'>
-              <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400' />
-              <input
-                className='pl-8 pr-2 py-2 border rounded-lg text-sm w-56'
-                placeholder='Search by name or address'
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-              />
-            </div>
-            <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors'><HiOutlineDownload /> Export</button>
-            <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors'><HiOutlineUpload /> Import</button>
-            <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-800 text-white text-sm inline-flex items-center gap-2'><HiOutlinePlus /> Add New</a>
-          </div>
-        </div>
-        <div className='overflow-auto'>
-          <table className='min-w-full border rounded-lg text-sm'>
-            <thead className='bg-slate-50'>
-              <tr>
-                <th className='text-left p-2 border-b'>ID</th>
-                <th className='text-left p-2 border-b'>Listing</th>
-                <th className='text-left p-2 border-b'>Category</th>
-                <th className='text-left p-2 border-b'>Type</th>
-                <th className='text-left p-2 border-b'>Price</th>
-                <th className='text-left p-2 border-b'>Offer</th>
-                <th className='text-left p-2 border-b'>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(listingsLoading ? [] : listings)
-                .filter((l) => {
-                  if (!listSearch.trim()) return true;
-                  const q = listSearch.toLowerCase();
-                  return (
-                    String(l.name || '').toLowerCase().includes(q) ||
-                    String(l.address || '').toLowerCase().includes(q)
-                  );
-                })
-                .map((l) => {
-                  const id = String(l._id).slice(-4).toUpperCase();
-                  const price = (l.offer && l.discountPrice) ? l.discountPrice : l.regularPrice;
-                  return (
-                    <tr key={l._id} className='border-b hover:bg-slate-50'>
-                      <td className='p-2'>#{id}</td>
-                      <td className='p-2'>
-                        <a href={`/listing/${l._id}`} className='text-slate-800 hover:underline font-medium'>{l.name}</a>
-                        <div className='text-xs text-slate-500 truncate max-w-[360px]'>{l.address}</div>
-                      </td>
-                      <td className='p-2 text-xs'>{l.category || '-'}</td>
-                      <td className='p-2'>
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${l.type === 'rent' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{l.type || '-'}</span>
-                      </td>
-                      <td className='p-2'>${Number(price || 0).toLocaleString('en-US')}{l.type === 'rent' ? <span className='text-xs text-slate-500'> / month</span> : null}</td>
-                      <td className='p-2'>
-                        {l.offer ? (
-                          <span className='px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800'>Offer</span>
-                        ) : (
-                          <span className='px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700'>—</span>
-                        )}
-                      </td>
-                      <td className='p-2 text-xs'>{l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '-'}</td>
-                    </tr>
-                  );
-                })}
-              {!listingsLoading && listings.length === 0 && (
-                <tr><td className='p-2 text-slate-500' colSpan={7}>No listings.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      )}
-      {/* Categories */}
-      {activeTab === 'categories' && (
-        <section className='mb-8 bg-white rounded-xl shadow p-5'>
-          <div className='flex items-center justify-between mb-4'>
-            <h2 className='text-xl font-semibold'>Categories</h2>
-            <div className='text-sm text-slate-600'>Total: {categories.length}</div>
-          </div>
-          
-          {/* Create Category Section - Permission Based */}
-          {hasPerm('createCategory') && (
-            <div className='mb-6 flex gap-2 items-center flex-wrap'>
-              <input
-                type='text'
-                placeholder='Create new category (e.g., DLF)'
-                className='border p-3 rounded-lg flex-1'
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-              />
-              <button
-                disabled={creating || !newCategoryName.trim()}
-                onClick={async () => {
-                  if (!newCategoryName.trim()) {
-                    alert('Please enter a category name');
-                    return;
-                  }
-                  try {
-                    setCreating(true);
-                    const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
-                    if (data && data.slug) {
-                      setCategories((prev) => [...prev, data]);
-                      setNewCategoryName('');
-                    } else {
-                      console.error('Failed to create category:', data);
-                      alert(data?.message || 'Failed to create category');
-                    }
-                  } catch (error) {
-                    console.error('Error creating category:', error);
-                    alert('Error creating category. Please try again.');
-                  } finally {
-                    setCreating(false);
-                  }
-                }}
-                className='px-5 py-3 rounded-lg bg-slate-800 text-white hover:opacity-95 disabled:opacity-70'
-              >
-                {creating ? 'Creating...' : 'Create Category'}
-              </button>
-            </div>
-          )}
-          
-          {/* Categories List */}
-          <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4'>
-            {categories.map((category) => (
-              <div key={category._id} className='border rounded-lg p-4 hover:shadow-md transition-shadow'>
-                <h3 className='font-semibold text-slate-800 mb-2'>{category.name}</h3>
-                <p className='text-sm text-slate-600 mb-3'>Slug: {category.slug}</p>
-                <div className='flex items-center justify-between'>
-                  <span className='text-xs text-slate-500'>
-                    {category.fields?.length || 0} fields
-                  </span>
-                  {hasPerm('deleteCategory') && (
-                    <button
-                      onClick={async () => {
-                        if (confirm('Are you sure you want to delete this category?')) {
-                          try {
-                            await apiClient.delete(`/category/delete/${category._id}`);
-                            setCategories((prev) => prev.filter((c) => c._id !== category._id));
-                            alert('Category deleted successfully!');
-                          } catch (error) {
-                            console.error('Error deleting category:', error);
-                            alert('Error deleting category. Please try again.');
-                          }
-                        }
-                      }}
-                      className='px-2 py-1 text-xs rounded border text-red-700 hover:bg-red-50'
-                    >
-                      Delete
-                    </button>
-                  )}
+                {/* Stats Row */}
+                <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6'>
+                  <div className='p-3 bg-purple-50 rounded-lg border border-purple-100'>
+                    <div className='text-xs text-purple-600 font-medium'>Total Sale Value</div>
+                    <div className='text-lg font-bold text-purple-800'>₹{listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}</div>
+                    <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'sale').length} properties</div>
+                  </div>
+                  <div className='p-3 bg-blue-50 rounded-lg border border-blue-100'>
+                    <div className='text-xs text-blue-600 font-medium'>Monthly Rent Value</div>
+                    <div className='text-lg font-bold text-blue-800'>₹{listings.filter(l => l.type === 'rent').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}</div>
+                    <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'rent').length} properties</div>
+                  </div>
+                  <div className='p-3 bg-green-50 rounded-lg border border-green-100'>
+                    <div className='text-xs text-green-600 font-medium'>With Offers</div>
+                    <div className='text-lg font-bold text-green-800'>{listings.filter(l => l.offer).length}</div>
+                    <div className='text-xs text-slate-500'>₹{listings.filter(l => l.offer).reduce((sum, l) => sum + ((l.regularPrice || 0) - (l.discountPrice || 0)), 0).toLocaleString('en-IN')} discount</div>
+                  </div>
+                  <div className='p-3 bg-amber-50 rounded-lg border border-amber-100'>
+                    <div className='text-xs text-amber-600 font-medium'>Avg. Sale Price</div>
+                    <div className='text-lg font-bold text-amber-800'>₹{listings.filter(l => l.type === 'sale').length > 0 ? Math.round(listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0) / listings.filter(l => l.type === 'sale').length).toLocaleString('en-IN') : 0}</div>
+                    <div className='text-xs text-slate-500'>per property</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-            {categories.length === 0 && (
-              <div className='col-span-full text-center py-8 text-slate-500'>
-                No categories found. Create your first category above.
-              </div>
-            )}
-          </div>
-        </section>
-      )}
 
-      {/* Property Types */}
-      {isAdmin && (
-        <section className='mb-8' style={{ display: activeTab === 'property-types' ? 'block' : 'none' }}>
-          <PropertyTypeManagement />
-        </section>
-      )}
-      {/* Security Logs */}
-      {activeTab === 'logs' && (
-      <section className='mb-8 bg-white rounded-xl shadow p-5'>
-        <div className='flex items-center justify-between mb-3'>
-          <h2 className='text-xl font-semibold'>Security Logs</h2>
-          <div className='text-sm text-slate-600'>Total: {logsTotal}</div>
-        </div>
-        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-3'>
-          <input value={logFilters.email} onChange={(e) => setLogFilters({ ...logFilters, email: e.target.value })} placeholder='Filter email' className='border rounded p-2 text-sm' />
-          <select value={logFilters.method} onChange={(e) => setLogFilters({ ...logFilters, method: e.target.value })} className='border rounded p-2 text-sm'>
-            <option value='all'>All methods</option>
-            <option value='password'>Password</option>
-            <option value='signup'>Signup</option>
-            <option value='other'>Other</option>
-          </select>
-          <select value={logFilters.status} onChange={(e) => setLogFilters({ ...logFilters, status: e.target.value })} className='border rounded p-2 text-sm'>
-            <option value='all'>All status</option>
-            <option value='blocked'>Blocked</option>
-            <option value='invalid'>Invalid</option>
-            <option value='success'>Success</option>
-          </select>
-          <input type='date' value={logFilters.since} onChange={(e) => setLogFilters({ ...logFilters, since: e.target.value })} className='border rounded p-2 text-sm' />
-          <input type='date' value={logFilters.until} onChange={(e) => setLogFilters({ ...logFilters, until: e.target.value })} className='border rounded p-2 text-sm' />
-        </div>
-        <div className='flex items-center gap-2 mb-3'>
-          <button
-            className='px-3 py-1.5 rounded bg-slate-800 text-white text-sm'
-            onClick={async () => {
-              try {
-                const params = new URLSearchParams();
-                params.set('limit', String(pageSize));
-                params.set('skip', String(logPage * pageSize));
-                if (logFilters.email.trim()) params.set('email', logFilters.email.trim());
-                if (logFilters.method !== 'all') params.set('method', logFilters.method);
-                if (logFilters.status !== 'all') params.set('status', logFilters.status);
-                if (logFilters.since) params.set('since', logFilters.since);
-                if (logFilters.until) params.set('until', logFilters.until);
-                const data = await apiClient.get(`/user/security/logs?${params.toString()}`);
-                setLogs(Array.isArray(data?.logs) ? data.logs : []);
-                setLogsTotal(Number(data?.total) || 0);
-              } catch (error) {
-                console.error(error);
-              }
-            }}
-          >Apply Filters</button>
-          <button
-            className='px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm'
-            onClick={async () => {
-              try {
-                setLogFilters({ method: 'all', status: 'all', email: '', since: '', until: '' });
-                setLogPage(0);
-                const data = await apiClient.get(`/user/security/logs?limit=${pageSize}`);
-                setLogs(Array.isArray(data?.logs) ? data.logs : []);
-                setLogsTotal(Number(data?.total) || 0);
-              } catch (error) {
-                console.error(error);
-              }
-            }}
-          >Reset</button>
-          <label className='flex items-center gap-2 text-sm ml-2'>
-            <input type='checkbox' checked={onlyPhoneChanges} onChange={(e) => setOnlyPhoneChanges(e.target.checked)} />
-            Only phone changes
-          </label>
-          <div className='ml-auto flex items-center gap-2'>
-            <button disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p-1))} className='px-3 py-1.5 rounded border text-sm disabled:opacity-50'>Prev</button>
-            <span className='text-sm text-slate-600'>Page {logPage + 1} of {Math.max(1, Math.ceil(logsTotal / pageSize))}</span>
-            <button disabled={(logPage+1) * pageSize >= logsTotal} onClick={() => setLogPage((p) => p+1)} className='px-3 py-1.5 rounded border text-sm disabled:opacity-50'>Next</button>
-          </div>
-        </div>
-        <div className='overflow-auto max-h-96'>
-          <table className='min-w-full border rounded-lg text-sm'>
-            <thead className='bg-slate-50'>
-              <tr>
-                <th className='text-left p-2 border-b'>Time</th>
-                <th className='text-left p-2 border-b'>Email</th>
-                <th className='text-left p-2 border-b'>Method</th>
-                <th className='text-left p-2 border-b'>Status</th>
-                <th className='text-left p-2 border-b'>Reason</th>
-                <th className='text-left p-2 border-b'>IP</th>
-                <th className='text-left p-2 border-b'>User Agent</th>
-                <th className='text-left p-2 border-b'>Path</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(onlyPhoneChanges ? logs.filter((l) => String(l.reason || '').startsWith('phone_changed:')) : logs).map((log) => {
-                const badge = log.status === 'blocked' ? 'bg-red-100 text-red-800' : log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
-                return (
-                  <tr key={log._id} className='border-b hover:bg-slate-50'>
-                    <td className='p-2 whitespace-nowrap'>{new Date(log.createdAt).toLocaleString()}</td>
-                    <td className='p-2 break-all'>{log.email}</td>
-                    <td className='p-2 capitalize'>{log.method}</td>
-                    <td className='p-2'><span className={`px-2 py-0.5 rounded-full text-xs ${badge}`}>{log.status}</span></td>
-                    <td className='p-2'>{log.reason}</td>
-                    <td className='p-2'>{log.ip}</td>
-                    <td className='p-2 text-xs max-w-[280px] truncate' title={log.userAgent}>{log.userAgent}</td>
-                    <td className='p-2 text-xs'>{log.path}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      )}
-      {/* Owners Management */}
-      {activeTab === 'owners' && (
-      <section className='mb-8 bg-white rounded-xl shadow p-5'>
-        <div className='flex items-center justify-between mb-3'>
-          <h2 className='text-xl font-semibold'>Owners</h2>
-          {ownersLoading && <span className='text-sm text-slate-500'>Loading…</span>}
-        </div>
-        {hasPerm('createOwner') && (
-          <>
-            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3'>
-              <input
-                className='border p-2 rounded'
-                placeholder='Owner name*'
-                value={newOwner.name}
-                onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
-              />
-              <input
-                className='border p-2 rounded'
-                placeholder='Email'
-                value={newOwner.email}
-                onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })}
-              />
-              <input
-                className='border p-2 rounded'
-                placeholder='Phone'
-                value={newOwner.phone}
-                onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
-              />
-              <input
-                className='border p-2 rounded'
-                placeholder='Company'
-                value={newOwner.companyName}
-                onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })}
-              />
-            </div>
-            <div className='flex items-center gap-2 mb-4'>
-              <button onClick={createOwner} className='px-4 py-2 rounded bg-blue-600 text-white'>Create Owner</button>
-            </div>
-          </>
-        )}
-        <div className='flex items-center gap-2 mb-4'>
-          <input
-            className='border p-2 rounded ml-auto'
-            placeholder='Search owners'
-            value={ownersQuery}
-            onChange={(e) => setOwnersQuery(e.target.value)}
-          />
-        </div>
-        <div className='overflow-auto'>
-          <table className='min-w-full border rounded-lg'>
-            <thead className='bg-slate-50'>
-              <tr>
-                <th className='text-left p-2 border-b'>Name</th>
-                <th className='text-left p-2 border-b'>Company</th>
-                <th className='text-left p-2 border-b'>Email</th>
-                <th className='text-left p-2 border-b'>Phone</th>
-                <th className='text-left p-2 border-b'>Active</th>
-                <th className='text-left p-2 border-b'>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {owners
-                .filter((o) => {
-                  if (!ownersQuery.trim()) return true;
-                  const q = ownersQuery.toLowerCase();
-                  return (
-                    String(o.name || '').toLowerCase().includes(q) ||
-                    String(o.email || '').toLowerCase().includes(q) ||
-                    String(o.companyName || '').toLowerCase().includes(q)
-                  );
-                })
-                .map((o) => (
-                  <tr key={o._id} className='border-b'>
-                    <td className='p-2'>{o.name}</td>
-                    <td className='p-2'>{o.companyName || '-'}</td>
-                    <td className='p-2'>{o.email || '-'}</td>
-                    <td className='p-2'>{o.phone || '-'}</td>
-                    <td className='p-2'>
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${o.active ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'}`}>{o.active ? 'Active' : 'Inactive'}</span>
-                    </td>
-                    <td className='p-2'>
-                      <div className='flex items-center gap-2'>
-                        {hasPerm('updateOwner') && (
-                          <button onClick={() => toggleOwnerActive(o)} className='px-2 py-1 text-xs rounded border'>{o.active ? 'Deactivate' : 'Activate'}</button>
-                        )}
-                        {hasPerm('deleteOwner') && (
-                          <button onClick={() => deleteOwnerById(o._id)} className='px-2 py-1 text-xs rounded border text-red-700'>Delete</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              {owners.length === 0 && (
-                <tr><td className='p-2 text-slate-500' colSpan={6}>No owners yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      )}
-      {activeTab === 'users' && (
-        <>
-          {/* Create Employee Section */}
-          <section className='mb-8 bg-white rounded-xl shadow p-5'>
-            <h2 className='text-xl font-semibold mb-4'>Create Employee</h2>
-            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
-              <input
-                className='border p-2 rounded'
-                placeholder='Username'
-                autoComplete='off'
-                value={newUser.username}
-                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-              />
-              <input
-                className='border p-2 rounded'
-                placeholder='Email'
-                type='email'
-                autoComplete='off'
-                value={newUser.email}
-                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-              />
-              <input
-                className='border p-2 rounded'
-                placeholder='Password'
-                type='password'
-                autoComplete='new-password'
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-              />
-              <input
-                className='border p-2 rounded'
-                placeholder='Phone/Mobile Number'
-                type='tel'
-                autoComplete='off'
-                value={newUser.phone}
-                onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-              />
-              <div className='flex flex-wrap gap-2 items-center'>
-                {categories.map((c) => (
-                  <label key={c._id} className='flex items-center gap-2 text-sm'>
-                    <input
-                      type='checkbox'
-                      checked={newUser.assignedCategories.includes(c.slug)}
-                      onChange={(e) => {
-                        const next = new Set(newUser.assignedCategories);
-                        if (e.target.checked) next.add(c.slug);
-                        else next.delete(c.slug);
-                        setNewUser({ ...newUser, assignedCategories: Array.from(next) });
-                      }}
-                    />
-                    {c.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className='mt-4'>
-              <button
-                disabled={creating}
-                onClick={async () => {
-                  try {
-                    setCreating(true);
-                    const data = await apiClient.post('/user/employee', newUser);
-                    if (data && data._id) {
-                      setUsers((prev) => [data, ...prev]);
-                      setNewUser({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
-                    }
-                  } catch (error) {
-                    console.error(error);
-                  } finally {
-                    setCreating(false);
-                  }
-                }}
-                className='px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-70'
-              >
-                {creating ? 'Creating...' : 'Create Employee'}
-              </button>
-            </div>
-          </section>
-
-          {/* All Users Table */}
-          <section className='mb-8 bg-white rounded-xl shadow p-5'>
-            <div className='flex items-center justify-between mb-4'>
-              <h2 className='text-xl font-semibold'>All Users</h2>
-              <div className='flex items-center gap-4'>
-                <div className='relative'>
-                  <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400' />
-                  <input
-                    className='pl-8 pr-2 py-2 border rounded-lg text-sm w-64'
-                    placeholder='Search users by name or email'
-                    value={usersQuery}
-                    onChange={(e) => setUsersQuery(e.target.value)}
-                  />
-                </div>
-                <div className='text-sm text-slate-600'>Total: {users.length} users</div>
-              </div>
-            </div>
-            
-            <div className='overflow-auto'>
-              <table className='min-w-full border rounded-lg text-sm'>
-                <thead className='bg-slate-50'>
-                  <tr>
-                    <th className='text-left p-3 border-b font-semibold'>User</th>
-                    <th className='text-left p-3 border-b font-semibold'>Email</th>
-                    <th className='text-left p-3 border-b font-semibold'>Role</th>
-                    <th className='text-left p-3 border-b font-semibold'>Categories</th>
-                    <th className='text-left p-3 border-b font-semibold'>Status</th>
-                    <th className='text-left p-3 border-b font-semibold'>Created</th>
-                    <th className='text-left p-3 border-b font-semibold'>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users
-                    .filter((user) => {
-                      if (!usersQuery.trim()) return true;
-                      const q = usersQuery.toLowerCase();
-                      return (
-                        String(user.username || '').toLowerCase().includes(q) ||
-                        String(user.email || '').toLowerCase().includes(q) ||
-                        String(user.phone || '').toLowerCase().includes(q)
-                      );
-                    })
-                    .map((user) => (
-                    <tr key={user._id} className='border-b hover:bg-slate-50'>
-                      <td className='p-3'>
-                        <div className='flex items-center gap-3'>
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            user.role === 'admin' ? 'bg-red-100' :
-                            user.role === 'employee' ? 'bg-blue-100' :
-                            user.role === 'seller' ? 'bg-green-100' :
-                            'bg-slate-200'
-                          }`}>
-                            <span className={`text-sm font-medium ${
-                              user.role === 'admin' ? 'text-red-600' :
-                              user.role === 'employee' ? 'text-blue-600' :
-                              user.role === 'seller' ? 'text-green-600' :
-                              'text-slate-600'
-                            }`}>
-                              {user.username ? user.username.charAt(0).toUpperCase() : 'U'}
-                            </span>
-                          </div>
-                          <div>
-                            <div className='font-medium text-slate-900'>{user.username || 'N/A'}</div>
-                            <div className='flex items-center gap-2'>
-                              <span className='text-xs text-slate-500'>ID: {String(user._id).slice(-6)}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                                user.role === 'employee' ? 'bg-blue-100 text-blue-800' :
-                                user.role === 'seller' ? 'bg-green-100 text-green-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {user.role || 'buyer'}
-                              </span>
+                {/* Category Distribution */}
+                <div className='mb-4'>
+                  <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Category</div>
+                  <div className='space-y-2'>
+                    {(() => {
+                      const categoryData = listings.reduce((acc, l) => {
+                        const cat = l.category || 'uncategorized';
+                        if (!acc[cat]) acc[cat] = { count: 0, value: 0 };
+                        acc[cat].count++;
+                        acc[cat].value += (l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0);
+                        return acc;
+                      }, {});
+                      const maxCount = Math.max(...Object.values(categoryData).map(c => c.count), 1);
+                      return Object.entries(categoryData).map(([cat, data]) => (
+                        <div key={cat} className='flex items-center gap-3'>
+                          <div className='w-24 text-xs text-slate-600 truncate capitalize'>{cat}</div>
+                          <div className='flex-1 h-6 bg-slate-100 rounded-full overflow-hidden'>
+                            <div className='h-full bg-gradient-to-r from-sky-500 to-blue-600 rounded-full flex items-center justify-end pr-2' style={{ width: `${(data.count / maxCount) * 100}%`, minWidth: '40px' }}>
+                              <span className='text-xs text-white font-medium'>{data.count}</span>
                             </div>
                           </div>
+                          <div className='w-28 text-xs text-slate-500 text-right'>₹{data.value.toLocaleString('en-IN')}</div>
                         </div>
-                      </td>
-                      <td className='p-3'>
-                        <div className='text-slate-900'>{user.email}</div>
-                        {user.phone && (
-                          <div className='text-xs text-slate-500'>{user.phone}</div>
-                        )}
-                      </td>
-                      <td className='p-3'>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                          user.role === 'employee' ? 'bg-blue-100 text-blue-800' :
-                          user.role === 'seller' ? 'bg-green-100 text-green-800' :
-                          'bg-slate-100 text-slate-800'
-                        }`}>
-                          {user.role || 'buyer'}
-                        </span>
-                      </td>
-                      <td className='p-3'>
-                        <div className='flex flex-wrap gap-1'>
-                          {(user.assignedCategories || []).map((cat) => (
-                            <span key={cat} className='px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full'>
-                              {cat}
-                            </span>
-                          ))}
-                          {(!user.assignedCategories || user.assignedCategories.length === 0) && (
-                            <span className='text-xs text-slate-400'>No categories</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className='p-3'>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          user.status === 'active' ? 'bg-green-100 text-green-800' :
-                          user.status === 'suspended' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {user.status || 'active'}
-                        </span>
-                      </td>
-                      <td className='p-3 text-xs text-slate-600'>
-                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                      </td>
-                      <td className='p-3'>
-                        <div className='flex items-center gap-2'>
-                          <button
-                            onClick={() => openUserManageModal(user)}
-                            className='px-3 py-1.5 text-xs rounded-lg border bg-white hover:bg-slate-50'
-                          >
-                            View & Manage
-                          </button>
-                          {user.role !== 'admin' && (
-                            <button
-                              onClick={() => toggleUserStatus(user._id, user.status || 'active')}
-                              className={`px-2 py-1 text-xs rounded border ${
-                                (user.status || 'active') === 'active'
-                                  ? 'text-orange-600 hover:bg-orange-50'
-                                  : 'text-green-600 hover:bg-green-50'
-                              }`}
-                            >
-                              {(user.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {users.length === 0 && (
-                    <tr>
-                      <td className='p-3 text-slate-500 text-center' colSpan={7}>
-                        No users found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
-
-        {showUserManageModal && managingUser && (
-          <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
-            <div className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden'>
-              <div className='p-6 border-b flex items-start justify-between gap-4'>
-                <div>
-                  <div className='text-xs uppercase tracking-wide text-slate-500'>User Details</div>
-                  <div className='text-xl font-semibold text-slate-900'>{managingUser.username || 'N/A'}</div>
-                  <div className='text-sm text-slate-600'>{managingUser.email}</div>
+                      ));
+                    })()}
+                    {listings.length === 0 && <div className='text-sm text-slate-400 text-center py-4'>No listings data available</div>}
+                  </div>
                 </div>
-                <button
-                  onClick={closeUserManageModal}
-                  disabled={saving}
-                  className='px-3 py-2 rounded-lg border text-sm hover:bg-slate-50 disabled:opacity-50'
-                >
-                  Close
-                </button>
-              </div>
 
-              <div className='p-6 overflow-auto'>
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                  <div className='rounded-xl border p-4'>
-                    <div className='text-sm font-semibold text-slate-800 mb-3'>Overview</div>
-                    <div className='space-y-2 text-sm'>
-                      <div className='flex items-center justify-between gap-3'>
-                        <div className='text-slate-500'>User ID</div>
-                        <div className='font-mono text-slate-800'>{managingUser._id}</div>
-                      </div>
-                      <div className='flex items-center justify-between gap-3'>
-                        <div className='text-slate-500'>Phone</div>
-                        <div className='text-slate-800'>{managingUser.phone || '-'}</div>
-                      </div>
-                      <div className='flex items-center justify-between gap-3'>
-                        <div className='text-slate-500'>Status</div>
-                        <div className='text-slate-800'>{managingUser.status || 'active'}</div>
-                      </div>
-                      <div className='flex items-center justify-between gap-3'>
-                        <div className='text-slate-500'>Created</div>
-                        <div className='text-slate-800'>
-                          {managingUser.createdAt ? new Date(managingUser.createdAt).toLocaleString() : 'N/A'}
-                        </div>
-                      </div>
-                      <div className='flex items-center justify-between gap-3'>
-                        <div className='text-slate-500'>Role</div>
-                        <div className='text-slate-800'>{managingUser.role || 'buyer'}</div>
-                      </div>
-                    </div>
-                    <div className='mt-4 flex items-center gap-2'>
-                      {managingUser.role !== 'admin' && (
-                        <button
-                          onClick={async () => {
-                            await toggleUserStatus(managingUser._id, managingUser.status || 'active');
-                            const nextStatus = (managingUser.status || 'active') === 'active' ? 'inactive' : 'active';
-                            setManagingUser((prev) => (prev ? { ...prev, status: nextStatus } : prev));
-                          }}
-                          disabled={saving}
-                          className={`px-3 py-2 rounded-lg border text-sm disabled:opacity-50 ${
-                            (managingUser.status || 'active') === 'active'
-                              ? 'text-orange-700 hover:bg-orange-50'
-                              : 'text-green-700 hover:bg-green-50'
-                          }`}
-                        >
-                          {(managingUser.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
-                        </button>
+                {/* Property Type Distribution */}
+                <div>
+                  <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Property Type</div>
+                  <div className='flex flex-wrap gap-2'>
+                    {(() => {
+                      const typeData = listings.reduce((acc, l) => { const type = l.propertyType || 'other'; if (!acc[type]) acc[type] = 0; acc[type]++; return acc; }, {});
+                      const colors = ['bg-purple-100 text-purple-800', 'bg-blue-100 text-blue-800', 'bg-green-100 text-green-800', 'bg-amber-100 text-amber-800', 'bg-red-100 text-red-800', 'bg-pink-100 text-pink-800'];
+                      return Object.entries(typeData).map(([type, count], idx) => (
+                        <span key={type} className={`px-3 py-1.5 rounded-full text-xs font-medium ${colors[idx % colors.length]}`}>{type}: {count}</span>
+                      ));
+                    })()}
+                    {listings.length === 0 && <span className='text-sm text-slate-400'>No data</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* LISTINGS TAB */}
+          {activeTab === 'listings' && (
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='flex items-center justify-between mb-4'>
+                <h2 className='text-base font-semibold text-slate-900'>All Listings</h2>
+                <div className='flex gap-2 items-center'>
+                  <div className='relative'>
+                    <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' />
+                    <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Search by name or address' value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
+                  </div>
+                  <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineDownload className='w-4 h-4' /> Export</button>
+                  <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineUpload className='w-4 h-4' /> Import</button>
+                  <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm inline-flex items-center gap-2 font-medium'><HiOutlinePlus className='w-4 h-4' /> Add New</a>
+                </div>
+              </div>
+              <div className='overflow-auto'>
+                <table className='min-w-full text-sm'>
+                  <thead>
+                    <tr className='border-b border-slate-200 bg-slate-50'>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>ID</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Listing</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Category</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Type</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Price</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Offer</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(listingsLoading ? [] : listings).filter((l) => { if (!listSearch.trim()) return true; const q = listSearch.toLowerCase(); return String(l.name || '').toLowerCase().includes(q) || String(l.address || '').toLowerCase().includes(q); }).map((l) => {
+                      const id = String(l._id).slice(-4).toUpperCase();
+                      const price = (l.offer && l.discountPrice) ? l.discountPrice : l.regularPrice;
+                      return (
+                        <tr key={l._id} className='border-b border-slate-100 hover:bg-slate-50'>
+                          <td className='px-3 py-2.5 text-xs text-slate-500'>#{id}</td>
+                          <td className='px-3 py-2.5'>
+                            <a href={`/listing/${l._id}`} className='text-slate-800 hover:underline font-medium text-sm'>{l.name}</a>
+                            <div className='text-xs text-slate-500 truncate max-w-[360px]'>{l.address}</div>
+                          </td>
+                          <td className='px-3 py-2.5 text-xs text-slate-600'>{l.category || '-'}</td>
+                          <td className='px-3 py-2.5'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${l.type === 'rent' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{l.type || '-'}</span></td>
+                          <td className='px-3 py-2.5 text-sm text-slate-800'>${Number(price || 0).toLocaleString('en-US')}{l.type === 'rent' ? <span className='text-xs text-slate-500'> / month</span> : null}</td>
+                          <td className='px-3 py-2.5'>{l.offer ? <span className='px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800'>Offer</span> : <span className='px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700'>—</span>}</td>
+                          <td className='px-3 py-2.5 text-xs text-slate-500'>{l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '-'}</td>
+                        </tr>
+                      );
+                    })}
+                    {!listingsLoading && listings.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={7}>No listings.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {/* CATEGORIES TAB */}
+          {activeTab === 'categories' && (
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='flex items-center justify-between mb-4'>
+                <h2 className='text-base font-semibold text-slate-900'>Categories</h2>
+                <div className='text-sm text-slate-500'>Total: {categories.length}</div>
+              </div>
+              {hasPerm('createCategory') && (
+                <div className='mb-6 flex gap-3 items-center flex-wrap'>
+                  <input type='text' placeholder='Create new category (e.g., DLF)' className='border border-slate-200 px-3 py-2 rounded-lg flex-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                  <button
+                    disabled={creating || !newCategoryName.trim()}
+                    onClick={async () => {
+                      if (!newCategoryName.trim()) { alert('Please enter a category name'); return; }
+                      try {
+                        setCreating(true);
+                        const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
+                        if (data && data.slug) { setCategories((prev) => [...prev, data]); setNewCategoryName(''); }
+                        else { alert(data?.message || 'Failed to create category'); }
+                      } catch { alert('Error creating category. Please try again.'); }
+                      finally { setCreating(false); }
+                    }}
+                    className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'
+                  >{creating ? 'Creating...' : 'Create Category'}</button>
+                </div>
+              )}
+              <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4'>
+                {categories.map((category) => (
+                  <div key={category._id} className='border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow'>
+                    <h3 className='font-semibold text-slate-800 mb-1 text-sm'>{category.name}</h3>
+                    <p className='text-xs text-slate-500 mb-3 font-mono'>{category.slug}</p>
+                    <div className='flex items-center justify-between'>
+                      <span className='text-xs text-slate-400'>{category.fields?.length || 0} fields</span>
+                      {hasPerm('deleteCategory') && (
+                        <button onClick={() => setPendingDeleteCategory(category)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>Delete</button>
                       )}
                     </div>
                   </div>
-
-                  <div className='rounded-xl border p-4'>
-                    <div className='text-sm font-semibold text-slate-800 mb-3'>Update Properties</div>
-                    <div className='space-y-4'>
-                      <div>
-                        <div className='text-xs font-medium text-slate-600 mb-1'>Role</div>
-                        {managingUser.role === 'admin' ? (
-                          <div>
-                            <div className='w-full px-3 py-2 rounded-lg border text-sm bg-slate-100 text-slate-500 cursor-not-allowed'>Admin</div>
-                            <p className='text-xs text-amber-600 mt-1'>Admin roles cannot be changed.</p>
-                          </div>
-                        ) : (
-                          <select
-                            value={manageRole}
-                            onChange={(e) => setManageRole(e.target.value)}
-                            disabled={saving}
-                            className='w-full px-3 py-2 rounded-lg border text-sm'
-                          >
-                            <option value='buyer'>Buyer</option>
-                            <option value='seller'>Seller</option>
-                            <option value='employee'>Employee</option>
-                          </select>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className='text-xs font-medium text-slate-600 mb-2'>Assigned Categories</div>
-                        <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
-                          {categories.map((c) => (
-                            <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
-                              <input
-                                type='checkbox'
-                                checked={manageCategories.includes(c.slug)}
-                                onChange={() => toggleManageCategory(c.slug)}
-                                disabled={saving}
-                              />
-                              <span>{c.name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className='flex justify-end gap-3'>
-                        <button
-                          onClick={closeUserManageModal}
-                          disabled={saving}
-                          className='px-4 py-2 rounded-lg border text-sm hover:bg-slate-50 disabled:opacity-50'
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={saveManagedUser}
-                          disabled={saving}
-                          className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm hover:opacity-95 disabled:opacity-50'
-                        >
-                          {saving ? 'Saving…' : 'Save Changes'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {isAdmin && managingUser.role === 'employee' && (
-                  <div className='mt-6 rounded-xl border p-4'>
-                    <div className='text-sm font-semibold text-slate-800 mb-3'>Reset Password</div>
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
-                      <input
-                        className='px-3 py-2 rounded-lg border text-sm'
-                        type='password'
-                        placeholder='New password'
-                        value={managePassword}
-                        onChange={(e) => setManagePassword(e.target.value)}
-                        disabled={saving}
-                      />
-                      <input
-                        className='px-3 py-2 rounded-lg border text-sm'
-                        type='password'
-                        placeholder='Confirm new password'
-                        value={managePasswordConfirm}
-                        onChange={(e) => setManagePasswordConfirm(e.target.value)}
-                        disabled={saving}
-                      />
-                    </div>
-                    <div className='mt-3 flex justify-end'>
-                      <button
-                        onClick={saveManagedPassword}
-                        disabled={saving || !managePassword}
-                        className='px-4 py-2 rounded-lg border text-sm hover:bg-slate-50 disabled:opacity-50'
-                      >
-                        {saving ? 'Updating…' : 'Update Password'}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                ))}
+                {categories.length === 0 && <div className='col-span-full text-center py-8 text-slate-500 text-sm'>No categories found. Create your first category above.</div>}
               </div>
             </div>
-          </div>
-        )}
-        
-        {/* Import Listings Modal */}
-        {showImportModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
-              <div className="p-6 border-b">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-800">
-                    Import Listings from CSV
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setShowImportModal(false);
-                      setImportFile(null);
-                      setImportResults(null);
-                    }}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+          )}
+
+          {/* PROPERTY TYPES TAB */}
+          {isAdmin && activeTab === 'property-types' && (
+            <PropertyTypeManagement />
+          )}
+
+          {/* SECURITY LOGS TAB */}
+          {activeTab === 'logs' && (
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='flex items-center justify-between mb-4'>
+                <h2 className='text-base font-semibold text-slate-900'>Security Logs</h2>
+                <div className='text-sm text-slate-500'>Total: {logsTotal}</div>
+              </div>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-3'>
+                <input value={logFilters.email} onChange={(e) => setLogFilters({ ...logFilters, email: e.target.value })} placeholder='Filter email' className='border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' />
+                <select value={logFilters.method} onChange={(e) => setLogFilters({ ...logFilters, method: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
+                  <option value='all'>All methods</option>
+                  <option value='password'>Password</option>
+                  <option value='signup'>Signup</option>
+                  <option value='other'>Other</option>
+                </select>
+                <select value={logFilters.status} onChange={(e) => setLogFilters({ ...logFilters, status: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
+                  <option value='all'>All status</option>
+                  <option value='blocked'>Blocked</option>
+                  <option value='invalid'>Invalid</option>
+                  <option value='success'>Success</option>
+                </select>
+                <input type='date' value={logFilters.since} onChange={(e) => setLogFilters({ ...logFilters, since: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
+                <input type='date' value={logFilters.until} onChange={(e) => setLogFilters({ ...logFilters, until: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
+              </div>
+              <div className='flex items-center gap-2 mb-4'>
+                <button className='px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors' onClick={async () => {
+                  try {
+                    const params = new URLSearchParams();
+                    params.set('limit', String(pageSize)); params.set('skip', String(logPage * pageSize));
+                    if (logFilters.email.trim()) params.set('email', logFilters.email.trim());
+                    if (logFilters.method !== 'all') params.set('method', logFilters.method);
+                    if (logFilters.status !== 'all') params.set('status', logFilters.status);
+                    if (logFilters.since) params.set('since', logFilters.since);
+                    if (logFilters.until) params.set('until', logFilters.until);
+                    const data = await apiClient.get(`/user/security/logs?${params.toString()}`);
+                    setLogs(Array.isArray(data?.logs) ? data.logs : []); setLogsTotal(Number(data?.total) || 0);
+                  } catch (error) { console.error(error); }
+                }}>Apply Filters</button>
+                <button className='px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm transition-colors' onClick={async () => {
+                  try {
+                    setLogFilters({ method: 'all', status: 'all', email: '', since: '', until: '' }); setLogPage(0);
+                    const data = await apiClient.get(`/user/security/logs?limit=${pageSize}`);
+                    setLogs(Array.isArray(data?.logs) ? data.logs : []); setLogsTotal(Number(data?.total) || 0);
+                  } catch (error) { console.error(error); }
+                }}>Reset</button>
+                <label className='flex items-center gap-2 text-sm text-slate-600 ml-2'>
+                  <input type='checkbox' checked={onlyPhoneChanges} onChange={(e) => setOnlyPhoneChanges(e.target.checked)} />
+                  Only phone changes
+                </label>
+                <div className='ml-auto flex items-center gap-2'>
+                  <button disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p-1))} className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm disabled:opacity-50 hover:bg-slate-50'>Prev</button>
+                  <span className='text-sm text-slate-600'>Page {logPage + 1} of {Math.max(1, Math.ceil(logsTotal / pageSize))}</span>
+                  <button disabled={(logPage+1) * pageSize >= logsTotal} onClick={() => setLogPage((p) => p+1)} className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm disabled:opacity-50 hover:bg-slate-50'>Next</button>
+                </div>
+              </div>
+              <div className='overflow-auto max-h-96'>
+                <table className='min-w-full text-sm'>
+                  <thead>
+                    <tr className='border-b border-slate-200 bg-slate-50'>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Time</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Email</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Method</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Status</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Reason</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>IP</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>User Agent</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Path</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(onlyPhoneChanges ? logs.filter((l) => String(l.reason || '').startsWith('phone_changed:')) : logs).map((log) => {
+                      const badge = log.status === 'blocked' ? 'bg-red-100 text-red-800' : log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                      return (
+                        <tr key={log._id} className='border-b border-slate-100 hover:bg-slate-50'>
+                          <td className='px-3 py-2 whitespace-nowrap text-xs text-slate-600'>{new Date(log.createdAt).toLocaleString()}</td>
+                          <td className='px-3 py-2 break-all text-xs'>{log.email}</td>
+                          <td className='px-3 py-2 capitalize text-xs'>{log.method}</td>
+                          <td className='px-3 py-2'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge}`}>{log.status}</span></td>
+                          <td className='px-3 py-2 text-xs'>{log.reason}</td>
+                          <td className='px-3 py-2 text-xs'>{log.ip}</td>
+                          <td className='px-3 py-2 text-xs max-w-[280px] truncate' title={log.userAgent}>{log.userAgent}</td>
+                          <td className='px-3 py-2 text-xs'>{log.path}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {/* OWNERS TAB */}
+          {activeTab === 'owners' && (
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='flex items-center justify-between mb-4'>
+                <h2 className='text-base font-semibold text-slate-900'>Owners</h2>
+                {ownersLoading && <span className='text-sm text-slate-400'>Loading…</span>}
+              </div>
+              {hasPerm('createOwner') && (
+                <>
+                  <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3'>
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Owner name*' value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Email' value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Phone' value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Company' value={newOwner.companyName} onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })} />
+                  </div>
+                  <div className='mb-4'>
+                    <button onClick={createOwner} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors'>Create Owner</button>
+                  </div>
+                </>
+              )}
+              <div className='mb-4 flex justify-end'>
+                <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Search owners' value={ownersQuery} onChange={(e) => setOwnersQuery(e.target.value)} />
+              </div>
+              <div className='overflow-auto'>
+                <table className='min-w-full text-sm'>
+                  <thead>
+                    <tr className='border-b border-slate-200 bg-slate-50'>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Name</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Company</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Email</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Phone</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Active</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {owners.filter((o) => { if (!ownersQuery.trim()) return true; const q = ownersQuery.toLowerCase(); return String(o.name || '').toLowerCase().includes(q) || String(o.email || '').toLowerCase().includes(q) || String(o.companyName || '').toLowerCase().includes(q); }).map((o) => (
+                      <tr key={o._id} className='border-b border-slate-100 hover:bg-slate-50'>
+                        <td className='px-3 py-2.5 text-sm font-medium text-slate-900'>{o.name}</td>
+                        <td className='px-3 py-2.5 text-sm text-slate-600'>{o.companyName || '-'}</td>
+                        <td className='px-3 py-2.5 text-sm text-slate-600'>{o.email || '-'}</td>
+                        <td className='px-3 py-2.5 text-sm text-slate-600'>{o.phone || '-'}</td>
+                        <td className='px-3 py-2.5'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.active ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'}`}>{o.active ? 'Active' : 'Inactive'}</span></td>
+                        <td className='px-3 py-2.5'>
+                          <div className='flex items-center gap-2'>
+                            {hasPerm('updateOwner') && <button onClick={() => toggleOwnerActive(o)} className='px-2 py-1 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors'>{o.active ? 'Deactivate' : 'Activate'}</button>}
+                            {hasPerm('deleteOwner') && <button onClick={() => deleteOwnerById(o._id)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>Delete</button>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {owners.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={6}>No owners yet.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {/* USERS TAB */}
+          {activeTab === 'users' && (
+            <div className='space-y-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+                <h2 className='text-base font-semibold text-slate-900 mb-4'>Create Employee</h2>
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Username' autoComplete='off' value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Email' type='email' autoComplete='off' value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Password' type='password' autoComplete='new-password' value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Phone/Mobile Number' type='tel' autoComplete='off' value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
+                  <div className='flex flex-wrap gap-2 items-center col-span-full'>
+                    {categories.map((c) => (
+                      <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
+                        <input type='checkbox' checked={newUser.assignedCategories.includes(c.slug)} onChange={(e) => { const next = new Set(newUser.assignedCategories); if (e.target.checked) next.add(c.slug); else next.delete(c.slug); setNewUser({ ...newUser, assignedCategories: Array.from(next) }); }} />
+                        {c.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className='mt-4'>
+                  <button disabled={creating} onClick={async () => { try { setCreating(true); const data = await apiClient.post('/user/employee', newUser); if (data && data._id) { setUsers((prev) => [data, ...prev]); setNewUser({ username: '', email: '', password: '', phone: '', assignedCategories: [] }); } } catch (error) { console.error(error); } finally { setCreating(false); } }} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>
+                    {creating ? 'Creating...' : 'Create Employee'}
                   </button>
                 </div>
-                <p className="text-sm text-slate-600 mt-1">
-                  Upload a CSV file to bulk import listings
-                </p>
               </div>
 
-              <div className="p-6">
-                {/* Download Sample Template */}
-                <div className="mb-4 p-4 bg-slate-50 rounded-lg">
-                  <p className="text-sm text-slate-600 mb-2">
-                    Download a sample CSV template to see the expected format:
-                  </p>
-                  <button
-                    onClick={downloadSampleCSV}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                  >
-                    <HiOutlineDownload className="w-4 h-4" />
-                    Download Sample Template
-                  </button>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+                <div className='flex items-center justify-between mb-4'>
+                  <h2 className='text-base font-semibold text-slate-900'>All Users</h2>
+                  <div className='flex items-center gap-4'>
+                    <div className='relative'>
+                      <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' />
+                      <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Search users by name or email' value={usersQuery} onChange={(e) => setUsersQuery(e.target.value)} />
+                    </div>
+                    <div className='text-sm text-slate-500'>Total: {users.length} users</div>
+                  </div>
+                </div>
+                <div className='overflow-auto'>
+                  <table className='min-w-full text-sm'>
+                    <thead>
+                      <tr className='border-b border-slate-200 bg-slate-50'>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>User</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Email</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Role</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Categories</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Status</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Created</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.filter((user) => { if (!usersQuery.trim()) return true; const q = usersQuery.toLowerCase(); return String(user.username || '').toLowerCase().includes(q) || String(user.email || '').toLowerCase().includes(q) || String(user.phone || '').toLowerCase().includes(q); }).map((user) => (
+                        <tr key={user._id} className='border-b border-slate-100 hover:bg-slate-50'>
+                          <td className='px-3 py-3'>
+                            <div className='flex items-center gap-3'>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${user.role === 'admin' ? 'bg-red-100' : user.role === 'employee' ? 'bg-blue-100' : user.role === 'seller' ? 'bg-green-100' : 'bg-slate-200'}`}>
+                                <span className={`text-sm font-medium ${user.role === 'admin' ? 'text-red-600' : user.role === 'employee' ? 'text-blue-600' : user.role === 'seller' ? 'text-green-600' : 'text-slate-600'}`}>{user.username ? user.username.charAt(0).toUpperCase() : 'U'}</span>
+                              </div>
+                              <div>
+                                <div className='font-medium text-slate-900 text-sm'>{user.username || 'N/A'}</div>
+                                <div className='text-xs text-slate-400'>ID: {String(user._id).slice(-6)}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className='px-3 py-3'>
+                            <div className='text-sm text-slate-900'>{user.email}</div>
+                            {user.phone && <div className='text-xs text-slate-500'>{user.phone}</div>}
+                          </td>
+                          <td className='px-3 py-3'><span className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-red-100 text-red-800' : user.role === 'employee' ? 'bg-blue-100 text-blue-800' : user.role === 'seller' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>{user.role || 'buyer'}</span></td>
+                          <td className='px-3 py-3'>
+                            <div className='flex flex-wrap gap-1'>
+                              {(user.assignedCategories || []).map((cat) => <span key={cat} className='px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full'>{cat}</span>)}
+                              {(!user.assignedCategories || user.assignedCategories.length === 0) && <span className='text-xs text-slate-400'>None</span>}
+                            </div>
+                          </td>
+                          <td className='px-3 py-3'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-800' : user.status === 'suspended' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{user.status || 'active'}</span></td>
+                          <td className='px-3 py-3 text-xs text-slate-500'>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
+                          <td className='px-3 py-3'>
+                            <div className='flex items-center gap-2'>
+                              <button onClick={() => openUserManageModal(user)} className='px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'>Manage</button>
+                              {user.role !== 'admin' && (
+                                <button onClick={() => toggleUserStatus(user._id, user.status || 'active')} className={`px-2 py-1 text-xs rounded-lg border transition-colors ${(user.status || 'active') === 'active' ? 'border-orange-200 text-orange-600 hover:bg-orange-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>
+                                  {(user.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {users.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={7}>No users found.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ROLES TAB */}
+          {activeTab === 'roles' && isAdmin && (
+            <RoleManagement />
+          )}
+        </>
+      )}
+
+      {/* User Manage Modal */}
+      {showUserManageModal && managingUser && (
+        <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
+          <div className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden'>
+            <div className='p-6 border-b flex items-start justify-between gap-4'>
+              <div>
+                <div className='text-xs uppercase tracking-wide text-slate-500'>User Details</div>
+                <div className='text-xl font-semibold text-slate-900'>{managingUser.username || 'N/A'}</div>
+                <div className='text-sm text-slate-500'>{managingUser.email}</div>
+              </div>
+              <button onClick={closeUserManageModal} disabled={saving} className='px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>
+                Close
+              </button>
+            </div>
+
+            <div className='p-6 overflow-auto'>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                <div className='rounded-xl border border-slate-200 p-4'>
+                  <div className='text-sm font-semibold text-slate-800 mb-3'>Overview</div>
+                  <div className='space-y-2 text-sm'>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>User ID</div><div className='font-mono text-xs text-slate-800'>{managingUser._id}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Phone</div><div className='text-slate-800'>{managingUser.phone || '-'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Status</div><div className='text-slate-800'>{managingUser.status || 'active'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Created</div><div className='text-xs text-slate-800'>{managingUser.createdAt ? new Date(managingUser.createdAt).toLocaleString() : 'N/A'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Role</div><div className='text-slate-800'>{managingUser.role || 'buyer'}</div></div>
+                  </div>
+                  <div className='mt-4'>
+                    {managingUser.role !== 'admin' && (
+                      <button onClick={async () => { await toggleUserStatus(managingUser._id, managingUser.status || 'active'); const nextStatus = (managingUser.status || 'active') === 'active' ? 'inactive' : 'active'; setManagingUser((prev) => (prev ? { ...prev, status: nextStatus } : prev)); }} disabled={saving} className={`px-3 py-2 rounded-lg border text-sm disabled:opacity-50 transition-colors ${(managingUser.status || 'active') === 'active' ? 'border-orange-200 text-orange-700 hover:bg-orange-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}>
+                        {(managingUser.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* File Upload */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Select CSV File
-                  </label>
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => setImportFile(e.target.files[0])}
-                    className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
-                  />
-                  {importFile && (
-                    <p className="mt-2 text-sm text-slate-600">
-                      Selected: {importFile.name}
-                    </p>
+                <div className='rounded-xl border border-slate-200 p-4'>
+                  <div className='text-sm font-semibold text-slate-800 mb-3'>Update Properties</div>
+                  <div className='space-y-4'>
+                    <div>
+                      <div className='text-xs font-medium text-slate-600 mb-1'>Role</div>
+                      {managingUser.role === 'admin' ? (
+                        <div>
+                          <div className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-100 text-slate-500 cursor-not-allowed'>Admin</div>
+                          <p className='text-xs text-amber-600 mt-1'>Admin roles cannot be changed.</p>
+                        </div>
+                      ) : (
+                        <select value={manageRole} onChange={(e) => setManageRole(e.target.value)} disabled={saving} className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300'>
+
+                          <option value='buyer'>Buyer</option>
+                          <option value='seller'>Seller</option>
+                          <option value='employee'>Employee</option>
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <div className='text-xs font-medium text-slate-600 mb-2'>Assigned Categories</div>
+                      <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
+                        {categories.map((c) => (
+                          <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
+                            <input type='checkbox' checked={manageCategories.includes(c.slug)} onChange={() => toggleManageCategory(c.slug)} disabled={saving} />
+                            <span>{c.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className='flex justify-end gap-3'>
+                      <button onClick={closeUserManageModal} disabled={saving} className='px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>Cancel</button>
+                      <button onClick={saveManagedUser} disabled={saving} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>{saving ? 'Saving…' : 'Save Changes'}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {isAdmin && managingUser.role === 'employee' && (
+                <div className='mt-6 rounded-xl border border-slate-200 p-4'>
+                  <div className='text-sm font-semibold text-slate-800 mb-3'>Reset Password</div>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder='New password' value={managePassword} onChange={(e) => setManagePassword(e.target.value)} disabled={saving} />
+                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder='Confirm new password' value={managePasswordConfirm} onChange={(e) => setManagePasswordConfirm(e.target.value)} disabled={saving} />
+                  </div>
+                  <div className='mt-3 flex justify-end'>
+                    <button onClick={saveManagedPassword} disabled={saving || !managePassword} className='px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700 transition-colors'>{saving ? 'Updating…' : 'Update Password'}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Listings Modal */}
+      {showImportModal && (
+        <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
+          <div className='bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden'>
+            <div className='p-6 border-b'>
+              <div className='flex items-start justify-between gap-4'>
+                <div>
+                  <h3 className='text-base font-semibold text-slate-900'>Import Listings from CSV</h3>
+                  <p className='text-sm text-slate-500 mt-0.5'>Upload a CSV file to bulk import listings</p>
+                </div>
+                <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportResults(null); }} className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors'>
+                  <HiX className='w-5 h-5' />
+                </button>
+              </div>
+            </div>
+
+            <div className='p-6'>
+              <div className='mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200'>
+                <p className='text-sm text-slate-600 mb-2'>Download a sample CSV template to see the expected format:</p>
+                <button onClick={downloadSampleCSV} className='text-sm text-slate-700 hover:text-slate-900 font-medium flex items-center gap-1.5 transition-colors'>
+                  <HiOutlineDownload className='w-4 h-4' />
+                  Download Sample Template
+                </button>
+              </div>
+
+              <div className='mb-4'>
+                <label className='block text-sm font-medium text-slate-700 mb-2'>Select CSV File</label>
+                <input type='file' accept='.csv' onChange={(e) => setImportFile(e.target.files[0])} className='block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200' />
+                {importFile && <p className='mt-2 text-sm text-slate-500'>Selected: {importFile.name}</p>}
+              </div>
+
+              {importResults && (
+                <div className='mt-4 p-4 rounded-lg border border-slate-200'>
+                  <h4 className='font-medium text-slate-800 mb-2 text-sm'>Import Results</h4>
+                  <div className='grid grid-cols-2 gap-4'>
+                    <div className='p-3 bg-green-50 rounded-lg border border-green-100'>
+                      <div className='text-green-800 font-medium'>{importResults.success?.length || 0}</div>
+                      <div className='text-green-600 text-xs'>Successfully imported</div>
+                    </div>
+                    <div className='p-3 bg-red-50 rounded-lg border border-red-100'>
+                      <div className='text-red-800 font-medium'>{importResults.failed?.length || 0}</div>
+                      <div className='text-red-600 text-xs'>Failed to import</div>
+                    </div>
+                  </div>
+                  {importResults.failed && importResults.failed.length > 0 && (
+                    <div className='mt-3'>
+                      <p className='text-sm font-medium text-slate-700 mb-1'>Errors:</p>
+                      <div className='max-h-32 overflow-y-auto text-xs text-red-600 bg-red-50 rounded p-2'>
+                        {importResults.failed.map((err, idx) => <div key={idx} className='mb-1'>Row {err.row}: {err.error}</div>)}
+                      </div>
+                    </div>
                   )}
                 </div>
+              )}
+            </div>
 
-                {/* Import Results */}
-                {importResults && (
-                  <div className="mt-4 p-4 rounded-lg border">
-                    <h4 className="font-medium text-slate-800 mb-2">Import Results</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="p-3 bg-green-50 rounded-lg">
-                        <div className="text-green-800 font-medium">{importResults.success?.length || 0}</div>
-                        <div className="text-green-600 text-xs">Successfully imported</div>
-                      </div>
-                      <div className="p-3 bg-red-50 rounded-lg">
-                        <div className="text-red-800 font-medium">{importResults.failed?.length || 0}</div>
-                        <div className="text-red-600 text-xs">Failed to import</div>
-                      </div>
-                    </div>
-                    {importResults.failed && importResults.failed.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-sm font-medium text-slate-700 mb-1">Errors:</p>
-                        <div className="max-h-32 overflow-y-auto text-xs text-red-600 bg-red-50 rounded p-2">
-                          {importResults.failed.map((err, idx) => (
-                            <div key={idx} className="mb-1">
-                              Row {err.row}: {err.error}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t bg-slate-50 flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setImportFile(null);
-                    setImportResults(null);
-                  }}
-                  disabled={importing}
-                  className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  {importResults ? 'Close' : 'Cancel'}
+            <div className='p-6 border-t bg-slate-50 flex justify-end gap-3'>
+              <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportResults(null); }} disabled={importing} className='px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors'>
+                {importResults ? 'Close' : 'Cancel'}
+              </button>
+              {!importResults && (
+                <button onClick={handleImportFile} disabled={importing || !importFile} className='px-4 py-2 text-sm rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium disabled:opacity-50 flex items-center gap-2 transition-colors'>
+                  {importing ? (
+                    <>
+                      <svg className='animate-spin w-4 h-4' fill='none' viewBox='0 0 24 24'>
+                        <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
+                        <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
+                      </svg>
+                      Importing...
+                    </>
+                  ) : (
+                    <><HiOutlineUpload className='w-4 h-4' /> Import Listings</>
+                  )}
                 </button>
-                {!importResults && (
-                  <button
-                    onClick={handleImportFile}
-                    disabled={importing || !importFile}
-                    className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {importing ? (
-                      <>
-                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <HiOutlineUpload className="w-4 h-4" />
-                        Import Listings
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Role Management Tab */}
-        {activeTab === 'roles' && isAdmin && (
-          <RoleManagement />
-        )}
-        </section>
-      </div>
-      ) : null}
-    </main>
+      <ConfirmDialog
+        open={!!pendingDeleteCategory}
+        title='Delete this category?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={async () => {
+          if (!pendingDeleteCategory) return;
+          const cat = pendingDeleteCategory;
+          setPendingDeleteCategory(null);
+          try {
+            await apiClient.delete(`/category/delete/${cat._id}`);
+            setCategories((prev) => prev.filter((c) => c._id !== cat._id));
+          } catch (error) {
+            console.error('Error deleting category:', error);
+          }
+        }}
+        onCancel={() => setPendingDeleteCategory(null)}
+      />
+    </div>
   );
 }

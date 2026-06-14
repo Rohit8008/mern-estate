@@ -1,10 +1,20 @@
 import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import User from '../models/user.model.js';
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ytreal';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, '..', '.env') });
+
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('MONGO_URI is not set. Add it to backend/.env');
+  process.exit(1);
+}
 
 function parseArgs(argv) {
-  const args = { email: 'mittalrohit701@gmail.com', username: 'test', password: 'Admin@123', resetPassword: false };
+  const args = { email: '', username: '', password: 'ChangeMe@123', resetPassword: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--email') args.email = argv[++i] || '';
@@ -29,18 +39,18 @@ async function main() {
       user = await User.create({
         username: username || email.split('@')[0],
         email,
-        password: password || 'Admin@123',
+        password,
         role: 'admin',
         assignedCategories: [],
       });
       console.log(`Created new admin user: ${email}`);
-      console.log(`Password: ${password || 'Admin@123'}`);
+      console.log(`Password: ${password}`);
     } else {
       user.role = 'admin';
       if (resetPassword) {
-        user.password = password || 'Admin@123';
+        user.password = password;
         console.log(`Reset password for: ${email}`);
-        console.log(`New password: ${password || 'Admin@123'}`);
+        console.log(`New password: ${password}`);
       }
       await user.save();
       console.log(`Promoted existing user to admin: ${email}`);

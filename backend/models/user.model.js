@@ -63,9 +63,8 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      default: '',
-      unique: true,
-      sparse: true, // This allows multiple documents with empty/null phone values
+      default: null,
+      // unique index is defined below with partialFilterExpression so null values are never indexed
       validate: {
         validator: function(v) {
           return !v || validator.isMobilePhone(v);
@@ -113,7 +112,7 @@ const userSchema = new mongoose.Schema(
     
     role: {
       type: String,
-      enum: ['user', 'buyer', 'employee', 'admin'],
+      enum: ['user', 'buyer', 'seller', 'employee', 'admin'],
       default: 'user',
       index: true,
     },
@@ -159,25 +158,23 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
     loginCount: {
       type: Number,
       default: 0,
     },
-    permissions: {
-      type: [String],
-      default: [],
-      enum: [
-        'read_listings',
-        'create_listings',
-        'update_listings',
-        'delete_listings',
-        'manage_users',
-        'manage_categories',
-        'view_analytics',
-        'manage_settings',
-        'view_security_logs',
-        'manage_roles'
-      ],
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockedUntil: {
+      type: Date,
+      default: null,
+      index: true,
     },
     isDeleted: {
       type: Boolean,
@@ -199,12 +196,14 @@ const userSchema = new mongoose.Schema(
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
-  // Only hash the password if it has been modified (or is new) and is set
   if (!this.isModified('password') || !this.password) return next();
 
   try {
-    // Hash password with cost of 12
     this.password = await bcryptjs.hash(this.password, 12);
+    // Subtract 1s so tokens created just before the change are still invalidated
+    if (!this.isNew) {
+      this.passwordChangedAt = new Date(Date.now() - 1000);
+    }
     next();
   } catch (error) {
     next(error);
@@ -240,9 +239,11 @@ userSchema.methods.toJSON = function() {
 };
 
 // Indexes for better performance
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
-userSchema.index({ phone: 1 });
+// Only index non-null phone values — allows unlimited users with phone: null
+userSchema.index(
+  { phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $type: 'string' } }, name: 'phone_unique_string' }
+);
 userSchema.index({ role: 1, status: 1 });
 userSchema.index({ createdAt: -1 });
 

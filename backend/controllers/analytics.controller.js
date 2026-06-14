@@ -13,8 +13,6 @@ import mongoose from 'mongoose';
 import Listing from '../models/listing.model.js';
 import Client from '../models/client.model.js';
 import User from '../models/user.model.js';
-import AnalyticsSnapshot from '../models/analytics.model.js';
-import { NotFoundError } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -27,8 +25,8 @@ export const getPropertyMetrics = async (req, res, next) => {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
-    const matchStage = { createdAt: { $gte: start, $lte: end } };
-    if (category) matchStage.category = new mongoose.Types.ObjectId(category);
+    const matchStage = { isDeleted: { $ne: true }, createdAt: { $gte: start, $lte: end } };
+    if (category) matchStage.category = category;
 
     const [
       totalListings,
@@ -40,11 +38,11 @@ export const getPropertyMetrics = async (req, res, next) => {
       Listing.countDocuments(matchStage),
 
       Listing.aggregate([
-        { $match: matchStage },
+        { $match: { ...matchStage, category: { $nin: [null, ''] } } },
         { $group: { _id: '$category', count: { $sum: 1 }, avgPrice: { $avg: '$regularPrice' } } },
-        { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'categoryInfo' } },
+        { $lookup: { from: 'categories', localField: '_id', foreignField: 'slug', as: 'categoryInfo' } },
         { $unwind: { path: '$categoryInfo', preserveNullAndEmptyArrays: true } },
-        { $project: { categoryName: '$categoryInfo.name', count: 1, avgPrice: 1 } },
+        { $project: { categoryName: { $ifNull: ['$categoryInfo.name', '$_id'] }, count: 1, avgPrice: 1 } },
         { $sort: { count: -1 } },
       ]),
 
@@ -565,7 +563,7 @@ export const getDashboardOverview = async (req, res, next) => {
       upcomingFollowUps,
       recentActivity,
     ] = await Promise.all([
-      Listing.countDocuments(),
+      Listing.countDocuments({ isDeleted: { $ne: true } }),
 
       Client.aggregate([
         { $match: matchStage },
@@ -647,11 +645,3 @@ export const getDashboardOverview = async (req, res, next) => {
   }
 };
 
-export default {
-  getPropertyMetrics,
-  getSalesAnalytics,
-  getLeadConversionReport,
-  getRevenueReport,
-  getAgentPerformance,
-  getDashboardOverview,
-};

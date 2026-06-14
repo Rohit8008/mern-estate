@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { captureException } from '../utils/sentry';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -12,15 +13,9 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    this.setState({
-      error,
-      errorInfo
-    });
-    
-    // Log error to console in development
-    if (import.meta.env.DEV) {
-      console.error('ErrorBoundary caught an error:', error, errorInfo);
-    }
+    this.setState({ error, errorInfo });
+    captureException(error, { component: errorInfo.componentStack, error_type: 'react_error_boundary' });
+    if (import.meta.env.DEV) console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
   render() {

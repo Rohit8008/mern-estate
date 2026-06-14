@@ -1,234 +1,113 @@
-/**
- * Sentry Error Tracking for Frontend
- *
- * Provides centralized error tracking and performance monitoring.
- * Configure VITE_SENTRY_DSN environment variable to enable.
- *
- * Usage:
- *   import { initSentry, captureException } from './utils/sentry';
- *
- *   // Initialize at app startup (in main.jsx)
- *   initSentry();
- *
- *   // Capture errors
- *   captureException(error, { userId, action: 'createListing' });
- */
+// OpenObserve-based frontend logger — replaces Sentry.
+// Keeps the same exported names so existing callers (main.jsx) don't change.
 
-let Sentry = null;
-let isInitialized = false;
+const INGEST_ENDPOINT = '/api/observability/logs';
+const SERVICE = 'frontend';
 
-/**
- * Initialize Sentry error tracking
- */
-export const initSentry = async () => {
-  const dsn = import.meta.env.VITE_SENTRY_DSN;
+let _userId = null;
+let _userCtx = null;
 
-  if (!dsn) {
-    console.log('Sentry DSN not configured, error tracking disabled');
-    return null;
-  }
+// ---------------------------------------------------------------------------
+// Internal buffer + flush
+// ---------------------------------------------------------------------------
+const buffer = [];
+let flushTimer = null;
 
+function tsUs() { return Math.floor(Date.now() * 1000); }
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(flush, 5000);
+}
+
+async function flush() {
+  flushTimer = null;
+  if (!buffer.length) return;
+  const entries = buffer.splice(0);
   try {
-    // Dynamic import to avoid bundling Sentry when not used
-    Sentry = await import('@sentry/react');
-
-    Sentry.init({
-      dsn,
-      environment: import.meta.env.MODE,
-      release: import.meta.env.VITE_APP_VERSION || '1.0.0',
-
-      // Integration configuration
-      integrations: [
-        Sentry.browserTracingIntegration(),
-        Sentry.replayIntegration({
-          maskAllText: true,
-          blockAllMedia: true,
-        }),
-      ],
-
-      // Performance monitoring
-      tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-
-      // Session replay
-      replaysSessionSampleRate: 0.1,
-      replaysOnErrorSampleRate: 1.0,
-
-      // Filter out sensitive data
-      beforeSend(event) {
-        // Remove sensitive URL params
-        if (event.request && event.request.url) {
-          const url = new URL(event.request.url);
-          url.searchParams.delete('token');
-          url.searchParams.delete('code');
-          event.request.url = url.toString();
-        }
-        return event;
-      },
-
-      // Ignore common non-errors
-      ignoreErrors: [
-        'ResizeObserver loop',
-        'Network request failed',
-        'Load failed',
-        'ChunkLoadError',
-        'Loading chunk',
-        'Non-Error promise rejection',
-        // Firebase errors that are usually transient
-        'auth/network-request-failed',
-        'auth/popup-closed-by-user',
-      ],
-
-      denyUrls: [
-        // Chrome extensions
-        /extensions\//i,
-        /^chrome:\/\//i,
-        /^chrome-extension:\/\//i,
-        // Firefox extensions
-        /^moz-extension:\/\//i,
-      ],
+    await fetch(INGEST_ENDPOINT, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(entries),
+      keepalive: true,
     });
-
-    isInitialized = true;
-    console.log('Sentry initialized successfully');
-    return Sentry;
-  } catch (error) {
-    console.warn('Failed to initialize Sentry:', error.message);
-    console.warn('Install @sentry/react to enable error tracking: npm install @sentry/react');
-    return null;
+  } catch {
+    // network unavailable — drop silently
   }
+}
+
+function push(level, message, meta = {}) {
+  buffer.push({
+    _timestamp: tsUs(),
+    service:    SERVICE,
+    level,
+    message,
+    url:        window.location.pathname,
+    user_id:    _userId,
+    ...(meta && Object.keys(meta).length ? meta : {}),
+  });
+  if (buffer.length >= 20) flush();
+  else scheduleFlush();
+}
+
+// Flush before page unload
+window.addEventListener('beforeunload', flush);
+
+// ---------------------------------------------------------------------------
+// Global error capture
+// ---------------------------------------------------------------------------
+function setupGlobalCapture() {
+  window.addEventListener('error', (e) => {
+    push('error', e.message || 'Unhandled error', {
+      error_type:  'uncaught_exception',
+      filename:    e.filename,
+      lineno:      e.lineno,
+      colno:       e.colno,
+      stack:       e.error?.stack,
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = e.reason;
+    const message = reason instanceof Error ? reason.message : String(reason ?? 'Unhandled rejection');
+    push('error', message, {
+      error_type: 'unhandled_rejection',
+      stack:      reason instanceof Error ? reason.stack : undefined,
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Public API  (matches the old sentry.js exports)
+// ---------------------------------------------------------------------------
+export const initSentry = () => {
+  setupGlobalCapture();
 };
 
-/**
- * Capture an exception with optional context
- * @param {Error} error - The error to capture
- * @param {Object} context - Additional context
- */
 export const captureException = (error, context = {}) => {
-  // Always log to console in development
-  if (import.meta.env.DEV) {
-    console.error('Error captured:', {
-      message: error.message,
-      stack: error.stack,
-      ...context,
-    });
-  }
-
-  if (!isInitialized || !Sentry) {
-    return;
-  }
-
-  Sentry.withScope((scope) => {
-    // Set user context
-    if (context.userId) {
-      scope.setUser({ id: context.userId });
-    }
-    if (context.user) {
-      scope.setUser(context.user);
-    }
-
-    // Set tags
-    if (context.tags) {
-      Object.entries(context.tags).forEach(([key, value]) => {
-        scope.setTag(key, value);
-      });
-    }
-
-    // Set extra data
-    if (context.extra) {
-      Object.entries(context.extra).forEach(([key, value]) => {
-        scope.setExtra(key, value);
-      });
-    }
-
-    if (context.action) {
-      scope.setTag('action', context.action);
-    }
-    if (context.component) {
-      scope.setTag('component', context.component);
-    }
-
-    Sentry.captureException(error);
+  if (import.meta.env.DEV) console.error('[OO]', error, context);
+  push('error', error?.message || String(error), {
+    error_type: 'captured_exception',
+    stack:      error?.stack,
+    ...context,
   });
 };
 
-/**
- * Capture a message
- * @param {string} message - The message to capture
- * @param {string} level - Severity level
- * @param {Object} context - Additional context
- */
 export const captureMessage = (message, level = 'info', context = {}) => {
-  if (import.meta.env.DEV) {
-    console.log(`[${level.toUpperCase()}]`, message, context);
-  }
-
-  if (!isInitialized || !Sentry) {
-    return;
-  }
-
-  Sentry.withScope((scope) => {
-    scope.setLevel(level);
-
-    if (context.tags) {
-      Object.entries(context.tags).forEach(([key, value]) => {
-        scope.setTag(key, value);
-      });
-    }
-
-    Sentry.captureMessage(message);
-  });
+  push(level, message, context);
 };
 
-/**
- * Set user context for all future events
- * @param {Object} user - User object
- */
 export const setUser = (user) => {
-  if (isInitialized && Sentry) {
-    Sentry.setUser(user ? {
-      id: user._id || user.id,
-      email: user.email,
-      username: user.username,
-    } : null);
-  }
+  _userId  = user?._id || user?.id || null;
+  _userCtx = user ? { email: user.email, username: user.username } : null;
 };
 
-/**
- * Clear user context
- */
 export const clearUser = () => {
-  if (isInitialized && Sentry) {
-    Sentry.setUser(null);
-  }
+  _userId  = null;
+  _userCtx = null;
 };
 
-/**
- * Get Sentry ErrorBoundary component
- * @returns {React.Component} Sentry ErrorBoundary or null
- */
-export const getErrorBoundary = () => {
-  if (isInitialized && Sentry) {
-    return Sentry.ErrorBoundary;
-  }
-  return null;
-};
+export const getErrorBoundary = () => null;
+export const addBreadcrumb    = () => {};
 
-/**
- * Add breadcrumb for debugging
- * @param {Object} breadcrumb - Breadcrumb object
- */
-export const addBreadcrumb = (breadcrumb) => {
-  if (isInitialized && Sentry) {
-    Sentry.addBreadcrumb(breadcrumb);
-  }
-};
-
-export default {
-  initSentry,
-  captureException,
-  captureMessage,
-  setUser,
-  clearUser,
-  getErrorBoundary,
-  addBreadcrumb,
-};
+export default { initSentry, captureException, captureMessage, setUser, clearUser, getErrorBoundary, addBreadcrumb };

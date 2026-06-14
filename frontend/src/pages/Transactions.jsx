@@ -1,13 +1,12 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import { apiClient } from '../utils/http';
 import {
-  HiRefresh, HiPlus, HiSearch, HiFilter, HiChevronDown, HiX,
-  HiCurrencyDollar, HiCalendar, HiUser, HiHome, HiCheck,
-  HiClock, HiExclamation, HiDownload, HiDotsVertical,
-  HiPencil, HiTrash, HiEye,
+  HiPlus, HiSearch, HiChevronDown, HiX,
+  HiCurrencyDollar, HiHome, HiCheck,
+  HiClock, HiDownload, HiDotsVertical,
+  HiPencil, HiTrash,
 } from 'react-icons/hi';
 
 const TRANSACTION_TYPES = ['All', 'Sale', 'Rent', 'Lease'];
@@ -196,8 +195,6 @@ export default function Transactions() {
   const { isBuyerViewMode } = useBuyerView();
 
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -206,6 +203,7 @@ export default function Transactions() {
   const [showModal, setShowModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [showActionsMenu, setShowActionsMenu] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -213,7 +211,6 @@ export default function Transactions() {
     return currentUser.role === 'admin' || currentUser.role === 'employee';
   }, [currentUser, isBuyerViewMode]);
 
-  const fmt = (n) => new Intl.NumberFormat('en-IN').format(n || 0);
   const fmtCurrency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
   // Calculate summary metrics
@@ -254,9 +251,7 @@ export default function Transactions() {
   };
 
   const handleDeleteTransaction = (id) => {
-    if (confirm('Are you sure you want to delete this transaction?')) {
-      setTransactions(prev => prev.filter(t => t._id !== id));
-    }
+    setPendingDelete(id);
     setShowActionsMenu(null);
   };
 
@@ -280,7 +275,7 @@ export default function Transactions() {
       <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
         <div>
           <h1 className='text-xl font-bold text-slate-900'>Transactions</h1>
-          <p className='text-sm text-slate-500 mt-1'>Track and manage all property transactions</p>
+          <p className='text-slate-500 text-sm mt-0.5'>Track and manage all property transactions</p>
         </div>
         <div className='flex items-center gap-2'>
           <button className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'>
@@ -299,45 +294,45 @@ export default function Transactions() {
 
       {/* KPI Cards */}
       <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-        <div className='bg-white border border-slate-200 rounded-xl p-5'>
-          <div className='flex items-center gap-2 mb-2'>
-            <div className='w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center'>
+        <div className='bg-white border border-slate-200 border-t-2 border-t-emerald-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+          <div className='flex items-center justify-between mb-3'>
+            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Total Value</span>
+            <div className='w-9 h-9 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center'>
               <HiCurrencyDollar className='w-5 h-5 text-emerald-600' />
             </div>
-            <span className='text-sm font-medium text-slate-600'>Total Value</span>
           </div>
           <div className='text-2xl font-bold text-slate-900'>{fmtCurrency(metrics.totalValue)}</div>
           <div className='text-xs text-slate-500 mt-1'>Completed transactions</div>
         </div>
 
-        <div className='bg-white border border-slate-200 rounded-xl p-5'>
-          <div className='flex items-center gap-2 mb-2'>
-            <div className='w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center'>
+        <div className='bg-white border border-slate-200 border-t-2 border-t-blue-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+          <div className='flex items-center justify-between mb-3'>
+            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Commission</span>
+            <div className='w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center'>
               <HiCurrencyDollar className='w-5 h-5 text-blue-600' />
             </div>
-            <span className='text-sm font-medium text-slate-600'>Commission Earned</span>
           </div>
           <div className='text-2xl font-bold text-slate-900'>{fmtCurrency(metrics.totalCommission)}</div>
           <div className='text-xs text-slate-500 mt-1'>From completed deals</div>
         </div>
 
-        <div className='bg-white border border-slate-200 rounded-xl p-5'>
-          <div className='flex items-center gap-2 mb-2'>
-            <div className='w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center'>
+        <div className='bg-white border border-slate-200 border-t-2 border-t-purple-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+          <div className='flex items-center justify-between mb-3'>
+            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Completed</span>
+            <div className='w-9 h-9 rounded-xl bg-purple-50 ring-1 ring-purple-100 flex items-center justify-center'>
               <HiCheck className='w-5 h-5 text-purple-600' />
             </div>
-            <span className='text-sm font-medium text-slate-600'>Completed</span>
           </div>
           <div className='text-2xl font-bold text-slate-900'>{metrics.completed}</div>
           <div className='text-xs text-slate-500 mt-1'>Successful transactions</div>
         </div>
 
-        <div className='bg-white border border-slate-200 rounded-xl p-5'>
-          <div className='flex items-center gap-2 mb-2'>
-            <div className='w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center'>
+        <div className='bg-white border border-slate-200 border-t-2 border-t-amber-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
+          <div className='flex items-center justify-between mb-3'>
+            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Pending</span>
+            <div className='w-9 h-9 rounded-xl bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center'>
               <HiClock className='w-5 h-5 text-amber-600' />
             </div>
-            <span className='text-sm font-medium text-slate-600'>Pending</span>
           </div>
           <div className='text-2xl font-bold text-slate-900'>{metrics.pending}</div>
           <div className='text-xs text-slate-500 mt-1'>In progress</div>
@@ -541,6 +536,14 @@ export default function Transactions() {
         onClose={() => { setShowModal(false); setEditingTransaction(null); }}
         transaction={editingTransaction}
         onSave={handleSaveTransaction}
+      />
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title='Delete transaction?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={() => { setTransactions(prev => prev.filter(t => t._id !== pendingDelete)); setPendingDelete(null); }}
+        onCancel={() => setPendingDelete(null)}
       />
     </div>
   );

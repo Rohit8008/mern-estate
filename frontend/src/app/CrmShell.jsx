@@ -2,47 +2,107 @@ import { useMemo, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
-  HiMenuAlt2,
-  HiOutlineBell,
-  HiOutlineSearch,
-  HiX,
-  HiChevronRight,
+  HiMenuAlt2, HiX, HiOutlineSearch, HiOutlineBell,
+  HiOutlineHome, HiOutlineOfficeBuilding, HiOutlineTag,
+  HiOutlinePlus, HiOutlineUsers, HiOutlineClipboardList,
+  HiOutlineChartBar, HiOutlineCurrencyDollar,
+  HiOutlineDocumentReport, HiOutlineViewBoards, HiOutlineCalendar,
+  HiOutlineUserGroup, HiOutlineShieldCheck, HiOutlineChat,
+  HiOutlineUser, HiOutlineLogout, HiChevronDown,
+  HiOutlineCollection, HiOutlineCog,
 } from 'react-icons/hi';
-import {
-  FaChartLine,
-  FaClipboardList,
-  FaCalendarAlt,
-  FaUsers,
-  FaUser,
-  FaChartPie,
-  FaMoneyBillWave,
-  FaFileAlt,
-  FaBuilding,
-  FaThList,
-  FaPlusCircle,
-  FaShieldAlt,
-} from 'react-icons/fa';
-
+import { HiOutlineSun, HiOutlineMoon } from 'react-icons/hi2';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useAppearance } from '../contexts/useAppearance';
+import { useNotification } from '../contexts/NotificationContext';
+import { usePermissions } from '../contexts/PermissionsContext';
+import { useSearchContext } from '../contexts/SearchContext';
 import { normalizeImageUrl } from '../utils/http';
+import OfflineIndicator from '../components/OfflineIndicator';
 
-function classNames(...xs) {
-  return xs.filter(Boolean).join(' ');
-}
+function cx(...xs) { return xs.filter(Boolean).join(' '); }
 
-const ROLE_BADGE = {
-  admin: 'bg-rose-100 text-rose-700',
-  employee: 'bg-indigo-100 text-indigo-700',
-  seller: 'bg-amber-100 text-amber-700',
+const NOTIF_ICONS = {
+  success: <span className='w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 mt-1' />,
+  error:   <span className='w-2 h-2 rounded-full bg-rose-500 flex-shrink-0 mt-1' />,
+  warning: <span className='w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1' />,
+  info:    <span className='w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1' />,
 };
 
+const ROLE_COLORS = {
+  admin:    'bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/30',
+  employee: 'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/30',
+  seller:   'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30',
+};
+
+const PAGE_TITLES = {
+  '/dashboard':         'Dashboard',
+  '/analytics':         'Analytics',
+  '/properties':        'Properties',
+  '/create-listing':    'Add Property',
+  '/update-listing':    'Edit Property',
+  '/categories':        'Categories',
+  '/owners':            'Property Owners',
+  '/clients':           'Clients',
+  '/pipeline':          'Sales Pipeline',
+  '/tasks':             'Tasks',
+  '/calendar':          'Calendar',
+  '/transactions':      'Transactions',
+  '/client-reports':    'Client Reports',
+  '/reports':           'Reports',
+  '/buyer-requirements':'Buyer Requirements',
+  '/buyers':            'Buyer Requirements',
+  '/admin':             'Admin Panel',
+  '/profile':           'My Profile',
+  '/settings':          'Settings',
+};
+
+function getPageTitle(pathname) {
+  for (const [prefix, title] of Object.entries(PAGE_TITLES)) {
+    if (pathname.startsWith(prefix)) return title;
+  }
+  return 'Real Vista';
+}
+
+// ── Nav item component ────────────────────────────────────────────────────────
+function NavItem({ item, isActive, onNavigate }) {
+  const Icon = item.icon;
+  const active = item.active !== undefined ? item.active : isActive(item.to);
+
+  return (
+    <Link
+      to={item.to}
+      onClick={onNavigate}
+      className={cx(
+        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 group',
+        active
+          ? 'crm-nav-active text-white'
+          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+      )}
+    >
+      <Icon className={cx(
+        'w-[15px] h-[15px] flex-shrink-0',
+        active ? 'text-indigo-300' : 'text-slate-500 group-hover:text-slate-400'
+      )} />
+      <span className='flex-1 truncate leading-none'>{item.label}</span>
+    </Link>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function CrmShell() {
   const location = useLocation();
-  const { currentUser } = useSelector((state) => state.user);
+  const { currentUser } = useSelector((s) => s.user);
   const { isBuyerViewMode } = useBuyerView();
 
+  const { resolvedTheme, setTheme } = useAppearance();
+  const { notifications, clearAll } = useNotification();
+  const { can } = usePermissions();
+
+  const { open: openSearch } = useSearchContext();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [q, setQ] = useState('');
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -55,251 +115,332 @@ export default function CrmShell() {
     return location.pathname.startsWith(path);
   };
 
-  const crmNav = [
-    { to: '/properties', label: 'Properties', icon: FaBuilding, active: isActive('/properties') },
+  const username  = currentUser?.username || currentUser?.name || 'User';
+  const initials  = username.slice(0, 2).toUpperCase();
+  const roleBadge = ROLE_COLORS[currentUser?.role] || 'bg-slate-700 text-slate-300';
+  const pageTitle = getPageTitle(location.pathname);
+  const closeSidebar = () => setSidebarOpen(false);
+
+  // ── Navigation structure ──────────────────────────────────────────────────
+  const allNavSections = [
     {
-      to: '/categories',
-      label: 'Categories',
-      icon: FaThList,
-      active: isActive('/categories') || isActive('/category/') || isActive('/dynamic-listings/'),
+      label: 'Overview',
+      items: [
+        { to: '/dashboard',  label: 'Dashboard',  icon: HiOutlineHome,     requires: 'viewAnalytics' },
+        { to: '/analytics',  label: 'Analytics',  icon: HiOutlineChartBar, requires: 'viewAnalytics' },
+      ],
     },
-    { to: '/create-listing', label: 'Create Listing', icon: FaPlusCircle, active: isActive('/create-listing') },
-    { to: '/contacts', label: 'Contacts', icon: FaUsers, active: isActive('/contacts') },
-    { to: '/tasks', label: 'Tasks', icon: FaClipboardList, active: isActive('/tasks') },
-    { to: '/portfolio', label: 'Portfolio Dashboard', icon: FaChartPie, active: isActive('/portfolio') },
-    { to: '/dashboard', label: 'Agency Dashboard', icon: FaChartLine, active: isActive('/dashboard') },
+    {
+      label: 'Properties',
+      items: [
+        {
+          to: '/properties', label: 'All Properties', icon: HiOutlineOfficeBuilding, requires: 'viewListings',
+          active: isActive('/properties') || isActive('/update-listing'),
+        },
+        {
+          to: '/categories', label: 'Categories', icon: HiOutlineTag, requires: 'viewCategories',
+          active: isActive('/categories') || isActive('/category/') || isActive('/dynamic-listings/'),
+        },
+        { to: '/create-listing', label: 'Add Property', icon: HiOutlinePlus, requires: 'createListing' },
+      ],
+    },
+    {
+      label: 'CRM',
+      items: [
+        {
+          to: '/clients',  label: 'Clients',          icon: HiOutlineUsers,     requires: 'viewClients',
+          active: isActive('/clients'),
+        },
+        {
+          // Property owners — was incorrectly called "Contacts" before
+          to: '/owners',   label: 'Property Owners',  icon: HiOutlineUserGroup, requires: 'viewOwners',
+        },
+        { to: '/pipeline', label: 'Sales Pipeline',   icon: HiOutlineViewBoards, requires: 'viewClients' },
+        { to: '/buyers',   label: 'Buyer Requirements',icon: HiOutlineCollection, requires: 'viewBuyerRequirements' },
+        { to: '/tasks',    label: 'Tasks',            icon: HiOutlineClipboardList },
+        { to: '/calendar', label: 'Calendar',         icon: HiOutlineCalendar },
+      ],
+    },
+    {
+      label: 'Finance & Reports',
+      items: [
+        { to: '/transactions',   label: 'Transactions',   icon: HiOutlineCurrencyDollar, requires: 'viewAnalytics' },
+        { to: '/reports',        label: 'Client Reports', icon: HiOutlineDocumentReport, requires: 'exportData' },
+      ],
+    },
+    ...(currentUser?.role === 'admin' ? [{
+      label: 'Admin',
+      items: [
+        { to: '/admin',    label: 'Admin Panel', icon: HiOutlineShieldCheck },
+        { to: '/settings', label: 'Settings',   icon: HiOutlineCog },
+      ],
+    }] : []),
   ];
 
-  const managementNav = [
-    { to: '/transactions', label: 'Transactions', icon: FaMoneyBillWave, active: isActive('/transactions') },
-    { to: '/client-reports', label: 'Client Reports', icon: FaFileAlt, active: isActive('/client-reports') },
-    { to: '/deals', label: 'Pipeline', icon: FaChartLine, active: isActive('/deals') },
-    { to: '/clients', label: 'Clients', icon: FaUser, active: isActive('/clients') && !isActive('/contacts') },
-    { to: '/calendar', label: 'Calendar', icon: FaCalendarAlt, active: isActive('/calendar') },
-    { to: '/buyer-requirements', label: 'Buyers', icon: FaUser, active: isActive('/buyer-requirements') },
-  ];
+  const navSections = allNavSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => can(item.requires)),
+    }))
+    .filter((section) => section.items.length > 0);
 
-  const username = currentUser?.username || currentUser?.name || 'User';
-  const initials = username.slice(0, 2).toUpperCase();
-  const roleBadge = ROLE_BADGE[currentUser?.role] || 'bg-slate-100 text-slate-600';
-
+  // Non-CRM users get the page content without the shell
   if (!canAccess) return <Outlet />;
 
-  const NavItem = ({ item }) => {
-    const Icon = item.icon;
-    return (
-      <Link
-        key={item.to}
-        to={item.to}
-        onClick={() => setSidebarOpen(false)}
-        className={classNames(
-          'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group',
-          item.active
-            ? 'bg-indigo-50 text-indigo-700'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-        )}
-      >
-        {/* Active left bar */}
-        {item.active && (
-          <span className='absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-600 rounded-r-full' />
-        )}
-        <Icon
-          className={classNames(
-            'w-4 h-4 flex-shrink-0 transition-colors',
-            item.active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'
-          )}
-        />
-        <span className='flex-1 truncate'>{item.label}</span>
-        {item.active && <HiChevronRight className='w-3.5 h-3.5 text-indigo-400 flex-shrink-0' />}
-      </Link>
-    );
-  };
-
   return (
-    <div className='min-h-screen bg-slate-50'>
-      {/* Mobile sidebar overlay */}
+    <div className='min-h-screen bg-slate-50 flex'>
+
+      {/* ── Mobile overlay ── */}
       {sidebarOpen && (
         <button
           type='button'
-          onClick={() => setSidebarOpen(false)}
-          className='fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden'
+          onClick={closeSidebar}
+          className='fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden'
           aria-label='Close sidebar'
         />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={classNames(
-          'fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 z-50 lg:z-30 flex flex-col',
-          'transform transition-transform duration-200 ease-in-out',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        )}
-      >
-        {/* Logo / Brand */}
-        <div className='h-16 px-4 flex items-center justify-between border-b border-slate-100 flex-shrink-0'>
-          <Link to='/dashboard' className='flex items-center gap-2.5 min-w-0' onClick={() => setSidebarOpen(false)}>
-            <div className='w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-500 shadow flex items-center justify-center flex-shrink-0'>
-              <FaBuilding className='w-4 h-4 text-white' />
+      {/* ── Sidebar ── */}
+      <aside className={cx(
+        'fixed top-0 left-0 h-full w-64 z-50 lg:z-30 flex flex-col',
+        'bg-slate-900 border-r border-white/5 crm-sidebar-dots',
+        'transform transition-transform duration-200 ease-in-out',
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      )}>
+
+        {/* Brand */}
+        <div className='h-14 px-4 flex items-center justify-between border-b border-white/[0.06] flex-shrink-0'>
+          <Link to='/dashboard' onClick={closeSidebar} className='flex items-center gap-2.5 min-w-0'>
+            <div className='w-7 h-7 rounded-lg flex-shrink-0 relative shadow-md shadow-indigo-700/40 overflow-hidden'>
+              <div className='absolute inset-0 bg-gradient-to-br from-indigo-500 to-violet-600' />
+              <div className='absolute inset-0 flex items-center justify-center'>
+                <HiOutlineOfficeBuilding className='w-3.5 h-3.5 text-white' />
+              </div>
             </div>
             <div className='min-w-0'>
-              <div className='text-sm font-bold text-slate-900 leading-tight truncate'>Real Estate CRM</div>
-              <div className='text-[10px] text-slate-400 leading-tight font-medium tracking-wide uppercase'>Workspace</div>
+              <div className='text-sm font-bold text-white leading-tight truncate'>Real Vista</div>
+              <div className='text-[10px] text-slate-500 leading-tight font-medium'>CRM</div>
             </div>
           </Link>
           <button
             type='button'
-            onClick={() => setSidebarOpen(false)}
-            className='lg:hidden p-1.5 rounded-lg hover:bg-slate-100 text-slate-500'
-            aria-label='Close sidebar'
+            onClick={closeSidebar}
+            className='lg:hidden p-1.5 rounded-lg hover:bg-white/10 text-slate-400'
           >
             <HiX className='w-4 h-4' />
           </button>
         </div>
 
-        {/* Navigation */}
-        <div className='flex-1 overflow-y-auto px-3 py-4 space-y-5'>
-          {/* CRM Section */}
-          <div>
-            <div className='px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest'>CRM</div>
-            <nav className='space-y-0.5'>
-              {crmNav.map((item) => (
-                <NavItem key={item.to} item={item} />
-              ))}
-            </nav>
-          </div>
-
-          {/* Divider */}
-          <div className='border-t border-slate-100' />
-
-          {/* Management Section */}
-          <div>
-            <div className='px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest'>Management</div>
-            <nav className='space-y-0.5'>
-              {managementNav.map((item) => (
-                <NavItem key={item.to} item={item} />
-              ))}
-            </nav>
-          </div>
-
-          {/* Admin link */}
-          {currentUser?.role === 'admin' && (
-            <>
-              <div className='border-t border-slate-100' />
-              <div>
-                <div className='px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest'>Admin</div>
-                <nav className='space-y-0.5'>
-                  <NavItem
-                    item={{
-                      to: '/admin',
-                      label: 'Admin Panel',
-                      icon: FaShieldAlt,
-                      active: isActive('/admin'),
-                    }}
-                  />
-                </nav>
+        {/* Nav */}
+        <nav className='flex-1 overflow-y-auto px-3 py-3 space-y-5 scrollbar-thin'>
+          {navSections.map((section) => (
+            <div key={section.label}>
+              <div className='px-3 mb-1.5'>
+                <span className='text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em] whitespace-nowrap'>
+                  {section.label}
+                </span>
               </div>
-            </>
-          )}
-        </div>
+              <div className='space-y-0.5'>
+                {section.items.map((item) => (
+                  <NavItem
+                    key={item.to}
+                    item={item}
+                    isActive={isActive}
+                    onNavigate={closeSidebar}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
 
         {/* User footer */}
-        <div className='flex-shrink-0 border-t border-slate-100 p-3'>
-          <Link
-            to='/profile'
-            onClick={() => setSidebarOpen(false)}
-            className='flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors group'
-          >
-            <div className='w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center'>
-              {currentUser?.avatar ? (
-                <img
-                  src={normalizeImageUrl(currentUser.avatar)}
-                  alt={username}
-                  className='w-full h-full object-cover'
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-              ) : (
-                <span className='text-xs font-bold text-indigo-700'>{initials}</span>
-              )}
-            </div>
-            <div className='min-w-0 flex-1'>
-              <div className='text-sm font-semibold text-slate-800 truncate leading-tight'>{username}</div>
-              <span className={classNames('inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize leading-tight mt-0.5', roleBadge)}>
-                {currentUser?.role || 'user'}
-              </span>
-            </div>
-            <HiChevronRight className='w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0' />
-          </Link>
+        <div className='flex-shrink-0 border-t border-white/5 p-3'>
+          <div className='relative'>
+            <button
+              onClick={() => setProfileOpen((o) => !o)}
+              className='w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors group'
+            >
+              <div className='w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-indigo-600/30 flex items-center justify-center ring-1 ring-white/10'>
+                {currentUser?.avatar ? (
+                  <img src={normalizeImageUrl(currentUser.avatar)} alt={username} className='w-full h-full object-cover' />
+                ) : (
+                  <span className='text-xs font-bold text-indigo-300'>{initials}</span>
+                )}
+              </div>
+              <div className='min-w-0 flex-1 text-left'>
+                <div className='text-sm font-semibold text-white truncate leading-tight'>{username}</div>
+                <span className={cx('inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md capitalize leading-tight mt-0.5', roleBadge)}>
+                  {currentUser?.role || 'user'}
+                </span>
+              </div>
+              <HiChevronDown className={cx('w-4 h-4 text-slate-500 flex-shrink-0 transition-transform', profileOpen && 'rotate-180')} />
+            </button>
+
+            {profileOpen && (
+              <>
+                <button className='fixed inset-0 z-10' onClick={() => setProfileOpen(false)} />
+                <div className='absolute bottom-full left-0 right-0 mb-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-20 overflow-hidden'>
+                  <Link
+                    to='/profile'
+                    onClick={() => { closeSidebar(); setProfileOpen(false); }}
+                    className='flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors'
+                  >
+                    <HiOutlineUser className='w-4 h-4' />
+                    View Profile
+                  </Link>
+                  <Link
+                    to='/messages'
+                    onClick={() => { closeSidebar(); setProfileOpen(false); }}
+                    className='flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors'
+                  >
+                    <HiOutlineChat className='w-4 h-4' />
+                    Messages
+                  </Link>
+                  <div className='border-t border-white/5' />
+                  <Link
+                    to='/'
+                    onClick={() => setProfileOpen(false)}
+                    className='flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition-colors'
+                  >
+                    <HiOutlineLogout className='w-4 h-4' />
+                    Back to Site
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className='lg:pl-64'>
-        {/* Top bar */}
-        <div className='h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20 gap-4'>
-          <div className='flex items-center gap-3 min-w-0 flex-1'>
+      {/* ── Main ── */}
+      <div className='flex-1 flex flex-col min-w-0 lg:pl-64'>
+
+        {/* Topbar */}
+        <header className='h-12 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20 gap-4 flex-shrink-0'>
+          <div className='flex items-center gap-4 min-w-0'>
             <button
               type='button'
-              className='lg:hidden p-2 rounded-xl hover:bg-slate-100 flex-shrink-0'
               onClick={() => setSidebarOpen(true)}
+              className='lg:hidden p-2 rounded-lg hover:bg-slate-100 flex-shrink-0'
               aria-label='Open sidebar'
             >
-              <HiMenuAlt2 className='w-5 h-5 text-slate-700' />
+              <HiMenuAlt2 className='w-5 h-5 text-slate-600' />
             </button>
 
-            <div className='hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 max-w-sm w-full'>
-              <HiOutlineSearch className='w-4 h-4 text-slate-400 flex-shrink-0' />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder='Search clients, deals, tasks…'
-                className='bg-transparent outline-none text-sm w-full text-slate-700 placeholder:text-slate-400'
-              />
-            </div>
+            <h1 className='text-sm font-semibold text-slate-800 hidden sm:block tracking-tight'>{pageTitle}</h1>
+
+            {/* Global search trigger */}
+            <button
+              onClick={() => openSearch()}
+              className='hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all duration-200 text-slate-400 hover:text-slate-600 w-60'
+              title='Search (⌘K)'
+            >
+              <HiOutlineSearch className='w-3.5 h-3.5 flex-shrink-0' />
+              <span className='text-sm flex-1 text-left text-slate-400'>Search…</span>
+              <kbd className='text-[10px] font-medium border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-400 hidden lg:inline-flex'>⌘K</kbd>
+            </button>
           </div>
 
           <div className='flex items-center gap-2 flex-shrink-0'>
+            {/* Dark mode toggle */}
             <button
               type='button'
-              className='relative p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors'
-              aria-label='Notifications'
+              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
+              aria-label='Toggle dark mode'
+              title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
-              <HiOutlineBell className='w-5 h-5 text-slate-600' />
-              <span className='absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white' />
+              {resolvedTheme === 'dark'
+                ? <HiOutlineSun className='w-4 h-4' />
+                : <HiOutlineMoon className='w-4 h-4' />
+              }
             </button>
 
+            {/* Notifications */}
+            <div className='relative'>
+              <button
+                type='button'
+                onClick={() => setNotifOpen((o) => !o)}
+                className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all relative'
+                aria-label='Notifications'
+              >
+                <HiOutlineBell className='w-4 h-4' />
+                {notifications.length > 0 && (
+                  <span className='absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full ring-1 ring-white' />
+                )}
+              </button>
+
+              {notifOpen && (
+                <>
+                  <button className='fixed inset-0 z-10' onClick={() => setNotifOpen(false)} aria-hidden='true' />
+                  <div className='absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden'>
+                    <div className='flex items-center justify-between px-4 py-3 border-b border-slate-100'>
+                      <span className='text-sm font-semibold text-slate-800'>Notifications</span>
+                      {notifications.length > 0 && (
+                        <button
+                          onClick={() => { clearAll(); setNotifOpen(false); }}
+                          className='text-xs text-slate-400 hover:text-slate-600 transition-colors'
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                    <div className='max-h-72 overflow-y-auto'>
+                      {notifications.length === 0 ? (
+                        <div className='px-4 py-8 text-center'>
+                          <HiOutlineBell className='w-8 h-8 text-slate-300 mx-auto mb-2' />
+                          <p className='text-sm text-slate-400'>No notifications</p>
+                        </div>
+                      ) : (
+                        <ul className='divide-y divide-slate-100'>
+                          {notifications.map((n) => (
+                            <li key={n.id} className='flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors'>
+                              {NOTIF_ICONS[n.type] || NOTIF_ICONS.info}
+                              <p className='text-xs text-slate-700 leading-relaxed flex-1'>{n.message}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Messages shortcut */}
             <Link
               to='/messages'
-              className='hidden sm:flex items-center px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700 transition-colors'
+              className='hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition-all'
             >
-              Messages
+              <HiOutlineChat className='w-4 h-4' />
+              <span>Messages</span>
             </Link>
 
+            {/* Profile button */}
             <Link
               to='/profile'
-              className='flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold transition-colors'
+              className='flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-slate-200 hover:bg-slate-50 transition-all'
             >
-              <div className='w-5 h-5 rounded-full overflow-hidden bg-indigo-400 flex items-center justify-center flex-shrink-0'>
+              <div className='w-6 h-6 rounded-md overflow-hidden bg-indigo-100 flex items-center justify-center flex-shrink-0'>
                 {currentUser?.avatar ? (
-                  <img
-                    src={normalizeImageUrl(currentUser.avatar)}
-                    alt={username}
-                    className='w-full h-full object-cover'
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
+                  <img src={normalizeImageUrl(currentUser.avatar)} alt={username} className='w-full h-full object-cover' />
                 ) : (
-                  <span className='text-[9px] font-bold text-white'>{initials}</span>
+                  <span className='text-[9px] font-bold text-indigo-600'>{initials}</span>
                 )}
               </div>
-              <span className='hidden sm:block'>{username.split(' ')[0]}</span>
+              <span className='hidden sm:block text-sm font-medium text-slate-700'>{username.split(' ')[0]}</span>
             </Link>
           </div>
-        </div>
+        </header>
 
         {/* Page content */}
-        <div className='px-4 lg:px-6 py-6'>
+        <main className='flex-1 px-4 lg:px-6 py-6'>
           <Outlet />
-        </div>
+        </main>
       </div>
+
+      <OfflineIndicator />
     </div>
   );
 }

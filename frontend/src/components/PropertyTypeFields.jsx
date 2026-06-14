@@ -25,9 +25,9 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
     const fieldError = errors[field.key];
     const isRequired = field.required;
 
-    const baseInputClass = `w-full border rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400
-      focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors
-      ${fieldError ? 'border-red-500' : 'border-gray-300'}`;
+    const baseInputClass = `w-full border rounded-lg px-4 py-3 text-slate-900 placeholder-slate-400
+      focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors
+      ${fieldError ? 'border-rose-500' : 'border-slate-300'}`;
 
     switch (field.type) {
       case 'text':
@@ -77,7 +77,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
               required={isRequired}
             />
             {field.unit && (
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-sm">
                 {field.unit}
               </span>
             )}
@@ -110,9 +110,9 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
                 name={field.key}
                 checked={value === true}
                 onChange={() => handleFieldChange(field.key, true)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
               />
-              <span className="ml-2 text-gray-700">Yes</span>
+              <span className="ml-2 text-slate-700">Yes</span>
             </label>
             <label className="inline-flex items-center">
               <input
@@ -120,9 +120,9 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
                 name={field.key}
                 checked={value === false}
                 onChange={() => handleFieldChange(field.key, false)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
               />
-              <span className="ml-2 text-gray-700">No</span>
+              <span className="ml-2 text-slate-700">No</span>
             </label>
           </div>
         );
@@ -170,8 +170,8 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
   return (
     <div className='space-y-6'>
       {Object.entries(groupedFields).map(([groupName, groupFields]) => (
-        <div key={groupName} className='bg-gray-50 rounded-lg p-6 border border-gray-200'>
-          <h3 className='text-lg font-semibold text-gray-900 mb-4'>
+        <div key={groupName} className='bg-slate-50 rounded-lg p-6 border border-slate-200'>
+          <h3 className='text-lg font-semibold text-slate-900 mb-4'>
             {groupTitles[groupName] || groupName.charAt(0).toUpperCase() + groupName.slice(1)}
           </h3>
           <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -179,16 +179,16 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
               const fieldError = errors[field.key];
               return (
                 <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                  <label className='block text-sm font-medium text-gray-700 mb-2'>
+                  <label className='block text-sm font-medium text-slate-700 mb-2'>
                     {field.label}
-                    {field.required && <span className='text-red-500 ml-1'>*</span>}
+                    {field.required && <span className='text-rose-500 ml-1'>*</span>}
                   </label>
                   {renderField(field)}
                   {field.helpText && (
-                    <p className='text-xs text-gray-500 mt-1'>{field.helpText}</p>
+                    <p className='text-xs text-slate-500 mt-1'>{field.helpText}</p>
                   )}
                   {fieldError && (
-                    <p className='text-xs text-red-500 mt-1'>{fieldError}</p>
+                    <p className='text-xs text-rose-500 mt-1'>{fieldError}</p>
                   )}
                 </div>
               );

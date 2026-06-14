@@ -108,8 +108,8 @@ export const taskValidation = {
     title: Joi.string().min(2).max(200).required(),
     description: Joi.string().max(2000).optional().allow(''),
     dueAt: Joi.date().iso().optional().allow(null, ''),
-    status: Joi.string().valid('todo', 'in_progress', 'done', 'blocked').optional(),
-    priority: Joi.string().valid('low', 'medium', 'high').optional(),
+    status: Joi.string().valid('todo', 'in_progress', 'review', 'done', 'blocked').optional(),
+    priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional(),
     assignedTo: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional(),
     related: Joi.object({
       kind: Joi.string().valid('client', 'listing', 'none').optional(),
@@ -126,8 +126,8 @@ export const taskValidation = {
     title: Joi.string().min(2).max(200).optional(),
     description: Joi.string().max(2000).optional().allow(''),
     dueAt: Joi.date().iso().optional().allow(null, ''),
-    status: Joi.string().valid('todo', 'in_progress', 'done', 'blocked').optional(),
-    priority: Joi.string().valid('low', 'medium', 'high').optional(),
+    status: Joi.string().valid('todo', 'in_progress', 'review', 'done', 'blocked').optional(),
+    priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional(),
     assignedTo: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional(),
     related: Joi.object({
       kind: Joi.string().valid('client', 'listing', 'none').optional(),
@@ -260,7 +260,7 @@ export const userRouteValidation = {
     username: Joi.string().alphanum().min(3).max(30).optional(),
     firstName: Joi.string().max(50).optional().allow(''),
     lastName: Joi.string().max(50).optional().allow(''),
-    avatar: Joi.string().uri().optional().allow(''),
+    avatar: Joi.string().uri({ allowRelative: true }).optional().allow(''),
     phone: Joi.string().max(30).optional().allow(''),
     addressLine1: Joi.string().max(100).optional().allow(''),
     addressLine2: Joi.string().max(100).optional().allow(''),
@@ -279,6 +279,7 @@ export const userRouteValidation = {
     password: Joi.string().min(8).max(128).required(),
     assignedCategories: Joi.array().items(Joi.string().max(100)).max(200).optional(),
     phone: Joi.string().max(30).optional().allow(''),
+    message: Joi.string().max(500).optional().allow(''),
   }),
 
   adminSetEmployeePassword: Joi.object({
@@ -338,7 +339,7 @@ export const userValidation = {
         'any.required': 'Password is required',
       }),
     avatar: Joi.string()
-      .uri()
+      .uri({ allowRelative: true })
       .optional()
       .messages({
         'string.uri': 'Avatar must be a valid URL',
@@ -380,7 +381,7 @@ export const userValidation = {
         'string.max': 'Email cannot exceed 254 characters',
       }),
     avatar: Joi.string()
-      .uri()
+      .uri({ allowRelative: true })
       .optional()
       .messages({
         'string.uri': 'Avatar must be a valid URL',
@@ -433,28 +434,31 @@ export const listingValidation = {
         'number.min': 'Discount price cannot be negative',
         'number.max': 'Discount price cannot exceed 1 billion',
       }),
-    bathrooms: Joi.number()
-      .integer()
-      .min(1)
-      .max(20)
-      .required()
-      .messages({
-        'number.integer': 'Bathrooms must be a whole number',
-        'number.min': 'Must have at least 1 bathroom',
-        'number.max': 'Cannot have more than 20 bathrooms',
-        'any.required': 'Number of bathrooms is required',
-      }),
-    bedrooms: Joi.number()
-      .integer()
-      .min(1)
-      .max(20)
-      .required()
-      .messages({
-        'number.integer': 'Bedrooms must be a whole number',
-        'number.min': 'Must have at least 1 bedroom',
-        'number.max': 'Cannot have more than 20 bedrooms',
-        'any.required': 'Number of bedrooms is required',
-      }),
+    bathrooms: Joi.when('propertyCategory', {
+      switch: [
+        { is: Joi.valid('land', 'industrial'), then: Joi.number().integer().min(0).max(20).optional().default(0) },
+        { is: 'commercial',                    then: Joi.number().integer().min(0).max(20).optional().default(0) },
+        { is: 'residential',                   then: Joi.number().integer().min(1).max(20).required() },
+      ],
+      otherwise: Joi.number().integer().min(0).max(20).optional().default(0),
+    }).messages({
+      'number.integer': 'Bathrooms must be a whole number',
+      'number.min': 'Must have at least 1 bathroom',
+      'number.max': 'Cannot have more than 20 bathrooms',
+      'any.required': 'Number of bathrooms is required',
+    }),
+    bedrooms: Joi.when('propertyCategory', {
+      switch: [
+        { is: Joi.valid('land', 'industrial', 'commercial'), then: Joi.number().integer().min(0).max(20).optional().default(0) },
+        { is: 'residential',                                 then: Joi.number().integer().min(1).max(20).required() },
+      ],
+      otherwise: Joi.number().integer().min(0).max(20).optional().default(0),
+    }).messages({
+      'number.integer': 'Bedrooms must be a whole number',
+      'number.min': 'Must have at least 1 bedroom',
+      'number.max': 'Cannot have more than 20 bedrooms',
+      'any.required': 'Number of bedrooms is required',
+    }),
     furnished: Joi.boolean()
       .optional(),
     parking: Joi.boolean()
@@ -798,158 +802,3 @@ export const categoryValidation = {
   }),
 };
 
-// Search validation
-export const searchValidation = {
-  query: Joi.object({
-    searchTerm: Joi.string()
-      .max(100)
-      .optional()
-      .messages({
-        'string.max': 'Search term cannot exceed 100 characters',
-      }),
-    type: Joi.string()
-      .valid('sale', 'rent')
-      .optional(),
-    offer: Joi.boolean()
-      .optional(),
-    furnished: Joi.boolean()
-      .optional(),
-    parking: Joi.boolean()
-      .optional(),
-    sort: Joi.string()
-      .valid('createdAt', 'regularPrice', 'name')
-      .optional(),
-    order: Joi.string()
-      .valid('asc', 'desc')
-      .optional(),
-    limit: Joi.number()
-      .integer()
-      .min(1)
-      .max(50)
-      .optional()
-      .messages({
-        'number.integer': 'Limit must be a whole number',
-        'number.min': 'Limit must be at least 1',
-        'number.max': 'Limit cannot exceed 50',
-      }),
-    startIndex: Joi.number()
-      .integer()
-      .min(0)
-      .optional()
-      .messages({
-        'number.integer': 'Start index must be a whole number',
-        'number.min': 'Start index cannot be negative',
-      }),
-  }),
-};
-
-// Buyer Requirement validation
-export const validateBuyerRequirement = (req, res, next) => {
-  const schema = Joi.object({
-    buyerName: Joi.string()
-      .min(3)
-      .max(100)
-      .required()
-      .messages({
-        'string.min': 'Buyer name must be at least 3 characters',
-        'string.max': 'Buyer name cannot exceed 100 characters',
-        'any.required': 'Buyer name is required',
-      }),
-    email: Joi.string()
-      .email()
-      .optional()
-      .allow('')
-      .messages({
-        'string.email': 'Please provide a valid email address',
-      }),
-    phone: Joi.string()
-      .pattern(/^\+?\d{10,15}$/)
-      .optional()
-      .allow('')
-      .messages({
-        'string.pattern.base': 'Please provide a valid phone number',
-      }),
-    propertyType: Joi.string()
-      .valid('sale', 'rent')
-      .default('sale')
-      .messages({
-        'any.only': 'Property type must be either "sale" or "rent"',
-      }),
-    location: Joi.string()
-      .max(200)
-      .optional()
-      .allow('')
-      .messages({
-        'string.max': 'Location cannot exceed 200 characters',
-      }),
-    minPrice: Joi.number()
-      .min(0)
-      .optional()
-      .messages({
-        'number.min': 'Minimum price cannot be negative',
-      }),
-    maxPrice: Joi.number()
-      .min(Joi.ref('minPrice'))
-      .optional()
-      .messages({
-        'number.min': 'Maximum price must be greater than or equal to minimum price',
-      }),
-    minBedrooms: Joi.number()
-      .min(0)
-      .max(20)
-      .optional()
-      .messages({
-        'number.min': 'Minimum bedrooms cannot be negative',
-        'number.max': 'Minimum bedrooms cannot exceed 20',
-      }),
-    minBathrooms: Joi.number()
-      .min(0)
-      .max(20)
-      .optional()
-      .messages({
-        'number.min': 'Minimum bathrooms cannot be negative',
-        'number.max': 'Minimum bathrooms cannot exceed 20',
-      }),
-    minArea: Joi.number()
-      .min(0)
-      .optional()
-      .messages({
-        'number.min': 'Minimum area cannot be negative',
-      }),
-    maxArea: Joi.number()
-      .min(Joi.ref('minArea'))
-      .optional()
-      .messages({
-        'number.min': 'Maximum area must be greater than or equal to minimum area',
-      }),
-    preferredMoveInDate: Joi.date()
-      .iso()
-      .optional()
-      .allow('')
-      .messages({
-        'date.format': 'Please provide a valid date',
-      }),
-    status: Joi.string()
-      .valid('active', 'matched', 'closed', 'inactive')
-      .default('active')
-      .messages({
-        'any.only': 'Status must be one of: active, matched, closed, inactive',
-      }),
-    notes: Joi.string()
-      .max(500)
-      .optional()
-      .allow('')
-      .messages({
-        'string.max': 'Notes cannot exceed 500 characters',
-      }),
-  });
-
-  const { error } = schema.validate(req.body);
-  if (error) {
-    return res.status(400).json({
-      success: false,
-      message: error.details[0].message,
-    });
-  }
-  next();
-};

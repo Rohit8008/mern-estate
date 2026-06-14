@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -41,6 +42,7 @@ export default function PropertyTypeManagement() {
   // Local draft for fields being edited — keyed by property type id
   const [dirtyFields, setDirtyFields] = useState({});
   const [savingId, setSavingId] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const { showSuccess, showError } = useNotification();
   const isFetching = useRef(false);
 
@@ -60,7 +62,7 @@ export default function PropertyTypeManagement() {
     isFetching.current = true;
     try {
       setLoading(true);
-      const data = await apiClient.get('/property-types/list?includeInactive=true');
+      const data = await apiClient.get('/property-types/list?includeInactive=true', { silent: true });
       const types = data.data || [];
       setPropertyTypes(types);
       cachedPropertyTypes = types;
@@ -140,7 +142,7 @@ export default function PropertyTypeManagement() {
     if (!fields) return;
     try {
       setSavingId(typeId);
-      await apiClient.put(`/property-types/${typeId}`, { fields });
+      await apiClient.put(`/property-types/${typeId}`, { fields }, { silent: true });
       // Update local cache
       setPropertyTypes(prev => {
         const updated = prev.map(t => (t._id === typeId ? { ...t, fields } : t));
@@ -164,7 +166,7 @@ export default function PropertyTypeManagement() {
 
   const handleSeedDefaults = async () => {
     try {
-      await apiClient.post('/property-types/seed');
+      await apiClient.post('/property-types/seed', {}, { silent: true });
       showSuccess('Default property types seeded successfully');
       fetchPropertyTypes();
     } catch (error) {
@@ -178,7 +180,7 @@ export default function PropertyTypeManagement() {
       return;
     }
     try {
-      const result = await apiClient.post('/property-types/create', formData);
+      const result = await apiClient.post('/property-types/create', formData, { silent: true });
       showSuccess('Property type created successfully');
       setShowCreateModal(false);
       setFormData({ name: '', description: '', icon: '🏠', category: 'residential' });
@@ -205,7 +207,7 @@ export default function PropertyTypeManagement() {
         cacheTimestamp = Date.now();
         return updated;
       });
-      await apiClient.put(`/property-types/${id}`, { isActive: !currentActive });
+      await apiClient.put(`/property-types/${id}`, { isActive: !currentActive }, { silent: true });
       showSuccess('Updated successfully');
     } catch (error) {
       showError('Failed to update property type');
@@ -214,9 +216,8 @@ export default function PropertyTypeManagement() {
   };
 
   const handleDeleteType = async (id) => {
-    if (!confirm('Are you sure you want to delete this property type?')) return;
     try {
-      await apiClient.delete(`/property-types/${id}`);
+      await apiClient.delete(`/property-types/${id}`, { silent: true });
       showSuccess('Property type deleted successfully');
       setPropertyTypes(prev => {
         const updated = prev.filter(t => t._id !== id);
@@ -248,25 +249,25 @@ export default function PropertyTypeManagement() {
   }
 
   return (
-    <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
+    <div className='space-y-6'>
       {/* Header */}
-      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8'>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
         <div>
-          <h1 className='text-2xl font-bold text-gray-900'>Property Types</h1>
-          <p className='text-sm text-gray-500 mt-1'>
+          <h1 className='text-xl font-bold text-slate-900'>Property Types</h1>
+          <p className='text-sm text-slate-500 mt-0.5'>
             {propertyTypes.length} type{propertyTypes.length !== 1 && 's'} configured
           </p>
         </div>
         <div className='flex gap-3'>
           <button
             onClick={handleSeedDefaults}
-            className='px-4 py-2 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors'
+            className='px-4 py-2 text-sm font-medium border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors'
           >
             Seed Defaults
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className='px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'
+            className='px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
           >
             + New Type
           </button>
@@ -274,15 +275,15 @@ export default function PropertyTypeManagement() {
       </div>
 
       {/* Category Tabs */}
-      <div className='flex gap-2 mb-6 overflow-x-auto pb-1'>
+      <div className='flex gap-2 overflow-x-auto pb-1'>
         {CATEGORIES.map(cat => (
           <button
             key={cat.value}
             onClick={() => setActiveCategory(cat.value)}
             className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
               activeCategory === cat.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
             {cat.label}
@@ -292,12 +293,12 @@ export default function PropertyTypeManagement() {
 
       {/* Empty State */}
       {filtered.length === 0 && (
-        <div className='text-center py-16 bg-white rounded-xl border border-gray-200'>
-          <div className='text-5xl mb-4'>🏗️</div>
-          <h3 className='text-lg font-semibold text-gray-900 mb-2'>
+        <div className='text-center py-16 bg-white rounded-xl border border-slate-200'>
+          <div className='text-4xl mb-4'>🏗️</div>
+          <h3 className='text-lg font-semibold text-slate-900 mb-2'>
             {propertyTypes.length === 0 ? 'No property types yet' : 'No types in this category'}
           </h3>
-          <p className='text-sm text-gray-500 mb-6'>
+          <p className='text-sm text-slate-500 mb-6'>
             {propertyTypes.length === 0
               ? 'Get started by seeding the default types or creating a new one.'
               : 'Try selecting a different category above.'}
@@ -305,7 +306,7 @@ export default function PropertyTypeManagement() {
           {propertyTypes.length === 0 && (
             <button
               onClick={handleSeedDefaults}
-              className='px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors'
+              className='px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors'
             >
               Seed Default Types
             </button>
@@ -322,19 +323,19 @@ export default function PropertyTypeManagement() {
           const displayFields = getDisplayFields(type);
 
           return (
-            <div key={type._id} className={`bg-white rounded-xl border overflow-hidden shadow-sm ${isDirty ? 'border-amber-300' : 'border-gray-200'}`}>
+            <div key={type._id} className={`bg-white rounded-xl border overflow-hidden shadow-sm ${isDirty ? 'border-amber-300' : 'border-slate-200'}`}>
               {/* Card Header */}
               <div className='flex items-center justify-between p-5'>
                 <div className='flex items-center gap-4 min-w-0'>
                   <span className='text-3xl flex-shrink-0'>{type.icon}</span>
                   <div className='min-w-0'>
                     <div className='flex items-center gap-2 flex-wrap'>
-                      <h3 className='text-lg font-semibold text-gray-900'>{type.name}</h3>
-                      <span className='text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium capitalize'>
+                      <h3 className='text-lg font-semibold text-slate-900'>{type.name}</h3>
+                      <span className='text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium capitalize'>
                         {type.category}
                       </span>
                       {type.isSystem && (
-                        <span className='text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium'>
+                        <span className='text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium'>
                           System
                         </span>
                       )}
@@ -349,7 +350,7 @@ export default function PropertyTypeManagement() {
                         </span>
                       )}
                     </div>
-                    <p className='text-sm text-gray-500 mt-0.5 truncate'>{type.description}</p>
+                    <p className='text-sm text-slate-500 mt-0.5 truncate'>{type.description}</p>
                   </div>
                 </div>
                 <div className='flex items-center gap-2 flex-shrink-0 ml-4'>
@@ -365,7 +366,7 @@ export default function PropertyTypeManagement() {
                   </button>
                   {!type.isSystem && (
                     <button
-                      onClick={() => handleDeleteType(type._id)}
+                      onClick={() => setPendingDelete(type._id)}
                       className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'
                     >
                       Delete
@@ -373,10 +374,10 @@ export default function PropertyTypeManagement() {
                   )}
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : type._id)}
-                    className='p-2 rounded-lg hover:bg-gray-100 transition-colors'
+                    className='p-2 rounded-lg hover:bg-slate-100 transition-colors'
                   >
                     <svg
-                      className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                      className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                       fill='none' stroke='currentColor' viewBox='0 0 24 24'
                     >
                       <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 9l-7 7-7-7' />
@@ -387,11 +388,11 @@ export default function PropertyTypeManagement() {
 
               {/* Expandable Fields Section */}
               {isExpanded && (
-                <div className='border-t border-gray-100 bg-gray-50/50 p-5'>
+                <div className='border-t border-slate-100 bg-slate-50/50 p-5'>
                   <div className='flex items-center justify-between mb-4'>
-                    <h4 className='text-sm font-semibold text-gray-700'>
+                    <h4 className='text-sm font-semibold text-slate-700'>
                       Fields
-                      <span className='ml-2 text-xs font-normal text-gray-400'>
+                      <span className='ml-2 text-xs font-normal text-slate-400'>
                         ({displayFields.length})
                       </span>
                     </h4>
@@ -401,7 +402,7 @@ export default function PropertyTypeManagement() {
                           <button
                             onClick={() => discardFieldChanges(type._id)}
                             disabled={isSaving}
-                            className='px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50'
+                            className='px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50'
                           >
                             Discard
                           </button>
@@ -416,7 +417,7 @@ export default function PropertyTypeManagement() {
                       )}
                       <button
                         onClick={() => addLocalField(type._id)}
-                        className='px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'
+                        className='px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
                       >
                         + Add Field
                       </button>
@@ -426,34 +427,34 @@ export default function PropertyTypeManagement() {
                   {displayFields.length > 0 ? (
                     <div className='space-y-3'>
                       {displayFields.map((field, idx) => (
-                        <div key={idx} className='bg-white rounded-lg border border-gray-200 p-4'>
+                        <div key={idx} className='bg-white rounded-lg border border-slate-200 p-4'>
                           <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Key</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Key</label>
                               <input
                                 type='text'
                                 value={field.key}
                                 onChange={(e) => updateLocalField(type._id, idx, { key: e.target.value })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                                 placeholder='bedrooms'
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Label</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Label</label>
                               <input
                                 type='text'
                                 value={field.label}
                                 onChange={(e) => updateLocalField(type._id, idx, { label: e.target.value })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                                 placeholder='Bedrooms'
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Type</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Type</label>
                               <select
                                 value={field.type}
                                 onChange={(e) => updateLocalField(type._id, idx, { type: e.target.value })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                               >
                                 {FIELD_TYPES.map(ft => (
                                   <option key={ft.value} value={ft.value}>{ft.label}</option>
@@ -461,12 +462,12 @@ export default function PropertyTypeManagement() {
                               </select>
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Group</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Group</label>
                               <input
                                 type='text'
                                 value={field.group}
                                 onChange={(e) => updateLocalField(type._id, idx, { group: e.target.value })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                                 placeholder='rooms'
                               />
                             </div>
@@ -474,65 +475,65 @@ export default function PropertyTypeManagement() {
 
                           <div className='grid grid-cols-3 sm:grid-cols-5 gap-3 mt-3 items-end'>
                             <div className='flex items-center pt-4'>
-                              <label className='flex items-center gap-1.5 text-xs font-medium text-gray-600 cursor-pointer'>
+                              <label className='flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer'>
                                 <input
                                   type='checkbox'
                                   checked={field.required}
                                   onChange={(e) => updateLocalField(type._id, idx, { required: e.target.checked })}
-                                  className='rounded border-gray-300 text-blue-600 focus:ring-blue-500'
+                                  className='rounded border-slate-300 text-indigo-600 focus:ring-blue-500'
                                 />
                                 Required
                               </label>
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Min</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Min</label>
                               <input
                                 type='number'
                                 value={field.min ?? ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { min: e.target.value ? Number(e.target.value) : null })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Max</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Max</label>
                               <input
                                 type='number'
                                 value={field.max ?? ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { max: e.target.value ? Number(e.target.value) : null })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Unit</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Unit</label>
                               <input
                                 type='text'
                                 value={field.unit || ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { unit: e.target.value })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                                 placeholder='sq.ft'
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Order</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Order</label>
                               <input
                                 type='number'
                                 value={field.order || 0}
                                 onChange={(e) => updateLocalField(type._id, idx, { order: Number(e.target.value) })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                               />
                             </div>
                           </div>
 
                           {field.type === 'select' && (
                             <div className='mt-3'>
-                              <label className='block text-xs font-medium text-gray-500 mb-1'>Options (comma-separated)</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>Options (comma-separated)</label>
                               <input
                                 type='text'
                                 value={field.options?.join(', ') || ''}
                                 onChange={(e) => updateLocalField(type._id, idx, {
                                   options: e.target.value.split(',').map(o => o.trim()).filter(Boolean)
                                 })}
-                                className='w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                                 placeholder='North, South, East, West'
                               />
                             </div>
@@ -550,7 +551,7 @@ export default function PropertyTypeManagement() {
                       ))}
                     </div>
                   ) : (
-                    <div className='text-center py-8 text-sm text-gray-400'>
+                    <div className='text-center py-8 text-sm text-slate-400'>
                       No fields configured. Click "+ Add Field" to start.
                     </div>
                   )}
@@ -563,7 +564,7 @@ export default function PropertyTypeManagement() {
                         <button
                           onClick={() => discardFieldChanges(type._id)}
                           disabled={isSaving}
-                          className='px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-white transition-colors disabled:opacity-50'
+                          className='px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-white transition-colors disabled:opacity-50'
                         >
                           Discard
                         </button>
@@ -588,45 +589,45 @@ export default function PropertyTypeManagement() {
       {showCreateModal && (
         <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4'>
           <div className='bg-white rounded-2xl shadow-2xl max-w-md w-full p-6'>
-            <h3 className='text-xl font-bold text-gray-900 mb-5'>Create Property Type</h3>
+            <h3 className='text-xl font-bold text-slate-900 mb-5'>Create Property Type</h3>
             <div className='space-y-4'>
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>Name</label>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>Name</label>
                 <input
                   type='text'
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className='w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                   placeholder='e.g., Warehouse'
                   autoFocus
                 />
               </div>
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>Description</label>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className='w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                   rows={3}
                   placeholder='Brief description...'
                 />
               </div>
               <div className='grid grid-cols-2 gap-4'>
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Icon</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Icon</label>
                   <input
                     type='text'
                     value={formData.icon}
                     onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                    className='w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-center text-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-center text-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                   />
                 </div>
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Category</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Category</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className='w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
                   >
                     {CATEGORIES.filter(c => c.value !== 'all').map(cat => (
                       <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -638,13 +639,13 @@ export default function PropertyTypeManagement() {
             <div className='flex gap-3 mt-6'>
               <button
                 onClick={() => { setShowCreateModal(false); setFormData({ name: '', description: '', icon: '🏠', category: 'residential' }); }}
-                className='flex-1 px-4 py-2.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors'
+                className='flex-1 px-4 py-2.5 text-sm font-medium border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors'
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateType}
-                className='flex-1 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'
+                className='flex-1 px-4 py-2.5 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
               >
                 Create
               </button>
@@ -652,6 +653,14 @@ export default function PropertyTypeManagement() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title='Delete this property type?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={() => { handleDeleteType(pendingDelete); setPendingDelete(null); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { FaThList, FaPlus, FaExternalLinkAlt, FaTable, FaPencilAlt, FaTrash, FaUpload, FaTimes, FaCheck } from 'react-icons/fa';
+import { HiViewList, HiPlus, HiExternalLink, HiTable, HiPencil, HiTrash, HiUpload, HiX, HiCheck } from 'react-icons/hi';
 import { apiClient } from '../utils/http';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -23,8 +24,8 @@ function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
       {/* Header */}
       <div className='flex items-start justify-between gap-3'>
         <div className='flex items-center gap-3 min-w-0'>
-          <div className='w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0'>
-            <FaThList className='w-4 h-4 text-indigo-600' />
+          <div className='w-9 h-9 rounded-xl bg-slate-50 ring-1 ring-slate-100 flex items-center justify-center flex-shrink-0'>
+            <HiViewList className='w-4 h-4 text-slate-600' />
           </div>
           <div className='min-w-0'>
             <div className='text-sm font-semibold text-slate-900 truncate'>{c.name}</div>
@@ -39,14 +40,14 @@ function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
           to={`/category/${c.slug}`}
           className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors border border-slate-200'
         >
-          <FaExternalLinkAlt className='w-3 h-3' />
+          <HiExternalLink className='w-3 h-3' />
           View Listings
         </Link>
         <Link
           to={`/dynamic-listings/${c.slug}`}
           className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium transition-colors border border-emerald-200'
         >
-          <FaTable className='w-3 h-3' />
+          <HiTable className='w-3 h-3' />
           Excel View
         </Link>
       </div>
@@ -58,9 +59,9 @@ function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
             {hasPerm('updateCategory') && (
               <Link
                 to={`/admin/categories/${c.slug}/fields`}
-                className='inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-indigo-600 font-medium transition-colors'
+                className='inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 font-medium transition-colors'
               >
-                <FaPencilAlt className='w-3 h-3' />
+                <HiPencil className='w-3 h-3' />
                 Edit Fields
               </Link>
             )}
@@ -84,12 +85,12 @@ function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
                   <span>Deleting…</span>
                 ) : confirmDelete ? (
                   <>
-                    <FaCheck className='w-3 h-3' />
+                    <HiCheck className='w-3 h-3' />
                     Yes, Delete
                   </>
                 ) : (
                   <>
-                    <FaTrash className='w-3 h-3' />
+                    <HiTrash className='w-3 h-3' />
                     Delete
                   </>
                 )}
@@ -99,7 +100,7 @@ function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
                   onClick={() => setConfirmDelete(false)}
                   className='p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors'
                 >
-                  <FaTimes className='w-3 h-3' />
+                  <HiX className='w-3 h-3' />
                 </button>
               )}
             </div>
@@ -112,12 +113,10 @@ function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
 
 export default function Categories() {
   const { currentUser } = useSelector((state) => state.user);
+  const { can: hasPerm } = usePermissions();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [userPermissions, setUserPermissions] = useState({});
-  const isAdmin = currentUser?.role === 'admin';
-  const hasPerm = (perm) => isAdmin || userPermissions[perm] === true;
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState('');
@@ -127,14 +126,7 @@ export default function Categories() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [permResult, data] = await Promise.allSettled([
-          apiClient.get('/user/my-permissions'),
-          apiClient.get('/category/list'),
-        ]);
-        if (permResult.status === 'fulfilled' && permResult.value?.permissions) {
-          setUserPermissions(permResult.value.permissions);
-        }
-        const catData = data.status === 'fulfilled' ? data.value : [];
+        const catData = await apiClient.get('/category/list').catch(() => []);
         if (Array.isArray(catData)) {
           if (currentUser?.role === 'employee' && currentUser.assignedCategories?.length) {
             setCategories(catData.filter((c) => currentUser.assignedCategories.includes(c.slug)));
@@ -199,12 +191,12 @@ export default function Categories() {
             {categories.length} {categories.length === 1 ? 'category' : 'categories'}
           </p>
         </div>
-        {isAdmin && (
+        {currentUser?.role === 'admin' && (
           <Link
             to='/admin/import'
             className='inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700 transition-colors'
           >
-            <FaUpload className='w-3.5 h-3.5' />
+            <HiUpload className='w-3.5 h-3.5' />
             Bulk Import
           </Link>
         )}
@@ -229,9 +221,9 @@ export default function Categories() {
             <button
               disabled={creating || !newCategoryName.trim()}
               onClick={handleCreate}
-              className='inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0'
+              className='inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0'
             >
-              <FaPlus className='w-3.5 h-3.5' />
+              <HiPlus className='w-3.5 h-3.5' />
               {creating ? 'Creating…' : 'Create Category'}
             </button>
           </div>
@@ -243,13 +235,13 @@ export default function Categories() {
         <div className='mb-4 flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium'>
           <span className='flex-1'>{error}</span>
           <button onClick={() => setError('')} className='text-red-400 hover:text-red-600'>
-            <FaTimes className='w-4 h-4' />
+            <HiX className='w-4 h-4' />
           </button>
         </div>
       )}
       {successMsg && (
         <div className='mb-4 flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm font-medium'>
-          <FaCheck className='w-4 h-4 flex-shrink-0' />
+          <HiCheck className='w-4 h-4 flex-shrink-0' />
           <span>{successMsg}</span>
         </div>
       )}
@@ -294,7 +286,7 @@ export default function Categories() {
       {!loading && categories.length === 0 && (
         <div className='flex flex-col items-center justify-center py-20 text-center'>
           <div className='w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4'>
-            <FaThList className='w-7 h-7 text-slate-400' />
+            <HiViewList className='w-7 h-7 text-slate-400' />
           </div>
           <div className='text-base font-semibold text-slate-700 mb-1'>No categories yet</div>
           <p className='text-sm text-slate-500 max-w-xs'>

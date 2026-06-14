@@ -13,15 +13,18 @@ export default function AuthBootstrap() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiClient.get('/user/me');
+        const data = await apiClient.get('/user/me', { silent: true });
         if (data && data._id) {
           dispatch(signInSuccess(data));
           return;
         }
         dispatch(signOutUserSuccess());
       } catch (error) {
-        console.error('Auth bootstrap error:', error);
-        dispatch(signOutUserSuccess());
+        // Only sign out on explicit auth failure (401). Rate limit (429),
+        // network errors, or server errors should not clear the session.
+        if (error?.statusCode === 401) {
+          dispatch(signOutUserSuccess());
+        }
       }
     })();
   }, [dispatch]);

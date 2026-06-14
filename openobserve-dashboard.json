@@ -1,0 +1,963 @@
+{
+  "version": 8,
+  "title": "PropCRM \u2014 Application Monitoring",
+  "description": "Backend errors, HTTP traffic, log levels, security events and frontend errors.",
+  "role": "",
+  "owner": "admin@example.com",
+  "tabs": [
+    {
+      "tabId": "tab-overview",
+      "name": "Overview",
+      "panels": [
+        {
+          "id": "1001",
+          "type": "stat",
+          "title": "Backend Errors",
+          "description": "Error-level logs in the time range",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT COUNT(*) AS value FROM \"backend_logs\" WHERE level = 'error'",
+              "customQuery": true,
+              "fields": {
+                "stream": "backend_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [
+                  {
+                    "label": "value",
+                    "alias": "value",
+                    "column": "value",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 0,
+            "w": 5,
+            "h": 4,
+            "i": 1001
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1002",
+          "type": "stat",
+          "title": "Warnings",
+          "description": "Warning-level logs in the time range",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT COUNT(*) AS value FROM \"backend_logs\" WHERE level = 'warn'",
+              "customQuery": true,
+              "fields": {
+                "stream": "backend_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [
+                  {
+                    "label": "value",
+                    "alias": "value",
+                    "column": "value",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 5,
+            "y": 0,
+            "w": 4,
+            "h": 4,
+            "i": 1002
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1003",
+          "type": "stat",
+          "title": "HTTP Requests",
+          "description": "Total requests recorded in access_logs",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT COUNT(*) AS value FROM \"access_logs\"",
+              "customQuery": true,
+              "fields": {
+                "stream": "access_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [
+                  {
+                    "label": "value",
+                    "alias": "value",
+                    "column": "value",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 9,
+            "y": 0,
+            "w": 5,
+            "h": 4,
+            "i": 1003
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1004",
+          "type": "stat",
+          "title": "Frontend Errors",
+          "description": "Browser-side error events",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT COUNT(*) AS value FROM \"frontend_logs\" WHERE level = 'error'",
+              "customQuery": true,
+              "fields": {
+                "stream": "frontend_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [
+                  {
+                    "label": "value",
+                    "alias": "value",
+                    "column": "value",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 14,
+            "y": 0,
+            "w": 5,
+            "h": 4,
+            "i": 1004
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1005",
+          "type": "stat",
+          "title": "Security Events",
+          "description": "security_logs entries",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT COUNT(*) AS value FROM \"security_logs\"",
+              "customQuery": true,
+              "fields": {
+                "stream": "security_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [
+                  {
+                    "label": "value",
+                    "alias": "value",
+                    "column": "value",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 19,
+            "y": 0,
+            "w": 5,
+            "h": 4,
+            "i": 1005
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1006",
+          "type": "area",
+          "title": "Log Volume Over Time",
+          "description": "Backend logs per hour by level",
+          "config": {
+            "show_legends": true,
+            "legends_position": "bottom",
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp, '1 hour') AS x_axis_1, level, COUNT(*) AS log_count FROM \"backend_logs\" GROUP BY x_axis_1, level ORDER BY x_axis_1 ASC",
+              "customQuery": true,
+              "fields": {
+                "stream": "backend_logs",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x_axis_1",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "log_count",
+                    "alias": "log_count",
+                    "column": "log_count",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": [
+                  {
+                    "label": "level",
+                    "alias": "level",
+                    "column": "level",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ]
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 4,
+            "w": 15,
+            "h": 8,
+            "i": 1006
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1007",
+          "type": "donut",
+          "title": "Log Level Distribution",
+          "description": "Error / warn / info / debug share",
+          "config": {
+            "show_legends": true,
+            "legends_position": "bottom",
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT level, COUNT(*) AS log_count FROM \"backend_logs\" GROUP BY level ORDER BY log_count DESC",
+              "customQuery": true,
+              "fields": {
+                "stream": "backend_logs",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "level",
+                    "alias": "level",
+                    "column": "level",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "log_count",
+                    "alias": "log_count",
+                    "column": "log_count",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 15,
+            "y": 4,
+            "w": 9,
+            "h": 8,
+            "i": 1007
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1008",
+          "type": "bar",
+          "title": "HTTP Response Codes",
+          "description": "Requests per HTTP status code",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT CAST(status AS VARCHAR) AS status_code, COUNT(*) AS request_count FROM \"access_logs\" GROUP BY status_code ORDER BY status_code ASC",
+              "customQuery": true,
+              "fields": {
+                "stream": "access_logs",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "status_code",
+                    "alias": "status_code",
+                    "column": "status_code",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "request_count",
+                    "alias": "request_count",
+                    "column": "request_count",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 12,
+            "w": 10,
+            "h": 7,
+            "i": 1008
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1009",
+          "type": "area",
+          "title": "HTTP Request Volume Over Time",
+          "description": "Total API requests per hour",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp, '1 hour') AS x_axis_1, COUNT(*) AS request_count FROM \"access_logs\" GROUP BY x_axis_1 ORDER BY x_axis_1 ASC",
+              "customQuery": true,
+              "fields": {
+                "stream": "access_logs",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x_axis_1",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "request_count",
+                    "alias": "request_count",
+                    "column": "request_count",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 10,
+            "y": 12,
+            "w": 14,
+            "h": 7,
+            "i": 1009
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1010",
+          "type": "h-bar",
+          "title": "Top Error Messages",
+          "description": "Most frequent error messages",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT message, COUNT(*) AS occurrences FROM \"backend_logs\" WHERE level = 'error' GROUP BY message ORDER BY occurrences DESC LIMIT 10",
+              "customQuery": true,
+              "fields": {
+                "stream": "backend_logs",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "message",
+                    "alias": "message",
+                    "column": "message",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "occurrences",
+                    "alias": "occurrences",
+                    "column": "occurrences",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 19,
+            "w": 12,
+            "h": 8,
+            "i": 1010
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1011",
+          "type": "h-bar",
+          "title": "Top Requested Endpoints",
+          "description": "Most hit API paths",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT url, COUNT(*) AS hits FROM \"access_logs\" GROUP BY url ORDER BY hits DESC LIMIT 10",
+              "customQuery": true,
+              "fields": {
+                "stream": "access_logs",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "url",
+                    "alias": "url",
+                    "column": "url",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "hits",
+                    "alias": "hits",
+                    "column": "hits",
+                    "color": null,
+                    "aggregationFunction": null
+                  }
+                ],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 12,
+            "y": 19,
+            "w": 12,
+            "h": 8,
+            "i": 1011
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1012",
+          "type": "table",
+          "title": "Recent Backend Errors",
+          "description": "Latest 50 errors \u2014 newest first",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, level, message, method, url, status, ip FROM \"backend_logs\" WHERE level = 'error' ORDER BY _timestamp DESC LIMIT 50",
+              "customQuery": true,
+              "fields": {
+                "stream": "backend_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 27,
+            "w": 24,
+            "h": 8,
+            "i": 1012
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1013",
+          "type": "table",
+          "title": "Security Events",
+          "description": "Latest security_logs entries",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, message, ip, url, method FROM \"security_logs\" ORDER BY _timestamp DESC LIMIT 30",
+              "customQuery": true,
+              "fields": {
+                "stream": "security_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 35,
+            "w": 24,
+            "h": 7,
+            "i": 1013
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1014",
+          "type": "table",
+          "title": "Audit Log",
+          "description": "Admin actions",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, message, userid FROM \"audit_logs\" ORDER BY _timestamp DESC LIMIT 30",
+              "customQuery": true,
+              "fields": {
+                "stream": "audit_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 42,
+            "w": 12,
+            "h": 7,
+            "i": 1014
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "1015",
+          "type": "table",
+          "title": "Frontend Errors",
+          "description": "Browser-captured errors",
+          "config": {
+            "show_legends": false,
+            "legends_position": null,
+            "unit": null,
+            "decimals": null,
+            "axis_width": null,
+            "axis_border_show": false,
+            "legend_width": null,
+            "base_map": null,
+            "map_view": null,
+            "color": null,
+            "thresholds": []
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, level, message, url FROM \"frontend_logs\" WHERE level = 'error' ORDER BY _timestamp DESC LIMIT 30",
+              "customQuery": true,
+              "fields": {
+                "stream": "frontend_logs",
+                "stream_type": "logs",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "breakdown": []
+              },
+              "config": {
+                "current_mode": "auto",
+                "promql_legend": "",
+                "limit": 0
+              }
+            }
+          ],
+          "layout": {
+            "x": 12,
+            "y": 42,
+            "w": 12,
+            "h": 7,
+            "i": 1015
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "list": []
+  },
+  "defaultDatetimeDuration": {
+    "type": "relative",
+    "relativeTimePeriod": "24h",
+    "startTime": null,
+    "endTime": null
+  }
+}

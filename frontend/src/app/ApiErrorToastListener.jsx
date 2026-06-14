@@ -7,9 +7,9 @@ export default function ApiErrorToastListener() {
   useEffect(() => {
     const handler = (event) => {
       const detail = event?.detail || {};
-      const msg = detail.message || 'An error occurred';
-      const code = detail.statusCode ? ` (code ${detail.statusCode})` : '';
-      showError(`${msg}${code}`);
+      // 401 is handled by the auth flow (redirect to sign-in)
+      if (detail.statusCode === 401) return;
+      showError(detail.message || 'An unexpected error occurred.');
     };
 
     window.addEventListener('api-error', handler);

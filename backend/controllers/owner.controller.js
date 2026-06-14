@@ -1,6 +1,6 @@
 import Owner from '../models/owner.model.js';
 import { errorHandler } from '../utils/error.js';
-import { io } from '../index.js';
+import { io } from '../socket.js';
 
 export const createOwner = async (req, res, next) => {
   try {

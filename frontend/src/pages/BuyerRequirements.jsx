@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useSelector } from 'react-redux';
-import { FaPlus, FaSearch, FaFilter, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt, FaHome, FaBed, FaBath, FaDollarSign, FaCalendarAlt, FaEdit, FaTrash, FaEye } from 'react-icons/fa';
+import {
+  HiPlus, HiSearch, HiUser, HiPhone, HiMail, HiLocationMarker,
+  HiHome, HiCurrencyDollar, HiCalendar, HiPencil, HiTrash, HiEye,
+} from 'react-icons/hi';
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 
 export default function BuyerRequirements() {
-  console.log('BuyerRequirements component is rendering');
-  
   const [buyerRequirements, setBuyerRequirements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -15,11 +17,10 @@ export default function BuyerRequirements() {
   const [filterType, setFilterType] = useState('all');
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
-  
-  console.log('BuyerRequirements - currentUser:', currentUser);
 
   const [editingId, setEditingId] = useState(null);
   const [viewingRequirement, setViewingRequirement] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const emptyForm = {
     buyerName: '',
@@ -143,16 +144,14 @@ export default function BuyerRequirements() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this buyer requirement?')) {
-      try {
-        await fetchWithRefresh(`/api/buyer-requirements/${id}`, {
-          method: 'DELETE',
-        });
-        fetchBuyerRequirements();
-      } catch (error) {
-        console.error('Error deleting buyer requirement:', error);
-        setError('Failed to delete buyer requirement');
-      }
+    try {
+      await fetchWithRefresh(`/api/buyer-requirements/${id}`, {
+        method: 'DELETE',
+      });
+      fetchBuyerRequirements();
+    } catch (error) {
+      console.error('Error deleting buyer requirement:', error);
+      setError('Failed to delete buyer requirement');
     }
   };
 
@@ -168,14 +167,13 @@ export default function BuyerRequirements() {
   });
 
   return (
-    <div className='min-h-screen bg-slate-50'>
-      <div className='max-w-7xl mx-auto px-4 py-8'>
+    <div className='space-y-6'>
+      <div>
         {/* Header */}
-        <div className='mb-8'>
-          <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-4'>
+          <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
             <div>
-              <h1 className='text-3xl font-bold text-slate-900'>Buyer Requirements</h1>
-              <p className='text-slate-600 mt-1'>Manage and track buyer requirements to match with your properties</p>
+              <h1 className='text-xl font-bold text-slate-900'>Buyer Requirements</h1>
+              <p className='text-slate-500 mt-0.5'>Manage and track buyer requirements</p>
             </div>
 
             {!isBuyerViewMode && (
@@ -184,26 +182,25 @@ export default function BuyerRequirements() {
                   setViewingRequirement(null);
                   setShowForm(true);
                 }}
-                className='inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors'
+                className='inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors'
               >
-                <FaPlus className='w-4 h-4' />
+                <HiPlus className='w-4 h-4' />
                 Add Requirement
               </button>
             )}
           </div>
-        </div>
 
         {/* Controls */}
-        <div className='bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-6 mb-6'>
+        <div className='bg-white rounded-xl border border-slate-200 p-4 mb-6'>
           <div className='flex flex-col lg:flex-row gap-4 items-center justify-between'>
             <div className='flex flex-col sm:flex-row gap-3 flex-1 w-full'>
               {/* Search */}
               <div className='relative flex-1 max-w-xl w-full'>
-                <FaSearch className='absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400' />
+                <HiSearch className='absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400' />
                 <input
                   type='text'
                   placeholder='Search buyers or requirements...'
-                  className='w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
+                  className='w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -213,7 +210,7 @@ export default function BuyerRequirements() {
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className='px-4 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
+                className='px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
               >
                 <option value='all'>All Types</option>
                 <option value='sale'>For Sale</option>
@@ -241,28 +238,28 @@ export default function BuyerRequirements() {
 
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
                 <div>
-                  <div className='text-gray-500'>Name</div>
-                  <div className='font-medium text-gray-900'>{viewingRequirement.buyerName || '-'}</div>
+                  <div className='text-slate-500'>Name</div>
+                  <div className='font-medium text-slate-900'>{viewingRequirement.buyerName || '-'}</div>
                 </div>
                 <div>
-                  <div className='text-gray-500'>Phone</div>
-                  <div className='font-medium text-gray-900'>{viewingRequirement.buyerPhone || '-'}</div>
+                  <div className='text-slate-500'>Phone</div>
+                  <div className='font-medium text-slate-900'>{viewingRequirement.buyerPhone || '-'}</div>
                 </div>
                 <div>
-                  <div className='text-gray-500'>Email</div>
-                  <div className='font-medium text-gray-900'>{viewingRequirement.buyerEmail || '-'}</div>
+                  <div className='text-slate-500'>Email</div>
+                  <div className='font-medium text-slate-900'>{viewingRequirement.buyerEmail || '-'}</div>
                 </div>
                 <div>
-                  <div className='text-gray-500'>Location</div>
-                  <div className='font-medium text-gray-900'>{viewingRequirement.preferredLocation || '-'}</div>
+                  <div className='text-slate-500'>Location</div>
+                  <div className='font-medium text-slate-900'>{viewingRequirement.preferredLocation || '-'}</div>
                 </div>
                 <div>
-                  <div className='text-gray-500'>Type</div>
-                  <div className='font-medium text-gray-900'>{viewingRequirement.propertyType || '-'}</div>
+                  <div className='text-slate-500'>Type</div>
+                  <div className='font-medium text-slate-900'>{viewingRequirement.propertyType || '-'}</div>
                 </div>
                 <div>
-                  <div className='text-gray-500'>Budget</div>
-                  <div className='font-medium text-gray-900'>{viewingRequirement.budget || '-'}</div>
+                  <div className='text-slate-500'>Budget</div>
+                  <div className='font-medium text-slate-900'>{viewingRequirement.budget || '-'}</div>
                 </div>
               </div>
 
@@ -270,16 +267,16 @@ export default function BuyerRequirements() {
                 <div className='mt-4 space-y-3'>
                   {viewingRequirement.additionalRequirements && (
                     <div>
-                      <div className='text-gray-500 text-sm mb-1'>Additional Requirements</div>
-                      <div className='bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 text-sm'>
+                      <div className='text-slate-500 text-sm mb-1'>Additional Requirements</div>
+                      <div className='bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-sm'>
                         {viewingRequirement.additionalRequirements}
                       </div>
                     </div>
                   )}
                   {viewingRequirement.notes && (
                     <div>
-                      <div className='text-gray-500 text-sm mb-1'>Notes</div>
-                      <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 text-gray-800 text-sm'>
+                      <div className='text-slate-500 text-sm mb-1'>Notes</div>
+                      <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 text-slate-800 text-sm'>
                         {viewingRequirement.notes}
                       </div>
                     </div>
@@ -295,9 +292,9 @@ export default function BuyerRequirements() {
                       setViewingRequirement(null);
                       handleEdit(req);
                     }}
-                    className='inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold'
+                    className='inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium'
                   >
-                    <FaEdit className='w-4 h-4' />
+                    <HiPencil className='w-4 h-4' />
                     Edit
                   </button>
                 </div>
@@ -331,37 +328,40 @@ export default function BuyerRequirements() {
                 {/* Buyer Information */}
                 <div className='space-y-4'>
                   <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
-                    <FaUser className='w-5 h-5 text-slate-900' />
+                    <HiUser className='w-5 h-5 text-slate-900' />
                     Buyer Information
                   </h3>
                   
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Buyer Name *</label>
+                    <label htmlFor='buyerName' className='block text-sm font-medium text-slate-700 mb-1'>Buyer Name *</label>
                     <input
+                      id='buyerName'
                       type='text'
                       required
-                      className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                       value={formData.buyerName}
                       onChange={(e) => setFormData({...formData, buyerName: e.target.value})}
                     />
                   </div>
 
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Email</label>
+                    <label htmlFor='buyerEmail' className='block text-sm font-medium text-slate-700 mb-1'>Email</label>
                     <input
+                      id='buyerEmail'
                       type='email'
-                      className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                       value={formData.buyerEmail}
                       onChange={(e) => setFormData({...formData, buyerEmail: e.target.value})}
                     />
                   </div>
 
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Phone *</label>
+                    <label htmlFor='buyerPhone' className='block text-sm font-medium text-slate-700 mb-1'>Phone *</label>
                     <input
+                      id='buyerPhone'
                       type='tel'
                       required
-                      className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                       value={formData.buyerPhone}
                       onChange={(e) => setFormData({...formData, buyerPhone: e.target.value})}
                     />
@@ -371,15 +371,15 @@ export default function BuyerRequirements() {
                 {/* Property Requirements */}
                 <div className='space-y-4'>
                   <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
-                    <FaHome className='w-5 h-5 text-slate-900' />
+                    <HiHome className='w-5 h-5 text-slate-900' />
                     Property Requirements
                   </h3>
 
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Property Type *</label>
+                    <label className='block text-sm font-medium text-slate-700 mb-1'>Property Type *</label>
                     <select
                       required
-                      className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
+                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
                       value={formData.propertyType}
                       onChange={(e) => setFormData({...formData, propertyType: e.target.value})}
                     >
@@ -389,10 +389,10 @@ export default function BuyerRequirements() {
                   </div>
 
                   <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-1'>Preferred Location</label>
+                    <label className='block text-sm font-medium text-slate-700 mb-1'>Preferred Location</label>
                     <input
                       type='text'
-                      className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                       value={formData.preferredLocation}
                       onChange={(e) => setFormData({...formData, preferredLocation: e.target.value})}
                     />
@@ -400,19 +400,19 @@ export default function BuyerRequirements() {
 
                   <div className='grid grid-cols-2 gap-4'>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-1'>Min Price</label>
+                      <label className='block text-sm font-medium text-slate-700 mb-1'>Min Price</label>
                       <input
                         type='number'
-                        className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                         value={formData.minPrice}
                         onChange={(e) => setFormData({...formData, minPrice: e.target.value})}
                       />
                     </div>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-1'>Max Price</label>
+                      <label className='block text-sm font-medium text-slate-700 mb-1'>Max Price</label>
                       <input
                         type='number'
-                        className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                         value={formData.maxPrice}
                         onChange={(e) => setFormData({...formData, maxPrice: e.target.value})}
                       />
@@ -421,21 +421,21 @@ export default function BuyerRequirements() {
 
                   <div className='grid grid-cols-2 gap-4'>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-1'>Min Bedrooms</label>
+                      <label className='block text-sm font-medium text-slate-700 mb-1'>Min Bedrooms</label>
                       <input
                         type='number'
                         min='1'
-                        className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                         value={formData.minBedrooms}
                         onChange={(e) => setFormData({...formData, minBedrooms: e.target.value})}
                       />
                     </div>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700 mb-1'>Min Bathrooms</label>
+                      <label className='block text-sm font-medium text-slate-700 mb-1'>Min Bathrooms</label>
                       <input
                         type='number'
                         min='1'
-                        className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                         value={formData.minBathrooms}
                         onChange={(e) => setFormData({...formData, minBathrooms: e.target.value})}
                       />
@@ -447,49 +447,49 @@ export default function BuyerRequirements() {
               {/* Additional Information */}
               <div className='space-y-4'>
                 <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
-                  <FaCalendarAlt className='w-5 h-5 text-slate-900' />
+                  <HiCalendar className='w-5 h-5 text-slate-900' />
                   Additional Information
                 </h3>
 
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Budget Range</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Budget Range</label>
                   <input
                     type='text'
                     placeholder='e.g., $300,000 - $500,000'
-                    className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                     value={formData.budget}
                     onChange={(e) => setFormData({...formData, budget: e.target.value})}
                   />
                 </div>
 
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Timeline</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Timeline</label>
                   <input
                     type='text'
                     placeholder='e.g., Within 3 months, ASAP'
-                    className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                     value={formData.timeline}
                     onChange={(e) => setFormData({...formData, timeline: e.target.value})}
                   />
                 </div>
 
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Additional Requirements</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Additional Requirements</label>
                   <textarea
                     rows='3'
                     placeholder='Any specific features, amenities, or preferences...'
-                    className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                     value={formData.additionalRequirements}
                     onChange={(e) => setFormData({...formData, additionalRequirements: e.target.value})}
                   />
                 </div>
 
                 <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>Notes</label>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Notes</label>
                   <textarea
                     rows='2'
                     placeholder='Internal notes about this buyer...'
-                    className='w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
+                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
                     value={formData.notes}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   />
@@ -524,8 +524,8 @@ export default function BuyerRequirements() {
         <div className='space-y-4'>
           {loading && (
             <div className='text-center py-8'>
-              <div className='inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600'></div>
-              <p className='mt-2 text-gray-600'>Loading buyer requirements...</p>
+              <div className='inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900'></div>
+              <p className='mt-2 text-slate-500'>Loading buyer requirements...</p>
             </div>
           )}
 
@@ -537,12 +537,12 @@ export default function BuyerRequirements() {
 
           {!loading && !error && filteredRequirements.length === 0 && (
             <div className='text-center py-12'>
-              <FaUser className='w-16 h-16 text-gray-300 mx-auto mb-4' />
-              <h3 className='text-lg font-medium text-gray-900 mb-2'>No buyer requirements found</h3>
-              <p className='text-gray-600 mb-4'>Start by adding your first buyer requirement</p>
+              <HiUser className='w-14 h-14 text-slate-300 mx-auto mb-4' />
+              <h3 className='text-lg font-semibold text-slate-900 mb-2'>No buyer requirements found</h3>
+              <p className='text-slate-500 mb-4'>Start by adding your first buyer requirement</p>
               <button
                 onClick={() => setShowForm(true)}
-                className='bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors'
+                className='bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors'
               >
                 Add Buyer Requirement
               </button>
@@ -555,7 +555,7 @@ export default function BuyerRequirements() {
                 <div className='flex-1'>
                   <div className='flex items-center gap-3 mb-3'>
                     <div className='w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-sm'>
-                      <FaUser className='w-6 h-6 text-white' />
+                      <HiUser className='w-6 h-6 text-white' />
                     </div>
                     <div>
                       <div className='flex items-center gap-2 flex-wrap'>
@@ -571,13 +571,13 @@ export default function BuyerRequirements() {
                       <div className='flex items-center gap-4 text-sm text-slate-600 mt-1'>
                         {requirement.buyerEmail && (
                           <span className='flex items-center gap-1'>
-                            <FaEnvelope className='w-4 h-4' />
+                            <HiMail className='w-4 h-4' />
                             {requirement.buyerEmail}
                           </span>
                         )}
                         {requirement.buyerPhone && (
                           <span className='flex items-center gap-1'>
-                            <FaPhone className='w-4 h-4' />
+                            <HiPhone className='w-4 h-4' />
                             {requirement.buyerPhone}
                           </span>
                         )}
@@ -587,48 +587,46 @@ export default function BuyerRequirements() {
 
                   <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4'>
                     <div className='flex items-center gap-2 text-sm'>
-                      <FaMapMarkerAlt className='w-4 h-4 text-gray-400' />
-                      <span className='text-gray-600'>Location:</span>
+                      <HiLocationMarker className='w-4 h-4 text-slate-400' />
+                      <span className='text-slate-600'>Location:</span>
                       <span className='font-medium'>{requirement.preferredLocation}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <FaHome className='w-4 h-4 text-gray-400' />
-                      <span className='text-gray-600'>Type:</span>
+                      <HiHome className='w-4 h-4 text-slate-400' />
+                      <span className='text-slate-600'>Type:</span>
                       <span className='font-medium capitalize'>{requirement.propertyType}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <FaDollarSign className='w-4 h-4 text-gray-400' />
-                      <span className='text-gray-600'>Budget:</span>
+                      <HiCurrencyDollar className='w-4 h-4 text-slate-400' />
+                      <span className='text-slate-600'>Budget:</span>
                       <span className='font-medium'>{requirement.budget || 'Not specified'}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <FaBed className='w-4 h-4 text-gray-400' />
-                      <span className='text-gray-600'>Bedrooms:</span>
+                      <span className='text-slate-600'>Bedrooms:</span>
                       <span className='font-medium'>{requirement.minBedrooms || 'Any'}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <FaBath className='w-4 h-4 text-gray-400' />
-                      <span className='text-gray-600'>Bathrooms:</span>
+                      <span className='text-slate-600'>Bathrooms:</span>
                       <span className='font-medium'>{requirement.minBathrooms || 'Any'}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <FaCalendarAlt className='w-4 h-4 text-gray-400' />
-                      <span className='text-gray-600'>Timeline:</span>
+                      <HiCalendar className='w-4 h-4 text-slate-400' />
+                      <span className='text-slate-600'>Timeline:</span>
                       <span className='font-medium'>{requirement.timeline || 'Not specified'}</span>
                     </div>
                   </div>
 
                   {requirement.additionalRequirements && (
                     <div className='mb-3'>
-                      <p className='text-sm text-gray-600 mb-1'>Additional Requirements:</p>
-                      <p className='text-sm text-gray-800 bg-gray-50 p-3 rounded-lg'>{requirement.additionalRequirements}</p>
+                      <p className='text-sm text-slate-600 mb-1'>Additional Requirements:</p>
+                      <p className='text-sm text-slate-800 bg-slate-50 p-3 rounded-lg'>{requirement.additionalRequirements}</p>
                     </div>
                   )}
 
                   {requirement.notes && (
                     <div className='mb-3'>
-                      <p className='text-sm text-gray-600 mb-1'>Notes:</p>
-                      <p className='text-sm text-gray-800 bg-blue-50 p-3 rounded-lg'>{requirement.notes}</p>
+                      <p className='text-sm text-slate-600 mb-1'>Notes:</p>
+                      <p className='text-sm text-slate-800 bg-blue-50 p-3 rounded-lg'>{requirement.notes}</p>
                     </div>
                   )}
                 </div>
@@ -636,26 +634,26 @@ export default function BuyerRequirements() {
                 <div className='flex items-center gap-2 ml-4'>
                   <button
                     onClick={() => handleView(requirement)}
-                    className='p-2.5 text-slate-700 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200'
+                    className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
                     title='View requirement'
                   >
-                    <FaEye className='w-4 h-4' />
+                    <HiEye className='w-4 h-4' />
                   </button>
                   {!isBuyerViewMode && (
                     <>
                       <button
                         onClick={() => handleEdit(requirement)}
-                        className='p-2.5 text-slate-700 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200'
+                        className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
                         title='Edit requirement'
                       >
-                        <FaEdit className='w-4 h-4' />
+                        <HiPencil className='w-4 h-4' />
                       </button>
                       <button
-                        onClick={() => handleDelete(requirement._id)}
-                        className='p-2.5 text-red-700 hover:bg-red-50 rounded-xl transition-colors border border-red-200'
+                        onClick={() => setPendingDelete(requirement._id)}
+                        className='p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200'
                         title='Delete requirement'
                       >
-                        <FaTrash className='w-4 h-4' />
+                        <HiTrash className='w-4 h-4' />
                       </button>
                     </>
                   )}
@@ -665,6 +663,14 @@ export default function BuyerRequirements() {
           ))}
         </div>
       </div>
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title='Delete buyer requirement?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={() => { handleDelete(pendingDelete); setPendingDelete(null); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

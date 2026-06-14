@@ -35,3 +35,23 @@ backend/uploads/
 # Backups
 backups/
 backend/logs/
+
+# Playwright
+e2e/.auth/
+playwright-report/
+playwright/.cache/
+test-results/
+.env.e2e
+
+# Claude Code internal files
+.claude/
+
+# Internal audit / analysis docs
+AUDIT.md
+
+# Build output
+frontend/dist/
+backend/dist/
+
+# OS
+Thumbs.db

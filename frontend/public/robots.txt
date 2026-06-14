@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /
+Allow: /listing/
+Allow: /search
+Allow: /sign-in
+Allow: /sign-up
+
+Disallow: /dashboard
+Disallow: /portfolio
+Disallow: /properties
+Disallow: /contacts
+Disallow: /tasks
+Disallow: /deals
+Disallow: /clients
+Disallow: /calendar
+Disallow: /transactions
+Disallow: /client-reports
+Disallow: /buyer-requirements
+Disallow: /analytics
+Disallow: /profile
+Disallow: /create-listing
+Disallow: /update-listing/
+Disallow: /api/
+
+Sitemap: https://realvista.in/sitemap.xml

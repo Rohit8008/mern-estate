@@ -1,6 +1,6 @@
 import Message from '../models/message.model.js';
 import { errorHandler } from '../utils/error.js';
-import { io } from '../index.js';
+import { io } from '../socket.js';
 import { onlineUsers } from '../utils/onlineUsers.js';
 import User from '../models/user.model.js';
 import Listing from '../models/listing.model.js';

@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { PageHeader, Button } from '../design-system';
 import {
   HiPlus, HiSearch, HiX, HiChevronDown, HiChevronRight,
   HiMail, HiPhone, HiCheck, HiPencil, HiTrash, HiRefresh,
-  HiViewGrid, HiViewList, HiUser, HiCalendar, HiChat,
+  HiViewGrid, HiViewList, HiUser, HiCalendar, HiChat, HiUsers,
 } from 'react-icons/hi';
 
 const STATUS_CONFIG = {
@@ -40,6 +42,7 @@ export default function ContactsBoard() {
   const [creating, setCreating] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showStatusDropdown, setShowStatusDropdown] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   // Filters
   const q = searchParams.get('q') || '';
@@ -131,7 +134,6 @@ export default function ContactsBoard() {
   };
 
   const handleDeleteContact = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this contact?')) return;
     try {
       await apiClient.delete(`/clients/${id}`);
       await fetchContacts();
@@ -161,31 +163,20 @@ export default function ContactsBoard() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
-        <div className='flex items-center gap-3'>
-          <h1 className='text-xl font-bold text-slate-900'>Contacts</h1>
-          <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full'>
-            {contacts.length}
-          </span>
-        </div>
-        <div className='flex items-center gap-2'>
-          <button
-            onClick={fetchContacts}
-            className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'
-          >
-            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-2 shadow-sm transition-colors'
-          >
-            <HiPlus className='w-4 h-4' />
-            New contact
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title='Clients'
+        description='Manage your sales leads and client relationships'
+        actions={
+          <>
+            <Button variant='secondary' size='sm' icon={HiRefresh} onClick={fetchContacts} className={loading ? '[&>svg]:animate-spin' : ''}>
+              Refresh
+            </Button>
+            <Button variant='primary' size='sm' icon={HiPlus} onClick={() => setShowCreateModal(true)}>
+              New client
+            </Button>
+          </>
+        }
+      />
 
       {/* Board container */}
       <div className='bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden'>
@@ -221,7 +212,7 @@ export default function ContactsBoard() {
               <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' />
               <input
                 className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition-all placeholder:text-slate-400'
-                placeholder='Search contacts...'
+                placeholder='Search clients...'
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
               />
@@ -291,9 +282,10 @@ export default function ContactsBoard() {
         {/* Cards View */}
         {!loading && view === 'cards' && (
           <div className='p-4'>
-            {STATUS_ORDER.map((status) => {
+            {contacts.length === 0 && !loading ? null : STATUS_ORDER.map((status) => {
               const items = groupedContacts.get(status) || [];
               if (items.length === 0 && statusFilter && statusFilter !== status) return null;
+              if (items.length === 0 && contacts.length === 0) return null;
               const config = STATUS_CONFIG[status] || STATUS_CONFIG.lead;
               const isCollapsed = collapsedGroups[status];
 
@@ -325,19 +317,19 @@ export default function ContactsBoard() {
                           contact={contact}
                           onSelect={() => setSelectedContact(contact)}
                           onEdit={() => openEditModal(contact)}
-                          onDelete={() => handleDeleteContact(contact._id)}
+                          onDelete={() => setPendingDelete(contact._id)}
                           onStatusChange={(newStatus) => handleStatusChange(contact._id, newStatus)}
                           showStatusDropdown={showStatusDropdown === contact._id}
                           setShowStatusDropdown={setShowStatusDropdown}
                         />
                       ))}
-                      {/* Add contact card */}
+                      {/* Add client card */}
                       <button
                         onClick={() => setShowCreateModal(true)}
-                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors'
+                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-colors'
                       >
                         <HiPlus className='w-6 h-6 mb-2' />
-                        <span className='text-sm font-medium'>Add contact</span>
+                        <span className='text-sm font-medium'>Add client</span>
                       </button>
                     </div>
                   )}
@@ -346,19 +338,15 @@ export default function ContactsBoard() {
             })}
 
             {contacts.length === 0 && !loading && (
-              <div className='text-center py-16'>
-                <div className='w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4'>
-                  <HiUser className='w-8 h-8 text-slate-400' />
+              <div className='flex flex-col items-center justify-center py-20 text-center'>
+                <div className='w-16 h-16 rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 flex items-center justify-center mx-auto mb-5'>
+                  <HiUsers className='w-8 h-8 text-indigo-500' />
                 </div>
-                <h3 className='text-lg font-semibold text-slate-900 mb-2'>No contacts yet</h3>
-                <p className='text-slate-500 mb-4'>Get started by adding your first contact</p>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium inline-flex items-center gap-2'
-                >
-                  <HiPlus className='w-4 h-4' />
-                  Add contact
-                </button>
+                <h3 className='text-lg font-semibold text-slate-900 mb-1.5'>No clients yet</h3>
+                <p className='text-slate-500 text-sm mb-6 max-w-xs'>Add your first client to start managing your sales pipeline and track leads through every stage.</p>
+                <Button variant='primary' size='md' icon={HiPlus} onClick={() => setShowCreateModal(true)}>
+                  Add your first client
+                </Button>
               </div>
             )}
           </div>
@@ -494,12 +482,12 @@ export default function ContactsBoard() {
                         <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
                           <HiUser className='w-6 h-6 text-slate-400' />
                         </div>
-                        <p className='text-slate-500 text-sm'>No contacts found</p>
+                        <p className='text-slate-500 text-sm'>No clients found</p>
                         <button
                           onClick={() => setShowCreateModal(true)}
-                          className='text-sm font-medium text-blue-600 hover:text-blue-700'
+                          className='text-sm font-medium text-indigo-600 hover:text-indigo-700'
                         >
-                          + Add your first contact
+                          + Add your first client
                         </button>
                       </div>
                     </td>
@@ -524,7 +512,7 @@ export default function ContactsBoard() {
           contact={selectedContact}
           onClose={() => setSelectedContact(null)}
           onEdit={() => openEditModal(selectedContact)}
-          onDelete={() => handleDeleteContact(selectedContact._id)}
+          onDelete={() => setPendingDelete(selectedContact._id)}
           onStatusChange={(newStatus) => handleStatusChange(selectedContact._id, newStatus)}
         />
       )}
@@ -535,7 +523,7 @@ export default function ContactsBoard() {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateContact}
           loading={creating}
-          title='Create New Contact'
+          title='New Client'
         />
       )}
 
@@ -546,9 +534,17 @@ export default function ContactsBoard() {
           onClose={() => { setShowEditModal(false); setEditingContact(null); }}
           onSubmit={(data) => handleUpdateContact(editingContact._id, data)}
           loading={false}
-          title='Edit Contact'
+          title='Edit Client'
         />
       )}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title='Delete this client?'
+        description='This action cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={() => { handleDeleteContact(pendingDelete); setPendingDelete(null); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

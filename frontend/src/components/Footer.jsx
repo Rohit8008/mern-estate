@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker,
+  HiOutlineHome, HiOutlineSearch, HiOutlineUserAdd,
+  HiOutlineCalendar, HiOutlineLightningBolt,
+} from 'react-icons/hi';
 import { apiClient } from '../utils/http';
-import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaTwitter, FaLinkedin, FaInstagram } from 'react-icons/fa';
+
+const OWNER_PHONE = '+91 62839 30283';
+const OWNER_EMAIL = 'mittalrohit701@gmail.com';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
@@ -32,136 +39,121 @@ export default function Footer() {
   };
 
   return (
-    <footer className='bg-gray-900 text-white'>
-      {/* Main Footer Content */}
-      <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16'>
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8'>
-          {/* Company Info */}
-          <div className='space-y-6'>
-            <div className='flex items-center space-x-3'>
-              <div className='w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center'>
-                <span className='text-white font-bold text-lg'>R</span>
+    <footer className='bg-slate-950 text-white'>
+      <div className='max-w-7xl mx-auto px-4 py-14'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10'>
+
+          {/* Brand */}
+          <div className='space-y-5'>
+            <div className='flex items-center gap-2.5'>
+              <div className='w-9 h-9 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-xl flex items-center justify-center flex-shrink-0'>
+                <HiOutlineHome className='w-4 h-4 text-white' />
               </div>
-              <span className='text-2xl font-bold'>RealVista</span>
+              <span className='text-lg font-bold'>Real Vista</span>
             </div>
-            <p className='text-gray-300 text-sm leading-relaxed'>
-              Your trusted partner in real estate. We help you find the perfect property or sell your current one with expert guidance and personalized service.
+            <p className='text-slate-400 text-sm leading-relaxed'>
+              End-to-end real estate platform — verified listings for buyers and a full CRM for agencies ready to grow.
             </p>
-            <div className='flex space-x-4'>
-              <a href='#' className='w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors'>
-                <FaFacebook className='w-5 h-5' />
-              </a>
-              <a href='#' className='w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors'>
-                <FaTwitter className='w-5 h-5' />
-              </a>
-              <a href='#' className='w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors'>
-                <FaLinkedin className='w-5 h-5' />
-              </a>
-              <a href='#' className='w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors'>
-                <FaInstagram className='w-5 h-5' />
-              </a>
+            <div className='flex gap-2'>
+              {['in', 'tw', 'ig', 'yt'].map((s) => (
+                <a
+                  key={s}
+                  href='#'
+                  aria-label={s}
+                  className='w-8 h-8 bg-slate-800 hover:bg-indigo-600 border border-slate-700 rounded-lg flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase'
+                >
+                  {s}
+                </a>
+              ))}
             </div>
           </div>
 
-          {/* Quick Links */}
+          {/* Platform */}
           <div>
-            <h3 className='text-lg font-semibold mb-6'>Quick Links</h3>
+            <h3 className='text-sm font-semibold text-white mb-5 uppercase tracking-wide'>Platform</h3>
             <ul className='space-y-3'>
-              <li>
-                <Link to='/search' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  Properties
-                </Link>
-              </li>
-              <li>
-                <Link to='/categories' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  Categories
-                </Link>
-              </li>
-              <li>
-                <Link to='/buyer-requirements' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  Buyer Requirements
-                </Link>
-              </li>
-              <li>
-                <Link to='/about' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link to='/contact' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  Contact
-                </Link>
-              </li>
+              {[
+                { label: 'Browse Properties', to: '/search',  icon: HiOutlineSearch },
+                { label: 'Sign In',           to: '/sign-in', icon: HiOutlineHome },
+                { label: 'Create Account',    to: '/sign-up', icon: HiOutlineUserAdd },
+              ].map(({ label, to, icon: Icon }) => (
+                <li key={label}>
+                  <Link
+                    to={to}
+                    className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'
+                  >
+                    <Icon className='w-3.5 h-3.5 text-indigo-500 flex-shrink-0' />
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* Services */}
+          {/* For Agencies */}
           <div>
-            <h3 className='text-lg font-semibold mb-6'>Our Services</h3>
+            <h3 className='text-sm font-semibold text-white mb-5 uppercase tracking-wide'>For Agencies</h3>
             <ul className='space-y-3'>
-              <li className='text-gray-300 text-sm'>Property Sales</li>
-              <li className='text-gray-300 text-sm'>Property Rentals</li>
-              <li className='text-gray-300 text-sm'>Property Management</li>
-              <li className='text-gray-300 text-sm'>Investment Consulting</li>
-              <li className='text-gray-300 text-sm'>Market Analysis</li>
-              <li className='text-gray-300 text-sm'>Legal Support</li>
+              {[
+                'Pipeline Management',
+                'Analytics Dashboard',
+                'Task & Calendar',
+                'Document Management',
+                'Owner & Listing CRM',
+              ].map((item) => (
+                <li key={item} className='flex items-center gap-2 text-slate-400 text-sm'>
+                  <HiOutlineLightningBolt className='w-3.5 h-3.5 text-indigo-500 flex-shrink-0' />
+                  {item}
+                </li>
+              ))}
             </ul>
+            <a
+              href={`mailto:${OWNER_EMAIL}?subject=Demo Request — Real Vista`}
+              className='inline-flex items-center gap-2 mt-5 text-sm text-indigo-400 hover:text-indigo-300 transition-colors font-medium'
+            >
+              <HiOutlineCalendar className='w-4 h-4' />
+              Request a Demo
+            </a>
           </div>
 
-          {/* Contact Info */}
+          {/* Contact & Newsletter */}
           <div>
-            <h3 className='text-lg font-semibold mb-6'>Contact Info</h3>
-            <div className='space-y-4'>
-              <div className='flex items-start space-x-3'>
-                <FaMapMarkerAlt className='w-5 h-5 text-blue-400 mt-1 flex-shrink-0' />
-                <div>
-                  <p className='text-gray-300 text-sm'>
-                    Bathinda<br />
-                    Punjab, India 151001
-                  </p>
-                </div>
-              </div>
-              <div className='flex items-center space-x-3'>
-                <FaPhone className='w-5 h-5 text-blue-400 flex-shrink-0' />
-                <a href='tel:+1234567890' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  +91 6283930283
-                </a>
-              </div>
-              <div className='flex items-center space-x-3'>
-                <FaEnvelope className='w-5 h-5 text-blue-400 flex-shrink-0' />
-                <a href='mailto:mittalrohit701@gmail.com' className='text-gray-300 hover:text-white transition-colors text-sm'>
-                  mittalrohit701@gmail.com
-                </a>
+            <h3 className='text-sm font-semibold text-white mb-5 uppercase tracking-wide'>Get in Touch</h3>
+            <div className='space-y-3 mb-6'>
+              <a href={`tel:${OWNER_PHONE.replace(/\s/g, '')}`} className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'>
+                <HiOutlinePhone className='w-4 h-4 text-indigo-500 flex-shrink-0' />
+                {OWNER_PHONE}
+              </a>
+              <a href={`mailto:${OWNER_EMAIL}`} className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'>
+                <HiOutlineMail className='w-4 h-4 text-indigo-500 flex-shrink-0' />
+                {OWNER_EMAIL}
+              </a>
+              <div className='flex items-start gap-2 text-slate-400 text-sm'>
+                <HiOutlineLocationMarker className='w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5' />
+                <span>Bathinda, Punjab — 151001</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Newsletter Signup */}
-        <div className='mt-12 pt-8 border-t border-gray-800'>
-          <div className='max-w-md mx-auto text-center'>
-            <h3 className='text-xl font-semibold mb-4'>Stay Updated</h3>
-            <p className='text-gray-300 text-sm mb-6'>
-              Get the latest property listings and market insights delivered to your inbox.
-            </p>
-            <form onSubmit={handleSubscribe} className='flex flex-col sm:flex-row gap-3'>
+            {/* Newsletter */}
+            <p className='text-slate-500 text-xs mb-2'>Get new listings in your inbox</p>
+            <form onSubmit={handleSubscribe} className='flex gap-2'>
               <input
                 type='email'
-                placeholder='Enter your email'
+                placeholder='your@email.com'
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className='flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                className='flex-1 min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
               />
               <button
                 type='submit'
                 disabled={loading}
-                className='px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50'
+                className='px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 whitespace-nowrap'
               >
-                {loading ? 'Subscribing...' : 'Subscribe'}
+                {loading ? '…' : 'Join'}
               </button>
             </form>
             {subStatus.message && (
-              <p className={`mt-3 text-sm ${subStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+              <p className={`mt-2 text-xs ${subStatus.type === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {subStatus.message}
               </p>
             )}
@@ -169,24 +161,13 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className='bg-gray-950 border-t border-gray-800'>
-        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'>
-          <div className='flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0'>
-            <div className='text-gray-400 text-sm'>
-              © 2026 RealVista. All rights reserved.
-            </div>
-            <div className='flex space-x-6 text-sm'>
-              <a href='#' className='text-gray-400 hover:text-white transition-colors'>
-                Privacy Policy
-              </a>
-              <a href='#' className='text-gray-400 hover:text-white transition-colors'>
-                Terms of Service
-              </a>
-              <a href='#' className='text-gray-400 hover:text-white transition-colors'>
-                Cookie Policy
-              </a>
-            </div>
+      {/* Bottom bar */}
+      <div className='border-t border-slate-800'>
+        <div className='max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3 text-slate-600 text-xs'>
+          <span>© 2026 Real Vista. All rights reserved.</span>
+          <div className='flex gap-5'>
+            <span className='hover:text-slate-400 cursor-default'>Privacy Policy</span>
+            <span className='hover:text-slate-400 cursor-default'>Terms of Service</span>
           </div>
         </div>
       </div>

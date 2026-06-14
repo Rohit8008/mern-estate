@@ -2,15 +2,17 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useAppearance } from '../contexts/useAppearance';
 import { apiClient } from '../utils/http';
 import Chart from 'react-apexcharts';
 import {
-  HiPlus, HiSearch, HiFilter, HiUsers, HiChevronDown, HiStar,
-  HiDotsHorizontal, HiTrendingUp, HiClock, HiCurrencyDollar,
-  HiChartBar, HiX, HiCheck, HiPencil, HiEye, HiMail,
+  HiPlus, HiSearch, HiUsers, HiStar,
+  HiClock, HiX, HiCheck, HiMail,
   HiHome, HiUserGroup, HiClipboardList, HiRefresh,
-  HiArrowsExpand, HiSwitchHorizontal,
+  HiSwitchHorizontal,
+  HiHashtag, HiChartBar, HiLightningBolt, HiViewList, HiTable, HiTemplate,
 } from 'react-icons/hi';
+import { KpiCard, PageHeader, Button } from '../design-system';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -21,12 +23,12 @@ const STATUS_COLORS = {
 };
 
 const WIDGET_TYPES = [
-  { id: 'number', label: 'Numbers', icon: '🔢', description: 'Display a single number metric' },
-  { id: 'chart', label: 'Chart', icon: '📊', description: 'Bar, line, or pie chart' },
-  { id: 'battery', label: 'Battery', icon: '🔋', description: 'Progress indicator' },
-  { id: 'timeline', label: 'Timeline', icon: '📅', description: 'Recent activity feed' },
-  { id: 'table', label: 'Table', icon: '📋', description: 'Data table view' },
-  { id: 'workload', label: 'Workload', icon: '👥', description: 'Team workload view' },
+  { id: 'number',   label: 'Metric',    icon: HiHashtag,      description: 'Display a single number metric' },
+  { id: 'chart',    label: 'Chart',     icon: HiChartBar,     description: 'Bar, line, or pie chart' },
+  { id: 'battery',  label: 'Progress',  icon: HiLightningBolt,description: 'Progress / rate indicator' },
+  { id: 'timeline', label: 'Timeline',  icon: HiViewList,     description: 'Recent activity feed' },
+  { id: 'table',    label: 'Table',     icon: HiTable,        description: 'Data table view' },
+  { id: 'workload', label: 'Team',      icon: HiTemplate,     description: 'Team workload view' },
 ];
 
 const WIDGET_PRESETS = {
@@ -77,17 +79,28 @@ const WIDGET_DEFAULT_SPAN = {
 
 const STORAGE_KEY = 'agency_dashboard_widgets';
 
+// Icon components cannot be serialized to JSON. Store the widget type ID and
+// resolve the icon component at render time from WIDGET_TYPES.
+const WIDGET_TYPE_MAP = Object.fromEntries(WIDGET_TYPES.map((wt) => [wt.id, wt]));
+
 function loadWidgetsFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    // Ensure every widget has a span (migration from older format)
-    return JSON.parse(raw).map((w) => ({ ...w, span: w.span || WIDGET_DEFAULT_SPAN[w.type] || 'sm' }));
+    return JSON.parse(raw).map((w) => ({
+      ...w,
+      span: w.span || WIDGET_DEFAULT_SPAN[w.type] || 'sm',
+    }));
   } catch { return []; }
 }
 
 function saveWidgetsToStorage(widgets) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets)); } catch { }
+  // Strip non-serializable fields (icon component refs) before saving
+  const safe = widgets.map(({ ...w }) => {
+    delete w.icon;
+    return w;
+  });
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safe)); } catch { }
 }
 
 function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats, teamMembers, fmt, resolveData, statusBreakdown, monthlyTrend, isDragOver, onDragStart, onDragOver, onDragLeave, onDrop }) {
@@ -131,7 +144,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
               <div key={i} className='flex flex-col items-center'>
                 <span className='text-xs font-bold text-slate-700 mb-1'>{c.count}</span>
                 <div className='w-12 rounded-t' style={{ height: `${Math.max((c.count / max) * 100, 6)}px`, backgroundColor: colors[i % colors.length] }} />
-                <span className='text-[10px] text-slate-500 mt-1 capitalize'>{c._id || 'Other'}</span>
+                <span className='text-[10px] text-slate-500 mt-1 capitalize'>{c.categoryName || 'Other'}</span>
               </div>
             ))}
           </div>
@@ -311,7 +324,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
     >
       <div className='flex items-center justify-between mb-3 flex-shrink-0'>
         <div className='flex items-center gap-2 cursor-grab active:cursor-grabbing flex-1 min-w-0'>
-          <span className='text-lg'>{widget.icon}</span>
+          {(() => { const Icon = WIDGET_TYPE_MAP[widget.type]?.icon; return Icon ? <Icon className='w-4 h-4 text-slate-500 flex-shrink-0' /> : null; })()}
           <span className='text-sm font-semibold text-slate-700 truncate'>{widget.label}</span>
         </div>
         <div className='flex items-center gap-1 flex-shrink-0'>
@@ -331,6 +344,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
 export default function AgencyDashboard() {
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
+  const { resolvedTheme } = useAppearance();
 
   const [analytics, setAnalytics] = useState(null);
   const [propertyStats, setPropertyStats] = useState(null);
@@ -466,7 +480,9 @@ export default function AgencyDashboard() {
 
   const addWidget = (wt, preset) => {
     const span = WIDGET_DEFAULT_SPAN[wt.id] || 'sm';
-    const newWidget = { id: `w-${Date.now()}`, type: wt.id, label: preset.label, icon: wt.icon, preset: preset.key, dataPath: preset.dataPath, span };
+    // Do NOT store icon (React component) — it can't be serialized to localStorage.
+    // Icon is resolved at render time from WIDGET_TYPE_MAP[widget.type].icon.
+    const newWidget = { id: `w-${Date.now()}`, type: wt.id, label: preset.label, preset: preset.key, dataPath: preset.dataPath, span };
     setCustomWidgets((prev) => {
       const next = [...prev, newWidget];
       saveWidgetsToStorage(next);
@@ -528,16 +544,28 @@ export default function AgencyDashboard() {
     setInviteError('');
     setInviteSuccess('');
     try {
-      const username = inviteEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'user';
-      const tempPassword = `Invite@${Date.now().toString(36)}`;
+      // Generate a username that always satisfies min(3) + alphanum + stays unique
+      const prefix = inviteEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
+      const suffix = Math.random().toString(36).slice(2, 5); // 3 alphanum chars
+      const username = prefix.length >= 3 ? `${prefix}${suffix}` : `user${suffix}`;
+
+      // Password that always passes: upper + lower + digit + special, ≥ 12 chars
+      const rand = Math.random().toString(36).slice(2, 8); // 6 lowercase+digit chars
+      const tempPassword = `Inv@${rand}1A`;
+
       await apiClient.post('/user/employee', {
         username,
         email: inviteEmail.trim(),
         password: tempPassword,
         firstName: '',
         lastName: '',
+        message: inviteMessage.trim(),
       });
-      setInviteSuccess(`Invite sent! Employee account created for ${inviteEmail}`);
+      setInviteSuccess(
+        `Invite sent to ${inviteEmail.trim()} ✓\n\n` +
+        `A welcome email with login credentials has been delivered.\n\n` +
+        `Temp password (in case email doesn't arrive): ${tempPassword}`
+      );
       setInviteEmail('');
       setInviteMessage('');
       if (isAdmin) fetchData();
@@ -568,41 +596,54 @@ export default function AgencyDashboard() {
   const shouldShow = (...labels) => !q || labels.some((l) => l.toLowerCase().includes(q));
   const filteredWidgets = customWidgets.filter((w) => shouldShow(w.label));
 
+  // Chart colors adapt to dark/light mode
+  const isDark = resolvedTheme === 'dark';
+  const chartAxisColor  = isDark ? '#94a3b8' : '#64748b';
+  const chartGridColor  = isDark ? '#1e293b' : '#e2e8f0';
+  const chartTooltipTheme = isDark ? 'dark' : 'light';
+  const chartStrokeColor  = isDark ? '#0f172a' : '#fff';
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const displayName = (currentUser?.username || 'there').split(/[\s_]+/)[0];
+  const todayString = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
-        <div className='flex items-center gap-3'>
-          <h1 className='text-xl font-bold text-slate-900 flex items-center gap-2'>
-            Agency Dashboard
-            <button onClick={() => setIsFavorite(!isFavorite)} className={`transition-colors ${isFavorite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}`}>
-              <HiStar className='w-5 h-5' />
-            </button>
-          </h1>
-        </div>
-        <div className='flex items-center gap-2'>
-          <button onClick={fetchData} className='px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'>
-            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          {isAdmin && (
-            <button onClick={() => setShowInviteModal(true)} className='px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors flex items-center gap-1.5'>
-              <HiMail className='w-4 h-4' />
-              Invite
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Greeting Header */}
+      <PageHeader
+        dark
+        title={`${greeting}, ${displayName}!`}
+        description={`${todayString} · Agency performance overview`}
+        actions={
+          <>
+            <Button
+              variant='dark'
+              size='sm'
+              icon={HiRefresh}
+              onClick={fetchData}
+              className={loading ? '[&>svg]:animate-spin' : ''}
+            >
+              Refresh
+            </Button>
+            {isAdmin && (
+              <Button variant='darkBrand' size='sm' icon={HiMail} onClick={() => setShowInviteModal(true)}>
+                Invite Member
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Toolbar */}
-      <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-2'>
-        <button onClick={() => openWidgetModal()} className='px-3 py-1.5 rounded-md bg-slate-900 text-white text-sm font-medium flex items-center gap-1.5 hover:bg-slate-800 transition-colors'>
+      <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm'>
+        <button onClick={() => openWidgetModal()} className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium flex items-center gap-1.5 hover:bg-slate-800 transition-colors'>
           <HiPlus className='w-4 h-4' />
           Add widget
         </button>
-        <div className='h-6 w-px bg-slate-200' />
-        <div className='flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-200 bg-white text-sm flex-1 max-w-xs'>
-          <HiSearch className='w-4 h-4 text-slate-400' />
+        <div className='h-5 w-px bg-slate-200' />
+        <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-sm flex-1 max-w-xs focus-within:bg-white focus-within:border-slate-300 transition-colors'>
+          <HiSearch className='w-4 h-4 text-slate-400 flex-shrink-0' />
           <input className='bg-transparent outline-none flex-1 text-slate-700 placeholder:text-slate-400 text-sm' placeholder='Filter widgets...' value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} />
           {searchFilter && (<button onClick={() => setSearchFilter('')} className='text-slate-400 hover:text-slate-600'><HiX className='w-4 h-4' /></button>)}
         </div>
@@ -663,70 +704,59 @@ export default function AgencyDashboard() {
       {!loading && analytics && (
         <>
           {/* Section title */}
-          <div className='pt-2'>
-            <h2 className='text-lg font-bold text-slate-900'>Properties Overview</h2>
-            <p className='text-slate-500 text-sm mt-0.5'>Real-time metrics from your portfolio</p>
+          <div className='flex items-center justify-between'>
+            <div>
+              <h2 className='text-base font-semibold text-slate-900'>Properties Overview</h2>
+              <p className='text-slate-500 text-xs mt-0.5'>Real-time metrics from your portfolio</p>
+            </div>
           </div>
 
           {/* KPI Cards */}
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
             {shouldShow('total properties', 'properties overview', 'kpi') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
-                <div className='flex items-center gap-2 mb-2'>
-                  <div className='w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center'><HiHome className='w-5 h-5 text-blue-600' /></div>
-                  <span className='text-sm font-medium text-slate-600'>Total Properties</span>
-                </div>
-                <div className='text-3xl font-bold text-slate-900'>{fmt(props.total)}</div>
-                <div className='flex items-center gap-3 mt-2 text-xs text-slate-500'>
-                  <span className='text-green-600 font-medium'>{fmt(props.available)} available</span>
-                  <span>{fmt(props.sold)} sold</span>
-                </div>
-              </div>
+              <KpiCard
+                title='Total Properties'
+                value={fmt(props.total)}
+                icon={HiHome}
+                color='blue'
+                sub={<><span className='text-emerald-600 font-medium'>{fmt(props.available)} available</span>{' · '}{fmt(props.sold)} sold</>}
+              />
             )}
             {shouldShow('under negotiation', 'deals', 'kpi') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
-                <div className='flex items-center gap-2 mb-2'>
-                  <div className='w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center'><HiClock className='w-5 h-5 text-amber-600' /></div>
-                  <span className='text-sm font-medium text-slate-600'>Under Negotiation</span>
-                </div>
-                <div className='text-3xl font-bold text-slate-900'>{fmt(props.underNegotiation)}</div>
-                <div className='text-xs text-slate-500 mt-2'>Active deals in progress</div>
-              </div>
+              <KpiCard
+                title='Under Negotiation'
+                value={fmt(props.underNegotiation)}
+                icon={HiClock}
+                color='amber'
+                sub='Active deals in progress'
+              />
             )}
             {shouldShow('buyer requirements', 'buyers', 'kpi') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
-                <div className='flex items-center gap-2 mb-2'>
-                  <div className='w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center'><HiUserGroup className='w-5 h-5 text-purple-600' /></div>
-                  <span className='text-sm font-medium text-slate-600'>Buyer Requirements</span>
-                </div>
-                <div className='text-3xl font-bold text-slate-900'>{fmt(buyers.total)}</div>
-                <div className='flex items-center gap-3 mt-2 text-xs text-slate-500'>
-                  <span className='text-green-600 font-medium'>{fmt(buyers.active)} active</span>
-                  <span>{fmt(buyers.matched)} matched</span>
-                </div>
-              </div>
+              <KpiCard
+                title='Buyer Requirements'
+                value={fmt(buyers.total)}
+                icon={HiUserGroup}
+                color='purple'
+                sub={<><span className='text-emerald-600 font-medium'>{fmt(buyers.active)} active</span>{' · '}{fmt(buyers.matched)} matched</>}
+              />
             )}
-            {shouldShow('team', 'employees', 'kpi') && isAdmin && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
-                <div className='flex items-center gap-2 mb-2'>
-                  <div className='w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center'><HiUsers className='w-5 h-5 text-emerald-600' /></div>
-                  <span className='text-sm font-medium text-slate-600'>Team</span>
-                </div>
-                <div className='text-3xl font-bold text-slate-900'>{fmt(employees.total)}</div>
-                <div className='text-xs text-slate-500 mt-2'>
-                  <span className='text-green-600 font-medium'>{fmt(employees.active)} active</span> employees
-                </div>
-              </div>
+            {isAdmin && shouldShow('team', 'employees', 'kpi') && (
+              <KpiCard
+                title='Team Members'
+                value={fmt(employees.total)}
+                icon={HiUsers}
+                color='emerald'
+                sub={<><span className='text-emerald-600 font-medium'>{fmt(employees.active)} active</span>{' employees'}</>}
+              />
             )}
             {!isAdmin && shouldShow('closed buyers', 'kpi') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
-                <div className='flex items-center gap-2 mb-2'>
-                  <div className='w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center'><HiCheck className='w-5 h-5 text-emerald-600' /></div>
-                  <span className='text-sm font-medium text-slate-600'>Closed Buyers</span>
-                </div>
-                <div className='text-3xl font-bold text-slate-900'>{fmt(buyers.closed)}</div>
-                <div className='text-xs text-slate-500 mt-2'>Successfully matched</div>
-              </div>
+              <KpiCard
+                title='Closed Buyers'
+                value={fmt(buyers.closed)}
+                icon={HiCheck}
+                color='emerald'
+                sub='Successfully matched'
+              />
             )}
           </div>
 
@@ -734,7 +764,7 @@ export default function AgencyDashboard() {
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {/* Listing status bar chart */}
             {shouldShow('listing status', 'chart', 'status') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>Listing Status</h3>
                 {statusBreakdown.length > 0 ? (
                   <Chart
@@ -746,10 +776,10 @@ export default function AgencyDashboard() {
                       colors: statusBreakdown.map((s) => s.color),
                       dataLabels: { enabled: true, style: { fontSize: '12px', fontWeight: 600 } },
                       legend: { show: false },
-                      xaxis: { categories: statusBreakdown.map((s) => s.label), labels: { style: { fontSize: '11px', colors: '#64748b' } } },
-                      yaxis: { labels: { style: { fontSize: '11px', colors: '#64748b' } } },
-                      grid: { borderColor: '#e2e8f0', strokeDashArray: 4 },
-                      tooltip: { theme: 'light' },
+                      xaxis: { categories: statusBreakdown.map((s) => s.label), labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
+                      yaxis: { labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
+                      grid: { borderColor: chartGridColor, strokeDashArray: 4 },
+                      tooltip: { theme: chartTooltipTheme },
                     }}
                     series={[{ name: 'Properties', data: statusBreakdown.map((s) => s.count) }]}
                   />
@@ -761,7 +791,7 @@ export default function AgencyDashboard() {
 
             {/* Monthly trend line chart */}
             {shouldShow('monthly trend', 'chart', 'listings by month') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>New Listings by Month</h3>
                 {monthlyTrend.length > 1 ? (
                   <Chart
@@ -773,11 +803,11 @@ export default function AgencyDashboard() {
                       colors: ['#3b82f6'],
                       fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1, stops: [0, 90, 100] } },
                       dataLabels: { enabled: false },
-                      xaxis: { categories: monthlyTrend.map((d) => d.month), labels: { style: { fontSize: '11px', colors: '#64748b' } } },
-                      yaxis: { labels: { style: { fontSize: '11px', colors: '#64748b' } }, min: 0 },
-                      grid: { borderColor: '#e2e8f0', strokeDashArray: 4 },
-                      markers: { size: 5, colors: ['#3b82f6'], strokeColors: '#fff', strokeWidth: 2, hover: { size: 7 } },
-                      tooltip: { theme: 'light' },
+                      xaxis: { categories: monthlyTrend.map((d) => d.month), labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
+                      yaxis: { labels: { style: { fontSize: '11px', colors: chartAxisColor } }, min: 0 },
+                      grid: { borderColor: chartGridColor, strokeDashArray: 4 },
+                      markers: { size: 5, colors: ['#3b82f6'], strokeColors: chartStrokeColor, strokeWidth: 2, hover: { size: 7 } },
+                      tooltip: { theme: chartTooltipTheme },
                     }}
                     series={[{ name: 'Listings', data: monthlyTrend.map((d) => d.count) }]}
                   />
@@ -791,20 +821,20 @@ export default function AgencyDashboard() {
           {/* Properties by Category & City */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {shouldShow('category', 'residential', 'commercial', 'land') && props.byCategory?.length > 0 && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>Properties by Category</h3>
                 <Chart
                   type='donut'
                   height={220}
                   options={{
                     chart: { fontFamily: 'inherit' },
-                    labels: props.byCategory.map((cat) => cat._id || 'Unknown'),
+                    labels: props.byCategory.map((cat) => cat.categoryName || 'Unknown'),
                     colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
-                    legend: { position: 'bottom', fontSize: '12px', labels: { colors: '#64748b' } },
+                    legend: { position: 'bottom', fontSize: '12px', labels: { colors: chartAxisColor } },
                     dataLabels: { enabled: true, style: { fontSize: '11px', fontWeight: 600 } },
-                    plotOptions: { pie: { donut: { size: '55%', labels: { show: true, total: { show: true, label: 'Total', fontSize: '12px', color: '#64748b', formatter: () => props.total } } } } },
-                    stroke: { width: 2, colors: ['#fff'] },
-                    tooltip: { theme: 'light' },
+                    plotOptions: { pie: { donut: { size: '55%', labels: { show: true, total: { show: true, label: 'Total', fontSize: '12px', color: chartAxisColor, formatter: () => props.total } } } } },
+                    stroke: { width: 2, colors: [chartStrokeColor] },
+                    tooltip: { theme: chartTooltipTheme },
                   }}
                   series={props.byCategory.map((cat) => cat.count)}
                 />
@@ -812,7 +842,7 @@ export default function AgencyDashboard() {
             )}
 
             {shouldShow('city', 'top cities', 'location') && props.byCity?.length > 0 && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>Top Cities</h3>
                 <Chart
                   type='bar'
@@ -820,12 +850,12 @@ export default function AgencyDashboard() {
                   options={{
                     chart: { toolbar: { show: false }, fontFamily: 'inherit' },
                     plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
-                    colors: ['#1e293b'],
+                    colors: [isDark ? '#334155' : '#1e293b'],
                     dataLabels: { enabled: true, style: { fontSize: '11px', fontWeight: 600 }, offsetX: -5 },
-                    xaxis: { categories: props.byCity.slice(0, 6).map((c) => c._id), labels: { style: { fontSize: '11px', colors: '#64748b' } } },
-                    yaxis: { labels: { style: { fontSize: '11px', colors: '#64748b' } } },
-                    grid: { borderColor: '#e2e8f0', strokeDashArray: 4, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
-                    tooltip: { theme: 'light' },
+                    xaxis: { categories: props.byCity.slice(0, 6).map((c) => c._id), labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
+                    yaxis: { labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
+                    grid: { borderColor: chartGridColor, strokeDashArray: 4, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+                    tooltip: { theme: chartTooltipTheme },
                   }}
                   series={[{ name: 'Properties', data: props.byCity.slice(0, 6).map((c) => c.count) }]}
                 />
@@ -836,7 +866,7 @@ export default function AgencyDashboard() {
           {/* Recent Activity */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {shouldShow('recent listings', 'activity', 'properties') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
                   <h3 className='text-sm font-semibold text-slate-700'>Recent Listings</h3>
                   <Link to='/properties' className='text-xs font-medium text-slate-500 hover:text-slate-900'>View all</Link>
@@ -861,7 +891,7 @@ export default function AgencyDashboard() {
             )}
 
             {shouldShow('recent buyers', 'activity', 'buyer requirements') && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5'>
+              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
                   <h3 className='text-sm font-semibold text-slate-700'>Recent Buyer Requirements</h3>
                   <Link to='/buyer-requirements' className='text-xs font-medium text-slate-500 hover:text-slate-900'>View all</Link>
@@ -961,13 +991,18 @@ export default function AgencyDashboard() {
                 <>
                   <p className='text-sm text-slate-600 mb-4'>Choose a widget type:</p>
                   <div className='grid grid-cols-2 gap-3'>
-                    {WIDGET_TYPES.map((w) => (
-                      <button key={w.id} onClick={() => selectWidgetType(w)} className='p-4 border border-slate-200 rounded-lg hover:border-slate-400 hover:bg-slate-50 transition-colors text-left'>
-                        <div className='text-2xl mb-2'>{w.icon}</div>
-                        <div className='font-medium text-slate-900 text-sm'>{w.label}</div>
-                        <div className='text-xs text-slate-500 mt-1'>{w.description}</div>
-                      </button>
-                    ))}
+                    {WIDGET_TYPES.map((w) => {
+                      const WIcon = w.icon;
+                      return (
+                        <button key={w.id} onClick={() => selectWidgetType(w)} className='p-4 border border-slate-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors text-left group'>
+                          <div className='w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-3 transition-colors'>
+                            <WIcon className='w-4 h-4 text-slate-500 group-hover:text-indigo-600' />
+                          </div>
+                          <div className='font-medium text-slate-900 text-sm'>{w.label}</div>
+                          <div className='text-xs text-slate-500 mt-1'>{w.description}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </>
               ) : (
@@ -998,7 +1033,7 @@ export default function AgencyDashboard() {
             </div>
             <div className='p-6 space-y-4'>
               {inviteSuccess && (
-                <div className='bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700'>{inviteSuccess}</div>
+                <div className='bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 whitespace-pre-wrap font-mono leading-relaxed'>{inviteSuccess}</div>
               )}
               {inviteError && (
                 <div className='bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700'>{inviteError}</div>

@@ -1,81 +1,35 @@
 import { useEffect, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { signOutUserSuccess } from '../redux/user/userSlice';
-import { refreshAccessToken, parseJsonSafely } from '../utils/http';
+import { useSelector } from 'react-redux';
+import { refreshAccessToken } from '../utils/http';
+
+// Access token lifetime is 15 minutes. Only refresh on tab focus if the tab
+// was hidden for long enough that the token might have expired.
+const TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export const useTokenRefresh = () => {
-  const dispatch = useDispatch();
   const { currentUser } = useSelector((state) => state.user);
-  const refreshIntervalRef = useRef(null);
+  const hiddenAtRef = useRef(null);
 
   useEffect(() => {
-    // Don't run token refresh on sign-in page
-    if (window.location.pathname.includes('/sign-in')) {
-      return;
-    }
+    if (!currentUser) return;
 
-    if (!currentUser) {
-      // Clear any existing refresh interval if user logs out
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
-      return;
-    }
+    const handleVisibilityChange = () => {
+      if (window.location.pathname.includes('/sign-in')) return;
 
-    // Set up automatic token refresh every 10 minutes (before 15min expiry)
-    refreshIntervalRef.current = setInterval(async () => {
-      try {
-        const refreshData = await refreshAccessToken(false); // Don't redirect on periodic refresh
-        if (!refreshData) {
-          // Refresh failed, but don't logout immediately
-          // Let the user continue working until they make an API call
-          console.warn('Periodic token refresh failed, but continuing...');
-        }
-      } catch (error) {
-        console.error('Automatic token refresh failed:', error);
-        // Don't logout on periodic refresh failures
-      }
-    }, 10 * 60 * 1000); // 10 minutes
-
-    // Cleanup on unmount
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
-    };
-  }, [currentUser, dispatch]);
-
-  // Also refresh token on page visibility change (user comes back to tab)
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      // Don't run token refresh on sign-in page
-      if (window.location.pathname.includes('/sign-in')) {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
         return;
       }
-      
-      if (document.visibilityState === 'visible' && currentUser) {
-        // Add a small delay to avoid immediate refresh when switching tabs quickly
-        setTimeout(async () => {
-          try {
-            const refreshData = await refreshAccessToken(false);
-            if (refreshData) {
-              console.log('Token refreshed successfully on visibility change');
-            } else {
-              console.warn('Token refresh failed on visibility change, but continuing...');
-            }
-          } catch (error) {
-            console.error('Token refresh on visibility change failed:', error);
-            // Don't redirect on visibility change failures
-          }
-        }, 1000); // 1 second delay
-      }
+
+      // Tab became visible — only refresh if away long enough to risk expiry
+      const awayMs = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+      hiddenAtRef.current = null;
+      if (awayMs < TOKEN_TTL_MS * 0.8) return; // less than 12 min — skip
+
+      refreshAccessToken(false).catch(() => {});
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [currentUser]);
 };

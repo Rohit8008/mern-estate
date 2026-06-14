@@ -26,26 +26,39 @@
         --radius: 0.5rem;
     }
 
+    /* Dark mode default border color — in @layer base so utility classes override it */
+    .dark * {
+        border-color: hsl(217 28% 18%);
+    }
+
     .dark {
-        --background: 222.2 84% 4.9%;
-        --foreground: 210 40% 98%;
-        --card: 222.2 84% 4.9%;
-        --card-foreground: 210 40% 98%;
-        --popover: 222.2 84% 4.9%;
-        --popover-foreground: 210 40% 98%;
+        /* Page background — darkest layer */
+        --background: 222 47% 6%;
+        --foreground: 210 40% 96%;
+        /* Card — elevated above page (must be lighter than --muted page bg) */
+        --card: 220 32% 12%;
+        --card-foreground: 210 40% 96%;
+        /* Popovers/dropdowns — elevated above card */
+        --popover: 220 30% 15%;
+        --popover-foreground: 210 40% 96%;
+        /* Brand blue */
         --primary: 217.2 91.2% 59.8%;
         --primary-foreground: 222.2 47.4% 11.2%;
-        --secondary: 217.2 32.6% 17.5%;
-        --secondary-foreground: 210 40% 98%;
-        --muted: 217.2 32.6% 17.5%;
-        --muted-foreground: 215 20.2% 65.1%;
-        --accent: 217.2 32.6% 17.5%;
-        --accent-foreground: 210 40% 98%;
+        /* Subtle surfaces (table headers, badges, hover) */
+        --secondary: 217 30% 17%;
+        --secondary-foreground: 210 40% 96%;
+        /* muted must be DARKER than card so bg-slate-50 (page bg) sits below elevated cards */
+        --muted: 217 32% 8%;
+        --muted-foreground: 215 20% 58%;
+        --accent: 217 30% 18%;
+        --accent-foreground: 210 40% 96%;
+        /* Danger */
         --destructive: 0 62.8% 30.6%;
         --destructive-foreground: 210 40% 98%;
-        --border: 217.2 32.6% 17.5%;
-        --input: 217.2 32.6% 17.5%;
-        --ring: 224.3 76.3% 48%;
+        /* Borders */
+        --border: 217 28% 18%;
+        --input: 217 28% 14%;
+        --ring: 224.3 76.3% 58%;
     }
 }
 
@@ -77,7 +90,7 @@
 body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -88,86 +101,258 @@ body {
     color-scheme: dark;
 }
 
-/* Dark mode surface + text normalization for components using fixed Tailwind grays */
-.dark .bg-white {
-    background-color: hsl(var(--card));
-}
+/* ═══════════════════════════════════════════
+   DARK MODE — COMPLETE SURFACE COVERAGE
+   Strategy: global CSS class selectors so we
+   don't need dark: variants on every element.
+═══════════════════════════════════════════ */
 
-.dark .bg-gray-50 {
-    background-color: hsl(var(--background));
-}
+/* ── Background surfaces ── */
+.dark .bg-white        { background-color: hsl(var(--card)); }
+.dark .bg-gray-50,
+.dark .bg-slate-50     { background-color: hsl(var(--muted)); }
+.dark .bg-gray-100,
+.dark .bg-slate-100    { background-color: hsl(217 28% 19%); }
+.dark .bg-gray-200,
+.dark .bg-slate-200    { background-color: hsl(217 25% 23%); }
 
-.dark .bg-gray-100 {
-    background-color: hsl(var(--muted));
-}
-
+/* ── Text ── */
 .dark .text-gray-900,
-.dark .text-slate-900 {
-    color: hsl(var(--foreground));
-}
-
+.dark .text-slate-900  { color: hsl(var(--foreground)); }
 .dark .text-gray-800,
-.dark .text-slate-800 {
-    color: hsl(var(--foreground));
-}
-
+.dark .text-slate-800  { color: hsl(210 30% 92%); }
 .dark .text-gray-700,
-.dark .text-slate-700 {
-    color: hsl(var(--foreground));
-    opacity: 0.9;
-}
-
+.dark .text-slate-700  { color: hsl(210 20% 82%); }
 .dark .text-gray-600,
-.dark .text-slate-600 {
-    color: hsl(var(--muted-foreground));
-}
-
+.dark .text-slate-600  { color: hsl(var(--muted-foreground)); }
 .dark .text-gray-500,
-.dark .text-slate-500 {
-    color: hsl(var(--muted-foreground));
-}
-
+.dark .text-slate-500  { color: hsl(215 15% 55%); }
 .dark .text-gray-400,
-.dark .text-slate-400 {
-    color: hsl(var(--muted-foreground));
-    opacity: 0.85;
-}
-
+.dark .text-slate-400  { color: hsl(215 12% 48%); }
 .dark .text-gray-300,
-.dark .text-slate-300 {
-    color: hsl(var(--foreground));
-    opacity: 0.85;
-}
+.dark .text-slate-300  { color: hsl(215 15% 65%); }
 
-.dark .text-gray-200,
-.dark .text-slate-200 {
-    color: hsl(var(--foreground));
-    opacity: 0.9;
-}
-
-.dark .placeholder-gray-400::placeholder,
-.dark .placeholder-gray-500::placeholder,
-.dark .placeholder-slate-400::placeholder,
-.dark .placeholder-slate-500::placeholder {
-    color: hsl(var(--muted-foreground));
-    opacity: 0.7;
-}
-
-.dark .border-gray-200,
+/* ── Borders ── */
 .dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-slate-100,
 .dark .border-slate-200,
-.dark .border-slate-100 {
+.dark .border-slate-300 { border-color: hsl(var(--border)); }
+
+/* ── Hover states ── */
+.dark .hover\:bg-white:hover         { background-color: hsl(var(--card)); }
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-slate-50:hover      { background-color: hsl(217 28% 16%); }
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-slate-100:hover     { background-color: hsl(217 25% 18%); }
+.dark .hover\:bg-slate-800:hover     { background-color: hsl(217 35% 16%); }
+.dark .hover\:border-gray-300:hover,
+.dark .hover\:border-slate-300:hover { border-color: hsl(217 25% 28%); }
+.dark .hover\:text-gray-900:hover,
+.dark .hover\:text-slate-900:hover   { color: hsl(var(--foreground)); }
+.dark .hover\:text-gray-700:hover,
+.dark .hover\:text-slate-700:hover   { color: hsl(210 20% 82%); }
+
+/* ── Focus / focus-within ── */
+.dark .focus-within\:bg-white:focus-within       { background-color: hsl(var(--card)); }
+.dark .focus-within\:border-slate-300:focus-within,
+.dark .focus-within\:border-indigo-300:focus-within { border-color: hsl(var(--ring)); }
+.dark .focus\:border-slate-300:focus,
+.dark .focus\:border-slate-400:focus             { border-color: hsl(var(--ring)); }
+.dark .focus\:ring-slate-900\/10:focus           { --tw-ring-color: hsl(var(--ring) / 0.3); }
+.dark .focus\:ring-2:focus                       { --tw-ring-color: hsl(var(--ring) / 0.4); }
+
+/* ── Dividers (divide-* utilities) ── */
+.dark .divide-gray-100  > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200  > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
     border-color: hsl(var(--border));
 }
 
+/* ── Tables ── */
+.dark thead,
+.dark tbody tr { border-color: hsl(var(--border)); }
+.dark thead th { color: hsl(var(--muted-foreground)); }
+.dark .hover\:bg-blue-50\/40:hover { background-color: hsl(225 35% 14%); }
+
+/* ── Opacity-modifier variants (Tailwind /N suffix generates different selectors) ── */
+/* bg-slate-50/{40,50,60,80} — toolbar tints, sticky headers, footer bars */
+.dark .bg-slate-50\/40,
+.dark .bg-slate-50\/50  { background-color: hsl(var(--muted)); }
+.dark .bg-slate-50\/60  { background-color: hsl(217 30% 11%); }
+.dark .bg-slate-50\/80  { background-color: hsl(217 30% 13%); }
+/* bg-blue-50/{40,50} — table row hover accent, tab highlight */
+.dark .bg-blue-50\/40,
+.dark .bg-blue-50\/50   { background-color: hsl(225 35% 14%); }
+/* bg-white/{80,90,95} — auth form cards, frosted header */
+.dark .bg-white\/80,
+.dark .bg-white\/90,
+.dark .bg-white\/95     { background-color: hsl(var(--card)); }
+/* bg-white/{5,10,20} — sidebar hover items (on dark bg, keep as-is) */
+/* These are inside the already-dark sidebar so no override needed */
+
+/* ── Colored hover backgrounds (buttons, list items) ── */
+.dark .hover\:bg-rose-50:hover    { background-color: hsl(355 30% 13%); }
+.dark .hover\:bg-amber-50:hover   { background-color: hsl(38 40% 12%); }
+.dark .hover\:bg-emerald-50:hover { background-color: hsl(145 30% 12%); }
+.dark .hover\:bg-blue-50:hover    { background-color: hsl(225 35% 14%); }
+.dark .hover\:bg-indigo-50:hover  { background-color: hsl(225 35% 14%); }
+.dark .hover\:bg-purple-50:hover  { background-color: hsl(265 30% 14%); }
+
+/* ── Form inputs ── */
+.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']),
+.dark textarea,
+.dark select {
+    background-color: hsl(var(--input));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+}
+.dark input::placeholder,
+.dark textarea::placeholder  { color: hsl(var(--muted-foreground)); opacity: 0.7; }
+.dark select option          { background-color: hsl(var(--popover)); }
+
+/* ── Colored light backgrounds (badges, highlights) ── */
+/* -50 variants */
 .dark .bg-blue-50,
-.dark .bg-indigo-50 {
-    background-color: hsl(var(--accent));
+.dark .bg-indigo-50  { background-color: hsl(225 35% 16%); }
+.dark .bg-purple-50  { background-color: hsl(265 30% 15%); }
+.dark .bg-emerald-50,
+.dark .bg-green-50   { background-color: hsl(145 30% 12%); }
+.dark .bg-amber-50,
+.dark .bg-yellow-50  { background-color: hsl(38 40% 12%); }
+.dark .bg-rose-50,
+.dark .bg-red-50     { background-color: hsl(355 30% 13%); }
+.dark .bg-orange-50  { background-color: hsl(25 35% 13%); }
+.dark .bg-cyan-50    { background-color: hsl(190 35% 13%); }
+/* -100 variants (badge backgrounds) */
+.dark .bg-blue-100,
+.dark .bg-indigo-100  { background-color: hsl(225 40% 18%); }
+.dark .bg-purple-100  { background-color: hsl(265 35% 17%); }
+.dark .bg-emerald-100,
+.dark .bg-green-100   { background-color: hsl(145 35% 14%); }
+.dark .bg-amber-100,
+.dark .bg-yellow-100  { background-color: hsl(38 45% 15%); }
+.dark .bg-rose-100,
+.dark .bg-red-100     { background-color: hsl(355 35% 16%); }
+.dark .bg-orange-100  { background-color: hsl(25 40% 16%); }
+.dark .bg-pink-100    { background-color: hsl(330 35% 16%); }
+
+/* ── Colored text (keep readable on dark bg) ── */
+.dark .text-blue-800,
+.dark .text-indigo-800  { color: hsl(217 80% 72%); }
+.dark .text-blue-700,
+.dark .text-indigo-700  { color: hsl(217 80% 70%); }
+.dark .text-blue-600,
+.dark .text-indigo-600  { color: hsl(217 75% 65%); }
+.dark .text-purple-800  { color: hsl(265 70% 72%); }
+.dark .text-purple-700  { color: hsl(265 70% 70%); }
+.dark .text-purple-600  { color: hsl(265 70% 68%); }
+.dark .text-emerald-800,
+.dark .text-green-800   { color: hsl(145 60% 58%); }
+.dark .text-emerald-700,
+.dark .text-green-700   { color: hsl(145 55% 55%); }
+.dark .text-emerald-600,
+.dark .text-green-600   { color: hsl(145 60% 55%); }
+.dark .text-amber-800,
+.dark .text-yellow-800  { color: hsl(38 85% 65%); }
+.dark .text-amber-600,
+.dark .text-yellow-600  { color: hsl(38 85% 60%); }
+.dark .text-orange-800  { color: hsl(25 80% 65%); }
+.dark .text-orange-600  { color: hsl(25 80% 60%); }
+.dark .text-rose-800,
+.dark .text-red-800     { color: hsl(355 75% 68%); }
+.dark .text-rose-600,
+.dark .text-red-600     { color: hsl(355 75% 65%); }
+.dark .text-pink-800    { color: hsl(330 70% 68%); }
+.dark .text-pink-600    { color: hsl(330 70% 65%); }
+
+/* ── Colored borders ── */
+.dark .border-blue-200,
+.dark .border-indigo-200  { border-color: hsl(225 35% 22%); }
+.dark .border-emerald-200,
+.dark .border-green-200   { border-color: hsl(145 30% 18%); }
+.dark .border-amber-200,
+.dark .border-yellow-200  { border-color: hsl(38 40% 20%); }
+.dark .border-rose-200,
+.dark .border-red-200     { border-color: hsl(355 30% 20%); }
+.dark .border-purple-200  { border-color: hsl(265 30% 22%); }
+
+/* ── Ring accent on icon containers ── */
+.dark .ring-blue-100,
+.dark .ring-indigo-100  { --tw-ring-color: hsl(225 35% 22%); }
+.dark .ring-emerald-100 { --tw-ring-color: hsl(145 30% 18%); }
+.dark .ring-amber-100   { --tw-ring-color: hsl(38 40% 20%); }
+.dark .ring-purple-100  { --tw-ring-color: hsl(265 30% 22%); }
+.dark .ring-white\/10   { --tw-ring-color: hsl(0 0% 100% / 0.1); }
+
+/* ── Shadows lighten on dark ── */
+.dark .shadow-sm  { box-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.4); }
+.dark .shadow-md  { box-shadow: 0 4px 8px 0 hsl(0 0% 0% / 0.5); }
+.dark .shadow-xl  { box-shadow: 0 20px 30px -5px hsl(0 0% 0% / 0.6); }
+.dark .shadow-2xl { box-shadow: 0 25px 50px -12px hsl(0 0% 0% / 0.7); }
+
+/* ── Scrollbars ── */
+.dark ::-webkit-scrollbar-track { background: hsl(var(--muted)); }
+.dark ::-webkit-scrollbar-thumb { background: hsl(217 28% 18%); }
+.dark ::-webkit-scrollbar-thumb:hover { background: hsl(217 25% 24%); }
+
+/* ── ring-white fix (notification dot etc) ── */
+.dark .ring-white { --tw-ring-color: hsl(var(--card)); }
+
+/* ── Light gradient backgrounds → solid surface in dark mode ──
+   Tailwind gradient utilities set background-image via CSS custom properties
+   that background-color overrides cannot touch. We strip the gradient entirely
+   for elements using light-palette from-* stops, and supply a background-color
+   fallback (bg-white / bg-slate-50 also get their own background-color override
+   further up; these rules add the image reset + cover gradient-only elements). */
+.dark .bg-gradient-to-b.from-slate-50,
+.dark .bg-gradient-to-br.from-slate-50,
+.dark .bg-gradient-to-r.from-slate-50,
+.dark .bg-gradient-to-r.from-slate-50.to-white {
+  background-image: none;
+  background-color: hsl(var(--muted));
 }
 
-.dark .text-blue-700,
-.dark .text-indigo-700 {
-    color: hsl(var(--primary));
+.dark .bg-gradient-to-br.from-blue-50,
+.dark .bg-gradient-to-br.from-indigo-50,
+.dark .bg-gradient-to-r.from-blue-50,
+.dark .bg-gradient-to-r.from-indigo-50 {
+  background-image: none;
+  background-color: hsl(225 35% 14%);
+}
+
+/* Coloured stat cards in Analytics / Admin */
+.dark .bg-gradient-to-br.from-green-50 {
+  background-image: none;
+  background-color: hsl(145 30% 11%);
+}
+.dark .bg-gradient-to-br.from-purple-50 {
+  background-image: none;
+  background-color: hsl(265 30% 13%);
+}
+.dark .bg-gradient-to-br.from-amber-50 {
+  background-image: none;
+  background-color: hsl(38 40% 11%);
+}
+
+/* Section-header strips inside cards */
+.dark .bg-gradient-to-r.from-slate-50.to-white,
+.dark .bg-gradient-to-r.to-white {
+  background-image: none;
+  background-color: hsl(var(--card));
+}
+
+/* ── Smooth theme transition (applied during switch, removed after) ── */
+.theme-transitioning,
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+    transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease,
+        color 0.2s ease,
+        box-shadow 0.25s ease !important;
 }
 
 html.compact body {
@@ -202,57 +387,23 @@ html.compact .input-modern {
     background: #94a3b8;
 }
 
-/* Focus styles for accessibility */
-*:focus {
-    outline: 2px solid var(--primary);
+/* Focus — visible only for keyboard navigation */
+*:focus-visible {
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
 }
 
-/* Enhanced transitions and animations */
-* {
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
+/* Remove the old global transition block — it caused every element to animate
+   on hover, degrading performance. Interactive components manage their own
+   transition classes via Tailwind utilities. */
 
-/* Modern button styles */
-.btn-primary {
-    @apply bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200;
-}
-
-.btn-secondary {
-    @apply bg-white text-gray-700 font-semibold py-3 px-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200;
-}
-
-/* Card styles */
-.card {
-    @apply bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300;
-}
-
-.card-hover {
-    @apply transform hover:-translate-y-1 hover:shadow-2xl transition-all duration-300;
-}
-
-/* Input styles */
-.input-modern {
-    @apply w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300;
-}
-
-/* Gradient text */
+/* Legacy helper classes — kept for backward compat but point to DS tokens */
 .gradient-text {
-    @apply bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent;
 }
 
-/* Glass morphism */
 .glass {
     @apply bg-white/80 backdrop-blur-sm border border-white/20;
-}
-
-/* Modern shadows */
-.shadow-modern {
-    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-}
-
-.shadow-modern-lg {
-    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
 }
 
 /* Popup animation */
@@ -286,4 +437,48 @@ html.compact .input-modern {
 
 .popup-exit {
     animation: slideOutRight 0.3s ease-in;
+}
+
+/* ═══════════════════════════════════════════
+   CRM DESIGN SYSTEM — TEXTURES & ANIMATIONS
+═══════════════════════════════════════════ */
+
+/* Sidebar dot-grid texture */
+.crm-sidebar-dots {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.032) 1px, transparent 0);
+    background-size: 18px 18px;
+}
+
+/* Dashboard banner dot-grid */
+.crm-banner-dots {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.055) 1px, transparent 0);
+    background-size: 22px 22px;
+}
+
+/* Staggered fade-up entry animation */
+@keyframes crm-fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.crm-animate-in {
+    animation: crm-fade-in-up 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.crm-delay-1 { animation-delay: 0.04s; }
+.crm-delay-2 { animation-delay: 0.09s; }
+.crm-delay-3 { animation-delay: 0.14s; }
+.crm-delay-4 { animation-delay: 0.19s; }
+.crm-delay-5 { animation-delay: 0.24s; }
+.crm-delay-6 { animation-delay: 0.29s; }
+
+/* Nav active glow — used by CrmShell NavItem */
+.crm-nav-active {
+    background-color: rgba(99, 102, 241, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.2);
 }

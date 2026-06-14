@@ -9,11 +9,14 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
 // Environment validation
+// SEC-004: MESSAGE_ENCRYPTION_KEY is required — without it the first Socket.IO
+// message send throws inside an unhandled-rejection handler and kills the server.
 const requiredEnvVars = [
   'JWT_SECRET',
   'REFRESH_SECRET',
   'MONGO_URI',
-  'NODE_ENV'
+  'NODE_ENV',
+  'MESSAGE_ENCRYPTION_KEY',
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -58,21 +61,22 @@ export const config = {
 
   // Security configuration
   security: {
-    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 12,
     maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5,
     lockoutDuration: parseInt(process.env.LOCKOUT_DURATION) || 15 * 60 * 1000, // 15 minutes
-    sessionTimeout: parseInt(process.env.SESSION_TIMEOUT) || 24 * 60 * 60 * 1000, // 24 hours
-    passwordMinLength: parseInt(process.env.PASSWORD_MIN_LENGTH) || 8,
     enableRateLimiting: process.env.ENABLE_RATE_LIMITING !== 'false',
-    enableSecurityHeaders: process.env.ENABLE_SECURITY_HEADERS !== 'false',
-    enableCORS: process.env.ENABLE_CORS !== 'false',
   },
 
   // CORS configuration
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
+    origin: process.env.NODE_ENV === 'production'
       ? [process.env.FRONTEND_URL, process.env.ADMIN_URL].filter(Boolean)
-      : ['http://localhost:5173', 'http://localhost:3000'],
+      : [
+          'http://localhost:5173',
+          'http://localhost:3000',
+          ...(process.env.EXTRA_CORS_ORIGINS
+            ? process.env.EXTRA_CORS_ORIGINS.split(',').map(o => o.trim())
+            : []),
+        ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -81,62 +85,31 @@ export const config = {
 
   // Rate limiting configuration
   rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000000,
-    authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 1000000,
-    strictMaxRequests: parseInt(process.env.STRICT_RATE_LIMIT_MAX) || 1000000,
-  },
-
-  // File upload configuration
-  upload: {
-    maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB
-    allowedImageTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-    allowedDocumentTypes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-    uploadPath: process.env.UPLOAD_PATH || 'uploads',
-    maxFilesPerUpload: parseInt(process.env.MAX_FILES_PER_UPLOAD) || 10,
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000,
+    authMaxRequests: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 20,
+    strictMaxRequests: parseInt(process.env.STRICT_RATE_LIMIT_MAX) || 30,
   },
 
   // Email configuration
   email: {
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    from: process.env.EMAIL_FROM || 'noreply@mern-estate.com',
   },
 
   // SMS configuration
   sms: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,
-    fromNumber: process.env.TWILIO_FROM_NUMBER,
-  },
-
-  // Logging configuration
-  logging: {
-    level: process.env.LOG_LEVEL || 'info',
-    enableFileLogging: process.env.ENABLE_FILE_LOGGING !== 'false',
-    logRetentionDays: parseInt(process.env.LOG_RETENTION_DAYS) || 30,
-    enableAuditLogging: process.env.ENABLE_AUDIT_LOGGING !== 'false',
   },
 
   // Cache configuration
   cache: {
     ttl: parseInt(process.env.CACHE_TTL) || 300, // 5 minutes
     maxSize: parseInt(process.env.CACHE_MAX_SIZE) || 100,
-    enableRedis: process.env.ENABLE_REDIS === 'true',
-    redisUrl: process.env.REDIS_URL,
-  },
-
-  // API configuration
-  api: {
-    version: process.env.API_VERSION || 'v1',
-    baseUrl: process.env.API_BASE_URL || '/api',
-    enableSwagger: process.env.ENABLE_SWAGGER === 'true',
-    enableMetrics: process.env.ENABLE_METRICS === 'true',
   },
 };
 
@@ -148,9 +121,15 @@ export const validateConfig = () => {
   if (config.jwt.secret === 'dev_secret' && config.server.isProduction) {
     errors.push('JWT_SECRET must be set to a secure value in production');
   }
+  if (config.jwt.secret.length < 32) {
+    errors.push('JWT_SECRET must be at least 32 characters long');
+  }
 
   if (config.jwt.refreshSecret === 'dev_refresh_secret' && config.server.isProduction) {
     errors.push('REFRESH_SECRET must be set to a secure value in production');
+  }
+  if (config.jwt.refreshSecret.length < 32) {
+    errors.push('REFRESH_SECRET must be at least 32 characters long');
   }
 
   // Validate database URI

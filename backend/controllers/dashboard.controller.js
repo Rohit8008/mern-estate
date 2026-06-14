@@ -66,8 +66,11 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
       .select('buyerName buyerPhone preferredCity status priority createdAt')
       .lean(),
     Listing.aggregate([
-      { $match: listingQuery },
-      { $group: { _id: '$propertyCategory', count: { $sum: 1 } } },
+      { $match: { ...listingQuery, category: { $nin: [null, ''] } } },
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $lookup: { from: 'categories', localField: '_id', foreignField: 'slug', as: 'cat' } },
+      { $unwind: { path: '$cat', preserveNullAndEmptyArrays: true } },
+      { $project: { categoryName: { $ifNull: ['$cat.name', '$_id'] }, count: 1 } },
       { $sort: { count: -1 } },
     ]),
     Listing.aggregate([

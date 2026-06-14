@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient, normalizeImageUrl } from '../utils/http';
 import {
-  HiRefresh, HiTrendingUp, HiTrendingDown, HiHome, HiCurrencyDollar,
-  HiChartBar, HiLocationMarker, HiCalendar, HiEye, HiFilter,
-  HiChevronDown, HiX, HiDownload, HiPrinter,
+  HiRefresh, HiTrendingUp, HiHome, HiCurrencyDollar,
+  HiChartBar, HiLocationMarker, HiEye, HiFilter,
+  HiChevronDown, HiDownload, HiPrinter,
 } from 'react-icons/hi';
 
 const STATUS_COLORS = {
@@ -22,13 +22,12 @@ export default function PortfolioDashboard() {
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
 
-  const [analytics, setAnalytics] = useState(null);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedType, setSelectedType] = useState('All');
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
-  const [dateRange, setDateRange] = useState('all');
+
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -41,11 +40,7 @@ export default function PortfolioDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [analyticsRes, propertiesRes] = await Promise.all([
-        apiClient.get('/dashboard/analytics'),
-        apiClient.get('/listing/get?limit=100'),
-      ]);
-      setAnalytics(analyticsRes?.data || analyticsRes);
+      const propertiesRes = await apiClient.get('/listing/get?limit=100');
       // Handle the nested response structure: { data: { listings: [...] } } or { listings: [...] } or direct array
       const listingsData = propertiesRes?.data?.listings || propertiesRes?.listings || propertiesRes || [];
       setProperties(Array.isArray(listingsData) ? listingsData : []);
@@ -234,7 +229,7 @@ export default function PortfolioDashboard() {
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(printContent);
+      printWindow.document.documentElement.innerHTML = printContent;
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => {
@@ -254,15 +249,17 @@ export default function PortfolioDashboard() {
   return (
     <div className='space-y-6'>
       {/* Header */}
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+      <div className='relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm overflow-hidden'>
+        <div className='absolute inset-0 crm-banner-dots pointer-events-none' aria-hidden='true' />
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>Portfolio Dashboard</h1>
-          <p className='text-sm text-slate-500 mt-1'>Overview of your property portfolio performance</p>
+          <p className='text-slate-400 text-xs font-medium uppercase tracking-widest mb-1'>Portfolio</p>
+          <h1 className='text-xl font-bold text-white'>Portfolio Dashboard</h1>
+          <p className='text-slate-400 text-sm mt-0.5'>Overview of your property portfolio performance</p>
         </div>
-        <div className='flex items-center gap-2'>
+        <div className='flex items-center gap-2 flex-shrink-0'>
           <button
             onClick={fetchData}
-            className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'
+            className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors'
           >
             <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -270,7 +267,7 @@ export default function PortfolioDashboard() {
           <button
             onClick={handleExport}
             disabled={loading || !properties.length}
-            className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+            className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
             <HiDownload className='w-4 h-4' />
             Export
@@ -278,7 +275,7 @@ export default function PortfolioDashboard() {
           <button
             onClick={handlePrint}
             disabled={loading || !properties.length}
-            className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+            className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
             <HiPrinter className='w-4 h-4' />
             Print
@@ -311,63 +308,58 @@ export default function PortfolioDashboard() {
         <>
           {/* KPI Cards */}
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-            <div className='bg-white border border-slate-200 rounded-xl p-5'>
-              <div className='flex items-center gap-2 mb-2'>
-                <div className='w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center'>
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-blue-500 crm-animate-in crm-delay-1'>
+              <div className='flex items-center justify-between mb-3'>
+                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Total Properties</span>
+                <div className='w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center ring-1 ring-blue-100'>
                   <HiHome className='w-5 h-5 text-blue-600' />
                 </div>
-                <span className='text-sm font-medium text-slate-600'>Total Properties</span>
               </div>
-              <div className='text-3xl font-bold text-slate-900'>{fmt(properties.length)}</div>
-              <div className='flex items-center gap-1 mt-2 text-xs'>
-                <HiTrendingUp className='w-4 h-4 text-emerald-500' />
-                <span className='text-emerald-600 font-medium'>+12%</span>
-                <span className='text-slate-500'>vs last month</span>
+              <div className='text-3xl font-bold text-slate-900 mb-2'>{fmt(properties.length)}</div>
+              <div className='flex items-center gap-1 text-xs text-slate-500'>
+                <HiTrendingUp className='w-3.5 h-3.5 text-emerald-500' />
+                <span className='text-emerald-600 font-medium'>Active portfolio</span>
               </div>
             </div>
 
-            <div className='bg-white border border-slate-200 rounded-xl p-5'>
-              <div className='flex items-center gap-2 mb-2'>
-                <div className='w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center'>
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-emerald-500 crm-animate-in crm-delay-2'>
+              <div className='flex items-center justify-between mb-3'>
+                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Portfolio Value</span>
+                <div className='w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center ring-1 ring-emerald-100'>
                   <HiCurrencyDollar className='w-5 h-5 text-emerald-600' />
                 </div>
-                <span className='text-sm font-medium text-slate-600'>Portfolio Value</span>
               </div>
-              <div className='text-3xl font-bold text-slate-900'>{fmtCurrency(portfolioMetrics.totalValue)}</div>
-              <div className='flex items-center gap-1 mt-2 text-xs'>
-                <HiTrendingUp className='w-4 h-4 text-emerald-500' />
-                <span className='text-emerald-600 font-medium'>+8.5%</span>
-                <span className='text-slate-500'>appreciation</span>
-              </div>
+              <div className='text-3xl font-bold text-slate-900 mb-2'>{fmtCurrency(portfolioMetrics.totalValue)}</div>
+              <div className='text-xs text-slate-500'>Total listed value</div>
             </div>
 
-            <div className='bg-white border border-slate-200 rounded-xl p-5'>
-              <div className='flex items-center gap-2 mb-2'>
-                <div className='w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center'>
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-amber-500 crm-animate-in crm-delay-3'>
+              <div className='flex items-center justify-between mb-3'>
+                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Avg. Price</span>
+                <div className='w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center ring-1 ring-amber-100'>
                   <HiChartBar className='w-5 h-5 text-amber-600' />
                 </div>
-                <span className='text-sm font-medium text-slate-600'>Avg. Price</span>
               </div>
-              <div className='text-3xl font-bold text-slate-900'>{fmtCurrency(portfolioMetrics.avgPrice)}</div>
-              <div className='text-xs text-slate-500 mt-2'>Per property average</div>
+              <div className='text-3xl font-bold text-slate-900 mb-2'>{fmtCurrency(portfolioMetrics.avgPrice)}</div>
+              <div className='text-xs text-slate-500'>Per property average</div>
             </div>
 
-            <div className='bg-white border border-slate-200 rounded-xl p-5'>
-              <div className='flex items-center gap-2 mb-2'>
-                <div className='w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center'>
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-purple-500 crm-animate-in crm-delay-4'>
+              <div className='flex items-center justify-between mb-3'>
+                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Locations</span>
+                <div className='w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center ring-1 ring-purple-100'>
                   <HiLocationMarker className='w-5 h-5 text-purple-600' />
                 </div>
-                <span className='text-sm font-medium text-slate-600'>Locations</span>
               </div>
-              <div className='text-3xl font-bold text-slate-900'>{Object.keys(portfolioMetrics.byCity).length}</div>
-              <div className='text-xs text-slate-500 mt-2'>Cities covered</div>
+              <div className='text-3xl font-bold text-slate-900 mb-2'>{Object.keys(portfolioMetrics.byCity).length}</div>
+              <div className='text-xs text-slate-500'>Cities covered</div>
             </div>
           </div>
 
           {/* Status Breakdown & Top Cities */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {/* Status Breakdown */}
-            <div className='bg-white border border-slate-200 rounded-xl p-5'>
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <h3 className='text-sm font-semibold text-slate-900 mb-4'>Property Status</h3>
               <div className='space-y-3'>
                 {Object.entries(portfolioMetrics.byStatus).map(([status, count]) => {
@@ -389,7 +381,7 @@ export default function PortfolioDashboard() {
             </div>
 
             {/* Top Cities */}
-            <div className='bg-white border border-slate-200 rounded-xl p-5'>
+            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <h3 className='text-sm font-semibold text-slate-900 mb-4'>Top Locations</h3>
               <div className='space-y-3'>
                 {topCities.map(([city, count], index) => {
@@ -416,7 +408,7 @@ export default function PortfolioDashboard() {
           </div>
 
           {/* Property Type Filter & List */}
-          <div className='bg-white border border-slate-200 rounded-xl overflow-hidden'>
+          <div className='bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm'>
             <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
               <h3 className='text-sm font-semibold text-slate-900'>Properties</h3>
               <div className='flex items-center gap-2'>

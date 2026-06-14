@@ -1,5 +1,5 @@
 import express from 'express';
-import { signOut, signOutAll, signin, refreshToken, google } from '../controllers/auth.controller.js';
+import { signOut, signOutAll, signin, refreshToken } from '../controllers/auth.controller.js';
 import { authRateLimit, refreshRateLimit } from '../middleware/security.js';
 import { validateBody, userValidation } from '../middleware/validation.js';
 import { tryVerifyToken, verifyToken } from '../utils/verifyUser.js';
@@ -12,12 +12,10 @@ router.post("/signup", (req, res) => {
 });
 // Apply stricter rate limit to signin attempts
 router.post("/signin", authRateLimit, validateBody(userValidation.login), signin);
-// Google OAuth signin/signup
-router.post("/google", authRateLimit, google);
 // Apply a dedicated higher-limit rate limiter to refresh so clients don't get locked out
 router.post('/refresh', refreshRateLimit, refreshToken);
+// BUG-007: GET /signout removed — GET requests are CSRF-able via <img src="">.
 router.post('/signout', tryVerifyToken, signOut);
-router.get('/signout', tryVerifyToken, signOut);
 router.post('/signout-all', verifyToken, signOutAll);
 
 // Development endpoint to clear rate limits

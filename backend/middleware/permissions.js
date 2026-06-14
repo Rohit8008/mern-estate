@@ -1,5 +1,18 @@
 import { errorHandler } from '../utils/error.js';
 import Role from '../models/role.model.js';
+import { MemoryCache } from '../utils/cache.js';
+
+// B-007: Cache role documents for 60s to avoid a DB hit on every permission check.
+const roleCache = new MemoryCache({ ttlMs: 60_000, maxSize: 200 });
+
+async function getCachedRole(roleId) {
+  const key = String(roleId);
+  const cached = roleCache.get(key);
+  if (cached) return cached;
+  const role = await Role.findById(roleId);
+  if (role) roleCache.set(key, role);
+  return role;
+}
 
 // Middleware to check if user has specific permission
 export const requirePermission = (permission) => {
@@ -16,7 +29,7 @@ export const requirePermission = (permission) => {
       }
 
       // Get user's role with permissions
-      const userRole = await Role.findById(req.user.assignedRole);
+      const userRole = await getCachedRole(req.user.assignedRole);
       if (!userRole || !userRole.isActive) {
         return next(errorHandler(403, 'Invalid or inactive role. Access denied.'));
       }
@@ -35,94 +48,6 @@ export const requirePermission = (permission) => {
   };
 };
 
-// Middleware to check multiple permissions (user needs ALL of them)
-export const requireAllPermissions = (permissions) => {
-  return async (req, res, next) => {
-    try {
-      // Super admins have all permissions
-      if (req.user.role === 'admin') {
-        return next();
-      }
-
-      if (!req.user.assignedRole) {
-        return next(errorHandler(403, 'No role assigned. Access denied.'));
-      }
-
-      const userRole = await Role.findById(req.user.assignedRole);
-      if (!userRole || !userRole.isActive) {
-        return next(errorHandler(403, 'Invalid or inactive role. Access denied.'));
-      }
-
-      // Check if user has ALL required permissions
-      const hasAllPermissions = permissions.every(permission => 
-        userRole.hasPermission(permission)
-      );
-
-      if (!hasAllPermissions) {
-        return next(errorHandler(403, `Permission denied. Required permissions: ${permissions.join(', ')}`));
-      }
-
-      req.userRole = userRole;
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
-};
-
-// Middleware to check multiple permissions (user needs ANY of them)
-export const requireAnyPermission = (permissions) => {
-  return async (req, res, next) => {
-    try {
-      // Super admins have all permissions
-      if (req.user.role === 'admin') {
-        return next();
-      }
-
-      if (!req.user.assignedRole) {
-        return next(errorHandler(403, 'No role assigned. Access denied.'));
-      }
-
-      const userRole = await Role.findById(req.user.assignedRole);
-      if (!userRole || !userRole.isActive) {
-        return next(errorHandler(403, 'Invalid or inactive role. Access denied.'));
-      }
-
-      // Check if user has ANY of the required permissions
-      const hasAnyPermission = permissions.some(permission => 
-        userRole.hasPermission(permission)
-      );
-
-      if (!hasAnyPermission) {
-        return next(errorHandler(403, `Permission denied. Required any of: ${permissions.join(', ')}`));
-      }
-
-      req.userRole = userRole;
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
-};
-
-// Middleware to check if user can manage specific resource
-export const canManageResource = (resourceType) => {
-  const permissionMap = {
-    'users': ['createUser', 'updateUser', 'deleteUser', 'viewUsers'],
-    'owners': ['createOwner', 'updateOwner', 'deleteOwner', 'viewOwners'],
-    'listings': ['createListing', 'updateListing', 'deleteListing', 'viewListings'],
-    'categories': ['createCategory', 'updateCategory', 'deleteCategory', 'viewCategories'],
-    'messages': ['viewMessages', 'sendMessages', 'deleteMessages'],
-    'buyer-requirements': ['createBuyerRequirement', 'updateBuyerRequirement', 'deleteBuyerRequirement', 'viewBuyerRequirements']
-  };
-
-  const requiredPermissions = permissionMap[resourceType] || [];
-  return requireAnyPermission(requiredPermissions);
-};
-
-// Middleware to check if user can toggle owner active status
-export const canToggleOwnerActive = requirePermission('toggleOwnerActive');
-
 // Middleware to check if user can create listings
 export const canCreateListing = async (req, res, next) => {
   // Admin always allowed
@@ -135,37 +60,18 @@ export const canCreateListing = async (req, res, next) => {
   return requirePermission('createListing')(req, res, next);
 };
 
-// Middleware to check if user can manage roles
-export const canManageRoles = requirePermission('manageRoles');
-
-// Helper function to get user permissions (for use in controllers)
-export const getUserPermissions = async (userId) => {
-  try {
-    const User = (await import('../models/user.model.js')).default;
-    const user = await User.findById(userId).populate('assignedRole');
-    
-    if (!user || !user.assignedRole) {
-      return [];
-    }
-
-    return user.assignedRole.getActivePermissions();
-  } catch (error) {
-    return [];
+// Attribute-based access check for listing resources.
+// Returns true when the user is allowed to read/mutate the given listing.
+// Pass { allowAssignedAgent: true } for update operations where the assigned
+// agent should also have access.
+export const canAccessListing = (user, listing, { allowAssignedAgent = false } = {}) => {
+  if (user.role === 'admin') return true;
+  const userId = String(user.id || user._id);
+  if (String(listing.userRef) === userId) return true;
+  if (user.role === 'employee') {
+    if (listing.category && user.assignedCategories?.includes(listing.category)) return true;
+    if (allowAssignedAgent && listing.assignedAgent && String(listing.assignedAgent) === userId) return true;
   }
+  return false;
 };
 
-// Helper function to check if user has permission (for use in controllers)
-export const userHasPermission = async (userId, permission) => {
-  try {
-    const User = (await import('../models/user.model.js')).default;
-    const user = await User.findById(userId).populate('assignedRole');
-    
-    if (!user || !user.assignedRole) {
-      return false;
-    }
-
-    return user.assignedRole.hasPermission(permission);
-  } catch (error) {
-    return false;
-  }
-};

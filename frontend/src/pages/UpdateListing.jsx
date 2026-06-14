@@ -8,6 +8,8 @@ import { apiClient, normalizeImageUrl } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
 import PropertyTypeFields from '../components/PropertyTypeFields';
+import PropertyDocuments from '../components/PropertyDocuments';
+import VoiceNotePanel from '../components/VoiceNotePanel';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -325,7 +327,16 @@ export default function UpdateListing() {
         const pt = propertyTypes.find(p => p.slug === e.target.value);
         setSelectedPropertyType(pt || null);
         setPropertyTypeFields({});
-        setFormData(prev => ({ ...prev, propertyType: e.target.value }));
+        const ptCat = pt?.category || '';
+        const isLandOrIndustrial = ptCat === 'land' || ptCat === 'industrial';
+        const isCommercial = ptCat === 'commercial';
+        setFormData(prev => ({
+          ...prev,
+          propertyType: e.target.value,
+          propertyCategory: ptCat,
+          bedrooms: isLandOrIndustrial || isCommercial ? 0 : prev.bedrooms || 1,
+          bathrooms: isLandOrIndustrial ? 0 : prev.bathrooms || 1,
+        }));
       } else if (e.target.name === 'category') {
         const cat = categories.find(c => c.slug === e.target.value);
         setSelectedCategory(cat || null);
@@ -521,6 +532,52 @@ export default function UpdateListing() {
                 </div>
               </div>
 
+              {/* Bedrooms & Bathrooms — shown based on property type */}
+              {selectedPropertyType && (() => {
+                const ptCat = selectedPropertyType.category;
+                const showBedrooms = ptCat === 'residential';
+                const showBathrooms = ptCat === 'residential' || ptCat === 'commercial';
+                if (!showBedrooms && !showBathrooms) return null;
+                return (
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                    {showBedrooms && (
+                      <div>
+                        <label className='block text-sm font-medium text-gray-700 mb-2'>Bedrooms *</label>
+                        <input
+                          type='number'
+                          id='bedrooms'
+                          name='bedrooms'
+                          min='1'
+                          max='20'
+                          required
+                          value={formData.bedrooms}
+                          onChange={handleChange}
+                          className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                        />
+                      </div>
+                    )}
+                    {showBathrooms && (
+                      <div>
+                        <label className='block text-sm font-medium text-gray-700 mb-2'>
+                          Bathrooms {showBedrooms ? '*' : '(optional)'}
+                        </label>
+                        <input
+                          type='number'
+                          id='bathrooms'
+                          name='bathrooms'
+                          min={showBedrooms ? '1' : '0'}
+                          max='20'
+                          required={showBedrooms}
+                          value={formData.bathrooms}
+                          onChange={handleChange}
+                          className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Dynamic Property Type Fields */}
               {selectedPropertyType && selectedPropertyType.fields && selectedPropertyType.fields.length > 0 && (
                 <PropertyTypeFields
@@ -531,37 +588,50 @@ export default function UpdateListing() {
               )}
 
               {/* Pricing */}
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                <div>
-                  <label htmlFor='regularPrice' className='block text-sm font-medium text-gray-700 mb-2'>
-                    Price (₹) *
-                  </label>
-                  <input
-                    type='number'
-                    id='regularPrice'
-                    min='0'
-                    required
-                    className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
-                    onChange={handleChange}
-                    value={formData.regularPrice}
-                  />
-                </div>
-
-                {formData.offer && (
+              <div className='space-y-4'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                   <div>
-                    <label htmlFor='discountPrice' className='block text-sm font-medium text-gray-700 mb-2'>
-                      Discount Price (₹)
+                    <label htmlFor='regularPrice' className='block text-sm font-medium text-gray-700 mb-2'>
+                      Price (₹) *
                     </label>
                     <input
                       type='number'
-                      id='discountPrice'
+                      id='regularPrice'
                       min='0'
+                      required
                       className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
                       onChange={handleChange}
-                      value={formData.discountPrice}
+                      value={formData.regularPrice}
                     />
                   </div>
-                )}
+
+                  {formData.offer && (
+                    <div>
+                      <label htmlFor='discountPrice' className='block text-sm font-medium text-gray-700 mb-2'>
+                        Discount Price (₹)
+                      </label>
+                      <input
+                        type='number'
+                        id='discountPrice'
+                        min='0'
+                        className='w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors'
+                        onChange={handleChange}
+                        value={formData.discountPrice}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <label className='flex items-center gap-2 cursor-pointer w-fit'>
+                  <input
+                    type='checkbox'
+                    id='offer'
+                    checked={formData.offer}
+                    onChange={handleChange}
+                    className='w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500'
+                  />
+                  <span className='text-sm font-medium text-gray-700'>This listing has a discounted offer price</span>
+                </label>
               </div>
 
               {/* Address */}
@@ -823,11 +893,6 @@ export default function UpdateListing() {
                         className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' />
                       <span className='ml-2 text-sm text-gray-700'>Furnished</span>
                     </label>
-                    <label className='flex items-center'>
-                      <input type='checkbox' id='offer' checked={formData.offer} onChange={handleChange}
-                        className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' />
-                      <span className='ml-2 text-sm text-gray-700'>Offer</span>
-                    </label>
                   </div>
                 </div>
               </div>
@@ -1058,6 +1123,23 @@ export default function UpdateListing() {
               </div>
             </div>
           </form>
+
+          {/* Documents section — shown once listing exists */}
+          {params.listingId && (
+            <div className='mt-8'>
+              <PropertyDocuments listingId={params.listingId} canEdit={true} />
+            </div>
+          )}
+
+          {/* Voice Notes */}
+          {params.listingId && (
+            <div className='mt-6 bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <VoiceNotePanel
+                listingId={params.listingId}
+                initialNotes={formData.voiceNotes || []}
+              />
+            </div>
+          )}
         </div>
       </div>
     </main>

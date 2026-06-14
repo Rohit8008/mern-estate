@@ -13,7 +13,9 @@ import {
   bulkImportListings,
   searchListings,
   getSearchSuggestions,
-  getPopularSearches
+  getPopularSearches,
+  addVoiceNote,
+  deleteVoiceNote,
 } from '../controllers/listing.controller.js';
 import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
 import { canCreateListing } from '../middleware/permissions.js';
@@ -45,5 +47,9 @@ router.post('/restore/:id', verifyToken, requireAdmin, restoreListing);
 
 // Bulk import listings (Admin only)
 router.post('/bulk-import', verifyToken, requireAdmin, validateBody(listingActionValidation.bulkImport), bulkImportListings);
+
+// Voice notes
+router.post('/:id/voice-notes', verifyToken, addVoiceNote);
+router.delete('/:id/voice-notes/:noteId', verifyToken, deleteVoiceNote);
 
 export default router;

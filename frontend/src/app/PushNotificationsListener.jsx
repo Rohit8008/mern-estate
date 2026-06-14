@@ -19,6 +19,15 @@ export default function PushNotificationsListener() {
 
     const socket = createSocket(currentUser._id, { transports: ['websocket'] });
 
+    const onUnreadMessages = ({ count }) => {
+      if (!prefs.pushMessages) return;
+      if (location.pathname.startsWith('/messages')) return;
+      showInfo(`You have ${count} unread message${count === 1 ? '' : 's'}`, {
+        duration: 6000,
+        onClick: () => { try { navigate('/messages'); } catch (_) {} },
+      });
+    };
+
     const onNewMessage = (msg) => {
       try {
         if (!prefs.pushMessages) return;
@@ -59,10 +68,12 @@ export default function PushNotificationsListener() {
       }
     };
 
+    socket.on('unread:messages', onUnreadMessages);
     socket.on('message:new', onNewMessage);
     socket.on('listing:update', onListingUpdate);
 
     return () => {
+      socket.off('unread:messages', onUnreadMessages);
       socket.off('message:new', onNewMessage);
       socket.off('listing:update', onListingUpdate);
       socket.close();

@@ -3,23 +3,23 @@ import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import SavedViewsBar from '../components/SavedViewsBar';
+import { PageHeader, Button } from '../design-system';
+import { HiRefresh, HiEye, HiEyeOff } from 'react-icons/hi';
 
 const STAGES = [
-  { id: 'new_lead', label: 'New Lead', header: 'bg-slate-50 text-slate-700 border-slate-200' },
-  { id: 'contacted', label: 'Contacted', header: 'bg-blue-50 text-blue-700 border-blue-200' },
-  { id: 'qualified', label: 'Qualified', header: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  { id: 'site_visit_scheduled', label: 'Site Visit Scheduled', header: 'bg-purple-50 text-purple-700 border-purple-200' },
-  { id: 'negotiation', label: 'Negotiation', header: 'bg-amber-50 text-amber-800 border-amber-200' },
-  { id: 'booking_token', label: 'Booking / Token', header: 'bg-orange-50 text-orange-800 border-orange-200' },
-  { id: 'documentation', label: 'Documentation', header: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
-  { id: 'closed_won', label: 'Closed (Won)', header: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-  { id: 'closed_lost', label: 'Closed (Lost)', header: 'bg-rose-50 text-rose-800 border-rose-200' },
-
-  // Legacy
-  { id: 'initial_contact', label: 'Initial Contact (Legacy)', header: 'bg-slate-50 text-slate-700 border-slate-200' },
-  { id: 'site_visit_done', label: 'Site Visit Done (Legacy)', header: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  { id: 'payment_pending', label: 'Payment Pending (Legacy)', header: 'bg-orange-50 text-orange-800 border-orange-200' },
+  { id: 'new_lead',              label: 'New Lead',            dot: 'bg-slate-400'   },
+  { id: 'contacted',             label: 'Contacted',           dot: 'bg-blue-500'    },
+  { id: 'qualified',             label: 'Qualified',           dot: 'bg-indigo-500'  },
+  { id: 'site_visit_scheduled',  label: 'Site Visit',          dot: 'bg-purple-500'  },
+  { id: 'negotiation',           label: 'Negotiation',         dot: 'bg-amber-500'   },
+  { id: 'booking_token',         label: 'Booking / Token',     dot: 'bg-orange-500'  },
+  { id: 'documentation',         label: 'Documentation',       dot: 'bg-yellow-500'  },
+  { id: 'closed_won',            label: 'Won',                 dot: 'bg-emerald-500' },
+  { id: 'closed_lost',           label: 'Lost',                dot: 'bg-rose-500'    },
+  // Legacy stages (hidden by default)
+  { id: 'initial_contact',       label: 'Initial Contact',     dot: 'bg-slate-400'   },
+  { id: 'site_visit_done',       label: 'Site Visit Done',     dot: 'bg-indigo-400'  },
+  { id: 'payment_pending',       label: 'Payment Pending',     dot: 'bg-orange-400'  },
 ];
 
 const stageById = Object.fromEntries(STAGES.map((s) => [s.id, s]));
@@ -42,6 +42,9 @@ export default function DealsBoard() {
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [dragOverStage, setDragOverStage] = useState('');
+  const [showLegacy, setShowLegacy] = useState(false);
+
+  const LEGACY_STAGE_IDS = ['initial_contact', 'site_visit_done', 'payment_pending'];
 
   const getCurrentQueryString = () => {
     // Deals board currently has no query-driven filters; keep placeholder for saved views
@@ -159,41 +162,47 @@ export default function DealsBoard() {
       map.set(stageId, existing);
     }
 
-    return Array.from(map.values());
-  }, [pipeline]);
+    const all = Array.from(map.values());
+    return showLegacy ? all : all.filter((col) => !LEGACY_STAGE_IDS.includes(col.id));
+  }, [pipeline, showLegacy]);
 
   if (!canAccess) return null;
 
   return (
-    <div className='min-h-screen bg-slate-50'>
-      <div className='max-w-[1400px] mx-auto px-4 py-6 space-y-5'>
-        <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
-          <div>
-            <h1 className='text-2xl md:text-3xl font-bold text-slate-900'>Deals Board</h1>
-            <p className='text-slate-600 mt-1'>Pipeline overview by stage (assigned-only)</p>
-          </div>
-
-          <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-            <SavedViewsBar
-              namespace='deals'
-              getCurrentQueryString={getCurrentQueryString}
-              onApplyQueryString={applyQueryString}
-            />
-            <Link
-              to='/clients'
-              className='px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold'
+    <div className='space-y-5'>
+      <PageHeader
+        title='Sales Pipeline'
+        description='Drag deals across stages to track your pipeline progress'
+        actions={
+          <>
+            <Button
+              variant='secondary'
+              size='sm'
+              icon={showLegacy ? HiEyeOff : HiEye}
+              onClick={() => setShowLegacy((v) => !v)}
             >
-              Open Clients
-            </Link>
-            <button
+              {showLegacy ? 'Hide legacy' : 'Legacy stages'}
+            </Button>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={() => {}}
+            >
+              <Link to='/clients' className='flex items-center gap-1.5'>Clients</Link>
+            </Button>
+            <Button
+              variant='primary'
+              size='sm'
+              icon={HiRefresh}
               onClick={loadPipeline}
               disabled={loading}
-              className='px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-400 text-sm font-semibold'
+              className={loading ? '[&>svg]:animate-spin' : ''}
             >
-              {loading ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-        </div>
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
         {error && (
           <div className='bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm'>
@@ -201,89 +210,73 @@ export default function DealsBoard() {
           </div>
         )}
 
-        <div className='overflow-x-auto'>
-          <div className='min-w-[1100px] grid grid-cols-12 gap-3'>
+        <div className='overflow-x-auto pb-2'>
+          <div className='flex gap-3' style={{ minWidth: `${columns.length * 272}px` }}>
             {columns.map((col) => (
-              <div key={col.id} className='col-span-12 sm:col-span-6 lg:col-span-4 xl:col-span-3'>
-                <div className={`rounded-2xl border ${col.header} overflow-hidden`}> 
-                  <div className='px-4 py-3 flex items-center justify-between border-b border-inherit'>
-                    <div>
-                      <div className='font-bold'>{col.label}</div>
-                      <div className='text-xs opacity-80 mt-0.5'>
-                        {col.count} deal(s) · {formatCurrency(col.totalValue)}
+              <div key={col.id} style={{ minWidth: '256px', width: '256px' }}>
+                {/* Column header */}
+                <div className='flex items-center gap-2 px-1 py-2 mb-2'>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${col.dot || 'bg-slate-400'}`} />
+                  <span className='text-sm font-semibold text-slate-800 truncate flex-1'>{col.label}</span>
+                  <span className='text-xs font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full'>{col.count}</span>
+                </div>
+                <div className='text-xs text-slate-400 px-1 mb-2'>{formatCurrency(col.totalValue)}</div>
+
+                {/* Drop zone */}
+                <div
+                  className={`rounded-xl border-2 transition-colors min-h-[120px] p-2 space-y-2 ${
+                    dragOverStage === col.id
+                      ? 'border-indigo-300 bg-indigo-50/40'
+                      : 'border-dashed border-slate-200 bg-slate-50/50'
+                  }`}
+                  onDragOver={(e) => onDragOver(e, col.id)}
+                  onDragLeave={() => setDragOverStage('')}
+                  onDrop={(e) => onDrop(e, col.id)}
+                >
+                  {(col.deals || []).map((d) => (
+                    <div
+                      key={d.dealId}
+                      className='rounded-lg border border-slate-200 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow'
+                      draggable
+                      onDragStart={(e) =>
+                        onDragStart(e, {
+                          clientId: d.clientId,
+                          dealId: d.dealId,
+                          fromStage: col.id,
+                        })
+                      }
+                    >
+                      <div className='flex items-start justify-between gap-2 mb-2'>
+                        <Link
+                          to={`/clients/${d.clientId}`}
+                          className='font-semibold text-slate-900 hover:text-indigo-600 text-sm leading-tight'
+                        >
+                          {d.clientName || 'Client'}
+                        </Link>
                       </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`p-3 space-y-3 bg-white transition-colors ${
-                      dragOverStage === col.id ? 'bg-slate-50/60' : ''
-                    }`}
-                    onDragOver={(e) => onDragOver(e, col.id)}
-                    onDragLeave={() => setDragOverStage('')}
-                    onDrop={(e) => onDrop(e, col.id)}
-                  >
-                    {(col.deals || []).map((d) => (
-                      <div
-                        key={d.dealId}
-                        className='rounded-xl border border-slate-200 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing'
-                        draggable
-                        onDragStart={(e) =>
-                          onDragStart(e, {
-                            clientId: d.clientId,
-                            dealId: d.dealId,
-                            fromStage: col.id,
-                          })
-                        }
-                      >
-                        <div className='flex items-start justify-between gap-3'>
-                          <div>
-                            <Link
-                              to={`/clients/${d.clientId}`}
-                              className='font-semibold text-slate-900 hover:underline'
-                            >
-                              {d.clientName || 'Client'}
-                            </Link>
-                            <div className='text-sm text-slate-600 mt-0.5'>{formatCurrency(d.value)}</div>
-                          </div>
-
-                          <select
-                            value={col.id}
-                            disabled={updating}
-                            onChange={(e) => moveDeal({ clientId: d.clientId, dealId: d.dealId, toStage: e.target.value })}
-                            className='text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white'
-                            title='Move stage'
-                          >
-                            {STAGES.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {stageById[s.id]?.label || s.id}
-                              </option>
-                            ))}
-                          </select>
+                      <div className='text-sm font-medium text-slate-700'>{formatCurrency(d.value)}</div>
+                      {d.expectedCloseDate && (
+                        <div className='text-xs text-slate-400 mt-1.5'>
+                          Close: {new Date(d.expectedCloseDate).toLocaleDateString()}
                         </div>
+                      )}
+                    </div>
+                  ))}
 
-                        {d.expectedCloseDate && (
-                          <div className='text-xs text-slate-500 mt-2'>
-                            Expected: {new Date(d.expectedCloseDate).toLocaleDateString()}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {(!col.deals || col.deals.length === 0) && (
-                      <div className='text-sm text-slate-500 px-1 py-2'>No deals</div>
-                    )}
-                  </div>
+                  {(!col.deals || col.deals.length === 0) && (
+                    <div className='flex items-center justify-center py-6 text-slate-400'>
+                      <span className='text-xs'>No deals</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {updating && (
-          <div className='text-sm text-slate-500'>Updating stage…</div>
-        )}
-      </div>
+      {updating && (
+        <div className='text-sm text-slate-500'>Updating stage…</div>
+      )}
     </div>
   );
 }

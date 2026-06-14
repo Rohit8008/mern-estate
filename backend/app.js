@@ -7,7 +7,7 @@ import morgan from 'morgan';
 import compression from 'compression';
 import hpp from 'hpp';
 
-import { initSentry, getSentryErrorHandler } from './utils/sentry.js';
+import observabilityRouter from './routes/observability.route.js';
 
 import userRouter from './routes/user.route.js';
 import authRouter from './routes/auth.route.js';
@@ -30,6 +30,10 @@ import propertyTypeRouter from './routes/propertyType.route.js';
 import subscriberRouter from './routes/subscriber.route.js';
 import activityRouter from './routes/activity.route.js';
 import geocodeRouter from './routes/geocode.route.js';
+import reportTemplateRouter from './routes/reportTemplate.route.js';
+import generatedReportRouter from './routes/generatedReport.route.js';
+import searchRouter from './routes/search.route.js';
+import contactRouter from './routes/contact.route.js';
 
 import {
   securityHeaders,
@@ -45,14 +49,23 @@ import { globalErrorHandler } from './utils/error.js';
 
 const __dirname = path.resolve();
 
+// SEC-003: Escape characters that have special meaning in HTML so that
+// req.originalUrl cannot inject executable content into the 404 response.
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 export function createApp() {
   const app = express();
 
   if (config.server.isProduction) {
     app.set('trust proxy', 1);
   }
-
-  initSentry(app);
 
   app.use(securityHeaders);
   // Protect against HTTP Parameter Pollution (e.g. ?role=user&role=admin)
@@ -97,6 +110,11 @@ export function createApp() {
   app.use('/api/activity', activityRouter);
   app.use('/api/newsletter', subscriberRouter);
   app.use('/api/geocode', geocodeRouter);
+  app.use('/api/report-templates', reportTemplateRouter);
+  app.use('/api/generated-reports', generatedReportRouter);
+  app.use('/api/search', searchRouter);
+  app.use('/api/contact', contactRouter);
+  app.use('/api/observability', observabilityRouter);
 
   app.use(express.static(path.join(__dirname, '/frontend/dist')));
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -130,7 +148,7 @@ export function createApp() {
             <div class="pill" aria-hidden="true">🛣️</div>
             <h1 class="title">API route not found</h1>
             <p class="text">The endpoint you requested does not exist:</p>
-            <div class="mono">${req.method} ${req.originalUrl}</div>
+            <div class="mono">${escapeHtml(req.method)} ${escapeHtml(req.originalUrl)}</div>
             <div class="row">
               <a href="/" class="btn primary">Go Home</a>
               <a href="/messages" class="btn">Open Messages</a>
@@ -184,7 +202,6 @@ export function createApp() {
   </html>`);
   });
 
-  app.use(getSentryErrorHandler());
   app.use(globalErrorHandler);
 
   return app;

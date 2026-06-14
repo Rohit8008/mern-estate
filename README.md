@@ -84,16 +84,39 @@ Important behavior:
 
 ---
 
+## Documentation
+
+| Guide | Description |
+|---|---|
+| [COMMANDS.md](COMMANDS.md) | All dev, test, seed, and deployment commands |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Deploy to Render (PaaS) step-by-step |
+| [SETUP_GUIDE.md](SETUP_GUIDE.md) | Local environment setup |
+| [docs/AUTH.md](docs/AUTH.md) | JWT auth, token lifecycle, session security |
+| [docs/LISTINGS.md](docs/LISTINGS.md) | Property listings CRUD, search, dynamic fields |
+| [docs/CRM.md](docs/CRM.md) | Clients, deal pipeline, lead scoring |
+| [docs/MESSAGING.md](docs/MESSAGING.md) | Real-time encrypted messaging (Socket.IO) |
+| [docs/ROLES.md](docs/ROLES.md) | RBAC roles, permissions, ABAC |
+| [docs/OWNERS.md](docs/OWNERS.md) | Property owner management |
+| [docs/BUYERS.md](docs/BUYERS.md) | Buyer requirements and property matching |
+| [docs/TASKS.md](docs/TASKS.md) | Task management |
+| [docs/DOCUMENTS.md](docs/DOCUMENTS.md) | File uploads (polymorphic — client or listing) |
+| [docs/ANALYTICS.md](docs/ANALYTICS.md) | Dashboard, analytics, agent performance |
+| [docs/SEARCH.md](docs/SEARCH.md) | Global cross-entity search |
+| [docs/REPORTS.md](docs/REPORTS.md) | Client report templates and generation |
+
+---
+
 ## Repository Structure
 
 ```
 mern-estate/
   backend/      # Express API + Mongo models + controllers
   frontend/     # React client
+  docs/         # Feature documentation
   render.yaml   # Render blueprint
-  SETUP_GUIDE.md
+  COMMANDS.md   # Developer commands reference
   DEPLOYMENT.md
-  PRODUCTION_FEATURES.md
+  SETUP_GUIDE.md
 ```
 
 ---
@@ -199,7 +222,6 @@ See:
 Render is supported out-of-the-box via `render.yaml`.
 
 - Full deployment guide: `DEPLOYMENT.md`
-- Feature documentation: `PRODUCTION_FEATURES.md`
 
 High-level:
 

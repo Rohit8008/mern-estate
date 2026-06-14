@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ConfirmDialog from './ConfirmDialog';
 import { apiClient } from '../utils/http';
 import { 
   HiOutlinePlus, 
@@ -15,9 +16,9 @@ import {
 
 // --- Local cache helpers ---
 const CACHE_KEYS = {
-  roles: 'rm_cache_roles',
-  users: 'rm_cache_users',
-  permissions: 'rm_cache_permissions',
+  roles: 'rm_cache_roles_v2',
+  users: 'rm_cache_users_v2',
+  permissions: 'rm_cache_permissions_v2',
 };
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -58,6 +59,8 @@ const RoleManagement = () => {
     permissions: {}
   });
   const [roleFormError, setRoleFormError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null); // { roleId, isForce, forceMsg }
+  const [forceDeleteError, setForceDeleteError] = useState('');
 
   // User role assignment state
   const [showUserRoleModal, setShowUserRoleModal] = useState(false);
@@ -66,9 +69,9 @@ const RoleManagement = () => {
 
   // Only hit API if cache is empty/expired — not on every mount
   useEffect(() => {
-    if (!readCache(CACHE_KEYS.roles)) fetchRoles();
-    if (!readCache(CACHE_KEYS.users)) fetchUsers();
-    if (!readCache(CACHE_KEYS.permissions)) fetchPermissions();
+    if (!readCache(CACHE_KEYS.roles)?.length) fetchRoles();
+    if (!readCache(CACHE_KEYS.users)?.length) fetchUsers();
+    if (!Object.keys(readCache(CACHE_KEYS.permissions) || {}).length) fetchPermissions();
   }, []);
 
   const fetchRoles = async () => {
@@ -141,34 +144,29 @@ const RoleManagement = () => {
     }
   };
 
-  const handleDeleteRole = async (roleId) => {
-    if (!confirm('Are you sure you want to delete this role?')) return;
-    
+  const handleDeleteRole = (roleId) => {
+    setForceDeleteError('');
+    setPendingDelete({ roleId, isForce: false, forceMsg: '' });
+  };
+
+  const executeDelete = async () => {
+    if (!pendingDelete) return;
+    const { roleId, isForce } = pendingDelete;
+    setPendingDelete(null);
     try {
       try {
-        await apiClient.delete(`/roles/${roleId}`);
+        await apiClient.delete(`/roles/${roleId}${isForce ? '?force=true' : ''}`);
       } catch (err) {
         const msg = err?.message || 'Failed to delete role.';
-        // If role is assigned to users, offer force delete
-        if (/assigned to this role/i.test(msg)) {
-          const proceed = confirm(
-            `${msg}\n\nDo you want to force delete this role? This will unassign it from all users and remove it.`
-          );
-          if (!proceed) return;
-          try {
-            await apiClient.delete(`/roles/${roleId}?force=true`);
-          } catch (e2) {
-            alert(e2?.message || 'Force delete failed.');
-            return;
-          }
-        } else {
-          alert(msg);
+        if (!isForce && /assigned to this role/i.test(msg)) {
+          // Show force-delete confirmation
+          setPendingDelete({ roleId, isForce: true, forceMsg: msg });
           return;
         }
+        setForceDeleteError(msg);
+        return;
       }
-      // Success path
       fetchRoles();
-      // Also refresh users list since some may have been unassigned
       fetchUsers();
     } catch (error) {
       console.error('Error deleting role:', error);
@@ -755,6 +753,22 @@ const RoleManagement = () => {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingDelete && !pendingDelete?.isForce}
+        title='Delete this role?'
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={executeDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+      <ConfirmDialog
+        open={!!pendingDelete?.isForce}
+        title='Role is assigned to users'
+        description={`${pendingDelete?.forceMsg || ''} Force delete will unassign this role from all users.`}
+        confirmLabel='Force Delete'
+        onConfirm={executeDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </>
   );
 };

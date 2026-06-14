@@ -4,6 +4,7 @@
  * Tests for auth endpoints: signin, signout, refresh token
  */
 
+import crypto from 'crypto';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -11,6 +12,8 @@ import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
 import authRouter from '../routes/auth.route.js';
 import { globalErrorHandler } from '../utils/error.js';
+
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 // Create minimal test app
 const createTestApp = () => {
@@ -152,8 +155,8 @@ describe('Auth API', () => {
 
       const { refreshToken } = await global.testUtils.createAuthToken(jwt, testUser);
 
-      // Store refresh token in user document
-      testUser.refreshTokens = [refreshToken];
+      // Store hashed refresh token in the format the controller expects
+      testUser.refreshTokens = [{ token: hashToken(refreshToken) }];
       await testUser.save();
 
       const res = await request(app)

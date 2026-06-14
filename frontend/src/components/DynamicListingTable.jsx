@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import ConfirmDialog from './ConfirmDialog';
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import * as XLSX from 'xlsx';
 
@@ -13,6 +14,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
   const [filterConfig, setFilterConfig] = useState({});
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [showColumnManager, setShowColumnManager] = useState(false);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(new Set());
 
   // Core fields that are always visible
@@ -194,9 +196,11 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
 
   const handleBulkDelete = async () => {
     if (selectedRows.size === 0) return;
+    setPendingBulkDelete(true);
+  };
 
-    if (!confirm(`Delete ${selectedRows.size} listings?`)) return;
-
+  const executeBulkDelete = async () => {
+    setPendingBulkDelete(false);
     try {
       const deletePromises = Array.from(selectedRows).map(id =>
         fetchWithRefresh(`/api/listing/delete/${id}`, { method: 'DELETE' })
@@ -494,6 +498,14 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
           No listings found
         </div>
       )}
+      <ConfirmDialog
+        open={pendingBulkDelete}
+        title={`Delete ${selectedRows.size} listing${selectedRows.size === 1 ? '' : 's'}?`}
+        description='This cannot be undone.'
+        confirmLabel='Delete'
+        onConfirm={executeBulkDelete}
+        onCancel={() => setPendingBulkDelete(false)}
+      />
     </div>
   );
 };

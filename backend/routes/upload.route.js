@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image uploads are allowed'));
@@ -36,7 +36,7 @@ router.post('/single', verifyToken, (req, res, next) => {
   upload.single('image')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 2MB.' });
+        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 10MB.' });
       }
       return res.status(400).json({ success: false, message: err.message });
     } else if (err) {
@@ -56,7 +56,7 @@ router.post('/multiple', verifyToken, (req, res, next) => {
   upload.array('images', 6)(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 2MB per image.' });
+        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 10MB per image.' });
       }
       return res.status(400).json({ success: false, message: err.message });
     } else if (err) {
@@ -72,6 +72,40 @@ router.post('/multiple', verifyToken, (req, res, next) => {
       return `${req.protocol}://${req.get('host')}${relativePath}`;
     });
     res.status(201).json({ success: true, urls });
+  });
+});
+
+const AUDIO_MIME_TYPES = new Set([
+  'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg',
+  'audio/wav', 'audio/x-wav', 'audio/aac',
+]);
+
+const audioUpload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+  fileFilter: (req, file, cb) => {
+    if (AUDIO_MIME_TYPES.has(file.mimetype) || file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'));
+    }
+  },
+});
+
+router.post('/audio', verifyToken, (req, res) => {
+  audioUpload.single('audio')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: 'File too large. Maximum size is 25MB.' });
+      }
+      return res.status(400).json({ success: false, message: err.message });
+    } else if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No audio file provided' });
+    }
+    res.status(201).json({ success: true, url: `/uploads/${req.file.filename}` });
   });
 });
 

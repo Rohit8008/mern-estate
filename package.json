@@ -2,14 +2,21 @@
   "name": "mern-estate",
   "version": "1.0.0",
   "description": "MERN Estate - Real Estate Application",
-  "scripts": {
-    "dev": "npm run dev --prefix backend",
-    "start": "npm run start --prefix backend",
-    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
-    "test": "npm run test --prefix backend",
-    "test:client": "npm run test --prefix frontend"
-  },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:debug": "playwright test --debug",
+    "e2e:report": "playwright show-report playwright-report",
+    "e2e:codegen": "playwright codegen http://localhost:5173",
+    "seed:demo": "cd backend && node scripts/seedDemo.js",
+    "demo:video": "playwright test --config=playwright.demo.config.js",
+    "demo:video:report": "playwright show-report e2e/demo/demo-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "dotenv": "^17.4.2"
+  }
 }

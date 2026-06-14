@@ -1,130 +1,163 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 
-import Home from '../pages/Home';
-import SignIn from '../pages/SignIn';
-import SignUp from '../pages/SignUp';
-import Profile from '../pages/Profile';
 import PrivateRoute from '../components/PrivateRoute';
-import CrmShell from './CrmShell';
-import SellerRoute from '../components/SellerRoute';
-import CreateListing from '../pages/CreateListing';
-import UpdateListing from '../pages/UpdateListing';
-import Listing from '../pages/Listing';
-import Search from '../pages/Search';
-import Categories from '../pages/Categories';
-import CategoryListings from '../pages/CategoryListings';
 import AdminRoute from '../components/AdminRoute';
-import Admin from '../pages/Admin';
-import UserProfile from '../pages/UserProfile';
-import Messages from '../pages/Messages';
-import AdminCategoryFields from '../pages/AdminCategoryFields';
-import AdminImport from '../pages/AdminImport';
-import DynamicListings from '../pages/DynamicListings';
-import PasswordReset from '../pages/PasswordReset';
-import ForgotPassword from '../pages/ForgotPassword';
-import Unauthorized from '../pages/Unauthorized';
-import NotFound from '../pages/NotFound';
-import BuyerRequirements from '../pages/BuyerRequirements';
-import Clients from '../pages/Clients';
-import ClientsLegacy from '../pages/ClientsLegacy';
-import ContactsBoard from '../pages/ContactsBoard';
-import TasksBoard from '../pages/TasksBoard';
-import AgencyDashboard from '../pages/AgencyDashboard';
-import PortfolioDashboard from '../pages/PortfolioDashboard';
-import Transactions from '../pages/Transactions';
-import ClientReportTemplate from '../pages/ClientReportTemplate';
-import ClientDetail from '../pages/ClientDetail';
-import DealsBoard from '../pages/DealsBoard';
-import DealsLegacy from '../pages/DealsLegacy';
-import Calendar from '../pages/Calendar';
-import CalendarLegacy from '../pages/CalendarLegacy';
-import PropertiesBoard from '../pages/PropertiesBoard';
-import PropertiesLegacy from '../pages/PropertiesLegacy';
-import AdminDashboard from '../pages/AdminDashboard';
-import TeamDashboard from '../pages/TeamDashboard';
-import Analytics from '../pages/Analytics';
-import PropertyTypeManagement from '../pages/PropertyTypeManagement';
-import Settings from '../pages/Settings';
-import { useUiMode } from '../contexts/useUiMode';
+import SellerRoute from '../components/SellerRoute';
+import PermissionRoute from '../components/PermissionRoute';
+import CrmShell from './CrmShell';
+
+// ── Lazy page imports ─────────────────────────────────────────────────────────
+// Public
+const Home            = lazy(() => import('../pages/Home'));
+const SignIn          = lazy(() => import('../pages/SignIn'));
+const SignUp          = lazy(() => import('../pages/SignUp'));
+const ForgotPassword  = lazy(() => import('../pages/ForgotPassword'));
+const PasswordReset   = lazy(() => import('../pages/PasswordReset'));
+const Unauthorized    = lazy(() => import('../pages/Unauthorized'));
+const NotFound        = lazy(() => import('../pages/NotFound'));
+const Listing         = lazy(() => import('../pages/Listing'));
+const UserProfile     = lazy(() => import('../pages/UserProfile'));
+const Search          = lazy(() => import('../pages/Search'));
+
+// CRM — overview
+const AgencyDashboard    = lazy(() => import('../pages/AgencyDashboard'));
+const Analytics          = lazy(() => import('../pages/Analytics'));
+const PortfolioDashboard = lazy(() => import('../pages/PortfolioDashboard'));
+const Transactions       = lazy(() => import('../pages/Transactions'));
+
+// CRM — properties
+const PropertiesBoard      = lazy(() => import('../pages/PropertiesBoard'));
+const CreateListing        = lazy(() => import('../pages/CreateListing'));
+const UpdateListing        = lazy(() => import('../pages/UpdateListing'));
+const DynamicListings      = lazy(() => import('../pages/DynamicListings'));
+const Categories           = lazy(() => import('../pages/Categories'));
+const CategoryListings     = lazy(() => import('../pages/CategoryListings'));
+
+// CRM — contacts & pipeline
+const ContactsBoard     = lazy(() => import('../pages/ContactsBoard'));
+const OwnersBoard       = lazy(() => import('../pages/OwnersBoard'));
+const ClientDetail      = lazy(() => import('../pages/ClientDetail'));
+const DealsBoard        = lazy(() => import('../pages/DealsBoard'));
+const BuyerRequirements = lazy(() => import('../pages/BuyerRequirements'));
+
+// CRM — misc
+const TasksBoard           = lazy(() => import('../pages/TasksBoard'));
+const Calendar             = lazy(() => import('../pages/Calendar'));
+const ClientReportTemplate = lazy(() => import('../pages/ClientReportTemplate'));
+const Profile              = lazy(() => import('../pages/Profile'));
+const Settings             = lazy(() => import('../pages/Settings'));
+const Messages             = lazy(() => import('../pages/Messages'));
+
+// Admin
+const Admin                   = lazy(() => import('../pages/Admin'));
+const AdminCategoryFields     = lazy(() => import('../pages/AdminCategoryFields'));
+const AdminImport             = lazy(() => import('../pages/AdminImport'));
+const PropertyTypeManagement  = lazy(() => import('../pages/PropertyTypeManagement'));
+
+// ── Fallback ──────────────────────────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className='flex items-center justify-center min-h-[60vh]'>
+      <div className='w-6 h-6 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin' />
+    </div>
+  );
+}
 
 export default function AppRoutes() {
-  const { isMinimal } = useUiMode();
-
   return (
-    <Routes>
-      <Route path='/' element={<Home />} />
-      <Route path='/sign-in' element={<div className='-mt-16'><SignIn /></div>} />
-      <Route path='/sign-up' element={<div className='-mt-16'><SignUp /></div>} />
-      <Route path='/forgot-password' element={<div className='-mt-16'><ForgotPassword /></div>} />
-      <Route path='/listing/:listingId' element={<Listing />} />
-      <Route path='/unauthorized' element={<Unauthorized />} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        {/* Public */}
+        <Route path='/' element={<Home />} />
+        <Route path='/sign-in' element={<SignIn />} />
+        <Route path='/sign-up' element={<SignUp />} />
+        <Route path='/forgot-password' element={<ForgotPassword />} />
+        <Route path='/listing/:listingId' element={<Listing />} />
+        <Route path='/unauthorized' element={<Unauthorized />} />
+        <Route path='/user/:userId' element={<UserProfile />} />
 
-      <Route element={<PrivateRoute />}>
-        <Route path='/search' element={<Search />} />
+        {/* ── Authenticated ── */}
+        <Route element={<PrivateRoute />}>
+          <Route path='/search' element={<Search />} />
+          <Route path='/password-reset' element={<PasswordReset />} />
 
-        {isMinimal ? (
+          {/* ── CRM Shell (sidebar layout, admin/employee only) ── */}
           <Route element={<CrmShell />}>
-            <Route path='/dashboard' element={<AgencyDashboard />} />
-            <Route path='/portfolio' element={<PortfolioDashboard />} />
-            <Route path='/properties' element={<PropertiesBoard />} />
+
+            {/* Always visible to authenticated CRM users */}
+            <Route path='/profile'  element={<Profile />} />
+            <Route path='/settings' element={<Settings />} />
+            <Route path='/messages' element={<Messages />} />
+            <Route path='/tasks'    element={<TasksBoard />} />
             <Route path='/calendar' element={<Calendar />} />
-            <Route path='/tasks' element={<TasksBoard />} />
-            <Route path='/deals' element={<DealsBoard />} />
-            <Route path='/clients' element={<Clients />} />
-            <Route path='/contacts' element={<ContactsBoard />} />
-            <Route path='/clients/:id' element={<ClientDetail />} />
-            <Route path='/buyer-requirements' element={<BuyerRequirements />} />
-            <Route path='/transactions' element={<Transactions />} />
-            <Route path='/client-reports' element={<ClientReportTemplate />} />
-            <Route path='/categories' element={<Categories />} />
-            <Route path='/category/:slug' element={<CategoryListings />} />
-            <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
-            <Route path='/create-listing' element={<CreateListing />} />
-            <Route path='/update-listing/:listingId' element={<UpdateListing />} />
+
+            {/* Overview */}
+            <Route element={<PermissionRoute requires='viewAnalytics' />}>
+              <Route path='/dashboard'    element={<AgencyDashboard />} />
+              <Route path='/analytics'    element={<Analytics />} />
+              <Route path='/portfolio'    element={<PortfolioDashboard />} />
+              <Route path='/transactions' element={<Transactions />} />
+            </Route>
+
+            {/* Properties */}
+            <Route element={<PermissionRoute requires='viewListings' />}>
+              <Route path='/properties' element={<PropertiesBoard />} />
+              <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
+            </Route>
+
+            <Route element={<PermissionRoute requires='viewCategories' />}>
+              <Route path='/categories' element={<Categories />} />
+              <Route path='/category/:slug' element={<CategoryListings />} />
+            </Route>
+
+            <Route element={<PermissionRoute requires='createListing' />}>
+              <Route path='/create-listing' element={<CreateListing />} />
+            </Route>
+
+            <Route element={<PermissionRoute requires='updateListing' />}>
+              <Route path='/update-listing/:listingId' element={<UpdateListing />} />
+            </Route>
+
+            {/* CRM */}
+            <Route element={<PermissionRoute requires='viewClients' />}>
+              <Route path='/clients'     element={<ContactsBoard />} />
+              <Route path='/clients/:id' element={<ClientDetail />} />
+              <Route path='/pipeline'    element={<DealsBoard />} />
+            </Route>
+
+            <Route element={<PermissionRoute requires='viewOwners' />}>
+              <Route path='/owners' element={<OwnersBoard />} />
+            </Route>
+
+            <Route element={<PermissionRoute requires='viewBuyerRequirements' />}>
+              <Route path='/buyers'             element={<BuyerRequirements />} />
+              <Route path='/buyer-requirements' element={<BuyerRequirements />} />
+            </Route>
+
+            <Route element={<PermissionRoute requires='exportData' />}>
+              <Route path='/reports'        element={<ClientReportTemplate />} />
+              <Route path='/client-reports' element={<ClientReportTemplate />} />
+            </Route>
+
+            {/* Admin-only routes — inside CRM shell so sidebar stays visible */}
+            <Route element={<AdminRoute />}>
+              <Route path='/admin' element={<Admin />} />
+              <Route path='/admin/categories/:slug/fields' element={<AdminCategoryFields />} />
+              <Route path='/admin/property-types' element={<PropertyTypeManagement />} />
+              <Route path='/admin/import' element={<AdminImport />} />
+            </Route>
           </Route>
-        ) : (
-          <>
-            <Route path='/dashboard' element={<TeamDashboard />} />
-            <Route path='/properties' element={<PropertiesLegacy />} />
-            <Route path='/calendar' element={<CalendarLegacy />} />
-            <Route path='/deals' element={<DealsLegacy />} />
-            <Route path='/clients' element={<ClientsLegacy />} />
-            <Route path='/clients/:id' element={<ClientDetail />} />
-            <Route path='/buyer-requirements' element={<BuyerRequirements />} />
-            <Route path='/categories' element={<Categories />} />
-            <Route path='/category/:slug' element={<CategoryListings />} />
-            <Route path='/dynamic-listings/:categorySlug' element={<DynamicListings />} />
-          </>
-        )}
-      </Route>
+        </Route>
 
-      <Route path='/user/:userId' element={<UserProfile />} />
+        {/* Sellers (non-CRM users) can still create/edit their own listings */}
+        <Route element={<SellerRoute />}>
+          <Route path='/create-listing' element={<CreateListing />} />
+          <Route path='/update-listing/:listingId' element={<UpdateListing />} />
+        </Route>
 
-      <Route element={<PrivateRoute />}>
-        <Route path='/messages' element={<Messages />} />
-      </Route>
-
-      <Route element={<AdminRoute />}>
-        <Route path='/admin' element={<Admin />} />
-        <Route path='/admin/dashboard' element={<AdminDashboard />} />
-        <Route path='/admin/analytics' element={<Analytics />} />
-        <Route path='/admin/categories/:slug/fields' element={<AdminCategoryFields />} />
-        <Route path='/admin/property-types' element={<PropertyTypeManagement />} />
-        <Route path='/admin/import' element={<AdminImport />} />
-      </Route>
-
-      <Route element={<PrivateRoute />}>
-        <Route path='/profile' element={<Profile />} />
-        <Route path='/settings' element={<Settings />} />
-        <Route path='/password-reset' element={<PasswordReset />} />
-      </Route>
-
-      <Route element={<SellerRoute />}>
-        <Route path='/create-listing' element={<CreateListing />} />
-        <Route path='/update-listing/:listingId' element={<UpdateListing />} />
-      </Route>
-
-      <Route path='*' element={<NotFound />} />
-    </Routes>
+        <Route path='*' element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
 }
