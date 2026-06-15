@@ -69,7 +69,7 @@ export const securityHeaders = helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "ws:", "wss:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https://api.cloudinary.com", "https://res.cloudinary.com", "https://fonts.googleapis.com"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],

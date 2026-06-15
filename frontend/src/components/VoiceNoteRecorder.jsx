@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { app } from '../firebase';
-import { apiClient } from '../utils/http';
+import { uploadToCloudinary } from '../utils/cloudinary';
 import { HiOutlineMicrophone, HiOutlineStop, HiOutlineUpload, HiX } from 'react-icons/hi';
 
 function formatDuration(seconds) {
@@ -57,36 +55,17 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
       setUploadProgress(0);
 
       try {
-        // Try Firebase Storage first
-        const url = await new Promise((resolve, reject) => {
-          const storage = getStorage(app);
-          const storageRef = ref(storage, `voice-notes/${Date.now()}.webm`);
-          const task = uploadBytesResumable(storageRef, blob);
-          task.on(
-            'state_changed',
-            (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-            reject,
-            async () => resolve(await getDownloadURL(task.snapshot.ref))
-          );
+        const url = await uploadToCloudinary(blob, {
+          folder: 'voice-notes',
+          filename: `voice-note-${Date.now()}`,
+          onProgress: setUploadProgress,
         });
         onSave(url, duration);
         setState('idle');
         setElapsed(0);
       } catch {
-        // Firebase unavailable — fall back to backend local storage
-        try {
-          setUploadProgress(10);
-          const form = new FormData();
-          form.append('audio', blob, 'voice-note.webm');
-          const data = await apiClient.upload('/upload/audio', form);
-          setUploadProgress(100);
-          onSave(data.url, duration);
-          setState('idle');
-          setElapsed(0);
-        } catch {
-          setError('Upload failed. Try again.');
-          setState('idle');
-        }
+        setError('Upload failed. Try again.');
+        setState('idle');
       }
     };
 

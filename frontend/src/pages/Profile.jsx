@@ -11,8 +11,7 @@ import {
   signOutUserStart, signOutUserSuccess, signOutUserFailure,
 } from '../redux/user/userSlice';
 import { apiClient, normalizeImageUrl, setUserSignedOut } from '../utils/http';
-import { app } from '../firebase';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { uploadToCloudinary } from '../utils/cloudinary';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
   PageHeader, Button,
@@ -41,6 +40,8 @@ export default function Profile() {
   const [pendingDeleteAccount, setPendingDeleteAccount] = useState(false);
   const [userListings, setUserListings] = useState([]);
   const [showListingsError, setShowListingsError] = useState(false);
+  const [listingsLoaded, setListingsLoaded] = useState(false);
+  const [listingsLoading, setListingsLoading] = useState(false);
 
   // Toast
   const [toast, setToast] = useState(null);
@@ -63,35 +64,17 @@ export default function Profile() {
     setFileUploadError(false);
     setFilePerc(0);
 
-    // Try Firebase Storage first; fall back to local backend on any failure.
     let avatarUrl;
     try {
-      avatarUrl = await new Promise((resolve, reject) => {
-        const storage = getStorage(app);
-        const storageRef = ref(storage, `avatars/${Date.now()}_${f.name}`);
-        const task = uploadBytesResumable(storageRef, f);
-        task.on(
-          'state_changed',
-          (snap) => setFilePerc(Math.round((snap.bytesTransferred / snap.totalBytes) * 90)),
-          (err) => reject(err),
-          async () => resolve(await getDownloadURL(task.snapshot.ref))
-        );
+      avatarUrl = await uploadToCloudinary(f, {
+        folder: 'avatars',
+        onProgress: (p) => setFilePerc(Math.round(p * 0.9)),
       });
-    } catch {
-      // Firebase failed — fall back to backend local storage
-      try {
-        setFilePerc(10);
-        const form = new FormData();
-        form.append('image', f);
-        const data = await apiClient.upload('/upload/single', form, { silent: true });
-        if (!data?.url) throw new Error('Upload failed');
-        avatarUrl = data.url;
-        setFilePerc(90);
-      } catch {
-        setFileUploadError(true);
-        setFilePerc(0);
-        return;
-      }
+    } catch (err) {
+      console.error('Cloudinary upload error:', err.message);
+      setFileUploadError(true);
+      setFilePerc(0);
+      return;
     }
 
     // Persist whichever URL we got
@@ -189,11 +172,16 @@ export default function Profile() {
   const handleShowListings = async () => {
     try {
       setShowListingsError(false);
+      setListingsLoading(true);
       const data = await apiClient.get(`/user/listings/${currentUser._id}`);
       if (data.success === false) { setShowListingsError(true); return; }
       setUserListings(data);
-    } catch {
+      setListingsLoaded(true);
+    } catch (err) {
+      console.error('Listings fetch error:', err.message);
       setShowListingsError(true);
+    } finally {
+      setListingsLoading(false);
     }
   };
 
@@ -296,8 +284,8 @@ export default function Profile() {
                   </Button>
                 </Link>
               )}
-              <Button variant='secondary' className='w-full justify-center' onClick={handleShowListings}>
-                View My Listings
+              <Button variant='secondary' className='w-full justify-center' onClick={handleShowListings} disabled={listingsLoading}>
+                {listingsLoading ? 'Loading...' : 'View My Listings'}
               </Button>
               {!isBuyerViewMode && (isAdmin || isEmployee) && (
                 <Link to='/admin' className='block'>
@@ -520,18 +508,22 @@ export default function Profile() {
       </div>
 
       {/* Listings */}
-      {userListings.length > 0 && (
+      {(listingsLoaded || showListingsError) && (
         <Card>
           <CardHeader
             action={
-              <Button variant='ghost' size='sm' onClick={handleShowListings}>Refresh</Button>
+              <Button variant='ghost' size='sm' onClick={handleShowListings} disabled={listingsLoading}>Refresh</Button>
             }
           >
             <CardTitle>Your Listings</CardTitle>
           </CardHeader>
 
           {showListingsError && (
-            <p className='text-rose-600 text-sm mb-4'>Error loading listings</p>
+            <p className='text-rose-600 text-sm mb-4'>Error loading listings. Please try again.</p>
+          )}
+
+          {!showListingsError && userListings.length === 0 && (
+            <p className='text-slate-500 text-sm'>No listings found. Create one to get started.</p>
           )}
 
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
