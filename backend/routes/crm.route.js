@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { verifyToken } from '../utils/verifyUser.js';
+import { verifyToken, requireRole } from '../utils/verifyUser.js';
 import { validateBody, crmValidation } from '../middleware/validation.js';
 import {
   addDeal,
@@ -24,8 +24,9 @@ import {
 
 const router = express.Router();
 
-// All routes require authentication
+// All CRM routes require authentication + admin or employee role
 router.use(verifyToken);
+router.use(requireRole('admin', 'employee'));
 
 // ============= DEAL ROUTES =============
 

@@ -432,7 +432,7 @@ export const getAgentPerformance = async (req, res, next) => {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
-    const matchStage = { createdAt: { $gte: start, $lte: end } };
+    const matchStage = { isDeleted: { $ne: true }, createdAt: { $gte: start, $lte: end } };
     if (agentId) {
       matchStage.assignedTo = new mongoose.Types.ObjectId(agentId);
     } else if (req.user.role !== 'admin') {
@@ -454,8 +454,8 @@ export const getAgentPerformance = async (req, res, next) => {
             lostClients: { $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] } },
             activeClients: { $sum: { $cond: [{ $nin: ['$status', ['won', 'lost']] }, 1, 0] } },
             avgScore: { $avg: '$score' },
-            totalCommunications: { $sum: { $size: '$communications' } },
-            totalFollowUps: { $sum: { $size: '$followUps' } },
+            totalCommunications: { $sum: { $size: { $ifNull: ['$communications', []] } } },
+            totalFollowUps: { $sum: { $size: { $ifNull: ['$followUps', []] } } },
           },
         },
         { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'agent' } },

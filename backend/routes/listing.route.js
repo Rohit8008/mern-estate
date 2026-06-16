@@ -23,16 +23,15 @@ import { validateBody, listingValidation, listingActionValidation } from '../mid
 
 const router = express.Router();
 
-// Search routes (public, placed first for priority)
-router.get('/search', searchListings);
-router.get('/suggestions', getSearchSuggestions);
-router.get('/popular-searches', getPopularSearches);
+router.get('/search', verifyToken, searchListings);
+router.get('/suggestions', verifyToken, getSearchSuggestions);
+router.get('/popular-searches', verifyToken, getPopularSearches);
 
 router.post('/create', verifyToken, canCreateListing, validateBody(listingValidation.create), createListing);
 router.delete('/delete/:id', verifyToken, deleteListing);
 router.post('/update/:id', verifyToken, validateBody(listingValidation.update), updateListing);
-router.get('/get/:id', getListing);
-router.get('/get', getListings);
+router.get('/get/:id', verifyToken, getListing);
+router.get('/get', verifyToken, getListings);
 
 // Agent assignment routes (Admin only)
 router.post('/assign-agent', verifyToken, requireAdmin, validateBody(listingActionValidation.assignAgent), assignListingToAgent);

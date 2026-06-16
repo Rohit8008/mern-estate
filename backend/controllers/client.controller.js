@@ -11,18 +11,11 @@ export const createClient = async (req, res, next) => {
       return next(errorHandler(403, 'You can only assign clients to yourself'));
     }
 
+    // Joi has already validated and stripped unknown fields from req.body,
+    // so spreading it is safe. We override assignedTo and add createdBy.
     const doc = await Client.create({
-      name: payload.name,
-      email: payload.email || '',
-      phone: payload.phone || '',
-      status: payload.status || 'lead',
-      notes: payload.notes || '',
-      tags: payload.tags || [],
-      source: payload.source || '',
-      interestedListings: payload.interestedListings || [],
+      ...payload,
       assignedTo,
-      organization: payload.organization || '',
-      lastContactAt: payload.lastContactAt || null,
       createdBy: req.user.id,
     });
 
@@ -79,7 +72,7 @@ export const getClientById = async (req, res, next) => {
 export const updateClient = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const existing = await Client.findById(id);
+    const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
 
     // Non-admins can only update their own
@@ -95,7 +88,7 @@ export const updateClient = async (req, res, next) => {
     const updates = { ...req.body };
     if (req.user.role !== 'admin') delete updates.assignedTo;
 
-    const updated = await Client.findByIdAndUpdate(id, updates, { new: true });
+    const updated = await Client.findByIdAndUpdate(id, { $set: updates }, { new: true });
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -105,7 +98,7 @@ export const updateClient = async (req, res, next) => {
 export const deleteClient = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const existing = await Client.findById(id);
+    const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
       return next(errorHandler(403, 'Forbidden'));
@@ -126,7 +119,7 @@ export const assignClient = async (req, res, next) => {
     if (req.user.role !== 'admin') return next(errorHandler(403, 'Admin only'));
     const { id } = req.params;
     const { assignedTo } = req.body;
-    const updated = await Client.findByIdAndUpdate(id, { assignedTo }, { new: true });
+    const updated = await Client.findOneAndUpdate({ _id: id, isDeleted: { $ne: true } }, { assignedTo }, { new: true });
     if (!updated) return next(errorHandler(404, 'Client not found'));
     res.json({ success: true, data: updated });
   } catch (err) {
@@ -138,7 +131,7 @@ export const addInterestedListing = async (req, res, next) => {
   try {
     const { id } = req.params; // client id
     const { listingId } = req.body;
-    const existing = await Client.findById(id);
+    const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
       return next(errorHandler(403, 'Forbidden'));
@@ -157,7 +150,7 @@ export const removeInterestedListing = async (req, res, next) => {
   try {
     const { id } = req.params; // client id
     const { listingId } = req.body;
-    const existing = await Client.findById(id);
+    const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
       return next(errorHandler(403, 'Forbidden'));

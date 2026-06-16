@@ -5,10 +5,24 @@
  * for client relationship management.
  */
 
+import mongoose from 'mongoose';
 import Client from '../models/client.model.js';
 import { errorHandler, AppError, NotFoundError } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 import { logActivity } from '../utils/activity.js';
+
+// ─── helpers ───────────────────────────────────────────────────────────────
+
+/** Find a non-deleted client; returns null if missing or soft-deleted. */
+const findActiveClient = (id) =>
+  Client.findOne({ _id: id, isDeleted: { $ne: true } });
+
+/** Throw 403 if the requesting user is neither admin nor the assignee. */
+const assertCanAccessClient = (client, user) => {
+  if (user.role !== 'admin' && String(client.assignedTo) !== user.id) {
+    throw new AppError('Not authorized to access this client', 403);
+  }
+};
 
 // ============= DEAL MANAGEMENT =============
 
@@ -19,20 +33,17 @@ import { logActivity } from '../utils/activity.js';
 export const addDeal = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const client = await Client.findById(id);
+    const client = await findActiveClient(id);
 
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
 
-    // Check authorization
-    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(new AppError('Not authorized to modify this client', 403));
-    }
+    assertCanAccessClient(client, req.user);
 
     const deal = {
       listingId: req.body.listingId,
-      stage: req.body.stage || 'initial_contact',
+      stage: req.body.stage || 'new_lead',
       value: req.body.value || 0,
       expectedCloseDate: req.body.expectedCloseDate,
       notes: req.body.notes || '',
@@ -42,7 +53,7 @@ export const addDeal = async (req, res, next) => {
         status: 'pending',
       },
       stageHistory: [{
-        stage: req.body.stage || 'initial_contact',
+        stage: req.body.stage || 'new_lead',
         changedAt: new Date(),
         changedBy: req.user.id,
         notes: 'Deal created',
@@ -90,13 +101,19 @@ export const getFollowUpsRange = async (req, res, next) => {
     const start = new Date(String(from));
     const end = new Date(String(to));
 
-    const matchStage = {
-      'followUps.dueAt': { $gte: start, $lte: end },
-    };
-
-    if (!String(includeCompleted || '').toLowerCase().includes('true')) {
-      matchStage['followUps.completed'] = false;
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(errorHandler(400, 'Invalid date format for from/to'));
     }
+
+    const includeAll = String(includeCompleted || '').toLowerCase() === 'true';
+    const followUpMatch = includeAll
+      ? { dueAt: { $gte: start, $lte: end } }
+      : { completed: false, dueAt: { $gte: start, $lte: end } };
+
+    const matchStage = {
+      isDeleted: { $ne: true },
+      followUps: { $elemMatch: followUpMatch },
+    };
 
     if (req.user.role !== 'admin') {
       matchStage.assignedTo = req.user.id;
@@ -154,15 +171,12 @@ export const updateDealStage = async (req, res, next) => {
     const { id, dealId } = req.params;
     const { stage, notes } = req.body;
 
-    const client = await Client.findById(id);
+    const client = await findActiveClient(id);
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
 
-    // Check authorization
-    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(new AppError('Not authorized to modify this client', 403));
-    }
+    assertCanAccessClient(client, req.user);
 
     const deal = client.deals.id(dealId);
     if (!deal) {
@@ -225,15 +239,12 @@ export const updateCommission = async (req, res, next) => {
     const { id, dealId } = req.params;
     const { percentage, status } = req.body;
 
-    const client = await Client.findById(id);
+    const client = await findActiveClient(id);
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
 
-    // Check authorization
-    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(new AppError('Not authorized to modify this client', 403));
-    }
+    assertCanAccessClient(client, req.user);
 
     const deal = client.deals.id(dealId);
     if (!deal) {
@@ -280,38 +291,102 @@ export const updateCommission = async (req, res, next) => {
  */
 export const getPipeline = async (req, res, next) => {
   try {
-    const matchStage = {};
+    const matchStage = { isDeleted: { $ne: true } };
 
-    // Filter by assigned user unless admin
+    // Filter by assigned user unless admin.
+    // Must use ObjectId in aggregation — Mongoose doesn't auto-cast in $match.
     if (req.user.role !== 'admin') {
-      matchStage.assignedTo = req.user.id;
+      matchStage.assignedTo = new mongoose.Types.ObjectId(req.user.id);
     }
 
-    const pipeline = await Client.aggregate([
-      { $match: matchStage },
-      { $unwind: '$deals' },
-      {
-        $group: {
-          _id: '$deals.stage',
-          count: { $sum: 1 },
-          totalValue: { $sum: '$deals.value' },
-          deals: {
-            $push: {
-              clientId: '$_id',
-              clientName: '$name',
-              dealId: '$deals._id',
-              value: '$deals.value',
-              expectedCloseDate: '$deals.expectedCloseDate',
+    // Map client status → pipeline stage for clients who have no deals yet
+    const STATUS_TO_STAGE = {
+      lead: 'new_lead',
+      contacted: 'contacted',
+      qualified: 'qualified',
+      proposal: 'negotiation',
+      negotiation: 'negotiation',
+      won: 'closed_won',
+      lost: 'closed_lost',
+    };
+
+    const [withDealsResult, withoutDealsResult] = await Promise.allSettled([
+      // Clients that have at least one deal — group by deal stage
+      Client.aggregate([
+        { $match: { ...matchStage, 'deals.0': { $exists: true } } },
+        { $unwind: '$deals' },
+        {
+          $group: {
+            _id: '$deals.stage',
+            count: { $sum: 1 },
+            totalValue: { $sum: '$deals.value' },
+            deals: {
+              $push: {
+                clientId: '$_id',
+                clientName: '$name',
+                dealId: '$deals._id',
+                value: '$deals.value',
+                expectedCloseDate: '$deals.expectedCloseDate',
+              },
             },
           },
         },
-      },
-      { $sort: { _id: 1 } },
+      ]),
+      // Clients with no deals at all — show by their CRM status
+      Client.aggregate([
+        {
+          $match: {
+            ...matchStage,
+            $or: [{ deals: { $exists: false } }, { deals: { $size: 0 } }],
+          },
+        },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            deals: {
+              $push: {
+                clientId: '$_id',
+                clientName: '$name',
+                dealId: null,
+                value: 0,
+                expectedCloseDate: null,
+              },
+            },
+          },
+        },
+      ]),
     ]);
+
+    const withDeals = withDealsResult.status === 'fulfilled' ? withDealsResult.value : [];
+    const withoutDeals = withoutDealsResult.status === 'fulfilled' ? withoutDealsResult.value : [];
+
+    // Build stage map from clients-with-deals
+    const stageMap = new Map();
+    for (const group of withDeals) {
+      stageMap.set(group._id, {
+        _id: group._id,
+        count: group.count,
+        totalValue: group.totalValue,
+        deals: group.deals,
+      });
+    }
+
+    // Merge clients-without-deals into their status-mapped stage
+    for (const group of withoutDeals) {
+      const stage = STATUS_TO_STAGE[group._id];
+      if (!stage) continue; // skip null/undefined/legacy statuses — don't inflate new_lead
+      if (!stageMap.has(stage)) {
+        stageMap.set(stage, { _id: stage, count: 0, totalValue: 0, deals: [] });
+      }
+      const existing = stageMap.get(stage);
+      existing.count += group.count;
+      existing.deals.push(...group.deals);
+      stageMap.set(stage, existing);
+    }
 
     // Define stage order
     const stageOrder = [
-      // Professional stages (preferred)
       'new_lead',
       'contacted',
       'qualified',
@@ -321,20 +396,15 @@ export const getPipeline = async (req, res, next) => {
       'documentation',
       'closed_won',
       'closed_lost',
-
       // Legacy stages (keep for backward compatibility)
       'initial_contact',
       'site_visit_done',
       'payment_pending',
     ];
 
-    const uniqueStageOrder = Array.from(new Set(stageOrder));
-
-    // Sort by stage order and add empty stages
-    const sortedPipeline = uniqueStageOrder.map(stage => {
-      const found = pipeline.find(p => p._id === stage);
-      return found || { _id: stage, count: 0, totalValue: 0, deals: [] };
-    });
+    const sortedPipeline = stageOrder.map(stage =>
+      stageMap.get(stage) || { _id: stage, count: 0, totalValue: 0, deals: [] }
+    );
 
     res.json({
       success: true,
@@ -354,16 +424,13 @@ export const getPipeline = async (req, res, next) => {
 export const addFollowUp = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const client = await Client.findById(id);
+    const client = await findActiveClient(id);
 
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
 
-    // Check authorization
-    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(new AppError('Not authorized to modify this client', 403));
-    }
+    assertCanAccessClient(client, req.user);
 
     const followUp = {
       dueAt: req.body.dueAt,
@@ -407,15 +474,12 @@ export const completeFollowUp = async (req, res, next) => {
     const { id, followUpId } = req.params;
     const { notes, outcome } = req.body;
 
-    const client = await Client.findById(id);
+    const client = await findActiveClient(id);
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
 
-    // Check authorization
-    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(new AppError('Not authorized to modify this client', 403));
-    }
+    assertCanAccessClient(client, req.user);
 
     const followUp = client.followUps.id(followUpId);
     if (!followUp) {
@@ -476,8 +540,8 @@ export const getUpcomingFollowUps = async (req, res, next) => {
     const now = new Date();
 
     const matchStage = {
-      'followUps.completed': false,
-      'followUps.dueAt': { $lte: endDate },
+      isDeleted: { $ne: true },
+      followUps: { $elemMatch: { completed: false, dueAt: { $lte: endDate } } },
     };
 
     // Filter by assigned user unless admin
@@ -539,16 +603,13 @@ export const getUpcomingFollowUps = async (req, res, next) => {
 export const addCommunication = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const client = await Client.findById(id);
+    const client = await findActiveClient(id);
 
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
 
-    // Check authorization
-    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(new AppError('Not authorized to modify this client', 403));
-    }
+    assertCanAccessClient(client, req.user);
 
     const communication = {
       type: req.body.type,
@@ -600,14 +661,16 @@ export const getCommunications = async (req, res, next) => {
     const { id } = req.params;
     const { limit = 50, offset = 0 } = req.query;
 
-    const client = await Client.findById(id)
-      .select('name communications')
+    const client = await Client.findOne({ _id: id, isDeleted: { $ne: true } })
+      .select('name communications assignedTo')
       .populate('communications.createdBy', 'username')
       .lean();
 
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
+
+    assertCanAccessClient(client, req.user);
 
     // Sort by date descending and paginate
     const sorted = (client.communications || [])
@@ -637,7 +700,7 @@ export const getClientSummary = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const client = await Client.findById(id)
+    const client = await Client.findOne({ _id: id, isDeleted: { $ne: true } })
       .populate('assignedTo', 'username email')
       .populate('interestedListings', 'name regularPrice address')
       .lean();
@@ -645,6 +708,8 @@ export const getClientSummary = async (req, res, next) => {
     if (!client) {
       return next(new NotFoundError('Client not found'));
     }
+
+    assertCanAccessClient(client, req.user);
 
     // Calculate deal summary
     const deals = client.deals || [];

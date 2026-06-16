@@ -127,3 +127,11 @@ export const requireAdmin = (req, res, next) => {
   next();
 };
 
+// requireRole('admin', 'employee') — blocks any role not in the list
+export const requireRole = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user?.role)) {
+    return next(new AuthorizationError(`Access restricted to: ${roles.join(', ')}`));
+  }
+  next();
+};
+

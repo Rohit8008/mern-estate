@@ -20,7 +20,7 @@ const dealSchema = new mongoose.Schema({
       'closed_won',
       'closed_lost',
     ],
-    default: 'initial_contact',
+    default: 'new_lead',
   },
   value: { type: Number, default: 0 },
   expectedCloseDate: { type: Date },

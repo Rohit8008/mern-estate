@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import { apiClient, normalizeImageUrl } from '../utils/http';
 import PropertyTypeFields from '../components/PropertyTypeFields';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
+import CameraCapture from '../components/CameraCapture';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -143,6 +144,7 @@ export default function CreateListing() {
   const dispatch = useDispatch();
   const { currentUser } = useSelector((state) => state.user);
   const [files, setFiles] = useState([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -1221,6 +1223,25 @@ export default function CreateListing() {
                     </div>
                   </label>
                 </div>
+                <button
+                  type='button'
+                  onClick={() => setCameraOpen(true)}
+                  className='mt-2 flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors'
+                >
+                  <svg className='w-4 h-4 text-indigo-500' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
+                    <path strokeLinecap='round' strokeLinejoin='round' d='M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z' />
+                    <path strokeLinecap='round' strokeLinejoin='round' d='M15 13a3 3 0 11-6 0 3 3 0 016 0z' />
+                  </svg>
+                  Take Photo with Camera
+                </button>
+                <CameraCapture
+                  open={cameraOpen}
+                  onClose={() => setCameraOpen(false)}
+                  onCapture={(file) => {
+                    setCameraOpen(false);
+                    setFiles((prev) => [...Array.from(prev), file]);
+                  }}
+                />
 
                 {files && files.length > 0 && (
                   <div className='mt-4'>

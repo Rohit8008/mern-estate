@@ -2,9 +2,10 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  HiX, HiCheck, HiEye, HiEyeOff, HiCog, HiLogout,
+  HiX, HiCheck, HiEye, HiEyeOff, HiCog, HiLogout, HiCamera,
 } from 'react-icons/hi';
 import ConfirmDialog from '../components/ConfirmDialog';
+import CameraCapture from '../components/CameraCapture';
 import {
   updateUserStart, updateUserSuccess, updateUserFailure,
   deleteUserFailure, deleteUserStart, deleteUserSuccess,
@@ -38,6 +39,7 @@ export default function Profile() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [pendingDeleteAccount, setPendingDeleteAccount] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [userListings, setUserListings] = useState([]);
   const [showListingsError, setShowListingsError] = useState(false);
   const [listingsLoaded, setListingsLoaded] = useState(false);
@@ -261,6 +263,14 @@ export default function Profile() {
               <Button variant='secondary' className='w-full justify-center' onClick={() => fileRef.current.click()}>
                 Change Photo
               </Button>
+              <Button variant='secondary' icon={HiCamera} className='w-full justify-center' onClick={() => setCameraOpen(true)}>
+                Take Photo
+              </Button>
+              <CameraCapture
+                open={cameraOpen}
+                onClose={() => setCameraOpen(false)}
+                onCapture={(file) => { setCameraOpen(false); uploadFile(file); }}
+              />
               {fileUploadError && (
                 <p className='text-rose-600 text-xs text-center'>Error uploading (must be less than 10MB)</p>
               )}

@@ -40,7 +40,18 @@ function shouldPopulate(req, key) {
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean);
-  return parts.includes(key);
+  if (!parts.includes(key)) return false;
+  // Owner contact data (email/phone) is internal — require CRM role
+  if (key === 'owners') {
+    const role = req.user?.role;
+    return role === 'admin' || role === 'employee';
+  }
+  return true;
+}
+
+function isPrivilegedUser(req) {
+  const role = req.user?.role;
+  return role === 'admin' || role === 'employee';
 }
 
 function setCachedResults(key, data) {
@@ -284,6 +295,14 @@ export const updateListing = asyncHandler(async (req, res, next) => {
   // Whitelist fields — userRef, assignedAgent, isDeleted, deletedAt are not updatable here
   const updates = buildListingPayload(req.body, null);
 
+  // Cross-field price guard: Joi can't compare discountPrice against the stored regularPrice
+  if (updates.discountPrice !== undefined) {
+    const effectiveRegularPrice = updates.regularPrice ?? listing.regularPrice;
+    if (effectiveRegularPrice != null && updates.discountPrice >= effectiveRegularPrice) {
+      throw new ValidationError('Discount price must be less than regular price', 'discountPrice');
+    }
+  }
+
   // Re-infer propertyCategory when propertyType changes and category isn't explicitly set
   if (updates.propertyType && !updates.propertyCategory) {
     const inferred = await inferPropertyCategory(updates.propertyType);
@@ -306,8 +325,16 @@ export const getListing = asyncHandler(async (req, res, next) => {
     .lean();
   if (!listing) throw new NotFoundError('Listing not found!');
 
-  const { userRef: owner, ownerIds: owners, ...rest } = listing;
-  res.status(200).json({ ...rest, owner: owner || null, owners: owners || [] });
+  const { userRef: owner, ownerIds: owners, voiceNotes, assignedAgent, ...rest } = listing;
+
+  const privileged = isPrivilegedUser(req);
+  const response = { ...rest, owner: owner || null };
+  if (privileged) {
+    response.owners = owners || [];
+    response.voiceNotes = voiceNotes || [];
+    response.assignedAgent = assignedAgent || null;
+  }
+  res.status(200).json(response);
 });
 
 // Assign listing to an agent (Admin only)
@@ -724,10 +751,14 @@ export const getListings = asyncHandler(async (req, res, next) => {
   }
   
   // Execute query with performance optimizations
+  const privileged = isPrivilegedUser(req);
   const [listings, totalCount] = await Promise.all([
     (async () => {
+      const projection = privileged
+        ? '-__v'
+        : '-__v -voiceNotes -ownerIds -assignedAgent -userRef -isDeleted -deletedAt';
       let qy = Listing.find(query)
-        .select('-__v') // Exclude version field
+        .select(projection)
         .sort(sortObj)
         .limit(limit)
         .skip(startIndex);

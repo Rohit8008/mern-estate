@@ -66,10 +66,23 @@ export const securityHeaders = helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      // data: required for base64-encoded fonts embedded in CSS (e.g. icon fonts)
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "ws:", "wss:", "https://api.cloudinary.com", "https://res.cloudinary.com", "https://fonts.googleapis.com"],
+      // Vite dev mode injects eval-based source maps; production build does not need unsafe-eval
+      scriptSrc: config.server.isDevelopment
+        ? ["'self'", "'unsafe-eval'"]
+        : ["'self'"],
+      connectSrc: [
+        "'self'", "ws:", "wss:",
+        "https://api.cloudinary.com",
+        "https://res.cloudinary.com",
+        "https://fonts.googleapis.com",
+      ],
+      // PWA service worker (Workbox generateSW output) runs from same origin
+      workerSrc: ["'self'", "blob:"],
+      // PWA web app manifest
+      manifestSrc: ["'self'"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],

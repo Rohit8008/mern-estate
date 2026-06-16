@@ -67,30 +67,48 @@ export const clientValidation = {
     name: Joi.string().min(2).max(120).required(),
     email: Joi.string().email().max(254).optional().allow(''),
     phone: Joi.string().max(30).optional().allow(''),
+    alternatePhone: Joi.string().max(30).optional().allow(''),
     status: Joi.string().valid('lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost').optional(),
-    priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional(),
+    priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional().allow(''),
     notes: Joi.string().max(2000).optional().allow(''),
+    requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
     source: Joi.string().max(100).optional().allow(''),
+    organization: Joi.string().max(120).optional().allow(''),
     interestedListings: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(200).optional(),
     assignedTo: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional(),
-    organization: Joi.string().max(120).optional().allow(''),
     lastContactAt: Joi.date().iso().optional().allow(null, ''),
+    propertyType: Joi.string().max(50).optional().allow(''),
+    preferredLocations: Joi.array().items(Joi.string().max(100)).max(20).optional(),
+    budget: Joi.object({
+      min: Joi.number().min(0).optional().allow(null),
+      max: Joi.number().min(0).optional().allow(null),
+      currency: Joi.string().max(10).optional().allow(''),
+    }).optional(),
   }),
 
   update: Joi.object({
     name: Joi.string().min(2).max(120).optional(),
     email: Joi.string().email().max(254).optional().allow(''),
     phone: Joi.string().max(30).optional().allow(''),
+    alternatePhone: Joi.string().max(30).optional().allow(''),
     status: Joi.string().valid('lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost').optional(),
-    priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional(),
+    priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional().allow(''),
     notes: Joi.string().max(2000).optional().allow(''),
+    requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
     source: Joi.string().max(100).optional().allow(''),
+    organization: Joi.string().max(120).optional().allow(''),
     interestedListings: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(200).optional(),
     assignedTo: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional(),
-    organization: Joi.string().max(120).optional().allow(''),
     lastContactAt: Joi.date().iso().optional().allow(null, ''),
+    propertyType: Joi.string().max(50).optional().allow(''),
+    preferredLocations: Joi.array().items(Joi.string().max(100)).max(20).optional(),
+    budget: Joi.object({
+      min: Joi.number().min(0).optional().allow(null),
+      max: Joi.number().min(0).optional().allow(null),
+      currency: Joi.string().max(10).optional().allow(''),
+    }).optional(),
   }),
 
   assign: Joi.object({
@@ -166,11 +184,19 @@ export const roleValidation = {
   }),
 };
 
+const DEAL_STAGES = [
+  'new_lead', 'contacted', 'qualified',
+  'site_visit_scheduled', 'negotiation', 'booking_token', 'documentation',
+  'closed_won', 'closed_lost',
+  // Legacy — kept for backward compat
+  'initial_contact', 'site_visit_done', 'payment_pending',
+];
+
 // CRM validation schemas
 export const crmValidation = {
   addDeal: Joi.object({
     listingId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
-    stage: Joi.string().max(50).optional(),
+    stage: Joi.string().valid(...DEAL_STAGES).optional(),
     value: Joi.number().min(0).optional(),
     expectedCloseDate: Joi.date().iso().optional().allow(null, ''),
     notes: Joi.string().max(2000).optional().allow(''),
@@ -178,7 +204,7 @@ export const crmValidation = {
   }),
 
   updateDealStage: Joi.object({
-    stage: Joi.string().max(50).required(),
+    stage: Joi.string().valid(...DEAL_STAGES).required(),
     notes: Joi.string().max(2000).optional().allow(''),
   }),
 
@@ -196,6 +222,7 @@ export const crmValidation = {
 
   completeFollowUp: Joi.object({
     notes: Joi.string().max(2000).optional().allow(''),
+    outcome: Joi.string().max(200).optional().allow(''),
   }),
 
   addCommunication: Joi.object({
@@ -401,13 +428,7 @@ export const listingValidation = {
         'string.max': 'Property name cannot exceed 100 characters',
         'any.required': 'Property name is required',
       }),
-    description: Joi.string()
-      .max(2000)
-      .optional()
-      .allow('')
-      .messages({
-        'string.max': 'Description cannot exceed 2000 characters',
-      }),
+    description: Joi.string().max(2000).optional().allow(''),
     address: Joi.string()
       .min(5)
       .max(200)
@@ -429,10 +450,12 @@ export const listingValidation = {
     discountPrice: Joi.number()
       .min(0)
       .max(1000000000)
+      .less(Joi.ref('regularPrice'))
       .optional()
       .messages({
         'number.min': 'Discount price cannot be negative',
         'number.max': 'Discount price cannot exceed 1 billion',
+        'number.less': 'Discount price must be less than regular price',
       }),
     bathrooms: Joi.when('propertyCategory', {
       switch: [
@@ -459,10 +482,8 @@ export const listingValidation = {
       'number.max': 'Cannot have more than 20 bedrooms',
       'any.required': 'Number of bedrooms is required',
     }),
-    furnished: Joi.boolean()
-      .optional(),
-    parking: Joi.boolean()
-      .optional(),
+    furnished: Joi.boolean().optional(),
+    parking: Joi.boolean().optional(),
     type: Joi.string()
       .valid('sale', 'rent')
       .required()
@@ -470,15 +491,15 @@ export const listingValidation = {
         'any.only': 'Type must be either "sale" or "rent"',
         'any.required': 'Property type is required',
       }),
-    offer: Joi.boolean()
-      .optional(),
+    offer: Joi.boolean().optional(),
     imageUrls: Joi.array()
-      .items(Joi.string().max(500))
+      .items(Joi.string().max(500).pattern(/^(https?:\/\/|\/)/, 'valid URL'))
       .max(10)
       .optional()
       .default([])
       .messages({
         'array.max': 'Cannot upload more than 10 images',
+        'string.uri': 'Each image must be a valid URL',
       }),
     category: Joi.string().max(100).optional().allow(''),
     attributes: Joi.object().unknown(true).optional(),
@@ -486,15 +507,23 @@ export const listingValidation = {
     ownerIds: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(50).optional(),
     city: Joi.string().max(100).optional().allow(''),
     locality: Joi.string().max(100).optional().allow(''),
+    areaName: Joi.string().max(100).optional().allow(''),
     state: Joi.string().max(100).optional().allow(''),
     pincode: Joi.string().max(20).optional().allow(''),
     areaSqFt: Joi.number().min(0).optional(),
+    sqYard: Joi.number().min(0).optional(),
+    sqYardRate: Joi.number().min(0).optional(),
+    totalValue: Joi.number().min(0).optional(),
+    plotSize: Joi.string().max(50).optional().allow(''),
+    propertyNo: Joi.string().max(50).optional().allow(''),
+    remarks: Joi.string().max(2000).optional().allow(''),
+    otherAttachment: Joi.string().max(500).pattern(/^(https?:\/\/|\/)/, 'valid URL').optional().allow(''),
     status: Joi.string().valid('available', 'sold', 'under_negotiation').optional(),
     assignedAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
     propertyCategory: Joi.string().valid('residential', 'commercial', 'land', 'unknown').optional(),
     propertyType: Joi.string().max(50).optional().allow(''),
-    commercialType: Joi.string().max(50).optional().allow(''),
-    plotType: Joi.string().max(50).optional().allow(''),
+    commercialType: Joi.string().valid('office', 'shop', 'showroom', 'warehouse', 'other', '').optional().allow(''),
+    plotType: Joi.string().valid('residential', 'commercial', 'agricultural', 'other', '').optional().allow(''),
     location: Joi.object({
       lat: Joi.number().min(-90).max(90).optional().allow(null),
       lng: Joi.number().min(-180).max(180).optional().allow(null),
@@ -502,64 +531,60 @@ export const listingValidation = {
   }),
 
   update: Joi.object({
-    name: Joi.string()
-      .min(3)
-      .max(100)
-      .optional(),
-    description: Joi.string()
-      .max(2000)
-      .optional()
-      .allow(''),
-    address: Joi.string()
-      .min(5)
-      .max(200)
-      .optional(),
-    regularPrice: Joi.number()
-      .positive()
-      .max(1000000000)
-      .optional(),
+    name: Joi.string().min(3).max(100).optional(),
+    description: Joi.string().max(2000).optional().allow(''),
+    address: Joi.string().min(5).max(200).optional(),
+    regularPrice: Joi.number().positive().max(1000000000).optional(),
     discountPrice: Joi.number()
       .min(0)
       .max(1000000000)
-      .optional(),
-    bathrooms: Joi.number()
-      .integer()
-      .min(1)
-      .max(20)
-      .optional(),
-    bedrooms: Joi.number()
-      .integer()
-      .min(1)
-      .max(20)
-      .optional(),
-    furnished: Joi.boolean()
-      .optional(),
-    parking: Joi.boolean()
-      .optional(),
-    type: Joi.string()
-      .valid('sale', 'rent')
-      .optional(),
-    offer: Joi.boolean()
-      .optional(),
+      .when('regularPrice', {
+        is: Joi.number().exist(),
+        then: Joi.number().less(Joi.ref('regularPrice')),
+      })
+      .optional()
+      .messages({
+        'number.min': 'Discount price cannot be negative',
+        'number.max': 'Discount price cannot exceed 1 billion',
+        'number.less': 'Discount price must be less than regular price',
+      }),
+    // Allow 0 for commercial/land; residential updates can still send 0 during a category change
+    bathrooms: Joi.number().integer().min(0).max(20).optional(),
+    bedrooms: Joi.number().integer().min(0).max(20).optional(),
+    furnished: Joi.boolean().optional(),
+    parking: Joi.boolean().optional(),
+    type: Joi.string().valid('sale', 'rent').optional(),
+    offer: Joi.boolean().optional(),
     imageUrls: Joi.array()
-      .items(Joi.string().max(500))
+      .items(Joi.string().max(500).pattern(/^(https?:\/\/|\/)/, 'valid URL'))
       .max(10)
-      .optional(),
+      .optional()
+      .messages({
+        'string.uri': 'Each image must be a valid URL',
+      }),
     category: Joi.string().max(100).optional().allow(''),
     attributes: Joi.object().unknown(true).optional(),
     propertyTypeFields: Joi.object().unknown(true).optional(),
     ownerIds: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(50).optional(),
     city: Joi.string().max(100).optional().allow(''),
     locality: Joi.string().max(100).optional().allow(''),
+    areaName: Joi.string().max(100).optional().allow(''),
     state: Joi.string().max(100).optional().allow(''),
     pincode: Joi.string().max(20).optional().allow(''),
     areaSqFt: Joi.number().min(0).optional(),
+    sqYard: Joi.number().min(0).optional(),
+    sqYardRate: Joi.number().min(0).optional(),
+    totalValue: Joi.number().min(0).optional(),
+    plotSize: Joi.string().max(50).optional().allow(''),
+    propertyNo: Joi.string().max(50).optional().allow(''),
+    remarks: Joi.string().max(2000).optional().allow(''),
+    otherAttachment: Joi.string().max(500).pattern(/^(https?:\/\/|\/)/, 'valid URL').optional().allow(''),
     status: Joi.string().valid('available', 'sold', 'under_negotiation').optional(),
     assignedAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
     propertyCategory: Joi.string().valid('residential', 'commercial', 'land', 'unknown').optional(),
     propertyType: Joi.string().max(50).optional().allow(''),
-    commercialType: Joi.string().max(50).optional().allow(''),
-    plotType: Joi.string().max(50).optional().allow(''),
+    commercialType: Joi.string().valid('office', 'shop', 'showroom', 'warehouse', 'other', '').optional().allow(''),
+    plotType: Joi.string().valid('residential', 'commercial', 'agricultural', 'other', '').optional().allow(''),
     location: Joi.object({
       lat: Joi.number().min(-90).max(90).optional().allow(null),
       lng: Joi.number().min(-180).max(180).optional().allow(null),
