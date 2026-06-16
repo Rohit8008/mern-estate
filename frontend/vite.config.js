@@ -30,7 +30,6 @@ export default defineConfig({
         manualChunks: {
           'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
           'vendor-redux':    ['@reduxjs/toolkit', 'react-redux', 'redux-persist'],
-          'vendor-firebase': ['firebase/app', 'firebase/storage'],
           'vendor-maps':     ['leaflet', 'react-leaflet'],
           'vendor-charts':   ['apexcharts', 'react-apexcharts'],
           'vendor-xlsx':     ['xlsx'],
@@ -96,11 +95,11 @@ export default defineConfig({
             },
           },
           {
-            // Cache Firebase Storage images
-            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+            // Cache Cloudinary images
+            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'firebase-images-cache',
+              cacheName: 'cloudinary-images-cache',
               expiration: { maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },

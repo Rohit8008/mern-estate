@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { apiClient, fetchWithRefresh, handleApiResponse, parseJsonSafely } from '../utils/http';
-import { FaPhone, FaEnvelope, FaWhatsapp, FaCalendar, FaPlus, FaCheck, FaRupeeSign } from 'react-icons/fa';
+import { apiClient } from '../utils/http';
+import { HiPhone, HiMail, HiChat, HiCalendar, HiPlusSm, HiCheck } from 'react-icons/hi';
 
 const DEAL_STAGES = [
   // Professional stages
@@ -22,11 +22,11 @@ const DEAL_STAGES = [
 ];
 
 const FOLLOW_UP_TYPES = [
-  { id: 'call', label: 'Call', icon: FaPhone },
-  { id: 'email', label: 'Email', icon: FaEnvelope },
-  { id: 'whatsapp', label: 'WhatsApp', icon: FaWhatsapp },
-  { id: 'meeting', label: 'Meeting', icon: FaCalendar },
-  { id: 'site_visit', label: 'Site Visit', icon: FaCalendar },
+  { id: 'call', label: 'Call', icon: HiPhone },
+  { id: 'email', label: 'Email', icon: HiMail },
+  { id: 'whatsapp', label: 'WhatsApp', icon: HiChat },
+  { id: 'meeting', label: 'Meeting', icon: HiCalendar },
+  { id: 'site_visit', label: 'Site Visit', icon: HiCalendar },
 ];
 
 const COMM_TYPES = ['call', 'email', 'sms', 'meeting', 'whatsapp', 'site_visit', 'note'];
@@ -35,8 +35,10 @@ export default function ClientDetail() {
   const { id } = useParams();
   const [client, setClient] = useState(null);
   const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);   // initial page load only
+  const [saving, setSaving] = useState(false);     // background refetch after mutations
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
 
   const [timeline, setTimeline] = useState([]);
@@ -50,13 +52,18 @@ export default function ClientDetail() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
 
+  // Requirements inline edit
+  const [editingReqs, setEditingReqs] = useState(false);
+  const [reqsForm, setReqsForm] = useState({});
+  const [reqsSaving, setReqsSaving] = useState(false);
+
   const docQuery = useMemo(() => `?kind=client&clientId=${id}&limit=50`, [id]);
   const taskQuery = useMemo(() => `?kind=client&clientId=${id}&limit=50`, [id]);
 
-  // Load client and summary
-  async function loadClient() {
+  // Load client and summary — isInitial=true shows full-page loader, false does a silent background refetch
+  async function loadClient(isInitial = false) {
+    if (isInitial) setLoading(true); else setSaving(true);
     try {
-      setLoading(true);
       const [clientRes, summaryRes] = await Promise.all([
         apiClient.get(`/clients/${id}`),
         apiClient.get(`/crm/${id}/summary`),
@@ -66,38 +73,71 @@ export default function ClientDetail() {
     } catch (e) {
       setError(e?.message || 'Failed to load client');
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false); else setSaving(false);
     }
   }
 
   useEffect(() => {
-    loadClient();
+    loadClient(true);
   }, [id]);
+
+  function startEditReqs() {
+    setReqsForm({
+      propertyType: client.propertyType || '',
+      budgetMin: client.budget?.min || '',
+      budgetMax: client.budget?.max || '',
+      preferredLocations: client.preferredLocations?.join(', ') || '',
+      requirements: client.requirements || '',
+    });
+    setEditingReqs(true);
+  }
+
+  async function saveReqs() {
+    setReqsSaving(true);
+    setFormError('');
+    try {
+      const { budgetMin, budgetMax, preferredLocations, ...rest } = reqsForm;
+      await apiClient.patch(`/clients/${id}`, {
+        ...rest,
+        preferredLocations: preferredLocations
+          ? preferredLocations.split(',').map((s) => s.trim()).filter(Boolean)
+          : [],
+        budget: { min: Number(budgetMin) || 0, max: Number(budgetMax) || 0, currency: 'INR' },
+      });
+      setEditingReqs(false);
+      await loadClient();
+    } catch (e) {
+      setFormError(e?.message || 'Failed to save requirements');
+    } finally {
+      setReqsSaving(false);
+    }
+  }
 
   // Add Deal
   async function handleAddDeal(e) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const payload = {
-      stage: form.get('stage') || 'initial_contact',
+      stage: form.get('stage') || 'new_lead',
       value: Number(form.get('value')) || 0,
       notes: form.get('notes') || '',
       commissionPercentage: Number(form.get('commission')) || 0,
     };
+    setFormError('');
     try {
       await apiClient.post(`/crm/${id}/deals`, payload);
-      e.currentTarget.reset();
+      formEl.reset();
       await loadClient();
-    } catch (_) {}
+    } catch (e) {
+      setFormError(e?.message || 'Failed to add deal');
+    }
   }
 
   // Update Deal Stage
   async function updateDealStage(dealId, newStage) {
     try {
-      await apiClient.request(`/crm/${id}/deals/${dealId}/stage`, {
-        method: 'PATCH',
-        body: JSON.stringify({ stage: newStage }),
-      });
+      await apiClient.patch(`/crm/${id}/deals/${dealId}/stage`, { stage: newStage });
       await loadClient();
     } catch (_) {}
   }
@@ -105,26 +145,27 @@ export default function ClientDetail() {
   // Add Follow-up
   async function handleAddFollowUp(e) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const payload = {
       dueAt: form.get('dueAt'),
       type: form.get('type') || 'call',
       notes: form.get('notes') || '',
     };
+    setFormError('');
     try {
       await apiClient.post(`/crm/${id}/follow-ups`, payload);
-      e.currentTarget.reset();
+      formEl.reset();
       await loadClient();
-    } catch (_) {}
+    } catch (e) {
+      setFormError(e?.message || 'Failed to schedule follow-up');
+    }
   }
 
   // Complete Follow-up
   async function completeFollowUp(followUpId) {
     try {
-      await apiClient.request(`/crm/${id}/follow-ups/${followUpId}/complete`, {
-        method: 'PATCH',
-        body: JSON.stringify({ outcome: 'Completed' }),
-      });
+      await apiClient.patch(`/crm/${id}/follow-ups/${followUpId}/complete`, { outcome: 'Completed' });
       await loadClient();
     } catch (_) {}
   }
@@ -132,18 +173,22 @@ export default function ClientDetail() {
   // Add Communication
   async function handleAddCommunication(e) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const payload = {
       type: form.get('type') || 'note',
       direction: form.get('direction') || 'outbound',
       summary: form.get('summary'),
       details: form.get('details') || '',
     };
+    setFormError('');
     try {
       await apiClient.post(`/crm/${id}/communications`, payload);
-      e.currentTarget.reset();
+      formEl.reset();
       await loadClient();
-    } catch (_) {}
+    } catch (e) {
+      setFormError(e?.message || 'Failed to log activity');
+    }
   }
 
   async function loadDocs() {
@@ -193,7 +238,8 @@ export default function ClientDetail() {
 
   async function handleUpload(e) {
     e.preventDefault();
-    const file = e.currentTarget.elements.file.files[0];
+    const formEl = e.currentTarget;
+    const file = formEl.elements.file.files[0];
     if (!file) return;
     setUploading(true);
     try {
@@ -202,14 +248,11 @@ export default function ClientDetail() {
       form.append('kind', 'client');
       form.append('clientId', id);
       form.append('title', file.name);
-      const res = await fetchWithRefresh('/api/documents/upload', {
-        method: 'POST',
-        body: form,
-      });
-      await handleApiResponse(res);
-      e.currentTarget.reset();
+      await apiClient.upload('/documents/upload', form);
+      formEl.reset();
       await loadDocs();
-    } catch (_) {
+    } catch (e) {
+      setFormError(e?.message || 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -217,7 +260,8 @@ export default function ClientDetail() {
 
   async function handleCreateTask(e) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const payload = {
       title: form.get('title')?.toString() || '',
       description: form.get('description')?.toString() || '',
@@ -226,11 +270,13 @@ export default function ClientDetail() {
       related: { kind: 'client', clientId: id },
     };
     setCreatingTask(true);
+    setFormError('');
     try {
       await apiClient.post('/tasks', payload);
-      e.currentTarget.reset();
+      formEl.reset();
       await loadTasks();
-    } catch (_) {
+    } catch (e) {
+      setFormError(e?.message || 'Failed to create task');
     } finally {
       setCreatingTask(false);
     }
@@ -239,7 +285,7 @@ export default function ClientDetail() {
   async function toggleTaskStatus(t) {
     const next = t.status === 'done' ? 'todo' : 'done';
     try {
-      await apiClient.request(`/tasks/${t._id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
+      await apiClient.patch(`/tasks/${t._id}`, { status: next });
       await loadTasks();
     } catch (_) {}
   }
@@ -252,9 +298,9 @@ export default function ClientDetail() {
     }).format(amount || 0);
   };
 
-  if (loading) return <div className="p-4">Loading...</div>;
-  if (error) return <div className="p-4 text-red-600">{error}</div>;
-  if (!client) return <div className="p-4">Not found</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>;
+  if (error) return <div className="p-4 text-rose-600 text-sm">{error}</div>;
+  if (!client) return <div className="p-4 text-slate-500 text-sm">Not found</div>;
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -262,6 +308,7 @@ export default function ClientDetail() {
     { id: 'followups', label: `Follow-ups (${client.followUps?.filter(f => !f.completed).length || 0})` },
     { id: 'timeline', label: 'Timeline' },
     { id: 'communications', label: `Calls/Notes (${client.communications?.length || 0})` },
+    { id: 'tasks', label: `Tasks (${tasks.length})` },
     { id: 'documents', label: 'Documents' },
   ];
 
@@ -286,7 +333,10 @@ export default function ClientDetail() {
             }`}>{client.priority}</span>
           </div>
         </div>
-        <Link to="/clients" className="text-blue-600 hover:underline">Back to Clients</Link>
+        <div className="flex items-center gap-3">
+          {saving && <span className="text-xs text-slate-400 animate-pulse">Saving…</span>}
+          <Link to="/clients" className="text-sm text-slate-600 hover:text-slate-900 hover:underline">← Clients</Link>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -328,6 +378,13 @@ export default function ClientDetail() {
         ))}
       </div>
 
+      {formError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg px-4 py-2.5 text-sm flex items-center justify-between">
+          {formError}
+          <button type="button" onClick={() => setFormError('')} className="text-rose-500 hover:text-rose-700 ml-4 shrink-0">✕</button>
+        </div>
+      )}
+
       {/* Tab Content */}
       <div className="space-y-4">
         {/* Overview Tab */}
@@ -344,23 +401,118 @@ export default function ClientDetail() {
               </div>
             </div>
             <div className="bg-white rounded-lg border p-4">
-              <h3 className="font-semibold mb-3">Requirements</h3>
-              <div className="space-y-2 text-sm">
-                <div><span className="text-slate-500">Budget:</span> {client.budget?.min || client.budget?.max ? `${formatCurrency(client.budget.min)} - ${formatCurrency(client.budget.max)}` : '—'}</div>
-                <div><span className="text-slate-500">Property Type:</span> {client.propertyType || '—'}</div>
-                <div><span className="text-slate-500">Locations:</span> {client.preferredLocations?.join(', ') || '—'}</div>
-                <div><span className="text-slate-500">Tags:</span> {client.tags?.join(', ') || '—'}</div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">Requirements</h3>
+                {!editingReqs && (
+                  <button
+                    onClick={startEditReqs}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 border border-indigo-200 rounded transition-colors"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
+              {editingReqs ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Property Type</label>
+                    <select
+                      value={reqsForm.propertyType}
+                      onChange={(e) => setReqsForm((p) => ({ ...p, propertyType: e.target.value }))}
+                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none bg-white"
+                    >
+                      <option value="">Any</option>
+                      <option value="residential">Residential</option>
+                      <option value="commercial">Commercial</option>
+                      <option value="plot">Plot / Land</option>
+                      <option value="villa">Villa</option>
+                      <option value="apartment">Apartment</option>
+                      <option value="office">Office</option>
+                      <option value="shop">Shop</option>
+                      <option value="warehouse">Warehouse</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Budget Min (₹)</label>
+                      <input
+                        type="number"
+                        value={reqsForm.budgetMin}
+                        onChange={(e) => setReqsForm((p) => ({ ...p, budgetMin: e.target.value }))}
+                        className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none"
+                        placeholder="0"
+                        min={0}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Budget Max (₹)</label>
+                      <input
+                        type="number"
+                        value={reqsForm.budgetMax}
+                        onChange={(e) => setReqsForm((p) => ({ ...p, budgetMax: e.target.value }))}
+                        className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none"
+                        placeholder="0"
+                        min={0}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Preferred Locations</label>
+                    <input
+                      type="text"
+                      value={reqsForm.preferredLocations}
+                      onChange={(e) => setReqsForm((p) => ({ ...p, preferredLocations: e.target.value }))}
+                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none"
+                      placeholder="Bandra, Andheri (comma-separated)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Detailed Requirements</label>
+                    <textarea
+                      value={reqsForm.requirements}
+                      onChange={(e) => setReqsForm((p) => ({ ...p, requirements: e.target.value }))}
+                      rows={3}
+                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none resize-none"
+                      placeholder="3BHK, south-facing, near school..."
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={saveReqs}
+                      disabled={reqsSaving}
+                      className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                    >
+                      {reqsSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => setEditingReqs(false)}
+                      className="px-3 py-1.5 text-xs border border-slate-200 rounded hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  <div><span className="text-slate-500">Budget:</span> {client.budget?.min || client.budget?.max ? `${formatCurrency(client.budget.min)} – ${formatCurrency(client.budget.max)}` : '—'}</div>
+                  <div><span className="text-slate-500">Property Type:</span> {client.propertyType || '—'}</div>
+                  <div><span className="text-slate-500">Locations:</span> {client.preferredLocations?.join(', ') || '—'}</div>
+                  <div><span className="text-slate-500">Tags:</span> {client.tags?.join(', ') || '—'}</div>
+                  {client.requirements && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <span className="text-slate-500 block mb-1">Requirements:</span>
+                      <p className="whitespace-pre-wrap">{client.requirements}</p>
+                    </div>
+                  )}
+                  {!client.requirements && !client.propertyType && !client.budget?.min && !client.budget?.max && (
+                    <p className="text-slate-400 text-xs italic">No requirements set — click Edit to add</p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="bg-white rounded-lg border p-4 md:col-span-2">
               <h3 className="font-semibold mb-3">Notes</h3>
               <p className="text-sm whitespace-pre-wrap">{client.notes || '—'}</p>
-              {client.requirements && (
-                <>
-                  <h4 className="font-medium mt-4 mb-2">Detailed Requirements</h4>
-                  <p className="text-sm whitespace-pre-wrap">{client.requirements}</p>
-                </>
-              )}
             </div>
           </div>
         )}
@@ -415,7 +567,7 @@ export default function ClientDetail() {
                 <input name="commission" type="number" placeholder="Commission %" max="100" className="border rounded px-3 py-2" />
                 <input name="notes" placeholder="Notes" className="border rounded px-3 py-2" />
                 <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded flex items-center gap-2">
-                  <FaPlus /> Add Deal
+                  <HiPlusSm className='w-4 h-4' /> Add Deal
                 </button>
               </form>
             </div>
@@ -461,7 +613,7 @@ export default function ClientDetail() {
                 </select>
                 <input name="notes" placeholder="Notes" className="border rounded px-3 py-2 md:col-span-2" />
                 <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded flex items-center gap-2">
-                  <FaPlus /> Schedule
+                  <HiPlusSm className='w-4 h-4' /> Schedule
                 </button>
               </form>
             </div>
@@ -491,7 +643,7 @@ export default function ClientDetail() {
                       </div>
                       {!fu.completed && (
                         <button onClick={() => completeFollowUp(fu._id)} className="px-3 py-1 bg-green-600 text-white rounded text-sm flex items-center gap-1">
-                          <FaCheck /> Done
+                          <HiCheck className='w-4 h-4' /> Done
                         </button>
                       )}
                     </div>
@@ -521,7 +673,7 @@ export default function ClientDetail() {
                 <input name="summary" required placeholder="Summary *" className="border rounded px-3 py-2 md:col-span-2" />
                 <textarea name="details" placeholder="Details (optional)" className="border rounded px-3 py-2 md:col-span-4" rows="2" />
                 <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded flex items-center gap-2">
-                  <FaPlus /> Log Activity
+                  <HiPlusSm className='w-4 h-4' /> Log Activity
                 </button>
               </form>
             </div>
@@ -578,8 +730,86 @@ export default function ClientDetail() {
 
             <form onSubmit={handleUpload} className="mt-4 flex items-center gap-3">
               <input type="file" name="file" className="border rounded px-3 py-2 flex-1" />
-              <button disabled={uploading} className="px-4 py-2 bg-slate-900 text-white rounded">
+              <button type="submit" disabled={uploading} className="px-4 py-2 bg-slate-900 text-white rounded">
                 {uploading ? 'Uploading...' : 'Upload'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'tasks' && (
+          <div className="bg-white rounded-lg border p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Tasks</h3>
+            </div>
+
+            {tasksLoading ? (
+              <div className="text-sm text-slate-500">Loading…</div>
+            ) : (
+              <ul className="space-y-2 mb-6">
+                {tasks.map(t => (
+                  <li key={t._id} className="border rounded p-3 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleTaskStatus(t)}
+                      className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                        t.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-slate-400'
+                      }`}
+                    >
+                      {t.status === 'done' && <HiCheck className="w-3 h-3" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-medium ${t.status === 'done' ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                        {t.title}
+                      </div>
+                      {t.dueAt && (
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          Due: {new Date(t.dueAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded capitalize ${
+                      t.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                      t.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>{t.priority || 'medium'}</span>
+                  </li>
+                ))}
+                {tasks.length === 0 && <li className="text-sm text-slate-500">No tasks yet</li>}
+              </ul>
+            )}
+
+            <form onSubmit={handleCreateTask} className="border-t pt-4 space-y-3">
+              <h4 className="text-sm font-semibold text-slate-700">Add task</h4>
+              <input
+                name="title"
+                required
+                placeholder="Task title"
+                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  name="dueAt"
+                  type="date"
+                  className="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+                <select
+                  name="priority"
+                  defaultValue="medium"
+                  className="border rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={creatingTask}
+                className="px-4 py-2 bg-slate-900 text-white text-sm rounded hover:bg-slate-800 disabled:opacity-50 transition-colors"
+              >
+                {creatingTask ? 'Adding…' : 'Add Task'}
               </button>
             </form>
           </div>

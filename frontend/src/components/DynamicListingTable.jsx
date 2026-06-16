@@ -80,9 +80,12 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
     setVisibleColumns(new Set(allFields.map(f => f.key)));
   }, [categoryFields]);
 
-  // Get all available fields
+  // Get all available fields — category fields are stored in listing.attributes, not top-level
   const allFields = useMemo(() => {
-    return [...coreFields, ...categoryFields];
+    return [
+      ...coreFields,
+      ...categoryFields.map(f => ({ ...f, isCategory: true })),
+    ];
   }, [categoryFields]);
 
   // Get visible fields
@@ -90,43 +93,38 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
     return allFields.filter(field => visibleColumns.has(field.key));
   }, [allFields, visibleColumns]);
 
+  // Read a field value from a listing — category fields live in listing.attributes
+  const getFieldValue = (listing, field) => {
+    if (field.isCategory) return listing.attributes?.[field.key] ?? '';
+    return listing[field.key] ?? '';
+  };
+
   // Sort listings
   const sortedListings = useMemo(() => {
     if (!sortConfig.key) return listings;
+    const sortField = allFields.find(f => f.key === sortConfig.key);
 
     return [...listings].sort((a, b) => {
-      let aVal = a[sortConfig.key];
-      let bVal = b[sortConfig.key];
-
-      // Handle attributes
-      if (sortConfig.key.startsWith('attr_')) {
-        const attrKey = sortConfig.key.replace('attr_', '');
-        aVal = a.attributes?.[attrKey];
-        bVal = b.attributes?.[attrKey];
-      }
+      const aVal = sortField ? getFieldValue(a, sortField) : a[sortConfig.key];
+      const bVal = sortField ? getFieldValue(b, sortField) : b[sortConfig.key];
 
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [listings, sortConfig]);
+  }, [listings, sortConfig, allFields]);
 
   // Filter listings
   const filteredListings = useMemo(() => {
     return sortedListings.filter(listing => {
-      return Object.entries(filterConfig).every(([key, value]) => {
-        if (!value) return true;
-        
-        let listingValue = listing[key];
-        if (key.startsWith('attr_')) {
-          const attrKey = key.replace('attr_', '');
-          listingValue = listing.attributes?.[attrKey];
-        }
-
-        return String(listingValue || '').toLowerCase().includes(value.toLowerCase());
+      return Object.entries(filterConfig).every(([key, filterValue]) => {
+        if (!filterValue) return true;
+        const field = allFields.find(f => f.key === key);
+        const listingValue = field ? getFieldValue(listing, field) : listing[key];
+        return String(listingValue ?? '').toLowerCase().includes(filterValue.toLowerCase());
       });
     });
-  }, [sortedListings, filterConfig]);
+  }, [sortedListings, filterConfig, allFields]);
 
   const handleSort = (key) => {
     setSortConfig(prev => ({
@@ -156,13 +154,10 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
 
     try {
       const updateData = {};
-      
-      if (fieldKey.startsWith('attr_')) {
-        const attrKey = fieldKey.replace('attr_', '');
-        updateData.attributes = {
-          ...listing.attributes,
-          [attrKey]: editValue
-        };
+      const field = allFields.find(f => f.key === fieldKey);
+
+      if (field?.isCategory) {
+        updateData.attributes = { ...listing.attributes, [fieldKey]: editValue };
       } else {
         updateData[fieldKey] = editValue;
       }
@@ -223,16 +218,10 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
   const handleExportExcel = () => {
     const exportData = filteredListings.map(listing => {
       const row = {};
-      
-      visibleFields.forEach(field => {
-        let value = listing[field.key];
-        
-        if (field.key.startsWith('attr_')) {
-          const attrKey = field.key.replace('attr_', '');
-          value = listing.attributes?.[attrKey];
-        }
 
-        // Format value based on type
+      visibleFields.forEach(field => {
+        let value = getFieldValue(listing, field);
+
         if (field.type === 'boolean') {
           value = value ? 'Yes' : 'No';
         } else if (field.type === 'number' && typeof value === 'number') {
@@ -241,7 +230,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
           value = new Date(value).toLocaleDateString();
         }
 
-        row[field.label] = value || '';
+        row[field.label] = value === '' || value == null ? '' : value;
       });
 
       return row;
@@ -420,13 +409,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                 </td>
                 {visibleFields.map(field => {
                   const fieldKey = field.key;
-                  let value = listing[fieldKey];
-                  
-                  if (fieldKey.startsWith('attr_')) {
-                    const attrKey = fieldKey.replace('attr_', '');
-                    value = listing.attributes?.[attrKey];
-                  }
-
+                  const value = getFieldValue(listing, field);
                   const isEditing = editingCell?.listingId === listing._id && editingCell?.fieldKey === fieldKey;
 
                   return (

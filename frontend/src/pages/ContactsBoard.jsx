@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
@@ -8,7 +8,7 @@ import { PageHeader, Button } from '../design-system';
 import {
   HiPlus, HiSearch, HiX, HiChevronDown, HiChevronRight,
   HiMail, HiPhone, HiCheck, HiPencil, HiTrash, HiRefresh,
-  HiViewGrid, HiViewList, HiUser, HiCalendar, HiChat, HiUsers,
+  HiViewGrid, HiViewList, HiUser, HiCalendar, HiChat, HiUsers, HiEye,
 } from 'react-icons/hi';
 
 const STATUS_CONFIG = {
@@ -67,7 +67,6 @@ export default function ContactsBoard() {
       const data = response?.data || response || [];
       setContacts(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error('Failed to load contacts:', e);
       setError(e?.message || 'Failed to load contacts');
       setContacts([]);
     } finally {
@@ -462,7 +461,7 @@ export default function ContactsBoard() {
                                 <HiPencil className='w-4 h-4' />
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteContact(contact._id); }}
+                                onClick={(e) => { e.stopPropagation(); setPendingDelete(contact._id); }}
                                 className='p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors'
                                 title='Delete'
                               >
@@ -666,15 +665,36 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
     name: contact?.name || '',
     email: contact?.email || '',
     phone: contact?.phone || '',
+    alternatePhone: contact?.alternatePhone || '',
     notes: contact?.notes || '',
+    requirements: contact?.requirements || '',
     status: contact?.status || 'lead',
+    priority: contact?.priority || 'medium',
     organization: contact?.organization || '',
     source: contact?.source || '',
+    propertyType: contact?.propertyType || '',
+    preferredLocations: contact?.preferredLocations?.join(', ') || '',
+    budgetMin: contact?.budget?.min || '',
+    budgetMax: contact?.budget?.max || '',
   });
+
+  const set = (field) => (e) => setFormData((p) => ({ ...p, [field]: e.target.value }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    const { budgetMin, budgetMax, preferredLocations, ...rest } = formData;
+    const payload = {
+      ...rest,
+      preferredLocations: preferredLocations
+        ? preferredLocations.split(',').map((s) => s.trim()).filter(Boolean)
+        : [],
+      budget: {
+        min: Number(budgetMin) || 0,
+        max: Number(budgetMax) || 0,
+        currency: 'INR',
+      },
+    };
+    onSubmit(payload);
   };
 
   return (
@@ -720,6 +740,16 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
               />
             </div>
           </div>
+          <div>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>Alternate Phone</label>
+            <input
+              type='tel'
+              value={formData.alternatePhone}
+              onChange={set('alternatePhone')}
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
+              placeholder='Optional second number'
+            />
+          </div>
           <div className='grid grid-cols-2 gap-4'>
             <div>
               <label className='block text-sm font-medium text-slate-700 mb-1'>Organization</label>
@@ -742,24 +772,109 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
               />
             </div>
           </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Status</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
-            >
-              {STATUS_ORDER.map((s) => (
-                <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
-              ))}
-            </select>
+          <div className='grid grid-cols-2 gap-4'>
+            <div>
+              <label className='block text-sm font-medium text-slate-700 mb-1'>Status</label>
+              <select
+                value={formData.status}
+                onChange={set('status')}
+                className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
+              >
+                {STATUS_ORDER.map((s) => (
+                  <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className='block text-sm font-medium text-slate-700 mb-1'>Priority</label>
+              <select
+                value={formData.priority}
+                onChange={set('priority')}
+                className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
+              >
+                <option value='low'>Low</option>
+                <option value='medium'>Medium</option>
+                <option value='high'>High</option>
+                <option value='urgent'>Urgent</option>
+              </select>
+            </div>
           </div>
+
+          {/* Requirements section */}
+          <div className='border-t border-slate-100 pt-4'>
+            <p className='text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3'>Requirements</p>
+            <div className='space-y-3'>
+              <div>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>Property Type</label>
+                <select
+                  value={formData.propertyType}
+                  onChange={set('propertyType')}
+                  className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
+                >
+                  <option value=''>Any</option>
+                  <option value='residential'>Residential</option>
+                  <option value='commercial'>Commercial</option>
+                  <option value='plot'>Plot / Land</option>
+                  <option value='villa'>Villa</option>
+                  <option value='apartment'>Apartment</option>
+                  <option value='office'>Office</option>
+                  <option value='shop'>Shop</option>
+                  <option value='warehouse'>Warehouse</option>
+                </select>
+              </div>
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Budget Min (₹)</label>
+                  <input
+                    type='number'
+                    value={formData.budgetMin}
+                    onChange={set('budgetMin')}
+                    className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
+                    placeholder='e.g. 2000000'
+                    min={0}
+                  />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-slate-700 mb-1'>Budget Max (₹)</label>
+                  <input
+                    type='number'
+                    value={formData.budgetMax}
+                    onChange={set('budgetMax')}
+                    className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
+                    placeholder='e.g. 5000000'
+                    min={0}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>Preferred Locations</label>
+                <input
+                  type='text'
+                  value={formData.preferredLocations}
+                  onChange={set('preferredLocations')}
+                  className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
+                  placeholder='Bandra, Andheri, Juhu (comma-separated)'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>Detailed Requirements</label>
+                <textarea
+                  value={formData.requirements}
+                  onChange={set('requirements')}
+                  rows={3}
+                  className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all resize-none'
+                  placeholder='3BHK, south-facing, near school, parking required...'
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className='block text-sm font-medium text-slate-700 mb-1'>Notes</label>
             <textarea
               value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
+              onChange={set('notes')}
+              rows={2}
               className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all resize-none'
               placeholder='Add notes about this contact...'
             />
@@ -817,6 +932,13 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
               </div>
             </div>
             <div className='flex items-center gap-2'>
+              <Link
+                to={`/clients/${c._id}`}
+                className='px-3 py-1.5 rounded-lg bg-slate-900 text-sm text-white hover:bg-slate-800 flex items-center gap-1.5 transition-colors'
+              >
+                <HiEye className='w-4 h-4' />
+                View & Deals
+              </Link>
               <button
                 onClick={onEdit}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 transition-colors'

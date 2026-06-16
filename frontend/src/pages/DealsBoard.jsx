@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { PageHeader, Button } from '../design-system';
-import { HiRefresh, HiEye, HiEyeOff } from 'react-icons/hi';
+import { HiRefresh, HiEye, HiEyeOff, HiPlusSm } from 'react-icons/hi';
 
 const STAGES = [
   { id: 'new_lead',              label: 'New Lead',            dot: 'bg-slate-400'   },
@@ -22,7 +22,7 @@ const STAGES = [
   { id: 'payment_pending',       label: 'Payment Pending',     dot: 'bg-orange-400'  },
 ];
 
-const stageById = Object.fromEntries(STAGES.map((s) => [s.id, s]));
+const LEGACY_STAGE_IDS = ['initial_contact', 'site_visit_done', 'payment_pending'];
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-IN', {
@@ -43,26 +43,8 @@ export default function DealsBoard() {
   const [updating, setUpdating] = useState(false);
   const [dragOverStage, setDragOverStage] = useState('');
   const [showLegacy, setShowLegacy] = useState(false);
-
-  const LEGACY_STAGE_IDS = ['initial_contact', 'site_visit_done', 'payment_pending'];
-
-  const getCurrentQueryString = () => {
-    // Deals board currently has no query-driven filters; keep placeholder for saved views
-    try {
-      return window.location.search.replace(/^\?/, '');
-    } catch (_) {
-      return '';
-    }
-  };
-
-  const applyQueryString = (qs) => {
-    try {
-      const url = new URL(window.location.href);
-      url.search = String(qs || '');
-      window.history.pushState({}, '', url.toString());
-      // No query-based filters yet; placeholder for future.
-    } catch (_) {}
-  };
+  const [addingDealFor, setAddingDealFor] = useState(null); // clientId string
+  const [quickDealValue, setQuickDealValue] = useState('');
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -124,13 +106,27 @@ export default function DealsBoard() {
     loadPipeline();
   }, [canAccess]);
 
+  async function handleQuickAddDeal(clientId, stage) {
+    setUpdating(true);
+    try {
+      await apiClient.post(`/crm/${clientId}/deals`, {
+        stage,
+        value: Number(quickDealValue) || 0,
+      });
+      setAddingDealFor(null);
+      setQuickDealValue('');
+      await loadPipeline();
+    } catch (e) {
+      setError(e?.message || 'Failed to add deal');
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   async function moveDeal({ clientId, dealId, toStage }) {
     setUpdating(true);
     try {
-      await apiClient.request(`/crm/${clientId}/deals/${dealId}/stage`, {
-        method: 'PATCH',
-        body: JSON.stringify({ stage: toStage }),
-      });
+      await apiClient.patch(`/crm/${clientId}/deals/${dealId}/stage`, { stage: toStage });
       await loadPipeline();
     } catch (e) {
       setError(e?.message || 'Failed to update deal stage');
@@ -183,13 +179,12 @@ export default function DealsBoard() {
             >
               {showLegacy ? 'Hide legacy' : 'Legacy stages'}
             </Button>
-            <Button
-              variant='secondary'
-              size='sm'
-              onClick={() => {}}
+            <Link
+              to='/clients'
+              className='inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 rounded-lg transition-colors'
             >
-              <Link to='/clients' className='flex items-center gap-1.5'>Clients</Link>
-            </Button>
+              Clients
+            </Link>
             <Button
               variant='primary'
               size='sm'
@@ -235,16 +230,15 @@ export default function DealsBoard() {
                 >
                   {(col.deals || []).map((d) => (
                     <div
-                      key={d.dealId}
-                      className='rounded-lg border border-slate-200 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow'
-                      draggable
-                      onDragStart={(e) =>
+                      key={d.dealId ? String(d.dealId) : `nodeal-${col.id}-${d.clientId}`}
+                      className={`rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow ${d.dealId ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+                      draggable={!!d.dealId}
+                      onDragStart={d.dealId ? (e) =>
                         onDragStart(e, {
                           clientId: d.clientId,
                           dealId: d.dealId,
                           fromStage: col.id,
-                        })
-                      }
+                        }) : undefined}
                     >
                       <div className='flex items-start justify-between gap-2 mb-2'>
                         <Link
@@ -253,12 +247,54 @@ export default function DealsBoard() {
                         >
                           {d.clientName || 'Client'}
                         </Link>
+                        {!d.dealId && (
+                          <span className='text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded shrink-0'>No deal</span>
+                        )}
                       </div>
-                      <div className='text-sm font-medium text-slate-700'>{formatCurrency(d.value)}</div>
-                      {d.expectedCloseDate && (
-                        <div className='text-xs text-slate-400 mt-1.5'>
-                          Close: {new Date(d.expectedCloseDate).toLocaleDateString()}
+                      {d.dealId ? (
+                        <>
+                          <div className='text-sm font-medium text-slate-700'>{formatCurrency(d.value)}</div>
+                          {d.expectedCloseDate && (
+                            <div className='text-xs text-slate-400 mt-1.5'>
+                              Close: {new Date(d.expectedCloseDate).toLocaleDateString()}
+                            </div>
+                          )}
+                        </>
+                      ) : addingDealFor === String(d.clientId) ? (
+                        <div className='mt-2 space-y-2' onClick={e => e.stopPropagation()}>
+                          <input
+                            type='number'
+                            placeholder='Deal value (₹)'
+                            value={quickDealValue}
+                            onChange={e => setQuickDealValue(e.target.value)}
+                            className='w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400'
+                            autoFocus
+                          />
+                          <div className='flex gap-1.5'>
+                            <button
+                              type='button'
+                              onClick={() => handleQuickAddDeal(d.clientId, col.id)}
+                              disabled={updating}
+                              className='flex-1 text-xs bg-slate-900 text-white rounded px-2 py-1.5 hover:bg-slate-800 disabled:opacity-50 transition-colors'
+                            >
+                              Save
+                            </button>
+                            <button
+                              type='button'
+                              onClick={() => { setAddingDealFor(null); setQuickDealValue(''); }}
+                              className='text-xs border border-slate-200 rounded px-2 py-1.5 hover:bg-slate-50 transition-colors'
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
+                      ) : (
+                        <button
+                          onClick={() => { setAddingDealFor(String(d.clientId)); setQuickDealValue(''); }}
+                          className='mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 transition-colors'
+                        >
+                          <HiPlusSm className='w-3.5 h-3.5' /> Add deal value
+                        </button>
                       )}
                     </div>
                   ))}
