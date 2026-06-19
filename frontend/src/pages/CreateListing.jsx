@@ -643,6 +643,7 @@ export default function CreateListing() {
                         </label>
                         <input
                           type='number'
+                          id='bedrooms'
                           name='bedrooms'
                           min='1'
                           max='20'
@@ -660,6 +661,7 @@ export default function CreateListing() {
                         </label>
                         <input
                           type='number'
+                          id='bathrooms'
                           name='bathrooms'
                           min={showBedrooms ? '1' : '0'}
                           max='20'

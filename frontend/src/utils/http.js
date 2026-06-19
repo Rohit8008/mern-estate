@@ -1,6 +1,35 @@
 // API base URL - empty for same-origin (dev), full URL for production
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+// ── Response decryption (AES-256-GCM) ──────────────────────────────────────
+// Set VITE_API_RESPONSE_SECRET (same value as API_RESPONSE_SECRET on the server)
+// to enable. Decryption is transparent — all other code is unchanged.
+const _ENC_SECRET = import.meta.env.VITE_API_RESPONSE_SECRET || '';
+let _decryptKeyPromise = null;
+
+function _getDecryptKey() {
+  if (!_ENC_SECRET) return Promise.resolve(null);
+  if (!_decryptKeyPromise) {
+    _decryptKeyPromise = window.crypto.subtle
+      .digest('SHA-256', new TextEncoder().encode(_ENC_SECRET))
+      .then(hash => window.crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['decrypt']));
+  }
+  return _decryptKeyPromise;
+}
+
+async function _decryptEnvelope({ iv, data }) {
+  const key = await _getDecryptKey();
+  if (!key) {
+    console.error('[api] Received encrypted response but VITE_API_RESPONSE_SECRET is not configured. Set it to match API_RESPONSE_SECRET on the server.');
+    return null;
+  }
+  const ivBuf   = Uint8Array.from(atob(iv),   c => c.charCodeAt(0));
+  const dataBuf = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+  // dataBuf = ciphertext ‖ 16-byte GCM auth tag
+  const plain = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: ivBuf, tagLength: 128 }, key, dataBuf);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
 // Helper to get full API URL
 export const getApiUrl = (path) => `${API_BASE_URL}${path}`;
 
@@ -9,7 +38,11 @@ export async function parseJsonSafely(response) {
     const text = await response.text();
     if (!text) return null;
     try {
-      return JSON.parse(text);
+      const parsed = JSON.parse(text);
+      if (parsed && parsed._enc === true) {
+        return await _decryptEnvelope(parsed); // null on key-missing or decrypt error
+      }
+      return parsed;
     } catch (_) {
       return null;
     }

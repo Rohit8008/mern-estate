@@ -134,7 +134,7 @@ const listingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['available', 'sold', 'under_negotiation'],
+      enum: ['available', 'sold', 'rented', 'under_negotiation'],
       default: 'available',
       index: true,
     },

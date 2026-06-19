@@ -47,7 +47,7 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
   ] = await Promise.all([
     Listing.countDocuments(listingQuery),
     Listing.countDocuments({ ...listingQuery, status: 'available' }),
-    Listing.countDocuments({ ...listingQuery, status: 'sold' }),
+    Listing.countDocuments({ ...listingQuery, status: { $in: ['sold', 'rented'] } }),
     Listing.countDocuments({ ...listingQuery, status: 'under_negotiation' }),
     BuyerRequirement.countDocuments(buyerQuery),
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'active' }),
@@ -273,7 +273,7 @@ export const getEmployeePerformance = asyncHandler(async (req, res, next) => {
     employees.map(async (employee) => {
       const [assignedListings, soldListings, assignedBuyers, closedBuyers] = await Promise.all([
         Listing.countDocuments({ assignedAgent: employee._id, isDeleted: false }),
-        Listing.countDocuments({ assignedAgent: employee._id, status: 'sold', isDeleted: false }),
+        Listing.countDocuments({ assignedAgent: employee._id, status: { $in: ['sold', 'rented'] }, isDeleted: false }),
         BuyerRequirement.countDocuments({ assignedAgent: employee._id, isDeleted: { $ne: true } }),
         BuyerRequirement.countDocuments({ assignedAgent: employee._id, status: 'closed', isDeleted: { $ne: true } }),
       ]);

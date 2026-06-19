@@ -28,13 +28,14 @@ export const createClient = async (req, res, next) => {
 // List clients with filters; non-admins only see their own
 export const getClients = async (req, res, next) => {
   try {
-    const { q, status, assignedTo, tag, page = 1, limit = 20 } = req.query;
+    const { q, status, contactType, assignedTo, tag, page = 1, limit = 20 } = req.query;
     const filter = { isDeleted: { $ne: true } };
 
     if (q) {
       filter.$text = { $search: q };
     }
     if (status) filter.status = status;
+    if (contactType) filter.contactType = contactType;
     if (tag) filter.tags = tag;
 
     if (req.user.role === 'admin') {

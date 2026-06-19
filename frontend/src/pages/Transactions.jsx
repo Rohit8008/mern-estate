@@ -1,265 +1,607 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useCrmAccess } from '../hooks/useCrmAccess';
+import { apiClient } from '../utils/http';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { useSelector } from 'react-redux';
-import { useBuyerView } from '../contexts/BuyerViewContext';
+import { Button, Badge, Input, Select, Textarea, KpiCard, EmptyState, Spinner } from '../design-system';
 import {
-  HiPlus, HiSearch, HiChevronDown, HiX,
-  HiCurrencyDollar, HiHome, HiCheck,
-  HiClock, HiDownload, HiDotsVertical,
-  HiPencil, HiTrash,
+  HiPlus, HiSearch, HiX, HiCurrencyDollar, HiCheck, HiClock,
+  HiDownload, HiPencil, HiTrash, HiHome, HiChevronDown,
 } from 'react-icons/hi';
 
-const TRANSACTION_TYPES = ['All', 'Sale', 'Rent', 'Lease'];
-const TRANSACTION_STATUS = ['All', 'Pending', 'Completed', 'Cancelled'];
+// ─── constants ─────────────────────────────────────────────────────────────────
+const TYPE_OPTS   = ['All', 'Sale', 'Rent', 'Lease'];
+const STATUS_OPTS = ['All', 'Pending', 'In Progress', 'Completed', 'Cancelled'];
 
-const STATUS_COLORS = {
-  pending: { bg: 'bg-amber-100', text: 'text-amber-700', icon: HiClock },
-  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: HiCheck },
-  cancelled: { bg: 'bg-rose-100', text: 'text-rose-700', icon: HiX },
-  in_progress: { bg: 'bg-blue-100', text: 'text-blue-700', icon: HiClock },
+const STATUS_META = {
+  pending:     { label: 'Pending',     variant: 'warning' },
+  in_progress: { label: 'In Progress', variant: 'info'    },
+  completed:   { label: 'Completed',   variant: 'success' },
+  cancelled:   { label: 'Cancelled',   variant: 'error'   },
 };
 
+const fmtINR = (n) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
-function TransactionModal({ isOpen, onClose, transaction, onSave }) {
-  const [formData, setFormData] = useState({
-    propertyName: '',
-    clientName: '',
-    type: 'sale',
-    amount: '',
-    commission: '',
-    status: 'pending',
-    date: new Date().toISOString().split('T')[0],
-    notes: '',
-  });
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+// ─── EntityPicker ──────────────────────────────────────────────────────────────
+// Searchable async-dropdown linked to real DB records
+function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem }) {
+  const [query, setQuery]     = useState('');
+  const [results, setResults] = useState([]);
+  const [open, setOpen]       = useState(false);
+  const [loading, setLoading] = useState(false);
+  const ref   = useRef(null);
+  const timer = useRef(null);
 
   useEffect(() => {
-    if (transaction) {
-      setFormData({
-        propertyName: transaction.propertyName || '',
-        clientName: transaction.clientName || '',
-        type: transaction.type || 'sale',
-        amount: transaction.amount || '',
-        commission: transaction.commission || '',
-        status: transaction.status || 'pending',
-        date: transaction.date || new Date().toISOString().split('T')[0],
-        notes: transaction.notes || '',
-      });
-    } else {
-      setFormData({
-        propertyName: '',
-        clientName: '',
-        type: 'sale',
-        amount: '',
-        commission: '',
-        status: 'pending',
-        date: new Date().toISOString().split('T')[0],
-        notes: '',
-      });
-    }
-  }, [transaction, isOpen]);
+    setQuery(value?.name ?? '');
+  }, [value?.name]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave(formData);
-    onClose();
+  const search = useCallback(async (q) => {
+    if (!q.trim()) { setResults([]); return; }
+    setLoading(true);
+    try { setResults(await fetchFn(q)); }
+    catch (_) { setResults([]); }
+    finally { setLoading(false); }
+  }, [fetchFn]);
+
+  const handleInput = (e) => {
+    const q = e.target.value;
+    setQuery(q);
+    setOpen(true);
+    if (q !== value?.name) onSelect(null, q);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => search(q), 300);
   };
 
-  if (!isOpen) return null;
+  const handlePick = (item) => {
+    onSelect(item);
+    setQuery(item.name);
+    setOpen(false);
+    setResults([]);
+  };
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
 
   return (
-    <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
-      <div className='bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto'>
-        <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
-          <h2 className='text-lg font-semibold text-slate-900'>
-            {transaction ? 'Edit Transaction' : 'New Transaction'}
-          </h2>
-          <button onClick={onClose} className='text-slate-400 hover:text-slate-600'>
-            <HiX className='w-5 h-5' />
+    <div className='flex flex-col gap-1' ref={ref}>
+      {label && <label className='text-sm font-medium text-slate-700'>{label}</label>}
+      <div className='relative'>
+        <span className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none'>
+          <HiSearch className='w-4 h-4' />
+        </span>
+        <input
+          type='text'
+          value={query}
+          onChange={handleInput}
+          onFocus={() => { if (query) { setOpen(true); search(query); } }}
+          placeholder={placeholder}
+          className='w-full border border-slate-300 rounded-lg text-sm text-slate-900 pl-9 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400'
+        />
+        {value && (
+          <button
+            type='button'
+            onClick={() => { onSelect(null); setQuery(''); setResults([]); }}
+            className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'
+          >
+            <HiX className='w-3.5 h-3.5' />
           </button>
-        </div>
-        <form onSubmit={handleSubmit} className='p-4 space-y-4'>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Property Name *</label>
-            <input
-              type='text'
-              value={formData.propertyName}
-              onChange={(e) => setFormData({ ...formData, propertyName: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-              placeholder='Enter property name'
-              required
-            />
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Client Name *</label>
-            <input
-              type='text'
-              value={formData.clientName}
-              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-              placeholder='Enter client name'
-              required
-            />
-          </div>
-          <div className='grid grid-cols-2 gap-4'>
-            <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Type</label>
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
+        )}
+        {open && (results.length > 0 || loading) && (
+          <div className='absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto'>
+            {loading && (
+              <div className='px-3 py-2 text-sm text-slate-400 flex items-center gap-2'>
+                <Spinner size='sm' /> Searching…
+              </div>
+            )}
+            {!loading && results.map((item) => (
+              <button
+                key={item._id}
+                type='button'
+                onClick={() => handlePick(item)}
+                className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0'
               >
-                <option value='sale'>Sale</option>
-                <option value='rent'>Rent</option>
-                <option value='lease'>Lease</option>
-              </select>
-            </div>
-            <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Status</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-              >
-                <option value='pending'>Pending</option>
-                <option value='in_progress'>In Progress</option>
-                <option value='completed'>Completed</option>
-                <option value='cancelled'>Cancelled</option>
-              </select>
-            </div>
+                {renderItem(item)}
+              </button>
+            ))}
           </div>
-          <div className='grid grid-cols-2 gap-4'>
-            <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Amount (₹) *</label>
-              <input
-                type='number'
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-                placeholder='0'
-                required
-              />
-            </div>
-            <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Commission (₹)</label>
-              <input
-                type='number'
-                value={formData.commission}
-                onChange={(e) => setFormData({ ...formData, commission: e.target.value })}
-                className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-                placeholder='0'
-              />
-            </div>
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Date</label>
-            <input
-              type='date'
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-            />
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-              rows={3}
-              placeholder='Additional notes...'
-            />
-          </div>
-          <div className='flex justify-end gap-2 pt-2'>
-            <button
-              type='button'
-              onClick={onClose}
-              className='px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium'
-            >
-              Cancel
-            </button>
-            <button
-              type='submit'
-              className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'
-            >
-              {transaction ? 'Update' : 'Create'} Transaction
-            </button>
-          </div>
-        </form>
+        )}
       </div>
     </div>
   );
 }
 
+// ─── TransactionDrawer ─────────────────────────────────────────────────────────
+function TransactionDrawer({ open, onClose, transaction, onSaved }) {
+  const EMPTY = {
+    property: null,
+    manualPropertyName: '',
+    client: null,
+    manualClientName: '',
+    type: 'sale',
+    amount: '',
+    commissionPercent: '',
+    commission: '',
+    status: 'pending',
+    date: new Date().toISOString().split('T')[0],
+    notes: '',
+    coAgent: null,
+    coAgentCommissionPercent: '',
+    coAgentCommission: '',
+  };
+
+  const [form, setForm]   = useState(EMPTY);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    if (transaction) {
+      setForm({
+        property: transaction.property ? { _id: transaction.property, name: transaction.propertyName } : null,
+        manualPropertyName: transaction.property ? '' : (transaction.propertyName || ''),
+        client: transaction.client ? { _id: transaction.client, name: transaction.clientName } : null,
+        manualClientName: transaction.client ? '' : (transaction.clientName || ''),
+        type: transaction.type || 'sale',
+        amount: transaction.amount ?? '',
+        commissionPercent: transaction.commissionPercent ?? '',
+        commission: transaction.commission ?? '',
+        status: transaction.status || 'pending',
+        date: transaction.date
+          ? new Date(transaction.date).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        notes: transaction.notes || '',
+        coAgent: transaction.coAgent ? { _id: transaction.coAgent, name: transaction.coAgentName } : null,
+        coAgentCommissionPercent: transaction.coAgentCommissionPercent ?? '',
+        coAgentCommission: transaction.coAgentCommission ?? '',
+      });
+    } else {
+      setForm(EMPTY);
+    }
+    setError('');
+  }, [open, transaction]);
+
+  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+
+  const handleAmountChange = (val) => {
+    setForm((f) => {
+      const amt = parseFloat(val) || 0;
+      const pct = parseFloat(f.commissionPercent) || 0;
+      return {
+        ...f,
+        amount: val,
+        commission: pct > 0 ? String((amt * pct / 100).toFixed(0)) : f.commission,
+      };
+    });
+  };
+
+  const handlePercentChange = (val) => {
+    setForm((f) => {
+      const pct = parseFloat(val) || 0;
+      const amt = parseFloat(f.amount) || 0;
+      return {
+        ...f,
+        commissionPercent: val,
+        commission: amt > 0 ? String((amt * pct / 100).toFixed(0)) : f.commission,
+      };
+    });
+  };
+
+  const fetchListings = useCallback(async (q) => {
+    const res = await apiClient.get(`/listing/get?searchTerm=${encodeURIComponent(q)}&limit=8`);
+    return (res.data?.listings || []).map((l) => ({
+      _id: l._id,
+      name: l.name,
+      address: l.address,
+    }));
+  }, []);
+
+  const fetchClients = useCallback(async (q) => {
+    const res = await apiClient.get(`/clients?contactType=lead&q=${encodeURIComponent(q)}&limit=8`);
+    return (res.data || []).map((c) => ({ _id: c._id, name: c.name, phone: c.phone }));
+  }, []);
+
+  const fetchCoAgents = useCallback(async (q) => {
+    const res = await apiClient.get(`/clients?contactType=co_agent&q=${encodeURIComponent(q)}&limit=8`);
+    return (res.data || []).map((c) => ({ _id: c._id, name: c.name, phone: c.phone, organization: c.organization }));
+  }, []);
+
+  const handleCoAgentPercentChange = (val) => {
+    setForm((f) => {
+      const pct = parseFloat(val) || 0;
+      const amt = parseFloat(f.amount) || 0;
+      return {
+        ...f,
+        coAgentCommissionPercent: val,
+        coAgentCommission: amt > 0 ? String((amt * pct / 100).toFixed(0)) : f.coAgentCommission,
+      };
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const propertyName = form.property?.name || form.manualPropertyName?.trim() || '';
+      const clientName   = form.client?.name   || form.manualClientName?.trim()   || '';
+      if (!propertyName) {
+        setError('Please select or enter a property name.');
+        setSaving(false);
+        return;
+      }
+      if (!clientName) {
+        setError('Please select or enter a client name.');
+        setSaving(false);
+        return;
+      }
+      const payload = {
+        property: form.property?._id || null,
+        propertyName,
+        client: form.client?._id || null,
+        clientName,
+        type: form.type,
+        amount: Number(form.amount),
+        commissionPercent: Number(form.commissionPercent) || 0,
+        commission: Number(form.commission) || 0,
+        status: form.status,
+        date: form.date,
+        notes: form.notes,
+        coAgent: form.coAgent?._id || null,
+        coAgentName: form.coAgent?.name || '',
+        coAgentCommissionPercent: Number(form.coAgentCommissionPercent) || 0,
+        coAgentCommission: Number(form.coAgentCommission) || 0,
+      };
+      if (transaction) {
+        await apiClient.patch(`/transactions/${transaction._id}`, payload);
+      } else {
+        await apiClient.post('/transactions', payload);
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err?.message || 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+      {/* Slide-in panel */}
+      <div
+        className={`fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        {/* Header */}
+        <div className='flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0'>
+          <div>
+            <h2 className='text-base font-semibold text-slate-900'>
+              {transaction ? 'Edit Transaction' : 'New Transaction'}
+            </h2>
+            <p className='text-xs text-slate-400 mt-0.5'>
+              {transaction ? 'Update transaction details' : 'Record a property transaction'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600'
+          >
+            <HiX className='w-5 h-5' />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className='flex-1 flex flex-col min-h-0'>
+          <div className='flex-1 overflow-y-auto px-6 py-5 space-y-5'>
+
+            {/* Property */}
+            <EntityPicker
+              label='Property'
+              placeholder='Search listings…'
+              value={form.property}
+              onSelect={(item, query) => {
+                set('property', item);
+                if (!item && query) set('manualPropertyName', query);
+              }}
+              fetchFn={fetchListings}
+              renderItem={(item) => (
+                <span className='flex flex-col'>
+                  <span className='font-medium text-slate-800'>{item.name}</span>
+                  {item.address && <span className='text-xs text-slate-400'>{item.address}</span>}
+                </span>
+              )}
+            />
+            {!form.property && (
+              <Input
+                label='Or enter property name'
+                placeholder='e.g. Green Valley Villa'
+                value={form.manualPropertyName}
+                onChange={(e) => set('manualPropertyName', e.target.value)}
+              />
+            )}
+
+            {/* Client */}
+            <EntityPicker
+              label='Client'
+              placeholder='Search clients…'
+              value={form.client}
+              onSelect={(item, query) => {
+                set('client', item);
+                if (!item && query) set('manualClientName', query);
+              }}
+              fetchFn={fetchClients}
+              renderItem={(item) => (
+                <span className='flex flex-col'>
+                  <span className='font-medium text-slate-800'>{item.name}</span>
+                  {item.phone && <span className='text-xs text-slate-400'>{item.phone}</span>}
+                </span>
+              )}
+            />
+            {!form.client && (
+              <Input
+                label='Or enter client name'
+                placeholder='e.g. Rahul Sharma'
+                value={form.manualClientName}
+                onChange={(e) => set('manualClientName', e.target.value)}
+              />
+            )}
+
+            <div className='grid grid-cols-2 gap-4'>
+              <Select label='Type' value={form.type} onChange={(e) => set('type', e.target.value)}>
+                <option value='sale'>Sale</option>
+                <option value='rent'>Rent</option>
+                <option value='lease'>Lease</option>
+              </Select>
+              <Select label='Status' value={form.status} onChange={(e) => set('status', e.target.value)}>
+                <option value='pending'>Pending</option>
+                <option value='in_progress'>In Progress</option>
+                <option value='completed'>Completed</option>
+                <option value='cancelled'>Cancelled</option>
+              </Select>
+            </div>
+
+            <Input
+              label='Transaction Amount (₹)'
+              type='number'
+              min='0'
+              placeholder='0'
+              value={form.amount}
+              onChange={(e) => handleAmountChange(e.target.value)}
+              required
+            />
+
+            <div className='grid grid-cols-2 gap-4'>
+              <Input
+                label='Commission %'
+                type='number'
+                min='0'
+                max='100'
+                step='0.1'
+                placeholder='e.g. 2'
+                value={form.commissionPercent}
+                onChange={(e) => handlePercentChange(e.target.value)}
+                hint='Auto-calculates amount →'
+              />
+              <Input
+                label='Commission (₹)'
+                type='number'
+                min='0'
+                placeholder='0'
+                value={form.commission}
+                onChange={(e) => set('commission', e.target.value)}
+              />
+            </div>
+
+            <Input
+              label='Date'
+              type='date'
+              value={form.date}
+              onChange={(e) => set('date', e.target.value)}
+            />
+
+            <Textarea
+              label='Notes'
+              value={form.notes}
+              onChange={(e) => set('notes', e.target.value)}
+              rows={3}
+              placeholder='Add any notes about this transaction…'
+            />
+
+            {/* Co-Agent */}
+            <div className='border-t border-slate-100 pt-4 space-y-3'>
+              <p className='text-xs font-semibold text-slate-400 uppercase tracking-wide'>Co-Agent (optional)</p>
+              <EntityPicker
+                label='Co-Agent / Broker'
+                placeholder='Search co-agents…'
+                value={form.coAgent}
+                onSelect={(item) => set('coAgent', item)}
+                fetchFn={fetchCoAgents}
+                renderItem={(item) => (
+                  <span className='flex flex-col'>
+                    <span className='font-medium text-slate-800'>{item.name}</span>
+                    {item.organization && <span className='text-xs text-slate-400'>{item.organization}</span>}
+                    {item.phone && !item.organization && <span className='text-xs text-slate-400'>{item.phone}</span>}
+                  </span>
+                )}
+              />
+              {form.coAgent && (
+                <div className='grid grid-cols-2 gap-3'>
+                  <div className='flex flex-col gap-1'>
+                    <label className='text-sm font-medium text-slate-700'>Their Commission %</label>
+                    <input
+                      type='number'
+                      min='0'
+                      max='100'
+                      step='0.1'
+                      value={form.coAgentCommissionPercent}
+                      onChange={(e) => handleCoAgentPercentChange(e.target.value)}
+                      placeholder='e.g. 1.5'
+                      className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10'
+                    />
+                  </div>
+                  <div className='flex flex-col gap-1'>
+                    <label className='text-sm font-medium text-slate-700'>Their Commission (₹)</label>
+                    <input
+                      type='number'
+                      min='0'
+                      value={form.coAgentCommission}
+                      onChange={(e) => set('coAgentCommission', e.target.value)}
+                      placeholder='Auto-calculated'
+                      className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10'
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {error && <p className='text-sm text-rose-600 bg-rose-50 px-3 py-2 rounded-lg'>{error}</p>}
+          </div>
+
+          {/* Footer */}
+          <div className='flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 flex-shrink-0'>
+            <Button variant='secondary' type='button' onClick={onClose}>Cancel</Button>
+            <Button variant='primary' type='submit' loading={saving}>
+              {transaction ? 'Update' : 'Create'} Transaction
+            </Button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+
+// ─── FilterDropdown ────────────────────────────────────────────────────────────
+function FilterDropdown({ label, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const active = value !== 'All';
+
+  return (
+    <div className='relative' ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`px-3 py-2 rounded-lg border text-sm font-medium flex items-center gap-2 transition-colors ${
+          active
+            ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+        }`}
+      >
+        {label}: {value}
+        <HiChevronDown className='w-4 h-4' />
+      </button>
+      {open && (
+        <div className='absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1'>
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${
+                value === opt ? 'bg-slate-100 font-medium text-slate-900' : 'text-slate-700'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function Transactions() {
-  const { currentUser } = useSelector((state) => state.user);
-  const { isBuyerViewMode } = useBuyerView();
+  const { canAccess } = useCrmAccess();
 
   const [transactions, setTransactions] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All');
+  const [total, setTotal]               = useState(0);
+  const [loading, setLoading]           = useState(true);
+  const [searchQuery, setSearchQuery]   = useState('');
+  const [typeFilter, setTypeFilter]     = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState(null);
-  const [showActionsMenu, setShowActionsMenu] = useState(null);
+  const [drawerOpen, setDrawerOpen]     = useState(false);
+  const [editing, setEditing]           = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting]         = useState(false);
+  const [deleteError, setDeleteError]   = useState('');
+  const [stats, setStats]               = useState({ totalPipeline: 0, totalCommission: 0, completed: 0, pending: 0 });
 
-  const canAccess = useMemo(() => {
-    if (!currentUser) return false;
-    if (isBuyerViewMode) return false;
-    return currentUser.role === 'admin' || currentUser.role === 'employee';
-  }, [currentUser, isBuyerViewMode]);
-
-  const fmtCurrency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
-
-  // Calculate summary metrics
-  const metrics = useMemo(() => {
-    const completed = transactions.filter(t => t.status === 'completed');
-    const totalValue = completed.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const totalCommission = completed.reduce((sum, t) => sum + (t.commission || 0), 0);
-    const pending = transactions.filter(t => t.status === 'pending' || t.status === 'in_progress').length;
-    return { totalValue, totalCommission, completed: completed.length, pending };
-  }, [transactions]);
-
-  // Filter transactions
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const matchesSearch = !searchQuery || 
-        t.propertyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.clientName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = typeFilter === 'All' || t.type.toLowerCase() === typeFilter.toLowerCase();
-      const matchesStatus = statusFilter === 'All' || t.status.toLowerCase() === statusFilter.toLowerCase();
-      return matchesSearch && matchesType && matchesStatus;
-    });
-  }, [transactions, searchQuery, typeFilter, statusFilter]);
-
-  const handleSaveTransaction = (formData) => {
-    if (editingTransaction) {
-      setTransactions(prev => prev.map(t => 
-        t._id === editingTransaction._id ? { ...t, ...formData } : t
-      ));
-    } else {
-      const newTransaction = {
-        _id: `t-${Date.now()}`,
-        ...formData,
-        agent: currentUser?.username || 'Unknown',
-      };
-      setTransactions(prev => [newTransaction, ...prev]);
+  const buildParams = useCallback(() => {
+    const p = new URLSearchParams();
+    if (searchQuery)          p.set('q', searchQuery);
+    if (typeFilter !== 'All') p.set('type', typeFilter.toLowerCase());
+    if (statusFilter !== 'All') {
+      p.set('status', statusFilter.toLowerCase().replaceAll(' ', '_'));
     }
-    setEditingTransaction(null);
+    p.set('limit', '50');
+    return p.toString();
+  }, [searchQuery, typeFilter, statusFilter]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get(`/transactions?${buildParams()}`);
+      setTransactions(res.data || []);
+      setTotal(res.total || 0);
+    } catch (_) {
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildParams]);
+
+  useEffect(() => {
+    if (!canAccess) return;
+    const t = setTimeout(load, searchQuery ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [canAccess, load, searchQuery]);
+
+  const loadStats = useCallback(() => {
+    apiClient.get('/transactions/stats')
+      .then((res) => setStats(res.data || {}))
+      .catch(() => {});
+  }, []);
+
+  // Stats are fetched independently — not affected by filters or page size
+  useEffect(() => {
+    if (!canAccess) return;
+    loadStats();
+  }, [canAccess, loadStats]);
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await apiClient.delete(`/transactions/${pendingDelete}`);
+      setPendingDelete(null);
+      load();
+      loadStats();
+    } catch (err) {
+      setDeleteError(err?.message || 'Failed to delete. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleDeleteTransaction = (id) => {
-    setPendingDelete(id);
-    setShowActionsMenu(null);
-  };
-
-  const openEditModal = (transaction) => {
-    setEditingTransaction(transaction);
-    setShowModal(true);
-    setShowActionsMenu(null);
-  };
+  const openNew  = () => { setEditing(null); setDrawerOpen(true); };
+  const openEdit = (t) => { setEditing(t); setDrawerOpen(true); };
 
   if (!canAccess) {
     return (
@@ -271,279 +613,176 @@ export default function Transactions() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+      {/* Page header */}
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
         <div>
           <h1 className='text-xl font-bold text-slate-900'>Transactions</h1>
           <p className='text-slate-500 text-sm mt-0.5'>Track and manage all property transactions</p>
         </div>
         <div className='flex items-center gap-2'>
-          <button className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'>
-            <HiDownload className='w-4 h-4' />
-            Export
-          </button>
-          <button
-            onClick={() => { setEditingTransaction(null); setShowModal(true); }}
-            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-1.5 transition-colors'
-          >
-            <HiPlus className='w-4 h-4' />
-            New Transaction
-          </button>
+          <Button variant='secondary' icon={HiDownload}>Export</Button>
+          <Button variant='primary' icon={HiPlus} onClick={openNew}>New Transaction</Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-        <div className='bg-white border border-slate-200 border-t-2 border-t-emerald-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
-          <div className='flex items-center justify-between mb-3'>
-            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Total Value</span>
-            <div className='w-9 h-9 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center'>
-              <HiCurrencyDollar className='w-5 h-5 text-emerald-600' />
-            </div>
-          </div>
-          <div className='text-2xl font-bold text-slate-900'>{fmtCurrency(metrics.totalValue)}</div>
-          <div className='text-xs text-slate-500 mt-1'>Completed transactions</div>
-        </div>
-
-        <div className='bg-white border border-slate-200 border-t-2 border-t-blue-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
-          <div className='flex items-center justify-between mb-3'>
-            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Commission</span>
-            <div className='w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center'>
-              <HiCurrencyDollar className='w-5 h-5 text-blue-600' />
-            </div>
-          </div>
-          <div className='text-2xl font-bold text-slate-900'>{fmtCurrency(metrics.totalCommission)}</div>
-          <div className='text-xs text-slate-500 mt-1'>From completed deals</div>
-        </div>
-
-        <div className='bg-white border border-slate-200 border-t-2 border-t-purple-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
-          <div className='flex items-center justify-between mb-3'>
-            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Completed</span>
-            <div className='w-9 h-9 rounded-xl bg-purple-50 ring-1 ring-purple-100 flex items-center justify-center'>
-              <HiCheck className='w-5 h-5 text-purple-600' />
-            </div>
-          </div>
-          <div className='text-2xl font-bold text-slate-900'>{metrics.completed}</div>
-          <div className='text-xs text-slate-500 mt-1'>Successful transactions</div>
-        </div>
-
-        <div className='bg-white border border-slate-200 border-t-2 border-t-amber-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
-          <div className='flex items-center justify-between mb-3'>
-            <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Pending</span>
-            <div className='w-9 h-9 rounded-xl bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center'>
-              <HiClock className='w-5 h-5 text-amber-600' />
-            </div>
-          </div>
-          <div className='text-2xl font-bold text-slate-900'>{metrics.pending}</div>
-          <div className='text-xs text-slate-500 mt-1'>In progress</div>
-        </div>
+      {/* KPI cards */}
+      <div className='grid grid-cols-2 lg:grid-cols-4 gap-4'>
+        <KpiCard title='Total Pipeline' value={fmtINR(stats.totalPipeline)}    sub='All active deals'  color='emerald' icon={HiCurrencyDollar} />
+        <KpiCard title='Commission'    value={fmtINR(stats.totalCommission)}  sub='From completed'    color='blue'    icon={HiCurrencyDollar} />
+        <KpiCard title='Completed'     value={stats.completed ?? 0}           sub='Successful deals'  color='purple'  icon={HiCheck} />
+        <KpiCard title='Pending'       value={stats.pending   ?? 0}           sub='In progress'       color='amber'   icon={HiClock} />
       </div>
 
       {/* Filters */}
-      <div className='bg-white border border-slate-200 rounded-xl p-4'>
-        <div className='flex flex-wrap items-center gap-3'>
-          <div className='flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white flex-1 max-w-xs'>
-            <HiSearch className='w-4 h-4 text-slate-400' />
-            <input
-              type='text'
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder='Search transactions...'
-              className='bg-transparent outline-none flex-1 text-sm text-slate-700 placeholder:text-slate-400'
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className='text-slate-400 hover:text-slate-600'>
-                <HiX className='w-4 h-4' />
-              </button>
-            )}
-          </div>
-
-          <div className='relative'>
-            <button
-              onClick={() => { setShowTypeDropdown(!showTypeDropdown); setShowStatusDropdown(false); }}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-600 flex items-center gap-2 hover:bg-slate-50'
-            >
-              Type: {typeFilter}
-              <HiChevronDown className='w-4 h-4' />
-            </button>
-            {showTypeDropdown && (
-              <div className='absolute top-full left-0 mt-1 w-32 bg-white border border-slate-200 rounded-lg shadow-lg z-10'>
-                {TRANSACTION_TYPES.map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => { setTypeFilter(type); setShowTypeDropdown(false); }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${typeFilter === type ? 'bg-slate-100 font-medium' : ''}`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className='relative'>
-            <button
-              onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowTypeDropdown(false); }}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-600 flex items-center gap-2 hover:bg-slate-50'
-            >
-              Status: {statusFilter}
-              <HiChevronDown className='w-4 h-4' />
-            </button>
-            {showStatusDropdown && (
-              <div className='absolute top-full left-0 mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-10'>
-                {TRANSACTION_STATUS.map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => { setStatusFilter(status); setShowStatusDropdown(false); }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${statusFilter === status ? 'bg-slate-100 font-medium' : ''}`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {(typeFilter !== 'All' || statusFilter !== 'All' || searchQuery) && (
-            <button
-              onClick={() => { setTypeFilter('All'); setStatusFilter('All'); setSearchQuery(''); }}
-              className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-1'
-            >
+      <div className='bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center gap-3'>
+        <div className='flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 flex-1 min-w-0 max-w-xs'>
+          <HiSearch className='w-4 h-4 text-slate-400 flex-shrink-0' />
+          <input
+            type='text'
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder='Search by property or client…'
+            className='bg-transparent outline-none flex-1 text-sm text-slate-700 placeholder:text-slate-400 min-w-0'
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className='text-slate-400 hover:text-slate-600 flex-shrink-0'>
               <HiX className='w-4 h-4' />
-              Clear filters
             </button>
           )}
         </div>
+
+        <FilterDropdown label='Type'   value={typeFilter}   options={TYPE_OPTS}   onChange={setTypeFilter} />
+        <FilterDropdown label='Status' value={statusFilter} options={STATUS_OPTS} onChange={setStatusFilter} />
+
+        {(typeFilter !== 'All' || statusFilter !== 'All' || searchQuery) && (
+          <button
+            onClick={() => { setTypeFilter('All'); setStatusFilter('All'); setSearchQuery(''); }}
+            className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-1'
+          >
+            <HiX className='w-4 h-4' /> Clear
+          </button>
+        )}
       </div>
 
-      {/* Transactions Table */}
+      {/* Table */}
       <div className='bg-white border border-slate-200 rounded-xl overflow-hidden'>
-        <div className='overflow-x-auto'>
-          <table className='w-full'>
-            <thead className='bg-slate-50'>
-              <tr>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Property</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Client</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Type</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Amount</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Commission</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Status</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Date</th>
-                <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Actions</th>
-              </tr>
-            </thead>
-            <tbody className='divide-y divide-slate-100'>
-              {filteredTransactions.map((transaction) => {
-                const statusColors = STATUS_COLORS[transaction.status] || STATUS_COLORS.pending;
-                const StatusIcon = statusColors.icon;
-                return (
-                  <tr key={transaction._id} className='hover:bg-slate-50'>
-                    <td className='px-4 py-3'>
-                      <div className='flex items-center gap-2'>
-                        <div className='w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center'>
-                          <HiHome className='w-4 h-4 text-slate-500' />
-                        </div>
-                        <span className='text-sm font-medium text-slate-900 truncate max-w-[180px]'>
-                          {transaction.propertyName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <div className='flex items-center gap-2'>
-                        <div className='w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center'>
-                          <span className='text-xs font-medium text-slate-600'>
-                            {transaction.clientName.charAt(0).toUpperCase()}
+        {loading ? (
+          <div className='flex items-center justify-center py-16'><Spinner /></div>
+        ) : transactions.length === 0 ? (
+          <EmptyState
+            icon={HiCurrencyDollar}
+            title='No transactions yet'
+            body='Create your first transaction to start tracking deals.'
+            action={<Button variant='primary' icon={HiPlus} onClick={openNew}>New Transaction</Button>}
+          />
+        ) : (
+          <div className='overflow-x-auto'>
+            <table className='w-full'>
+              <thead className='bg-slate-50 border-b border-slate-200'>
+                <tr>
+                  {['Property', 'Client', 'Type', 'Amount', 'Commission', 'Status', 'Date', ''].map((h) => (
+                    <th key={h} className='text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap'>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className='divide-y divide-slate-100'>
+                {transactions.map((t) => {
+                  const sm = STATUS_META[t.status] || STATUS_META.pending;
+                  return (
+                    <tr key={t._id} className='hover:bg-slate-50 transition-colors'>
+                      <td className='px-4 py-3'>
+                        <div className='flex items-center gap-2'>
+                          <div className='w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0'>
+                            <HiHome className='w-4 h-4 text-slate-500' />
+                          </div>
+                          <span className='text-sm font-medium text-slate-900 truncate max-w-[160px]'>
+                            {t.propertyName}
                           </span>
                         </div>
-                        <span className='text-sm text-slate-700'>{transaction.clientName}</span>
-                      </div>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className='text-sm text-slate-600 capitalize'>{transaction.type}</span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className='text-sm font-semibold text-slate-900'>{fmtCurrency(transaction.amount)}</span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className='text-sm text-emerald-600 font-medium'>{fmtCurrency(transaction.commission)}</span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors.bg} ${statusColors.text}`}>
-                        <StatusIcon className='w-3 h-3' />
-                        {transaction.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className='text-sm text-slate-500'>
-                        {new Date(transaction.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <div className='relative'>
-                        <button
-                          onClick={() => setShowActionsMenu(showActionsMenu === transaction._id ? null : transaction._id)}
-                          className='p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600'
-                        >
-                          <HiDotsVertical className='w-5 h-5' />
-                        </button>
-                        {showActionsMenu === transaction._id && (
-                          <div className='absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-10'>
-                            <button
-                              onClick={() => openEditModal(transaction)}
-                              className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2'
-                            >
-                              <HiPencil className='w-4 h-4' />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTransaction(transaction._id)}
-                              className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2'
-                            >
-                              <HiTrash className='w-4 h-4' />
-                              Delete
-                            </button>
+                      </td>
+                      <td className='px-4 py-3'>
+                        <div className='flex flex-col gap-0.5'>
+                          <div className='flex items-center gap-2'>
+                            <div className='w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0'>
+                              <span className='text-xs font-semibold text-indigo-600'>
+                                {t.clientName?.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className='text-sm text-slate-700'>{t.clientName}</span>
                           </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredTransactions.length === 0 && (
-                <tr>
-                  <td colSpan={8} className='px-4 py-12 text-center'>
-                    <div className='flex flex-col items-center'>
-                      <HiCurrencyDollar className='w-12 h-12 text-slate-300 mb-3' />
-                      <p className='text-sm text-slate-500'>No transactions found</p>
-                      <button
-                        onClick={() => { setEditingTransaction(null); setShowModal(true); }}
-                        className='mt-3 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800'
-                      >
-                        Create your first transaction
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                          {t.coAgentName && (
+                            <span className='text-xs text-slate-400 pl-9'>↗ {t.coAgentName}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className='px-4 py-3'>
+                        <span className='text-sm text-slate-600 capitalize'>{t.type}</span>
+                      </td>
+                      <td className='px-4 py-3'>
+                        <span className='text-sm font-semibold text-slate-900'>{fmtINR(t.amount)}</span>
+                      </td>
+                      <td className='px-4 py-3'>
+                        <div className='flex items-center gap-1'>
+                          <span className='text-sm font-medium text-emerald-600'>{fmtINR(t.commission)}</span>
+                          {t.commissionPercent > 0 && (
+                            <span className='text-xs text-slate-400'>({t.commissionPercent}%)</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className='px-4 py-3'>
+                        <Badge variant={sm.variant}>{sm.label}</Badge>
+                      </td>
+                      <td className='px-4 py-3 whitespace-nowrap'>
+                        <span className='text-sm text-slate-500'>{fmtDate(t.date)}</span>
+                      </td>
+                      <td className='px-4 py-3'>
+                        <div className='flex items-center justify-end gap-1'>
+                          <button
+                            onClick={() => openEdit(t)}
+                            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors'
+                            title='Edit'
+                          >
+                            <HiPencil className='w-4 h-4' />
+                          </button>
+                          <button
+                            onClick={() => setPendingDelete(t._id)}
+                            className='p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors'
+                            title='Delete'
+                          >
+                            <HiTrash className='w-4 h-4' />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {total > transactions.length && (
+              <div className='px-4 py-3 border-t border-slate-100 text-xs text-slate-500 text-center'>
+                Showing {transactions.length} of {total} — adjust filters to narrow results
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Modal */}
-      <TransactionModal
-        isOpen={showModal}
-        onClose={() => { setShowModal(false); setEditingTransaction(null); }}
-        transaction={editingTransaction}
-        onSave={handleSaveTransaction}
+      <TransactionDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        transaction={editing}
+        onSaved={() => { load(); loadStats(); }}
       />
+
       <ConfirmDialog
         open={!!pendingDelete}
         title='Delete transaction?'
-        description='This cannot be undone.'
+        description={deleteError || 'This action cannot be undone.'}
         confirmLabel='Delete'
-        onConfirm={() => { setTransactions(prev => prev.filter(t => t._id !== pendingDelete)); setPendingDelete(null); }}
-        onCancel={() => setPendingDelete(null)}
+        onConfirm={handleDelete}
+        onCancel={() => { setPendingDelete(null); setDeleteError(''); }}
       />
     </div>
   );

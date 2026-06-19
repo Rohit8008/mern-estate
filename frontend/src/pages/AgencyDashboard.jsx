@@ -20,6 +20,7 @@ const STATUS_COLORS = {
   available: '#f59e0b',
   under_negotiation: '#3b82f6',
   sold: '#10b981',
+  rented: '#8b5cf6',
 };
 
 const WIDGET_TYPES = [
@@ -243,7 +244,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
                   <tr key={l._id} className='border-b border-slate-50'>
                     <td className='py-1.5 text-slate-800 truncate max-w-[120px]'>{l.name}</td>
                     <td className='py-1.5 text-slate-600'>{l.city || '-'}</td>
-                    <td className='py-1.5'><span className={`capitalize px-1.5 py-0.5 rounded text-[10px] font-medium ${l.status === 'available' ? 'bg-green-100 text-green-700' : l.status === 'sold' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{(l.status || '').replace('_', ' ')}</span></td>
+                    <td className='py-1.5'><span className={`capitalize px-1.5 py-0.5 rounded text-[10px] font-medium ${l.status === 'available' ? 'bg-green-100 text-green-700' : l.status === 'sold' ? 'bg-blue-100 text-blue-700' : l.status === 'rented' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>{(l.status || '').replace('_', ' ')}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -880,6 +881,7 @@ export default function AgencyDashboard() {
                       </div>
                       <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${l.status === 'available' ? 'bg-green-100 text-green-700' :
                           l.status === 'sold' ? 'bg-blue-100 text-blue-700' :
+                          l.status === 'rented' ? 'bg-purple-100 text-purple-700' :
                             'bg-amber-100 text-amber-700'
                         }`}>{(l.status || '').replace('_', ' ')}</span>
                     </div>

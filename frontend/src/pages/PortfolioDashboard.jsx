@@ -160,6 +160,7 @@ export default function PortfolioDashboard() {
           .status { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
           .status-available { background: #d1fae5; color: #065f46; }
           .status-sold { background: #dbeafe; color: #1e40af; }
+          .status-rented { background: #ede9fe; color: #5b21b6; }
           .status-under_negotiation { background: #fef3c7; color: #92400e; }
           .footer { margin-top: 30px; font-size: 12px; color: #94a3b8; text-align: center; }
           @media print { body { padding: 0; } }

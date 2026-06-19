@@ -15,17 +15,19 @@ const VIEW_TABS = [
   { id: 'map', label: 'Map' },
 ];
 
-const STATUS_ORDER = ['available', 'under_negotiation', 'sold'];
+const STATUS_ORDER = ['available', 'under_negotiation', 'sold', 'rented'];
 const STATUS_LABEL = {
   available: 'New properties',
   under_negotiation: 'Negotiation',
-  sold: 'Sold / Rented',
+  sold: 'Sold',
+  rented: 'Rented',
 };
 
 const STATUS_STYLE = {
   available: { stripe: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
   under_negotiation: { stripe: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border-amber-200' },
   sold: { stripe: 'bg-slate-500', pill: 'bg-slate-100 text-slate-800 border-slate-200' },
+  rented: { stripe: 'bg-purple-500', pill: 'bg-purple-50 text-purple-800 border-purple-200' },
 };
 
 

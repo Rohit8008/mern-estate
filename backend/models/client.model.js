@@ -23,6 +23,7 @@ const dealSchema = new mongoose.Schema({
     default: 'new_lead',
   },
   value: { type: Number, default: 0 },
+  type: { type: String, enum: ['sale', 'rent', 'lease'], default: 'sale' },
   expectedCloseDate: { type: Date },
   commission: {
     percentage: { type: Number, default: 0, min: 0, max: 100 },
@@ -34,6 +35,11 @@ const dealSchema = new mongoose.Schema({
     },
   },
   notes: { type: String, default: '' },
+  transactionRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
+  coAgentRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', default: null },
+  coAgentName: { type: String, default: '' },
+  coAgentCommission: { type: Number, default: 0 },
+  coAgentCommissionPercent: { type: Number, default: 0 },
   stageHistory: [{
     stage: String,
     changedAt: { type: Date, default: Date.now },
@@ -110,6 +116,13 @@ const clientSchema = new mongoose.Schema(
     preferredLocations: [{ type: String }],
     propertyType: { type: String, default: '' }, // residential, commercial, plot, etc.
     requirements: { type: String, default: '', maxlength: 2000 },
+
+    contactType: {
+      type: String,
+      enum: ['lead', 'co_agent', 'referral_partner'],
+      default: 'lead',
+      index: true,
+    },
 
     // Metadata
     tags: { type: [String], default: [] },

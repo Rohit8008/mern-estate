@@ -34,6 +34,7 @@ import reportTemplateRouter from './routes/reportTemplate.route.js';
 import generatedReportRouter from './routes/generatedReport.route.js';
 import searchRouter from './routes/search.route.js';
 import contactRouter from './routes/contact.route.js';
+import transactionRouter from './routes/transaction.route.js';
 
 import {
   securityHeaders,
@@ -46,6 +47,7 @@ import {
 
 import { config } from './config/environment.js';
 import { globalErrorHandler } from './utils/error.js';
+import { encryptResponse } from './middleware/encryptResponse.js';
 
 const __dirname = path.resolve();
 
@@ -89,6 +91,8 @@ export function createApp() {
     app.use('/api/', apiRateLimit);
   }
 
+  app.use('/api', encryptResponse);
+
   app.use('/api/health', healthRouter);
   app.use('/api/user', userRouter);
   app.use('/api/auth', authRouter);
@@ -115,6 +119,7 @@ export function createApp() {
   app.use('/api/search', searchRouter);
   app.use('/api/contact', contactRouter);
   app.use('/api/observability', observabilityRouter);
+  app.use('/api/transactions', transactionRouter);
 
   app.use(express.static(path.join(__dirname, '/frontend/dist')));
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

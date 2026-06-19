@@ -7,6 +7,8 @@
 
 import mongoose from 'mongoose';
 import Client from '../models/client.model.js';
+import Transaction from '../models/transaction.model.js';
+import Listing from '../models/listing.model.js';
 import { errorHandler, AppError, NotFoundError } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 import { logActivity } from '../utils/activity.js';
@@ -196,16 +198,70 @@ export const updateDealStage = async (req, res, next) => {
     deal.stage = stage;
 
     // Update client status based on deal stage
+    let newTxId = null;
+    let prevListingStatus = 'available';
     if (stage === 'closed_won') {
       client.status = 'won';
       client.convertedAt = new Date();
+
+      // Auto-create a transaction if not already linked
+      if (!deal.transactionRef) {
+        // Resolve property name and listing status from deal type
+        let propertyName = client.name + ' — Property';
+        const dealType = deal.type || 'sale';
+        const listingStatus = (dealType === 'rent' || dealType === 'lease') ? 'rented' : 'sold';
+
+        if (deal.listingId) {
+          const listing = await Listing.findById(deal.listingId).select('name status').lean();
+          if (listing?.name) propertyName = listing.name;
+          if (listing?.status) prevListingStatus = listing.status;
+        }
+
+        const tx = await Transaction.create({
+          property: deal.listingId || null,
+          propertyName,
+          client: client._id,
+          clientName: client.name,
+          type: dealType,
+          amount: deal.value,
+          commissionPercent: deal.commission?.percentage || 0,
+          commission: deal.commission?.amount || 0,
+          status: 'completed',
+          date: new Date(),
+          notes: 'Auto-created from sales pipeline',
+          agent: req.user.id,
+          dealRef: deal._id,
+        });
+
+        deal.transactionRef = tx._id;
+        newTxId = tx._id;
+
+        if (deal.listingId) {
+          await Listing.findByIdAndUpdate(deal.listingId, { status: listingStatus });
+        }
+      }
     } else if (stage === 'closed_lost') {
       client.status = 'lost';
       client.lostAt = new Date();
       client.lostReason = notes || 'Deal lost';
     }
 
-    await client.save();
+    // Persist all deal/client changes; roll back auto-created transaction and listing on failure
+    try {
+      await client.save();
+    } catch (saveErr) {
+      if (newTxId) {
+        await Transaction.findByIdAndUpdate(newTxId, {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: req.user.id,
+        });
+        if (deal.listingId) {
+          await Listing.findByIdAndUpdate(deal.listingId, { status: prevListingStatus });
+        }
+      }
+      throw saveErr;
+    }
 
     try {
       await logActivity({

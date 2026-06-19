@@ -47,6 +47,7 @@ export default function ContactsBoard() {
   // Filters
   const q = searchParams.get('q') || '';
   const statusFilter = searchParams.get('status') || '';
+  const typeFilter = searchParams.get('contactType') || '';
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -62,6 +63,7 @@ export default function ContactsBoard() {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       if (statusFilter) params.set('status', statusFilter);
+      if (typeFilter) params.set('contactType', typeFilter);
       params.set('limit', '200');
       const response = await apiClient.get(`/clients?${params.toString()}`);
       const data = response?.data || response || [];
@@ -72,7 +74,7 @@ export default function ContactsBoard() {
     } finally {
       setLoading(false);
     }
-  }, [canAccess, q, statusFilter]);
+  }, [canAccess, q, statusFilter, typeFilter]);
 
   useEffect(() => {
     fetchContacts();
@@ -233,7 +235,18 @@ export default function ContactsBoard() {
               ))}
             </select>
 
-            {(q || statusFilter) && (
+            <select
+              value={typeFilter}
+              onChange={(e) => setParam('contactType', e.target.value)}
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none transition-all'
+            >
+              <option value=''>All types</option>
+              <option value='lead'>Leads</option>
+              <option value='co_agent'>Co-Agents</option>
+              <option value='referral_partner'>Referral Partners</option>
+            </select>
+
+            {(q || statusFilter || typeFilter) && (
               <button
                 onClick={() => setSearchParams(new URLSearchParams())}
                 className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
@@ -564,9 +577,17 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
             {(contact.name?.[0] || '?').toUpperCase()}
           </div>
           <div className='min-w-0'>
-            <h3 className='font-semibold text-slate-900 text-sm truncate group-hover:text-blue-700 transition-colors'>
-              {contact.name}
-            </h3>
+            <div className='flex items-center gap-1.5 flex-wrap'>
+              <h3 className='font-semibold text-slate-900 text-sm truncate group-hover:text-blue-700 transition-colors'>
+                {contact.name}
+              </h3>
+              {contact.contactType === 'co_agent' && (
+                <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 whitespace-nowrap'>Co-Agent</span>
+              )}
+              {contact.contactType === 'referral_partner' && (
+                <span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap'>Referral</span>
+              )}
+            </div>
             {contact.organization && (
               <p className='text-xs text-slate-400 truncate'>{contact.organization}</p>
             )}
@@ -672,6 +693,7 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
     priority: contact?.priority || 'medium',
     organization: contact?.organization || '',
     source: contact?.source || '',
+    contactType: contact?.contactType || 'lead',
     propertyType: contact?.propertyType || '',
     preferredLocations: contact?.preferredLocations?.join(', ') || '',
     budgetMin: contact?.budget?.min || '',
@@ -749,6 +771,18 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
               className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
               placeholder='Optional second number'
             />
+          </div>
+          <div>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>Contact Type</label>
+            <select
+              value={formData.contactType}
+              onChange={set('contactType')}
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
+            >
+              <option value='lead'>Lead (Buyer / Renter)</option>
+              <option value='co_agent'>Co-Agent / Broker</option>
+              <option value='referral_partner'>Referral Partner</option>
+            </select>
           </div>
           <div className='grid grid-cols-2 gap-4'>
             <div>

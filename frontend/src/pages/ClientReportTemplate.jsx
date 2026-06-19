@@ -100,8 +100,8 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   function buildPropertyDetails() {
     if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">Property details for <strong style="color:#0f172a;">${propertyName}</strong> will be provided separately upon request.</div>`;
     const l = listing;
-    const statusMap = { available: 'Available', sold: 'Sold', under_negotiation: 'Under Negotiation' };
-    const statusColor = { available: '#16a34a', sold: '#dc2626', under_negotiation: '#d97706' };
+    const statusMap = { available: 'Available', sold: 'Sold', rented: 'Rented', under_negotiation: 'Under Negotiation' };
+    const statusColor = { available: '#16a34a', sold: '#dc2626', rented: '#7c3aed', under_negotiation: '#d97706' };
     const status = l.status || 'available';
     let idx = 0;
     const rows = [

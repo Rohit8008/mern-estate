@@ -73,6 +73,7 @@ export const clientValidation = {
     notes: Joi.string().max(2000).optional().allow(''),
     requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
+    contactType: Joi.string().valid('lead', 'co_agent', 'referral_partner').optional(),
     source: Joi.string().max(100).optional().allow(''),
     organization: Joi.string().max(120).optional().allow(''),
     interestedListings: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(200).optional(),
@@ -97,6 +98,7 @@ export const clientValidation = {
     notes: Joi.string().max(2000).optional().allow(''),
     requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
+    contactType: Joi.string().valid('lead', 'co_agent', 'referral_partner').optional(),
     source: Joi.string().max(100).optional().allow(''),
     organization: Joi.string().max(120).optional().allow(''),
     interestedListings: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).max(200).optional(),
@@ -518,7 +520,7 @@ export const listingValidation = {
     propertyNo: Joi.string().max(50).optional().allow(''),
     remarks: Joi.string().max(2000).optional().allow(''),
     otherAttachment: Joi.string().max(500).pattern(/^(https?:\/\/|\/)/, 'valid URL').optional().allow(''),
-    status: Joi.string().valid('available', 'sold', 'under_negotiation').optional(),
+    status: Joi.string().valid('available', 'sold', 'rented', 'under_negotiation').optional(),
     assignedAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
     propertyCategory: Joi.string().valid('residential', 'commercial', 'land', 'unknown').optional(),
     propertyType: Joi.string().max(50).optional().allow(''),
@@ -579,7 +581,7 @@ export const listingValidation = {
     propertyNo: Joi.string().max(50).optional().allow(''),
     remarks: Joi.string().max(2000).optional().allow(''),
     otherAttachment: Joi.string().max(500).pattern(/^(https?:\/\/|\/)/, 'valid URL').optional().allow(''),
-    status: Joi.string().valid('available', 'sold', 'under_negotiation').optional(),
+    status: Joi.string().valid('available', 'sold', 'rented', 'under_negotiation').optional(),
     assignedAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
     propertyCategory: Joi.string().valid('residential', 'commercial', 'land', 'unknown').optional(),
     propertyType: Joi.string().max(50).optional().allow(''),
@@ -825,5 +827,51 @@ export const categoryValidation = {
       'any.required': 'fields is required',
     }),
   }),
+};
+
+export const transactionValidation = {
+  create: Joi.object({
+    property: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    propertyName: Joi.string().min(1).max(200).required(),
+    client: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    clientName: Joi.string().min(1).max(200).required(),
+    type: Joi.string().valid('sale', 'rent', 'lease').optional(),
+    amount: Joi.number().min(0).required(),
+    commissionPercent: Joi.number().min(0).max(100).optional(),
+    commission: Joi.number().min(0).optional(),
+    status: Joi.string().valid('pending', 'in_progress', 'completed', 'cancelled').optional(),
+    date: Joi.date().iso().optional().allow(null, ''),
+    notes: Joi.string().max(2000).optional().allow(''),
+    coAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    coAgentName: Joi.string().max(200).optional().allow(''),
+    coAgentCommissionPercent: Joi.number().min(0).max(100).optional(),
+    coAgentCommission: Joi.number().min(0).optional(),
+  }).custom((value, helpers) => {
+    const total = (value.commissionPercent || 0) + (value.coAgentCommissionPercent || 0);
+    if (total > 100) return helpers.error('commission.combinedTooHigh');
+    return value;
+  }).messages({ 'commission.combinedTooHigh': 'Combined commission percentage cannot exceed 100%' }),
+
+  update: Joi.object({
+    property: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    propertyName: Joi.string().min(1).max(200).optional(),
+    client: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    clientName: Joi.string().min(1).max(200).optional(),
+    type: Joi.string().valid('sale', 'rent', 'lease').optional(),
+    amount: Joi.number().min(0).optional(),
+    commissionPercent: Joi.number().min(0).max(100).optional(),
+    commission: Joi.number().min(0).optional(),
+    status: Joi.string().valid('pending', 'in_progress', 'completed', 'cancelled').optional(),
+    date: Joi.date().iso().optional().allow(null, ''),
+    notes: Joi.string().max(2000).optional().allow(''),
+    coAgent: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    coAgentName: Joi.string().max(200).optional().allow(''),
+    coAgentCommissionPercent: Joi.number().min(0).max(100).optional(),
+    coAgentCommission: Joi.number().min(0).optional(),
+  }).custom((value, helpers) => {
+    const total = (value.commissionPercent || 0) + (value.coAgentCommissionPercent || 0);
+    if (total > 100) return helpers.error('commission.combinedTooHigh');
+    return value;
+  }).messages({ 'commission.combinedTooHigh': 'Combined commission percentage cannot exceed 100%' }),
 };
 
