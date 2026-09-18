@@ -341,14 +341,34 @@ export function generateSuggestions(searchTerm, documents, options = {}) {
 }
 
 /**
- * Highlight matching terms in text
+ * Escape a string for safe interpolation into HTML.
+ * Everything that leaves highlightMatches is rendered as markup, so the source
+ * text has to be escaped BEFORE the highlight tags go in — otherwise a property
+ * named `<img onerror=...>` executes in every user's search dropdown.
+ */
+export function escapeHtml(text) {
+  return String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Highlight matching terms in text.
+ * Returns HTML: the input is escaped first, then only the <mark> tags this
+ * function adds are live markup. Callers may render the result as HTML.
  */
 export function highlightMatches(text, searchTerms, tag = 'mark') {
-  if (!text || !searchTerms.length) return text;
+  if (!text) return escapeHtml(text);
+  if (!searchTerms || !searchTerms.length) return escapeHtml(text);
 
-  let result = text;
+  let result = escapeHtml(text);
   searchTerms.forEach(term => {
-    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const escapedTerm = escapeHtml(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!escapedTerm) return;
+    const regex = new RegExp(`(${escapedTerm})`, 'gi');
     result = result.replace(regex, `<${tag}>$1</${tag}>`);
   });
 
@@ -356,6 +376,7 @@ export function highlightMatches(text, searchTerms, tag = 'mark') {
 }
 
 export default {
+  escapeHtml,
   levenshteinDistance,
   similarityScore,
   generateNgrams,
