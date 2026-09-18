@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,7 +12,7 @@
         --card-foreground: 222.2 84% 4.9%;
         --popover: 0 0% 100%;
         --popover-foreground: 222.2 84% 4.9%;
-        --primary: 221.2 83.2% 53.3%;
+        --primary: 207 60% 42%;
         --primary-foreground: 210 40% 98%;
         --secondary: 210 40% 96.1%;
         --secondary-foreground: 222.2 47.4% 11.2%;
@@ -22,7 +24,7 @@
         --destructive-foreground: 210 40% 98%;
         --border: 214.3 31.8% 91.4%;
         --input: 214.3 31.8% 91.4%;
-        --ring: 221.2 83.2% 53.3%;
+        --ring: 207 60% 42%;
         --radius: 0.5rem;
     }
 
@@ -42,7 +44,7 @@
         --popover: 220 30% 15%;
         --popover-foreground: 210 40% 96%;
         /* Brand blue */
-        --primary: 217.2 91.2% 59.8%;
+        --primary: 207 55% 58%;
         --primary-foreground: 222.2 47.4% 11.2%;
         /* Subtle surfaces (table headers, badges, hover) */
         --secondary: 217 30% 17%;
@@ -58,15 +60,15 @@
         /* Borders */
         --border: 217 28% 18%;
         --input: 217 28% 14%;
-        --ring: 224.3 76.3% 58%;
+        --ring: 207 55% 58%;
     }
 }
 
 /* Legacy custom variables for backward compatibility */
 :root {
-    --primary-legacy: #2563eb;
-    --primary-light: #3b82f6;
-    --primary-dark: #1d4ed8;
+    --primary-legacy: #2b6faa;
+    --primary-light: #488ac5;
+    --primary-dark: #1d588a;
     --secondary-legacy: #64748b;
     --accent-legacy: #f1f5f9;
     --text-primary: #0f172a;
@@ -74,9 +76,9 @@
     --border-legacy: #e2e8f0;
     --background-legacy: #ffffff;
     --surface: #f8fafc;
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --gradient-primary: linear-gradient(135deg, #2b6faa 0%, #17456d 100%);
+    --gradient-secondary: linear-gradient(135deg, #488ac5 0%, #1d588a 100%);
+    --gradient-success: linear-gradient(135deg, #34a37e 0%, #1d7a5c 100%);
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
@@ -369,6 +371,87 @@ html.compact .input-modern {
     @apply py-2;
 }
 
+/* ═══════════════════════════════════════════
+   TYPOGRAPHY UTILITIES
+   Tailwind ships text-wrap utilities from 3.4;
+   this project is on 3.3.3, so they are defined
+   here rather than left as classes that silently
+   do nothing.
+═══════════════════════════════════════════ */
+@layer utilities {
+    .text-balance { text-wrap: balance; }
+    .text-pretty  { text-wrap: pretty; }
+}
+
+/* Headings should never strand a single word on the last line. */
+h1, h2, h3 {
+    text-wrap: balance;
+}
+
+/* ═══════════════════════════════════════════
+   SKIP LINK
+   The first tab stop on every page. Visually
+   hidden until focused.
+═══════════════════════════════════════════ */
+.skip-link {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -120%);
+    z-index: 100;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0 0 0.75rem 0.75rem;
+    background-color: hsl(var(--foreground));
+    color: hsl(var(--background));
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: transform 0.18s ease;
+}
+
+.skip-link:focus-visible {
+    transform: translate(-50%, 0);
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════
+   MOTION
+   Anchor scrolling is smooth, and every
+   animation in the product is surrendered when
+   the visitor has asked for reduced motion.
+═══════════════════════════════════════════ */
+html {
+    scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .crm-animate-in { animation: none; opacity: 1; transform: none; }
+}
+
+/* ═══════════════════════════════════════════
+   TINTED ELEVATION
+   Shadows carry the hue of the surface they
+   fall on rather than neutral black, which is
+   what makes a stock box-shadow read as flat.
+═══════════════════════════════════════════ */
+:root {
+    --shadow-tint: 215 45% 22%;
+}
+
+.shadow-sm  { box-shadow: 0 1px 2px 0 hsl(var(--shadow-tint) / 0.07); }
+.shadow-md  { box-shadow: 0 4px 10px -2px hsl(var(--shadow-tint) / 0.10), 0 2px 4px -2px hsl(var(--shadow-tint) / 0.06); }
+.shadow-lg  { box-shadow: 0 12px 26px -6px hsl(var(--shadow-tint) / 0.13), 0 4px 8px -4px hsl(var(--shadow-tint) / 0.08); }
+.shadow-xl  { box-shadow: 0 22px 40px -10px hsl(var(--shadow-tint) / 0.16), 0 8px 14px -8px hsl(var(--shadow-tint) / 0.10); }
+
 /* Minimal scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
@@ -379,12 +462,12 @@ html.compact .input-modern {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #c3d2de;
     border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #8fa8bd;
 }
 
 /* Focus — visible only for keyboard navigation */
@@ -399,7 +482,7 @@ html.compact .input-modern {
 
 /* Legacy helper classes — kept for backward compat but point to DS tokens */
 .gradient-text {
-    @apply bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-brand-700 to-brand-500 bg-clip-text text-transparent;
 }
 
 .glass {
@@ -479,6 +562,72 @@ html.compact .input-modern {
 
 /* Nav active glow — used by CrmShell NavItem */
 .crm-nav-active {
-    background-color: rgba(99, 102, 241, 0.14);
-    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.2);
+    background-color: rgba(111, 167, 221, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(111, 167, 221, 0.24);
+}
+/* ── Printing ───────────────────────────────────────────────────────────────
+ *
+ * A pipeline or a team report is a thing people take into a meeting, and the
+ * only print path in the product was the client property report. Rather than a
+ * per-page stylesheet, this is one convention any screen can opt into:
+ *
+ *   .no-print      — chrome that should not appear on paper (sidebar, buttons)
+ *   .print-only    — hidden on screen, shown on paper (a title block)
+ *   .print-area    — when present, ONLY this subtree prints
+ *
+ * Kept as plain CSS rather than Tailwind's `print:` variant because it has to
+ * reach elements this project does not own — the app shell, the html/body
+ * background — and because the `.print-area` isolation needs a descendant
+ * selector that a utility class cannot express.
+ */
+
+.print-only { display: none; }
+
+@media print {
+  /* Ink and page furniture. Backgrounds are dropped by default in most
+   * browsers anyway; making it explicit keeps the output predictable. */
+  @page { margin: 14mm; }
+
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print,
+  nav, aside, header button, footer { display: none !important; }
+
+  .print-only { display: block !important; }
+
+  /* When a page marks its printable region, everything else collapses. */
+  body:has(.print-area) > * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  /* Cards and tables read better flat; shadows and rounded corners print as
+   * grey smudges. */
+  .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: none !important;
+  }
+  .rounded-xl, .rounded-2xl, .rounded-lg { border-radius: 0 !important; }
+
+  .bg-slate-50, .bg-slate-100, .bg-white { background: #fff !important; }
+
+  /* Keep a row or a card from being split across two pages. */
+  tr, li, .break-avoid { break-inside: avoid; page-break-inside: avoid; }
+
+  /* A board is horizontal on screen and unreadable that way on paper. */
+  .print-stack { display: block !important; }
+  .print-stack > * { width: 100% !important; margin-bottom: 1rem; break-inside: avoid; }
+
+  /* Scroll containers have to give up their height or they clip to one screen. */
+  .overflow-y-auto, .overflow-x-auto, .overflow-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  a[href]::after { content: ""; } /* no URL footnotes on an internal report */
 }

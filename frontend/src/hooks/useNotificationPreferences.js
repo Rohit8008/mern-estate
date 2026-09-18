@@ -1,70 +1,84 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiClient } from '../utils/http';
 
-function getPrefsForUser(userId) {
-  if (!userId) {
-    return {
-      pushMessages: true,
-      pushListingUpdates: true,
-    };
+/**
+ * This user's notification preferences, read from their account.
+ *
+ * These used to live in localStorage under `settings_<id>`, which meant they
+ * were per-browser, invisible to the server, and therefore governed nothing
+ * that happened outside the tab — the backend had no idea what anyone had
+ * chosen. They are now stored on the user and this hook reads them.
+ *
+ * The defaults here are permissive on purpose: while the request is in flight
+ * we would rather show a notification than swallow one.
+ */
+
+const FALLBACK = {
+  pushMessages: true,
+  pushListingUpdates: true,
+};
+
+/** Cached across mounts so the bell and Settings don't each refetch. */
+let cache = null;
+let inFlight = null;
+
+function toPushFlags(notifications) {
+  return {
+    pushMessages: notifications?.['message.received']?.inApp !== false,
+    pushListingUpdates: notifications?.['listing.updated']?.inApp !== false,
+  };
+}
+
+async function loadPreferences() {
+  if (cache) return cache;
+  if (!inFlight) {
+    inFlight = apiClient
+      .get('/notifications/preferences')
+      .then((res) => {
+        cache = res?.data || res;
+        return cache;
+      })
+      .finally(() => {
+        inFlight = null;
+      });
   }
+  return inFlight;
+}
 
-  try {
-    const raw = localStorage.getItem(`settings_${userId}`);
-    if (!raw) {
-      return {
-        pushMessages: true,
-        pushListingUpdates: true,
-      };
-    }
-
-    const parsed = JSON.parse(raw);
-    const notifications = parsed?.notifications || {};
-
-    return {
-      pushMessages: notifications.pushMessages !== false,
-      pushListingUpdates: notifications.pushListingUpdates !== false,
-    };
-  } catch (error) {
-    console.error(error);
-    return {
-      pushMessages: true,
-      pushListingUpdates: true,
-    };
-  }
+/** Called after a save, so open screens pick the new values up. */
+export function invalidateNotificationPreferences() {
+  cache = null;
+  window.dispatchEvent(new CustomEvent('preferences:update'));
 }
 
 export function useNotificationPreferences(userId) {
-  const [prefs, setPrefs] = useState(() => getPrefsForUser(userId));
+  const [prefs, setPrefs] = useState(FALLBACK);
 
-  useEffect(() => {
-    setPrefs(getPrefsForUser(userId));
+  const refresh = useCallback(() => {
+    if (!userId) {
+      setPrefs(FALLBACK);
+      return;
+    }
+
+    let cancelled = false;
+    loadPreferences()
+      .then((data) => {
+        if (!cancelled) setPrefs(toPushFlags(data?.notifications));
+      })
+      .catch(() => {
+        if (!cancelled) setPrefs(FALLBACK);
+      });
+
+    return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => {
-    if (!userId) return;
-
-    const onStorage = (e) => {
-      if (e.key === `settings_${userId}`) {
-        setPrefs(getPrefsForUser(userId));
-      }
-    };
-
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [userId]);
+  useEffect(() => refresh(), [refresh]);
 
   useEffect(() => {
-    if (!userId) return;
-
-    const onUpdate = (e) => {
-      const targetUserId = e?.detail?.userId;
-      if (!targetUserId || String(targetUserId) !== String(userId)) return;
-      setPrefs(getPrefsForUser(userId));
-    };
-
-    window.addEventListener('settings:update', onUpdate);
-    return () => window.removeEventListener('settings:update', onUpdate);
-  }, [userId]);
+    const onUpdate = () => refresh();
+    window.addEventListener('preferences:update', onUpdate);
+    return () => window.removeEventListener('preferences:update', onUpdate);
+  }, [refresh]);
 
   return useMemo(() => prefs, [prefs]);
 }
