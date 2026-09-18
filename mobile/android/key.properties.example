@@ -1,0 +1,7 @@
+# Copy this file to android/key.properties (gitignored — never commit the
+# real one) and fill in the values from your own release keystore. See
+# mobile/RELEASE.md for how to generate that keystore in the first place.
+storePassword=REPLACE_ME
+keyPassword=REPLACE_ME
+keyAlias=upload
+storeFile=/absolute/path/to/upload-keystore.jks
