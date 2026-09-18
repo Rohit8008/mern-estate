@@ -13,11 +13,13 @@ import { validateBody, propertyTypeValidation } from '../middleware/validation.j
 
 const router = express.Router();
 
-router.get('/list', getAllPropertyTypes);
-router.get('/:slug', getPropertyTypeBySlug);
-router.post('/create', verifyToken, requirePermission('manage_settings'), validateBody(propertyTypeValidation.create), createPropertyType);
-router.put('/:id', verifyToken, requirePermission('manage_settings'), validateBody(propertyTypeValidation.update), updatePropertyType);
-router.delete('/:id', verifyToken, requirePermission('manage_settings'), deletePropertyType);
-router.post('/seed', verifyToken, requirePermission('manage_settings'), seedDefaultPropertyTypes);
+// Property types described the public browse filters, which no longer exist.
+// Behind a session, like everything else about the property book.
+router.get('/list', verifyToken, getAllPropertyTypes);
+router.get('/:slug', verifyToken, getPropertyTypeBySlug);
+router.post('/create', verifyToken, requirePermission('systemSettings'), validateBody(propertyTypeValidation.create), createPropertyType);
+router.put('/:id', verifyToken, requirePermission('systemSettings'), validateBody(propertyTypeValidation.update), updatePropertyType);
+router.delete('/:id', verifyToken, requirePermission('systemSettings'), deletePropertyType);
+router.post('/seed', verifyToken, requirePermission('systemSettings'), seedDefaultPropertyTypes);
 
 export default router;

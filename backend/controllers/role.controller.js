@@ -1,6 +1,7 @@
 import Role from '../models/role.model.js';
 import User from '../models/user.model.js';
 import { errorHandler, sendSuccessResponse } from '../utils/error.js';
+import { PERMISSION_GROUPS } from '../utils/permissionCatalogue.js';
 
 // Create a new role
 export const createRole = async (req, res, next) => {
@@ -257,55 +258,7 @@ export const getUsersByRole = async (req, res, next) => {
 // Get all available permissions
 export const getAvailablePermissions = async (req, res, next) => {
   try {
-    const permissions = {
-      userManagement: {
-        createUser: 'Create new users',
-        updateUser: 'Update user information',
-        deleteUser: 'Delete users',
-        viewUsers: 'View user list'
-      },
-      ownerManagement: {
-        createOwner: 'Create new owners',
-        updateOwner: 'Update owner information',
-        deleteOwner: 'Delete owners',
-        viewOwners: 'View owner list',
-        toggleOwnerActive: 'Activate/deactivate owners'
-      },
-      listingManagement: {
-        createListing: 'Create new listings',
-        updateListing: 'Update listing information',
-        deleteListing: 'Delete listings',
-        viewListings: 'View listing list',
-        publishListing: 'Publish/unpublish listings'
-      },
-      categoryManagement: {
-        createCategory: 'Create new categories',
-        updateCategory: 'Update category information',
-        deleteCategory: 'Delete categories',
-        viewCategories: 'View category list'
-      },
-      messageManagement: {
-        viewMessages: 'View messages',
-        sendMessages: 'Send messages',
-        deleteMessages: 'Delete messages'
-      },
-      buyerRequirements: {
-        createBuyerRequirement: 'Create buyer requirements',
-        updateBuyerRequirement: 'Update buyer requirements',
-        deleteBuyerRequirement: 'Delete buyer requirements',
-        viewBuyerRequirements: 'View buyer requirements'
-      },
-      system: {
-        uploadFiles: 'Upload files',
-        viewAnalytics: 'View analytics and reports',
-        exportData: 'Export data',
-        manageRoles: 'Manage roles and permissions',
-        systemSettings: 'Access system settings',
-        viewLogs: 'View system logs'
-      }
-    };
-
-    sendSuccessResponse(res, permissions, 'Permissions retrieved successfully');
+    sendSuccessResponse(res, PERMISSION_GROUPS, 'Permissions retrieved successfully');
   } catch (error) {
     next(error);
   }
