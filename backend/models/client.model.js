@@ -34,14 +34,30 @@ const dealSchema = new mongoose.Schema({
       default: 'pending',
     },
   },
-  notes: { type: String, default: '' },
+  notes: { type: String, default: '', maxlength: 2000 },
   transactionRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
   coAgentRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', default: null },
-  coAgentName: { type: String, default: '' },
+  coAgentName: { type: String, default: '', maxlength: 200 },
   coAgentCommission: { type: Number, default: 0 },
   coAgentCommissionPercent: { type: Number, default: 0 },
   stageHistory: [{
-    stage: String,
+    stage: {
+      type: String,
+      enum: [
+        'new_lead',
+        'contacted',
+        'qualified',
+        'initial_contact',
+        'site_visit_scheduled',
+        'site_visit_done',
+        'negotiation',
+        'booking_token',
+        'documentation',
+        'payment_pending',
+        'closed_won',
+        'closed_lost',
+      ],
+    },
     changedAt: { type: Date, default: Date.now },
     changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     notes: String,
@@ -56,7 +72,7 @@ const followUpSchema = new mongoose.Schema({
     enum: ['call', 'email', 'meeting', 'site_visit', 'whatsapp', 'other'],
     default: 'call',
   },
-  notes: { type: String, default: '' },
+  notes: { type: String, default: '', maxlength: 1000 },
   completed: { type: Boolean, default: false },
   completedAt: { type: Date },
   reminderSent: { type: Boolean, default: false },
@@ -78,7 +94,7 @@ const communicationSchema = new mongoose.Schema({
   summary: { type: String, required: true, maxlength: 500 },
   details: { type: String, default: '', maxlength: 5000 },
   duration: { type: Number, min: 0 }, // Duration in minutes for calls/meetings
-  outcome: { type: String, default: '' },
+  outcome: { type: String, default: '', maxlength: 500 },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
 
@@ -86,11 +102,11 @@ const communicationSchema = new mongoose.Schema({
 const clientSchema = new mongoose.Schema(
   {
     // Basic Information
-    name: { type: String, required: true, trim: true, index: true },
-    email: { type: String, default: '', lowercase: true, trim: true, index: true },
-    phone: { type: String, default: '', trim: true, index: true },
-    alternatePhone: { type: String, default: '' },
-    organization: { type: String, default: '' },
+    name: { type: String, required: true, trim: true, index: true, maxlength: 150 },
+    email: { type: String, default: '', lowercase: true, trim: true, index: true, maxlength: 254 },
+    phone: { type: String, default: '', trim: true, index: true, maxlength: 20 },
+    alternatePhone: { type: String, default: '', maxlength: 20 },
+    organization: { type: String, default: '', maxlength: 150 },
 
     // Status and Classification
     status: {
@@ -105,7 +121,7 @@ const clientSchema = new mongoose.Schema(
       default: 'medium',
       index: true,
     },
-    source: { type: String, default: '' }, // How they found us
+    source: { type: String, default: '', maxlength: 100 }, // How they found us
 
     // Budget and Requirements
     budget: {
@@ -114,7 +130,7 @@ const clientSchema = new mongoose.Schema(
       currency: { type: String, default: 'INR' },
     },
     preferredLocations: [{ type: String }],
-    propertyType: { type: String, default: '' }, // residential, commercial, plot, etc.
+    propertyType: { type: String, default: '', maxlength: 100 }, // residential, commercial, plot, etc.
     requirements: { type: String, default: '', maxlength: 2000 },
 
     contactType: {
@@ -126,7 +142,7 @@ const clientSchema = new mongoose.Schema(
 
     // Metadata
     tags: { type: [String], default: [] },
-    notes: { type: String, default: '' },
+    notes: { type: String, default: '', maxlength: 3000 },
 
     // Relationships
     interestedListings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Listing', index: true }],
@@ -143,9 +159,26 @@ const clientSchema = new mongoose.Schema(
     nextFollowUp: { type: Date, index: true },
 
     // Lead Scoring
-    score: { type: Number, default: 0, index: true },
+    /**
+     * How warm this lead is.
+     *
+     * Derived from the score unless someone sets it by hand — an agent who has
+     * spoken to the person knows better than the arithmetic does, and a value
+     * they chose must not be overwritten on the next recalculation.
+     */
+    temperature: {
+      type: String,
+      enum: ['hot', 'warm', 'cold'],
+      default: 'cold',
+      index: true,
+    },
+    /** True once a person has chosen the temperature, pinning it. */
+    temperatureManual: { type: Boolean, default: false },
+
+    score: { type: Number, default: 0, min: 0, max: 100, index: true },
     scoreFactors: {
       engagement: { type: Number, default: 0 },
+      recency: { type: Number, default: 0 },
       budget: { type: Number, default: 0 },
       urgency: { type: Number, default: 0 },
       fit: { type: Number, default: 0 },
@@ -153,10 +186,37 @@ const clientSchema = new mongoose.Schema(
 
     // Conversion Tracking
     convertedAt: { type: Date },
-    lostReason: { type: String },
+    lostReason: { type: String, maxlength: 500 },
     lostAt: { type: Date },
 
     // Soft delete
+    /**
+     * Workspace tags, by id.
+     *
+     * Referenced rather than embedded as text so a rename or recolour applies
+     * everywhere at once. The older free-text `tags` array is left in place for
+     * records that already carry values.
+     */
+    tagIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag', index: true }],
+
+    /**
+     * Photos attached to the lead — a site visit, a whiteboard, a document
+     * someone snapped. There was nowhere to put one; the model had no image
+     * field at all.
+     */
+    photos: [
+      new mongoose.Schema(
+        {
+          url: { type: String, required: true, maxlength: 2000 },
+          caption: { type: String, default: '', maxlength: 200 },
+          uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        },
+        { timestamps: true }
+      ),
+    ],
+    /** Set when a data-subject erasure removed this record's personal details. */
+    erasedAt: { type: Date, default: null },
+    erasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -165,12 +225,14 @@ const clientSchema = new mongoose.Schema(
 );
 
 // Indexes for efficient queries
-clientSchema.index({ name: 'text', email: 'text', phone: 'text', notes: 'text', requirements: 'text' });
-clientSchema.index({ 'deals.stage': 1 });
-clientSchema.index({ 'followUps.dueAt': 1, 'followUps.completed': 1 });
-clientSchema.index({ priority: 1, status: 1 });
-clientSchema.index({ score: -1 });
-clientSchema.index({ createdAt: -1 });
+clientSchema.index({ tenantId: 1, name: 'text', email: 'text', phone: 'text', notes: 'text', requirements: 'text' });
+clientSchema.index({ tenantId: 1, 'deals.stage': 1 });
+clientSchema.index({ tenantId: 1, 'followUps.dueAt': 1, 'followUps.completed': 1 });
+clientSchema.index({ tenantId: 1, priority: 1, status: 1 });
+clientSchema.index({ tenantId: 1, score: -1 });
+clientSchema.index({ tenantId: 1, temperature: 1, status: 1 });
+clientSchema.index({ tenantId: 1, createdAt: -1 });
+clientSchema.index({ tenantId: 1, assignedTo: 1, createdAt: -1 }); // the non-admin list shape
 
 // Pre-save middleware to update nextFollowUp
 clientSchema.pre('save', function(next) {
@@ -210,8 +272,30 @@ clientSchema.methods.calculateScore = function() {
   // Fit score (based on interested listings)
   this.scoreFactors.fit = Math.min(this.interestedListings.length * 5, 20);
 
+  /*
+   * Recency. Without this a lead that was busy six months ago and silent since
+   * keeps the score it earned then, which is the opposite of what the number is
+   * for — it should say "worth calling today".
+   */
+  const lastTouch = this.lastContactAt || this.updatedAt || this.createdAt;
+  const daysSince = lastTouch ? (now - new Date(lastTouch)) / 86400000 : 999;
+  this.scoreFactors.recency =
+    daysSince <= 7 ? 20
+      : daysSince <= 30 ? 12
+      : daysSince <= 90 ? 5
+      : 0;
+
   // Calculate total score
-  this.score = Object.values(this.scoreFactors).reduce((a, b) => a + b, 0);
+  const total = Object.values(this.scoreFactors).reduce((a, b) => a + (Number(b) || 0), 0);
+  // The field is capped at 100 in the schema, so cap here rather than letting
+  // a save fail validation on a lead that is doing well.
+  this.score = Math.max(0, Math.min(100, Math.round(total)));
+
+  // Temperature follows the score, unless a person has pinned it.
+  if (!this.temperatureManual) {
+    this.temperature = this.score >= 60 ? 'hot' : this.score >= 30 ? 'warm' : 'cold';
+  }
+
   return this.score;
 };
 
