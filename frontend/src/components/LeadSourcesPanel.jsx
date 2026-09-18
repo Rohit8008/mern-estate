@@ -91,10 +91,8 @@ export default function LeadSourcesPanel() {
             <HiTag className='w-5 h-5 text-amber-600' />
           </div>
           <div>
-            <h2 className='text-base font-semibold text-slate-900'>Lead sources</h2>
-            <p className='text-xs text-slate-500'>
-              What you spend per month on each channel, so Analytics can show cost per deal
-            </p>
+            <h2 className='text-base font-semibold text-slate-900'>{t('leadSources.leadSources')}</h2>
+            <p className='text-xs text-slate-500'>{t('leadSources.whatYouSpendPerMonthOn')}</p>
           </div>
         </div>
 
@@ -104,7 +102,7 @@ export default function LeadSourcesPanel() {
               label={t('common.name')}
               value={draft.name}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-              placeholder='Property portal'
+              placeholder={t('leadSources.propertyPortal')}
             />
           </div>
           <div className='w-40'>
@@ -122,7 +120,7 @@ export default function LeadSourcesPanel() {
         {loading ? (
           <p className='text-sm text-slate-400 py-4'>{t('common.loading')}</p>
         ) : !sources.length ? (
-          <EmptyState icon={HiTag} title='No sources yet' body='Add the channels your leads come from.' />
+          <EmptyState icon={HiTag} title={t('leadSources.noSourcesYet')} body={t('leadSources.addTheChannelsYourLeadsCome')} />
         ) : (
           <>
             <ul className='divide-y divide-slate-100'>
@@ -151,7 +149,7 @@ export default function LeadSourcesPanel() {
             </ul>
 
             <div className='flex items-center justify-between pt-4 mt-1 border-t border-slate-200'>
-              <span className='text-sm text-slate-500'>Total monthly spend</span>
+              <span className='text-sm text-slate-500'>{t('leadSources.totalMonthlySpend')}</span>
               <span className='text-sm font-semibold text-slate-900'>{formatCurrency(totalMonthly)}</span>
             </div>
           </>
@@ -160,8 +158,8 @@ export default function LeadSourcesPanel() {
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
-        title='Remove this source?'
-        description='Leads that already came from it keep their recorded source.'
+        title={t('leadSources.removeThisSource')}
+        description={t('leadSources.leadsThatAlreadyCameFromIt')}
         confirmLabel={t('common.delete')}
         onConfirm={() => remove(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
@@ -169,9 +167,9 @@ export default function LeadSourcesPanel() {
 
       <ConfirmDialog
         open={Boolean(forcePrompt)}
-        title='This source is in use'
+        title={t('leadSources.thisSourceIsInUse')}
         description={`${forcePrompt?.message || ''} Remove it anyway? Existing leads keep their recorded source.`}
-        confirmLabel='Remove anyway'
+        confirmLabel={t('leadSources.removeAnyway')}
         onConfirm={() => remove(forcePrompt.id, true)}
         onCancel={() => setForcePrompt(null)}
       />

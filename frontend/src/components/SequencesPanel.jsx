@@ -108,10 +108,8 @@ export default function SequencesPanel() {
               <HiLightningBolt className='w-5 h-5 text-amber-600' />
             </div>
             <div>
-              <h2 className='text-base font-semibold text-slate-900'>Follow-up sequences</h2>
-              <p className='text-xs text-slate-500'>
-                A series of touches that runs on its own. Stops automatically when a lead is won or lost.
-              </p>
+              <h2 className='text-base font-semibold text-slate-900'>{t('sequences.followUpSequences')}</h2>
+              <p className='text-xs text-slate-500'>{t('sequences.aSeriesOfTouchesThatRuns')}</p>
             </div>
           </div>
           <Button icon={HiPlus} onClick={() => open(null)}>{t('common.add')}</Button>
@@ -122,8 +120,8 @@ export default function SequencesPanel() {
         ) : !sequences.length ? (
           <EmptyState
             icon={HiLightningBolt}
-            title='No sequences yet'
-            body='Build one to stop follow-ups depending on somebody remembering.'
+            title={t('sequences.noSequencesYet')}
+            body={t('sequences.buildOneToStopFollowUps')}
           />
         ) : (
           <ul className='divide-y divide-slate-100'>
@@ -132,7 +130,7 @@ export default function SequencesPanel() {
                 <div className='min-w-0'>
                   <div className='flex items-center gap-2 flex-wrap'>
                     <span className='text-sm font-medium text-slate-800'>{sequence.name}</span>
-                    {!sequence.isActive && <Badge variant='slate'>Paused</Badge>}
+                    {!sequence.isActive && <Badge variant='slate'>{t('sequences.paused')}</Badge>}
                     {sequence.activeEnrollments > 0 && (
                       <Badge variant='brand'>{sequence.activeEnrollments} running</Badge>
                     )}
@@ -165,7 +163,7 @@ export default function SequencesPanel() {
           open
           onClose={() => setEditing(null)}
           title={editing._id ? 'Edit sequence' : 'New sequence'}
-          description='Each step fires a set number of days after the one before it.'
+          description={t('sequences.eachStepFiresASetNumber')}
           size='2xl'
           footer={
             <>
@@ -181,26 +179,24 @@ export default function SequencesPanel() {
               label={t('common.name')}
               value={draft.name}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-              placeholder='New enquiry nurture'
+              placeholder={t('sequences.newEnquiryNurture')}
             />
             <Input
-              label='Description'
+              label={t('sequences.description')}
               value={draft.description}
               onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-              placeholder='What this is for'
+              placeholder={t('sequences.whatThisIsFor')}
             />
 
             <div>
               <div className='flex items-center justify-between mb-2'>
-                <p className='text-sm font-medium text-slate-700'>Steps</p>
+                <p className='text-sm font-medium text-slate-700'>{t('sequences.steps')}</p>
                 <button
                   type='button'
                   onClick={() => setDraft((d) => ({ ...d, steps: [...d.steps, { ...EMPTY_STEP }] }))}
                   className='inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors'
                 >
-                  <HiPlus className='w-3.5 h-3.5' />
-                  Add step
-                </button>
+                  <HiPlus className='w-3.5 h-3.5' />{t('sequences.addStep')}</button>
               </div>
 
               <ol className='space-y-3'>
@@ -216,7 +212,7 @@ export default function SequencesPanel() {
                           onClick={() => moveStep(index, -1)}
                           disabled={index === 0}
                           className='p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 transition-colors'
-                          aria-label='Move up'
+                          aria-label={t('sequences.moveUp')}
                         >
                           <HiChevronUp className='w-4 h-4' />
                         </button>
@@ -225,7 +221,7 @@ export default function SequencesPanel() {
                           onClick={() => moveStep(index, 1)}
                           disabled={index === draft.steps.length - 1}
                           className='p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 transition-colors'
-                          aria-label='Move down'
+                          aria-label={t('sequences.moveDown')}
                         >
                           <HiChevronDown className='w-4 h-4' />
                         </button>
@@ -235,7 +231,7 @@ export default function SequencesPanel() {
                             ...d, steps: d.steps.filter((_, i) => i !== index),
                           }))}
                           className='p-1 text-rose-500 hover:text-rose-700 transition-colors'
-                          aria-label='Remove step'
+                          aria-label={t('sequences.removeStep')}
                         >
                           <HiTrash className='w-3.5 h-3.5' />
                         </button>
@@ -244,7 +240,7 @@ export default function SequencesPanel() {
 
                     <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
                       <Select
-                        label='Action'
+                        label={t('sequences.action')}
                         value={step.action}
                         onChange={(e) => setStep(index, { action: e.target.value })}
                       >
@@ -266,10 +262,10 @@ export default function SequencesPanel() {
                         label={step.action === 'email' ? 'Subject' : 'Title'}
                         value={step.subject}
                         onChange={(e) => setStep(index, { subject: e.target.value })}
-                        placeholder='Following up on your enquiry'
+                        placeholder={t('sequences.followingUpOnYourEnquiry')}
                       />
                       <Textarea
-                        label='Message'
+                        label={t('sequences.message')}
                         rows={3}
                         value={step.body}
                         onChange={(e) => setStep(index, { body: e.target.value })}
@@ -280,8 +276,7 @@ export default function SequencesPanel() {
                 ))}
               </ol>
 
-              <p className='text-xs text-slate-400 mt-2'>
-                Merge fields: <code>{'{{firstName}}'}</code>, <code>{'{{lastName}}'}</code>,{' '}
+              <p className='text-xs text-slate-400 mt-2'>{t('sequences.mergeFields')}<code>{'{{firstName}}'}</code>, <code>{'{{lastName}}'}</code>,{' '}
                 <code>{'{{phone}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{workspaceName}}'}</code>
               </p>
             </div>
@@ -291,8 +286,8 @@ export default function SequencesPanel() {
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
-        title='Delete this sequence?'
-        description='Leads part-way through it will stop.'
+        title={t('sequences.deleteThisSequence')}
+        description={t('sequences.leadsPartWayThroughItWill')}
         confirmLabel={t('common.delete')}
         onConfirm={() => remove(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
@@ -300,9 +295,9 @@ export default function SequencesPanel() {
 
       <ConfirmDialog
         open={Boolean(forcePrompt)}
-        title='Leads are part-way through'
+        title={t('sequences.leadsArePartWayThrough')}
         description={`${forcePrompt?.message || ''} Delete it anyway? They will stop where they are.`}
-        confirmLabel='Delete anyway'
+        confirmLabel={t('sequences.deleteAnyway')}
         onConfirm={() => remove(forcePrompt.id, true)}
         onCancel={() => setForcePrompt(null)}
       />

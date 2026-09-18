@@ -36,7 +36,7 @@ export default function DealActivityFeed({ dealId }) {
   if (loading) return <p className='text-xs text-slate-400 py-2'>{t('common.loading')}</p>;
 
   if (!items.length) {
-    return <p className='text-xs text-slate-400 py-2'>No history yet — it starts at the first stage change.</p>;
+    return <p className='text-xs text-slate-400 py-2'>{t('dealActivityFeed.noHistoryYetItStartsAt')}</p>;
   }
 
   return (

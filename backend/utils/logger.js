@@ -46,12 +46,30 @@ async function flushStream(stream) {
   }
 }
 
+/**
+ * Batch the next flush to OpenObserve.
+ *
+ * Two properties this needs, both learned the hard way:
+ *
+ *  * **Nothing to ship, nothing to schedule.** Without OO_AUTH `flushStream`
+ *    returns immediately, so arming a timer only creates work that does
+ *    nothing. Buffers still drain at the 50-entry mark, so they stay bounded.
+ *
+ *  * **A pending flush must never hold the process open.** `unref()` keeps this
+ *    timer out of the event loop's liveness count: a best-effort log shipment
+ *    is not a reason to delay shutdown, and under Jest an armed 3s timer is
+ *    reported as a leaked handle — which is exactly what made the suite fail
+ *    intermittently with "Jest has detected the following 1 open handle".
+ */
 function scheduleFlush() {
-  if (flushTimer) return;
+  if (flushTimer || !OO_AUTH) return;
+
   flushTimer = setTimeout(async () => {
     flushTimer = null;
     await Promise.all(STREAMS.map(flushStream));
   }, 3000);
+
+  if (typeof flushTimer.unref === 'function') flushTimer.unref();
 }
 
 function push(stream, entry) {

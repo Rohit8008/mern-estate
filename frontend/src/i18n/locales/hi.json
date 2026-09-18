@@ -193,7 +193,95 @@
       "downloadMyDataHelp": "यह कार्यक्षेत्र आपके बारे में जो कुछ रखता है, JSON फ़ाइल के रूप में"
     },
     "saved": "सेटिंग्स सहेजी गईं",
-    "saveFailed": "सेटिंग्स सहेजी नहीं जा सकीं"
+    "saveFailed": "सेटिंग्स सहेजी नहीं जा सकीं",
+    "accountClosureAndDataRequests": "खाता बंद करना और डेटा अनुरोध",
+    "active": "सक्रिय",
+    "activeSessions": "सक्रिय सत्र",
+    "allowDirectMessages": "सीधे संदेश की अनुमति दें",
+    "allowOtherUsersToSeeYour": "अन्य उपयोगकर्ताओं को अपना ईमेल देखने दें",
+    "changePassword": "पासवर्ड बदलें",
+    "chooseWhatReachesYouInThe": "चुनें कि आपको ऐप में और ईमेल पर क्या मिले",
+    "chooseYourPreferredColorScheme": "अपनी पसंदीदा रंग योजना चुनें",
+    "closeAccount": "खाता बंद करें",
+    "communication": "संचार",
+    "compactMode": "संक्षिप्त मोड",
+    "controlWhatOthersCanSee": "नियंत्रित करें कि अन्य क्या देख सकते हैं",
+    "currentDevice": "वर्तमान डिवाइस",
+    "customizeHowTheAppLooks": "ऐप का रूप अनुकूलित करें",
+    "display": "प्रदर्शन",
+    "displayYourPhoneNumberOnYour": "अपनी प्रोफ़ाइल पर अपना फ़ोन नंबर दिखाएँ",
+    "email": "ईमेल",
+    "event": "इवेंट",
+    "inApp": "ऐप में",
+    "letOtherUsersSendYouMessages": "अन्य उपयोगकर्ताओं को आपको संदेश भेजने दें",
+    "letOthersSeeWhenYouAre": "दूसरों को दिखने दें कि आप कब ऑनलाइन हैं",
+    "manageWhoCanContactYou": "प्रबंधित करें कि आपसे कौन संपर्क कर सकता है",
+    "manageYourAccountPreferences": "अपने खाते की प्राथमिकताएँ प्रबंधित करें",
+    "manageYourAccountSecurity": "अपने खाते की सुरक्षा प्रबंधित करें",
+    "noNotificationTypesAvailable": "कोई सूचना प्रकार उपलब्ध नहीं।",
+    "passwordAuthentication": "पासवर्ड और प्रमाणीकरण",
+    "profile": "प्रोफ़ाइल",
+    "profileVisibility": "प्रोफ़ाइल दृश्यता",
+    "reduceSpacingForMoreContentOn": "स्क्रीन पर अधिक सामग्री के लिए जगह घटाएँ",
+    "saveChanges": "बदलाव सहेजें",
+    "saving": "सहेजा जा रहा है…",
+    "settings": "सेटिंग्स",
+    "showEmailAddress": "ईमेल पता दिखाएँ",
+    "showOnlineStatus": "ऑनलाइन स्थिति दिखाएँ",
+    "showPhoneNumber": "फ़ोन नंबर दिखाएँ",
+    "signOutAll": "सभी से साइन आउट",
+    "signOutAllDevices": "सभी डिवाइस से साइन आउट करें",
+    "signOutFromAllDevices": "सभी डिवाइस से साइन आउट करें?",
+    "theme": "थीम",
+    "thisDeviceActiveNow": "यह डिवाइस · अभी सक्रिय",
+    "thisWillSignYouOutFrom": "यह आपको इस डिवाइस सहित सभी डिवाइस से साइन आउट कर देगा।",
+    "updateYourPasswordRegularlyForSecurity": "सुरक्षा के लिए अपना पासवर्ड नियमित रूप से बदलें",
+    "notificationTypes": {
+      "lead.assigned": {
+        "label": "मुझे सौंपी गई लीड",
+        "description": "जब कोई ग्राहक या लीड आपको सौंपी जाए"
+      },
+      "deal.stage_changed": {
+        "label": "डील का चरण बदला",
+        "description": "जब आपकी डील नए चरण में जाए"
+      },
+      "task.assigned": {
+        "label": "मुझे सौंपा गया कार्य",
+        "description": "जब कोई आपको कार्य सौंपे"
+      },
+      "task.due": {
+        "label": "कार्य देय",
+        "description": "आपका कोई कार्य देय होने से कुछ पहले एक रिमाइंडर"
+      },
+      "followup.due": {
+        "label": "फ़ॉलो-अप देय",
+        "description": "जब कोई निर्धारित फ़ॉलो-अप देय हो जाए"
+      },
+      "buyer.match": {
+        "label": "नया खरीदार मिलान",
+        "description": "जब कोई नई लिस्टिंग आपकी खरीदार आवश्यकता से मेल खाए"
+      },
+      "message.received": {
+        "label": "नया संदेश",
+        "description": "जब कोई सहकर्मी आपको संदेश भेजे"
+      },
+      "import.finished": {
+        "label": "आयात पूर्ण",
+        "description": "जब आपका शुरू किया बल्क आयात पूरा हो"
+      },
+      "share.viewed": {
+        "label": "साझा संपत्ति देखी गई",
+        "description": "जब कोई आपका बनाया शेयर लिंक खोले"
+      },
+      "listing.updated": {
+        "label": "लिस्टिंग अपडेट",
+        "description": "जब आपसे जुड़ी कोई संपत्ति बने या बदले"
+      },
+      "system.alert": {
+        "label": "सिस्टम अलर्ट",
+        "description": "प्लान सीमाएँ, ट्रायल समाप्ति और अन्य खाता सूचनाएँ"
+      }
+    }
   },
   "tags": {
     "title": "टैग",
@@ -232,7 +320,11 @@
     "disabled": "निष्क्रिय",
     "disabledAfterFailures": "बार-बार विफलता के बाद स्वतः निष्क्रिय",
     "empty": "अभी कोई एंडपॉइंट नहीं",
-    "emptyBody": "Zapier, Make, n8n या अपनी सेवा को घटनाएँ भेजने के लिए एंडपॉइंट जोड़ें।"
+    "emptyBody": "Zapier, Make, n8n या अपनी सेवा को घटनाएँ भेजने के लिए एंडपॉइंट जोड़ें।",
+    "includingOnesAddedLater": "— बाद में जोड़ी गई घटनाओं सहित",
+    "queuedDeliveriesForItAreDiscarded": "इसके लिए कतार में लगी डिलीवरी हटा दी जाएँगी। इसे पूर्ववत नहीं किया जा सकता।",
+    "removeThisEndpoint": "यह एंडपॉइंट हटाएँ?",
+    "zapierNewLeads": "Zapier — नई लीड"
   },
   "audit": {
     "title": "ऑडिट लॉग",
@@ -1902,6 +1994,107 @@
     "refresh": "रिफ़्रेश",
     "searchByNameEmailPhoneCity": "नाम, ईमेल, फ़ोन, शहर से खोजें…",
     "state": "राज्य",
-    "status": "स्थिति"
+    "status": "स्थिति",
+    "youDoNotHavePermissionTo": "आपको संपत्ति मालिक देखने की अनुमति नहीं है।"
+  },
+  "auditLog": {
+    "actionOrMessage": "कार्रवाई या संदेश",
+    "changesToClientsTasksOwnersCategories": "ग्राहक, कार्य, मालिक, श्रेणियों और कार्यक्षेत्र सेटिंग्स के बदलाव यहाँ दिखते हैं।",
+    "from": "से",
+    "to": "तक"
+  },
+  "clientPhotos": {
+    "no": "नहीं",
+    "photos": "फ़ोटो",
+    "remove": "हटाएँ?",
+    "removePhoto": "फ़ोटो हटाएँ",
+    "yes": "हाँ"
+  },
+  "crmShell": {
+    "backToSite": "साइट पर वापस",
+    "closeSidebar": "साइडबार बंद करें",
+    "crm": "सीआरएम",
+    "k": "⌘K",
+    "openSidebar": "साइडबार खोलें",
+    "platform": "प्लेटफ़ॉर्म",
+    "thisWorkspaceHasNoScreensEnabled": "इस कार्यक्षेत्र में अभी कोई स्क्रीन चालू नहीं है। कार्यक्षेत्र प्रशासक इन्हें सेटिंग्स में चालू कर सकते हैं।",
+    "toggleDarkMode": "डार्क मोड बदलें",
+    "viewProfile": "प्रोफ़ाइल देखें"
+  },
+  "dealActivityFeed": {
+    "noHistoryYetItStartsAt": "अभी कोई इतिहास नहीं — यह पहले चरण परिवर्तन से शुरू होता है।"
+  },
+  "emailTemplates": {
+    "availableVariables": "उपलब्ध वेरिएबल",
+    "customised": "अनुकूलित",
+    "default": "डिफ़ॉल्ट",
+    "emailPreview": "ईमेल पूर्वावलोकन",
+    "emailTemplates": "ईमेल टेम्पलेट",
+    "preview": "पूर्वावलोकन",
+    "sendToMe": "मुझे भेजें",
+    "subject": "विषय",
+    "useDefault": "डिफ़ॉल्ट उपयोग करें"
+  },
+  "language": {
+    "frontendSrcI18nLocales": "frontend/src/i18n/locales/",
+    "itAppearsHereAutomatically": "। यह यहाँ अपने आप दिखने लगेगा।"
+  },
+  "leadSources": {
+    "addTheChannelsYourLeadsCome": "वे चैनल जोड़ें जहाँ से आपकी लीड आती हैं।",
+    "leadSources": "लीड स्रोत",
+    "leadsThatAlreadyCameFromIt": "इससे पहले आई लीड का दर्ज स्रोत बना रहेगा।",
+    "noSourcesYet": "अभी कोई स्रोत नहीं",
+    "propertyPortal": "प्रॉपर्टी पोर्टल",
+    "removeAnyway": "फिर भी हटाएँ",
+    "removeThisSource": "यह स्रोत हटाएँ?",
+    "thisSourceIsInUse": "यह स्रोत उपयोग में है",
+    "totalMonthlySpend": "कुल मासिक व्यय",
+    "whatYouSpendPerMonthOn": "आप हर चैनल पर प्रति माह कितना खर्च करते हैं, ताकि विश्लेषण प्रति डील लागत दिखा सके"
+  },
+  "sequenceEnrollments": {
+    "enroll": "नामांकित करें",
+    "finished": "पूर्ण",
+    "followUpSequences": "फ़ॉलो-अप शृंखलाएँ",
+    "notOnAnySequence": "किसी शृंखला में नहीं।",
+    "stopThisSequence": "यह शृंखला रोकें"
+  },
+  "sequences": {
+    "aSeriesOfTouchesThatRuns": "संपर्कों की एक शृंखला जो अपने आप चलती है। लीड जीतने या हारने पर अपने आप रुक जाती है।",
+    "action": "कार्रवाई",
+    "addStep": "चरण जोड़ें",
+    "buildOneToStopFollowUps": "एक बनाएँ ताकि फ़ॉलो-अप किसी के याद रखने पर निर्भर न रहें।",
+    "deleteAnyway": "फिर भी हटाएँ",
+    "deleteThisSequence": "यह शृंखला हटाएँ?",
+    "description": "विवरण",
+    "eachStepFiresASetNumber": "हर चरण पिछले चरण के तय दिनों बाद चलता है।",
+    "followUpSequences": "फ़ॉलो-अप शृंखलाएँ",
+    "followingUpOnYourEnquiry": "आपकी पूछताछ के संबंध में",
+    "leadsArePartWayThrough": "लीड बीच में हैं",
+    "leadsPartWayThroughItWill": "इसमें बीच तक पहुँची लीड रुक जाएँगी।",
+    "mergeFields": "मर्ज फ़ील्ड:",
+    "message": "संदेश",
+    "moveDown": "नीचे ले जाएँ",
+    "moveUp": "ऊपर ले जाएँ",
+    "newEnquiryNurture": "नई पूछताछ नर्चर",
+    "noSequencesYet": "अभी कोई शृंखला नहीं",
+    "paused": "रोका गया",
+    "removeStep": "चरण हटाएँ",
+    "steps": "चरण",
+    "whatThisIsFor": "यह किसलिए है"
+  },
+  "systemStatus": {
+    "noJobsRegistered": "कोई कार्य पंजीकृत नहीं।"
+  },
+  "workspaceMail": {
+    "acmeRealty": "Acme Realty",
+    "fromAddress": "प्रेषक पता",
+    "fromName": "प्रेषक नाम",
+    "noreplyAgencyCom": "noreply@agency.com",
+    "outgoingEmail": "बाहर जाने वाला ईमेल",
+    "port": "पोर्ट",
+    "smtpHost": "SMTP होस्ट",
+    "smtpYourProviderCom": "smtp.your-provider.com",
+    "username": "उपयोगकर्ता नाम",
+    "youAgencyCom": "you@agency.com"
   }
 }

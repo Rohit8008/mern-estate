@@ -99,7 +99,7 @@ export default function SystemStatusPanel() {
         {!status.scheduler?.enabled ? (
           <p className='text-sm text-slate-500'>Disabled on this instance (JOBS_ENABLED=false).</p>
         ) : !status.scheduler?.jobs?.length ? (
-          <p className='text-sm text-slate-500'>No jobs registered.</p>
+          <p className='text-sm text-slate-500'>{t('systemStatus.noJobsRegistered')}</p>
         ) : (
           <ul className='divide-y divide-slate-100'>
             {status.scheduler.jobs.map((job) => (

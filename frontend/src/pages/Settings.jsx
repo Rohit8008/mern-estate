@@ -231,17 +231,15 @@ export default function Settings() {
       {/* Page header */}
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>Settings</h1>
-          <p className='text-sm text-slate-500 mt-0.5'>Manage your account preferences</p>
+          <h1 className='text-xl font-bold text-slate-900'>{t('settings.settings')}</h1>
+          <p className='text-sm text-slate-500 mt-0.5'>{t('settings.manageYourAccountPreferences')}</p>
         </div>
         <div className='flex items-center gap-2'>
           <Link
             to='/profile'
             className='inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors'
           >
-            <HiUser className='w-4 h-4' />
-            Profile
-          </Link>
+            <HiUser className='w-4 h-4' />{t('settings.profile')}</Link>
           <button
             onClick={saveSettings}
             disabled={saving}
@@ -249,14 +247,10 @@ export default function Settings() {
           >
             {saving ? (
               <>
-                <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin' />
-                Saving...
-              </>
+                <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin' />{t('settings.saving')}</>
             ) : (
               <>
-                <HiCheck className='w-4 h-4' />
-                Save Changes
-              </>
+                <HiCheck className='w-4 h-4' />{t('settings.saveChanges')}</>
             )}
           </button>
         </div>
@@ -328,31 +322,23 @@ export default function Settings() {
                     <HiBell className='w-5 h-5 text-indigo-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Notifications</h2>
-                    <p className='text-xs text-slate-500'>
-                      Choose what reaches you in the app and by email
-                    </p>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.notifications.heading')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.chooseWhatReachesYouInThe')}</p>
                   </div>
                 </div>
 
                 {loadingPrefs ? (
                   <p className='text-sm text-slate-400 py-4'>Loading your preferences&hellip;</p>
                 ) : Object.keys(catalogue).length === 0 ? (
-                  <p className='text-sm text-slate-400 py-4'>No notification types available.</p>
+                  <p className='text-sm text-slate-400 py-4'>{t('settings.noNotificationTypesAvailable')}</p>
                 ) : (
                   <div className='overflow-x-auto -mx-5 px-5'>
                     <table className='w-full min-w-[26rem]'>
                       <thead>
                         <tr className='border-b border-slate-100'>
-                          <th className='text-left text-xs font-medium text-slate-400 uppercase tracking-wide pb-2'>
-                            Event
-                          </th>
-                          <th className='text-center text-xs font-medium text-slate-400 uppercase tracking-wide pb-2 w-20'>
-                            In app
-                          </th>
-                          <th className='text-center text-xs font-medium text-slate-400 uppercase tracking-wide pb-2 w-20'>
-                            Email
-                          </th>
+                          <th className='text-left text-xs font-medium text-slate-400 uppercase tracking-wide pb-2'>{t('settings.event')}</th>
+                          <th className='text-center text-xs font-medium text-slate-400 uppercase tracking-wide pb-2 w-20'>{t('settings.inApp')}</th>
+                          <th className='text-center text-xs font-medium text-slate-400 uppercase tracking-wide pb-2 w-20'>{t('settings.email')}</th>
                         </tr>
                       </thead>
                       <tbody className='divide-y divide-slate-50'>
@@ -361,21 +347,34 @@ export default function Settings() {
                           return (
                             <tr key={type}>
                               <td className='py-3 pr-4'>
-                                <div className='text-sm font-medium text-slate-800'>{meta.label}</div>
-                                <div className='text-xs text-slate-500'>{meta.description}</div>
+                                {/*
+                                  * The catalogue comes from the server, which
+                                  * stays the single source of WHICH types
+                                  * exist. The wording is translated by the
+                                  * type's stable id, falling back to the
+                                  * server's English when a locale has no
+                                  * entry — so a new type shows up immediately
+                                  * rather than waiting on a translation.
+                                  */}
+                                <div className='text-sm font-medium text-slate-800'>
+                                  {t(`settings.notificationTypes.${type}.label`, meta.label)}
+                                </div>
+                                <div className='text-xs text-slate-500'>
+                                  {t(`settings.notificationTypes.${type}.description`, meta.description)}
+                                </div>
                               </td>
                               <td className='py-3 text-center'>
                                 <Checkbox
                                   checked={pref.inApp !== false}
                                   onChange={() => toggleNotification(type, 'inApp')}
-                                  label={`${meta.label} in app`}
+                                  label={`${t(`settings.notificationTypes.${type}.label`, meta.label)} in app`}
                                 />
                               </td>
                               <td className='py-3 text-center'>
                                 <Checkbox
                                   checked={pref.email === true}
                                   onChange={() => toggleNotification(type, 'email')}
-                                  label={`${meta.label} by email`}
+                                  label={`${t(`settings.notificationTypes.${type}.label`, meta.label)} by email`}
                                 />
                               </td>
                             </tr>
@@ -398,28 +397,28 @@ export default function Settings() {
                     <HiEye className='w-5 h-5 text-emerald-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Profile Visibility</h2>
-                    <p className='text-xs text-slate-500'>Control what others can see</p>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.profileVisibility')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.controlWhatOthersCanSee')}</p>
                   </div>
                 </div>
                 <div>
                   <ToggleSwitch
                     enabled={privacy.showEmail}
                     onToggle={() => togglePrivacy('showEmail')}
-                    label='Show Email Address'
-                    description='Allow other users to see your email'
+                    label={t('settings.showEmailAddress')}
+                    description={t('settings.allowOtherUsersToSeeYour')}
                   />
                   <ToggleSwitch
                     enabled={privacy.showPhone}
                     onToggle={() => togglePrivacy('showPhone')}
-                    label='Show Phone Number'
-                    description='Display your phone number on your profile'
+                    label={t('settings.showPhoneNumber')}
+                    description={t('settings.displayYourPhoneNumberOnYour')}
                   />
                   <ToggleSwitch
                     enabled={privacy.showOnlineStatus}
                     onToggle={() => togglePrivacy('showOnlineStatus')}
-                    label='Show Online Status'
-                    description='Let others see when you are online'
+                    label={t('settings.showOnlineStatus')}
+                    description={t('settings.letOthersSeeWhenYouAre')}
                   />
                 </div>
               </div>
@@ -430,16 +429,16 @@ export default function Settings() {
                     <HiGlobe className='w-5 h-5 text-indigo-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Communication</h2>
-                    <p className='text-xs text-slate-500'>Manage who can contact you</p>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.communication')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.manageWhoCanContactYou')}</p>
                   </div>
                 </div>
                 <div>
                   <ToggleSwitch
                     enabled={privacy.allowMessages}
                     onToggle={() => togglePrivacy('allowMessages')}
-                    label='Allow Direct Messages'
-                    description='Let other users send you messages'
+                    label={t('settings.allowDirectMessages')}
+                    description={t('settings.letOtherUsersSendYouMessages')}
                   />
                 </div>
               </div>
@@ -455,8 +454,8 @@ export default function Settings() {
                     <HiLockClosed className='w-5 h-5 text-rose-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Password & Authentication</h2>
-                    <p className='text-xs text-slate-500'>Manage your account security</p>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.passwordAuthentication')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.manageYourAccountSecurity')}</p>
                   </div>
                 </div>
                 <Link
@@ -468,8 +467,8 @@ export default function Settings() {
                       <HiLockClosed className='w-4 h-4 text-slate-500' />
                     </div>
                     <div>
-                      <div className='text-sm font-medium text-slate-900'>Change Password</div>
-                      <div className='text-xs text-slate-500'>Update your password regularly for security</div>
+                      <div className='text-sm font-medium text-slate-900'>{t('settings.changePassword')}</div>
+                      <div className='text-xs text-slate-500'>{t('settings.updateYourPasswordRegularlyForSecurity')}</div>
                     </div>
                   </div>
                   <HiChevronRight className='w-4 h-4 text-slate-400 group-hover:text-slate-600' />
@@ -482,7 +481,7 @@ export default function Settings() {
                     <HiDeviceMobile className='w-5 h-5 text-amber-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Active Sessions</h2>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.activeSessions')}</h2>
                     <p className='text-xs text-slate-500'>Manage devices where you&apos;re logged in</p>
                   </div>
                 </div>
@@ -493,21 +492,17 @@ export default function Settings() {
                         <HiDeviceMobile className='w-4 h-4 text-emerald-600' />
                       </div>
                       <div>
-                        <div className='text-sm font-medium text-slate-900'>Current Device</div>
-                        <div className='text-xs text-slate-500'>This device · Active now</div>
+                        <div className='text-sm font-medium text-slate-900'>{t('settings.currentDevice')}</div>
+                        <div className='text-xs text-slate-500'>{t('settings.thisDeviceActiveNow')}</div>
                       </div>
                     </div>
-                    <span className='px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold'>
-                      Active
-                    </span>
+                    <span className='px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold'>{t('settings.active')}</span>
                   </div>
                   <button
                     onClick={() => setPendingSignOutAll(true)}
                     className='w-full flex items-center justify-center gap-2 p-3 text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors text-sm font-medium'
                   >
-                    <HiLogout className='w-4 h-4' />
-                    Sign Out All Devices
-                  </button>
+                    <HiLogout className='w-4 h-4' />{t('settings.signOutAllDevices')}</button>
                 </div>
               </div>
 
@@ -517,8 +512,8 @@ export default function Settings() {
                     <HiExclamation className='w-5 h-5 text-rose-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-rose-600'>Danger Zone</h2>
-                    <p className='text-xs text-slate-500'>Account closure and data requests</p>
+                    <h2 className='text-base font-semibold text-rose-600'>{t('settings.dangerZone.heading')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.accountClosureAndDataRequests')}</p>
                   </div>
                 </div>
                 <Link
@@ -526,7 +521,7 @@ export default function Settings() {
                   className='flex items-center justify-between p-4 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors group'
                 >
                   <div>
-                    <div className='text-sm font-medium text-rose-600'>Close Account</div>
+                    <div className='text-sm font-medium text-rose-600'>{t('settings.closeAccount')}</div>
                     <div className='text-xs text-slate-500'>Signs you out everywhere and disables access. Records you created stay with the workspace for its audit trail &mdash; ask an admin to erase your personal data.</div>
                   </div>
                   <HiChevronRight className='w-4 h-4 text-rose-400 group-hover:text-rose-600' />
@@ -584,16 +579,16 @@ export default function Settings() {
                     <HiColorSwatch className='w-5 h-5 text-pink-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Display</h2>
-                    <p className='text-xs text-slate-500'>Customize how the app looks</p>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.display')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.customizeHowTheAppLooks')}</p>
                   </div>
                 </div>
                 <div>
                   <ToggleSwitch
                     enabled={compactMode}
                     onToggle={handleCompactModeToggle}
-                    label='Compact Mode'
-                    description='Reduce spacing for more content on screen'
+                    label={t('settings.compactMode')}
+                    description={t('settings.reduceSpacingForMoreContentOn')}
                   />
                 </div>
               </div>
@@ -604,8 +599,8 @@ export default function Settings() {
                     <HiOutlineMoon className='w-5 h-5 text-slate-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Theme</h2>
-                    <p className='text-xs text-slate-500'>Choose your preferred color scheme</p>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('settings.theme')}</h2>
+                    <p className='text-xs text-slate-500'>{t('settings.chooseYourPreferredColorScheme')}</p>
                   </div>
                 </div>
                 <div className='grid grid-cols-3 gap-3'>
@@ -706,9 +701,9 @@ export default function Settings() {
 
       <ConfirmDialog
         open={pendingSignOutAll}
-        title='Sign out from all devices?'
-        description='This will sign you out from all devices including this one.'
-        confirmLabel='Sign Out All'
+        title={t('settings.signOutFromAllDevices')}
+        description={t('settings.thisWillSignYouOutFrom')}
+        confirmLabel={t('settings.signOutAll')}
         onConfirm={() => { setPendingSignOutAll(false); handleSignOutAllDevices(); }}
         onCancel={() => setPendingSignOutAll(false)}
       />

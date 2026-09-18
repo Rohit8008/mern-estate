@@ -103,7 +103,7 @@ export default function EmailTemplatesPanel() {
             <HiTemplate className='w-5 h-5 text-sky-600' />
           </div>
           <div>
-            <h2 className='text-base font-semibold text-slate-900'>Email templates</h2>
+            <h2 className='text-base font-semibold text-slate-900'>{t('emailTemplates.emailTemplates')}</h2>
             <p className='text-xs text-slate-500'>
               Your own wording for what the CRM sends. Anything you don&rsquo;t customise uses the built-in copy.
             </p>
@@ -124,8 +124,8 @@ export default function EmailTemplatesPanel() {
                 </div>
                 <div className='flex items-center gap-2 flex-shrink-0'>
                   {template.customised
-                    ? <Badge variant='brand'>Customised</Badge>
-                    : <Badge variant='slate'>Default</Badge>}
+                    ? <Badge variant='brand'>{t('emailTemplates.customised')}</Badge>
+                    : <Badge variant='slate'>{t('emailTemplates.default')}</Badge>}
                   <Button variant='secondary' onClick={() => open(template)}>{t('common.edit')}</Button>
                 </div>
               </li>
@@ -144,14 +144,10 @@ export default function EmailTemplatesPanel() {
           footer={
             <>
               {editing.customised && (
-                <Button variant='secondary' icon={HiRefresh} onClick={() => revert(editing.key)}>
-                  Use default
-                </Button>
+                <Button variant='secondary' icon={HiRefresh} onClick={() => revert(editing.key)}>{t('emailTemplates.useDefault')}</Button>
               )}
-              <Button variant='secondary' icon={HiEye} onClick={showPreview}>Preview</Button>
-              <Button variant='secondary' icon={HiPaperAirplane} onClick={sendTest} disabled={busy}>
-                Send to me
-              </Button>
+              <Button variant='secondary' icon={HiEye} onClick={showPreview}>{t('emailTemplates.preview')}</Button>
+              <Button variant='secondary' icon={HiPaperAirplane} onClick={sendTest} disabled={busy}>{t('emailTemplates.sendToMe')}</Button>
               <Button onClick={save} disabled={busy || !draft.subject || !draft.html}>
                 {busy ? t('common.saving') : t('common.save')}
               </Button>
@@ -160,7 +156,7 @@ export default function EmailTemplatesPanel() {
         >
           <div className='space-y-4'>
             <Input
-              label='Subject'
+              label={t('emailTemplates.subject')}
               value={draft.subject}
               onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
             />
@@ -173,7 +169,7 @@ export default function EmailTemplatesPanel() {
             />
 
             <div>
-              <p className='text-xs font-medium text-slate-600 mb-1.5'>Available variables</p>
+              <p className='text-xs font-medium text-slate-600 mb-1.5'>{t('emailTemplates.availableVariables')}</p>
               <div className='flex flex-wrap gap-1.5'>
                 {Object.entries(variables).map(([name, description]) => (
                   <button
@@ -192,7 +188,7 @@ export default function EmailTemplatesPanel() {
             {preview && (
               <div className='border border-slate-200 rounded-xl overflow-hidden'>
                 <div className='px-4 py-2 bg-slate-50 border-b border-slate-200'>
-                  <p className='text-xs text-slate-500'>Subject</p>
+                  <p className='text-xs text-slate-500'>{t('emailTemplates.subject')}</p>
                   <p className='text-sm font-medium text-slate-800'>{preview.subject}</p>
                 </div>
                 {/*
@@ -202,7 +198,7 @@ export default function EmailTemplatesPanel() {
                   * document's origin, scripts or styles in any case.
                   */}
                 <iframe
-                  title='Email preview'
+                  title={t('emailTemplates.emailPreview')}
                   sandbox=''
                   srcDoc={preview.html}
                   className='w-full h-64 bg-white'

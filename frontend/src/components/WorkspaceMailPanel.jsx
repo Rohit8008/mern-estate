@@ -87,7 +87,7 @@ export default function WorkspaceMailPanel() {
             <HiMail className='w-5 h-5 text-indigo-600' />
           </div>
           <div>
-            <h2 className='text-base font-semibold text-slate-900'>Outgoing email</h2>
+            <h2 className='text-base font-semibold text-slate-900'>{t('workspaceMail.outgoingEmail')}</h2>
             <p className='text-xs text-slate-500'>
               {usingWorkspace
                 ? 'Mail is being sent from this workspace’s own server.'
@@ -107,9 +107,9 @@ export default function WorkspaceMailPanel() {
         </label>
 
         <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-          <Input label='SMTP host' placeholder='smtp.your-provider.com' {...field('host')} />
-          <Input label='Port' type='number' placeholder='587' {...field('port')} />
-          <Input label='Username' placeholder='you@agency.com' {...field('user')} />
+          <Input label={t('workspaceMail.smtpHost')} placeholder={t('workspaceMail.smtpYourProviderCom')} {...field('host')} />
+          <Input label={t('workspaceMail.port')} type='number' placeholder='587' {...field('port')} />
+          <Input label={t('workspaceMail.username')} placeholder={t('workspaceMail.youAgencyCom')} {...field('user')} />
           <Input
             label={settings?.hasPassword ? 'Password (stored — type to replace)' : 'Password'}
             type='password'
@@ -117,8 +117,8 @@ export default function WorkspaceMailPanel() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <Input label='From address' placeholder='noreply@agency.com' {...field('from')} />
-          <Input label='From name' placeholder='Acme Realty' {...field('fromName')} />
+          <Input label={t('workspaceMail.fromAddress')} placeholder={t('workspaceMail.noreplyAgencyCom')} {...field('from')} />
+          <Input label={t('workspaceMail.fromName')} placeholder={t('workspaceMail.acmeRealty')} {...field('fromName')} />
         </div>
 
         <label className='flex items-center gap-2.5 mt-4 cursor-pointer'>

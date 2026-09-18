@@ -70,16 +70,14 @@ export default function SequenceEnrollments({ clientId, clientStatus }) {
   return (
     <div>
       <div className='flex items-center justify-between mb-3'>
-        <h3 className='font-semibold text-sm text-slate-900'>Follow-up sequences</h3>
+        <h3 className='font-semibold text-sm text-slate-900'>{t('sequenceEnrollments.followUpSequences')}</h3>
         {!closed && available.length > 0 && (
           <button
             type='button'
             onClick={() => setChoosing((c) => !c)}
             className='inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors'
           >
-            <HiPlay className='w-3.5 h-3.5' />
-            Enroll
-          </button>
+            <HiPlay className='w-3.5 h-3.5' />{t('sequenceEnrollments.enroll')}</button>
         )}
       </div>
 
@@ -111,7 +109,7 @@ export default function SequenceEnrollments({ clientId, clientStatus }) {
       )}
 
       {!enrollments.length ? (
-        <p className='text-xs text-slate-400'>Not on any sequence.</p>
+        <p className='text-xs text-slate-400'>{t('sequenceEnrollments.notOnAnySequence')}</p>
       ) : (
         <ul className='space-y-2'>
           {enrollments.map((enrollment) => {
@@ -128,7 +126,7 @@ export default function SequenceEnrollments({ clientId, clientStatus }) {
                     </p>
                     <p className='text-[11px] text-slate-500 mt-0.5 flex items-center gap-1'>
                       {enrollment.status === 'completed' ? (
-                        <><HiCheckCircle className='w-3.5 h-3.5 text-emerald-500' /> Finished</>
+                        <><HiCheckCircle className='w-3.5 h-3.5 text-emerald-500' />{t('sequenceEnrollments.finished')}</>
                       ) : isActive ? (
                         <>
                           <HiClock className='w-3.5 h-3.5 text-slate-400' />
@@ -148,7 +146,7 @@ export default function SequenceEnrollments({ clientId, clientStatus }) {
                       type='button'
                       onClick={() => stop(enrollment.sequence._id)}
                       className='p-1.5 text-slate-400 hover:text-rose-600 transition-colors flex-shrink-0'
-                      title='Stop this sequence'
+                      title={t('sequenceEnrollments.stopThisSequence')}
                     >
                       <HiStop className='w-4 h-4' />
                     </button>

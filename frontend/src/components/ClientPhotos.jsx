@@ -53,7 +53,7 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
   return (
     <div>
       <div className='flex items-center justify-between mb-3'>
-        <h3 className='font-semibold text-sm text-slate-900'>Photos</h3>
+        <h3 className='font-semibold text-sm text-slate-900'>{t('clientPhotos.photos')}</h3>
         {!readOnly && (
           <button
             type='button'
@@ -108,7 +108,7 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
                   type='button'
                   onClick={() => setPendingDelete(photo._id)}
                   className='absolute top-1 right-1 p-1 rounded-md bg-white/90 text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity'
-                  aria-label='Remove photo'
+                  aria-label={t('clientPhotos.removePhoto')}
                 >
                   <HiTrash className='w-3.5 h-3.5' />
                 </button>
@@ -118,22 +118,18 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
                 // Inline rather than a modal: this sits inside a detail panel
                 // and a second overlay on top reads as a stuck dialog.
                 <div className='absolute inset-0 bg-rose-50/95 rounded-lg flex flex-col items-center justify-center gap-1.5 p-1'>
-                  <span className='text-[10px] text-rose-700 text-center'>Remove?</span>
+                  <span className='text-[10px] text-rose-700 text-center'>{t('clientPhotos.remove')}</span>
                   <div className='flex gap-1'>
                     <button
                       type='button'
                       onClick={() => setPendingDelete(null)}
                       className='px-1.5 py-0.5 text-[10px] bg-white border border-slate-200 rounded'
-                    >
-                      No
-                    </button>
+                    >{t('clientPhotos.no')}</button>
                     <button
                       type='button'
                       onClick={() => remove(photo._id)}
                       className='px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded'
-                    >
-                      Yes
-                    </button>
+                    >{t('clientPhotos.yes')}</button>
                   </div>
                 </div>
               )}

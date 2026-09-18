@@ -115,7 +115,7 @@ export default function AuditLog() {
               icon={HiSearch}
               value={filters.q}
               onChange={setFilter('q')}
-              placeholder='Action or message'
+              placeholder={t('auditLog.actionOrMessage')}
             />
             <Select label={t('audit.entityType')} value={filters.entityType} onChange={setFilter('entityType')}>
               <option value=''>{t('common.none')}</option>
@@ -123,8 +123,8 @@ export default function AuditLog() {
                 <option key={type} value={type}>{type}</option>
               ))}
             </Select>
-            <Input label='From' type='date' value={filters.since} onChange={setFilter('since')} />
-            <Input label='To' type='date' value={filters.until} onChange={setFilter('until')} />
+            <Input label={t('auditLog.from')} type='date' value={filters.since} onChange={setFilter('since')} />
+            <Input label={t('auditLog.to')} type='date' value={filters.until} onChange={setFilter('until')} />
           </div>
         </div>
 
@@ -135,7 +135,7 @@ export default function AuditLog() {
             <EmptyState
               icon={HiClipboardList}
               title={t('audit.empty')}
-              body='Changes to clients, tasks, owners, categories and workspace settings appear here.'
+              body={t('auditLog.changesToClientsTasksOwnersCategories')}
             />
           ) : (
             <ul className='divide-y divide-slate-100'>

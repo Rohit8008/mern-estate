@@ -237,7 +237,7 @@ export default function WebhooksPanel() {
               label={t('common.name')}
               value={draft.name}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-              placeholder='Zapier — new leads'
+              placeholder={t('webhooks.zapierNewLeads')}
             />
             <Input
               label={t('webhooks.endpoint')}
@@ -257,7 +257,7 @@ export default function WebhooksPanel() {
                 />
                 <span className='text-sm text-slate-700'>
                   {t('webhooks.allEvents')}
-                  <span className='text-slate-400'> — including ones added later</span>
+                  <span className='text-slate-400'>{t('webhooks.includingOnesAddedLater')}</span>
                 </span>
               </label>
 
@@ -286,8 +286,8 @@ export default function WebhooksPanel() {
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
-        title='Remove this endpoint?'
-        description='Queued deliveries for it are discarded. This cannot be undone.'
+        title={t('webhooks.removeThisEndpoint')}
+        description={t('webhooks.queuedDeliveriesForItAreDiscarded')}
         confirmLabel={t('common.delete')}
         onConfirm={remove}
         onCancel={() => setPendingDelete(null)}

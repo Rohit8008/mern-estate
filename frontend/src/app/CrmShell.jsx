@@ -165,7 +165,7 @@ export default function CrmShell() {
           type='button'
           onClick={closeSidebar}
           className='fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden'
-          aria-label='Close sidebar'
+          aria-label={t('crmShell.closeSidebar')}
         />
       )}
 
@@ -191,7 +191,7 @@ export default function CrmShell() {
             </div>
             <div className='min-w-0'>
               <div className='text-sm font-bold text-white leading-tight truncate'>{productName}</div>
-              <div className='text-[10px] text-slate-500 leading-tight font-medium'>CRM</div>
+              <div className='text-[10px] text-slate-500 leading-tight font-medium'>{t('crmShell.crm')}</div>
             </div>
           </Link>
           <button
@@ -211,9 +211,7 @@ export default function CrmShell() {
           {currentUser?.isPlatformAdmin && (
             <div>
               <div className='px-3 mb-1.5'>
-                <span className='text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em]'>
-                  Platform
-                </span>
+                <span className='text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em]'>{t('crmShell.platform')}</span>
               </div>
               <NavItem
                 item={{ id: 'platform', route: '/platform', label: 'All workspaces', icon: HiOutlineGlobeAlt }}
@@ -224,10 +222,7 @@ export default function CrmShell() {
           )}
 
           {screensReady && navSections.length === 0 && (
-            <p className='px-3 text-xs text-slate-500 leading-relaxed'>
-              This workspace has no screens enabled yet. A workspace admin can turn them on in
-              Settings.
-            </p>
+            <p className='px-3 text-xs text-slate-500 leading-relaxed'>{t('crmShell.thisWorkspaceHasNoScreensEnabled')}</p>
           )}
           {navSections.map((section) => (
             <div key={section.label}>
@@ -282,9 +277,7 @@ export default function CrmShell() {
                     onClick={() => { closeSidebar(); setProfileOpen(false); }}
                     className='flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors'
                   >
-                    <HiOutlineUser className='w-4 h-4' />
-                    View Profile
-                  </Link>
+                    <HiOutlineUser className='w-4 h-4' />{t('crmShell.viewProfile')}</Link>
                   <Link
                     to='/messages'
                     onClick={() => { closeSidebar(); setProfileOpen(false); }}
@@ -299,9 +292,7 @@ export default function CrmShell() {
                     onClick={() => setProfileOpen(false)}
                     className='flex items-center gap-3 px-4 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition-colors'
                   >
-                    <HiOutlineLogout className='w-4 h-4' />
-                    Back to Site
-                  </Link>
+                    <HiOutlineLogout className='w-4 h-4' />{t('crmShell.backToSite')}</Link>
                 </div>
               </>
             )}
@@ -327,7 +318,7 @@ export default function CrmShell() {
               type='button'
               onClick={() => setSidebarOpen(true)}
               className='lg:hidden p-2 rounded-lg hover:bg-slate-100 flex-shrink-0'
-              aria-label='Open sidebar'
+              aria-label={t('crmShell.openSidebar')}
             >
               <HiMenuAlt2 className='w-5 h-5 text-slate-600' />
             </button>
@@ -342,7 +333,7 @@ export default function CrmShell() {
             >
               <HiOutlineSearch className='w-3.5 h-3.5 flex-shrink-0' />
               <span className='text-sm flex-1 text-left text-slate-400'>{t('nav.search')}…</span>
-              <kbd className='text-[10px] font-medium border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-400 hidden lg:inline-flex'>⌘K</kbd>
+              <kbd className='text-[10px] font-medium border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-400 hidden lg:inline-flex'>{t('crmShell.k')}</kbd>
             </button>
           </div>
 
@@ -352,7 +343,7 @@ export default function CrmShell() {
               type='button'
               onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
               className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
-              aria-label='Toggle dark mode'
+              aria-label={t('crmShell.toggleDarkMode')}
               title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {resolvedTheme === 'dark'

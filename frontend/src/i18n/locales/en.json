@@ -193,7 +193,95 @@
       "downloadMyDataHelp": "Everything this workspace holds about you, as a JSON file"
     },
     "saved": "Settings saved",
-    "saveFailed": "Failed to save settings"
+    "saveFailed": "Failed to save settings",
+    "accountClosureAndDataRequests": "Account closure and data requests",
+    "active": "Active",
+    "activeSessions": "Active Sessions",
+    "allowDirectMessages": "Allow Direct Messages",
+    "allowOtherUsersToSeeYour": "Allow other users to see your email",
+    "changePassword": "Change Password",
+    "chooseWhatReachesYouInThe": "Choose what reaches you in the app and by email",
+    "chooseYourPreferredColorScheme": "Choose your preferred color scheme",
+    "closeAccount": "Close Account",
+    "communication": "Communication",
+    "compactMode": "Compact Mode",
+    "controlWhatOthersCanSee": "Control what others can see",
+    "currentDevice": "Current Device",
+    "customizeHowTheAppLooks": "Customize how the app looks",
+    "display": "Display",
+    "displayYourPhoneNumberOnYour": "Display your phone number on your profile",
+    "email": "Email",
+    "event": "Event",
+    "inApp": "In app",
+    "letOtherUsersSendYouMessages": "Let other users send you messages",
+    "letOthersSeeWhenYouAre": "Let others see when you are online",
+    "manageWhoCanContactYou": "Manage who can contact you",
+    "manageYourAccountPreferences": "Manage your account preferences",
+    "manageYourAccountSecurity": "Manage your account security",
+    "noNotificationTypesAvailable": "No notification types available.",
+    "passwordAuthentication": "Password & Authentication",
+    "profile": "Profile",
+    "profileVisibility": "Profile Visibility",
+    "reduceSpacingForMoreContentOn": "Reduce spacing for more content on screen",
+    "saveChanges": "Save Changes",
+    "saving": "Saving...",
+    "settings": "Settings",
+    "showEmailAddress": "Show Email Address",
+    "showOnlineStatus": "Show Online Status",
+    "showPhoneNumber": "Show Phone Number",
+    "signOutAll": "Sign Out All",
+    "signOutAllDevices": "Sign Out All Devices",
+    "signOutFromAllDevices": "Sign out from all devices?",
+    "theme": "Theme",
+    "thisDeviceActiveNow": "This device · Active now",
+    "thisWillSignYouOutFrom": "This will sign you out from all devices including this one.",
+    "updateYourPasswordRegularlyForSecurity": "Update your password regularly for security",
+    "notificationTypes": {
+      "lead.assigned": {
+        "label": "Lead assigned to me",
+        "description": "When a client or lead is assigned to you"
+      },
+      "deal.stage_changed": {
+        "label": "Deal stage changed",
+        "description": "When a deal you own moves to a new stage"
+      },
+      "task.assigned": {
+        "label": "Task assigned to me",
+        "description": "When someone assigns you a task"
+      },
+      "task.due": {
+        "label": "Task due",
+        "description": "A reminder shortly before one of your tasks is due"
+      },
+      "followup.due": {
+        "label": "Follow-up due",
+        "description": "A reminder when a scheduled follow-up comes due"
+      },
+      "buyer.match": {
+        "label": "New buyer match",
+        "description": "When a new listing matches one of your buyer requirements"
+      },
+      "message.received": {
+        "label": "New message",
+        "description": "When a colleague sends you a message"
+      },
+      "import.finished": {
+        "label": "Import finished",
+        "description": "When a bulk import you started completes"
+      },
+      "share.viewed": {
+        "label": "Shared property viewed",
+        "description": "When someone opens a share link you created"
+      },
+      "listing.updated": {
+        "label": "Listing updates",
+        "description": "When a property you are involved with is created or changed"
+      },
+      "system.alert": {
+        "label": "System alerts",
+        "description": "Plan limits, trial expiry and other account notices"
+      }
+    }
   },
   "tags": {
     "title": "Tags",
@@ -232,7 +320,11 @@
     "disabled": "Disabled",
     "disabledAfterFailures": "Disabled automatically after repeated failures",
     "empty": "No endpoints yet",
-    "emptyBody": "Add an endpoint to forward events to Zapier, Make, n8n or your own service."
+    "emptyBody": "Add an endpoint to forward events to Zapier, Make, n8n or your own service.",
+    "includingOnesAddedLater": "— including ones added later",
+    "queuedDeliveriesForItAreDiscarded": "Queued deliveries for it are discarded. This cannot be undone.",
+    "removeThisEndpoint": "Remove this endpoint?",
+    "zapierNewLeads": "Zapier — new leads"
   },
   "audit": {
     "title": "Audit log",
@@ -1902,6 +1994,107 @@
     "refresh": "Refresh",
     "searchByNameEmailPhoneCity": "Search by name, email, phone, city…",
     "state": "State",
-    "status": "Status"
+    "status": "Status",
+    "youDoNotHavePermissionTo": "You do not have permission to view property owners."
+  },
+  "auditLog": {
+    "actionOrMessage": "Action or message",
+    "changesToClientsTasksOwnersCategories": "Changes to clients, tasks, owners, categories and workspace settings appear here.",
+    "from": "From",
+    "to": "To"
+  },
+  "clientPhotos": {
+    "no": "No",
+    "photos": "Photos",
+    "remove": "Remove?",
+    "removePhoto": "Remove photo",
+    "yes": "Yes"
+  },
+  "crmShell": {
+    "backToSite": "Back to Site",
+    "closeSidebar": "Close sidebar",
+    "crm": "CRM",
+    "k": "⌘K",
+    "openSidebar": "Open sidebar",
+    "platform": "Platform",
+    "thisWorkspaceHasNoScreensEnabled": "This workspace has no screens enabled yet. A workspace admin can turn them on in\n              Settings.",
+    "toggleDarkMode": "Toggle dark mode",
+    "viewProfile": "View Profile"
+  },
+  "dealActivityFeed": {
+    "noHistoryYetItStartsAt": "No history yet — it starts at the first stage change."
+  },
+  "emailTemplates": {
+    "availableVariables": "Available variables",
+    "customised": "Customised",
+    "default": "Default",
+    "emailPreview": "Email preview",
+    "emailTemplates": "Email templates",
+    "preview": "Preview",
+    "sendToMe": "Send to me",
+    "subject": "Subject",
+    "useDefault": "Use default"
+  },
+  "language": {
+    "frontendSrcI18nLocales": "frontend/src/i18n/locales/",
+    "itAppearsHereAutomatically": ". It appears here automatically."
+  },
+  "leadSources": {
+    "addTheChannelsYourLeadsCome": "Add the channels your leads come from.",
+    "leadSources": "Lead sources",
+    "leadsThatAlreadyCameFromIt": "Leads that already came from it keep their recorded source.",
+    "noSourcesYet": "No sources yet",
+    "propertyPortal": "Property portal",
+    "removeAnyway": "Remove anyway",
+    "removeThisSource": "Remove this source?",
+    "thisSourceIsInUse": "This source is in use",
+    "totalMonthlySpend": "Total monthly spend",
+    "whatYouSpendPerMonthOn": "What you spend per month on each channel, so Analytics can show cost per deal"
+  },
+  "sequenceEnrollments": {
+    "enroll": "Enroll",
+    "finished": "Finished",
+    "followUpSequences": "Follow-up sequences",
+    "notOnAnySequence": "Not on any sequence.",
+    "stopThisSequence": "Stop this sequence"
+  },
+  "sequences": {
+    "aSeriesOfTouchesThatRuns": "A series of touches that runs on its own. Stops automatically when a lead is won or lost.",
+    "action": "Action",
+    "addStep": "Add step",
+    "buildOneToStopFollowUps": "Build one to stop follow-ups depending on somebody remembering.",
+    "deleteAnyway": "Delete anyway",
+    "deleteThisSequence": "Delete this sequence?",
+    "description": "Description",
+    "eachStepFiresASetNumber": "Each step fires a set number of days after the one before it.",
+    "followUpSequences": "Follow-up sequences",
+    "followingUpOnYourEnquiry": "Following up on your enquiry",
+    "leadsArePartWayThrough": "Leads are part-way through",
+    "leadsPartWayThroughItWill": "Leads part-way through it will stop.",
+    "mergeFields": "Merge fields:",
+    "message": "Message",
+    "moveDown": "Move down",
+    "moveUp": "Move up",
+    "newEnquiryNurture": "New enquiry nurture",
+    "noSequencesYet": "No sequences yet",
+    "paused": "Paused",
+    "removeStep": "Remove step",
+    "steps": "Steps",
+    "whatThisIsFor": "What this is for"
+  },
+  "systemStatus": {
+    "noJobsRegistered": "No jobs registered."
+  },
+  "workspaceMail": {
+    "acmeRealty": "Acme Realty",
+    "fromAddress": "From address",
+    "fromName": "From name",
+    "noreplyAgencyCom": "noreply@agency.com",
+    "outgoingEmail": "Outgoing email",
+    "port": "Port",
+    "smtpHost": "SMTP host",
+    "smtpYourProviderCom": "smtp.your-provider.com",
+    "username": "Username",
+    "youAgencyCom": "you@agency.com"
   }
 }

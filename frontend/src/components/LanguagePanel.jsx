@@ -134,8 +134,7 @@ export default function LanguagePanel({ isAdmin }) {
 
           <p className='text-xs text-slate-400 mt-4'>
             Add a language by dropping a JSON file into
-            {' '}<code className='text-slate-500'>frontend/src/i18n/locales/</code>. It appears here automatically.
-          </p>
+            {' '}<code className='text-slate-500'>{t('language.frontendSrcI18nLocales')}</code>{t('language.itAppearsHereAutomatically')}</p>
         </div>
       )}
     </div>

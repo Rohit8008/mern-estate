@@ -144,7 +144,7 @@ export default function OwnersBoard() {
 
   if (!canAccess) {
     return (
-      <EmptyState icon={HiUser} title={t('owners.accessDenied')} body='You do not have permission to view property owners.' />
+      <EmptyState icon={HiUser} title={t('owners.accessDenied')} body={t('owners.youDoNotHavePermissionTo')} />
     );
   }
 
