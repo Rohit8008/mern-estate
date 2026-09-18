@@ -197,6 +197,19 @@ const clientSchema = new mongoose.Schema(
      * everywhere at once. The older free-text `tags` array is left in place for
      * records that already carry values.
      */
+    /**
+     * The last ten digits of `phone`, kept for matching.
+     *
+     * Duplicate detection used a suffix regex — `{ phone: /9876543210$/ }` —
+     * which no index can serve, so every check was a collection scan. In the
+     * importer that became one scan per row inside a single $or, which on a
+     * 5,000-row portal export is a self-inflicted outage.
+     *
+     * Derived in a pre-save hook so it cannot drift from `phone`, and indexed
+     * so the same check is one lookup.
+     */
+    phoneKey: { type: String, default: '', index: true },
+
     tagIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag', index: true }],
 
     /**
@@ -231,8 +244,25 @@ clientSchema.index({ tenantId: 1, 'followUps.dueAt': 1, 'followUps.completed': 1
 clientSchema.index({ tenantId: 1, priority: 1, status: 1 });
 clientSchema.index({ tenantId: 1, score: -1 });
 clientSchema.index({ tenantId: 1, temperature: 1, status: 1 });
+// The duplicate check: one indexed lookup rather than a regex scan per row.
+clientSchema.index({ tenantId: 1, phoneKey: 1 });
 clientSchema.index({ tenantId: 1, createdAt: -1 });
 clientSchema.index({ tenantId: 1, assignedTo: 1, createdAt: -1 }); // the non-admin list shape
+
+/** The digits a phone number is matched on, wherever it came from. */
+export function phoneKeyOf(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+// Derived, never set by hand — a stored value that can disagree with the field
+// it came from is worse than no stored value.
+clientSchema.pre('save', function syncPhoneKey(next) {
+  if (this.isModified('phone') || this.isNew) {
+    this.phoneKey = phoneKeyOf(this.phone);
+  }
+  next();
+});
 
 // Pre-save middleware to update nextFollowUp
 clientSchema.pre('save', function(next) {

@@ -116,3 +116,66 @@ export async function chooseAssignee({ requested, fallback, locality } = {}) {
     automatic: Boolean(chosen),
   };
 }
+
+/**
+ * Assign a whole batch in one go.
+ *
+ * `chooseAssignee` costs two aggregates per call, which is fine for one lead
+ * arriving from a form and ruinous for an import: a 5,000-row portal export
+ * became 10,000 queries, each slower than the last as the rows it had just
+ * written changed the counts.
+ *
+ * This reads the agents and their current load ONCE, then deals the batch out
+ * in memory — keeping round robin's actual promise, which is an even spread,
+ * rather than re-deriving it per row.
+ *
+ * @param {number} count how many leads to assign
+ * @param {object} opts
+ * @param {string} opts.fallback owner when no rule applies
+ * @returns {Promise<{assignees: string[], mode: string, automatic: boolean}>}
+ */
+export async function chooseAssigneesForBatch(count, { fallback } = {}) {
+  const mode = getTenant()?.workflow?.leadAssignment || 'manual';
+
+  if (mode === 'manual' || count <= 0) {
+    return { assignees: Array(Math.max(0, count)).fill(String(fallback)), mode, automatic: false };
+  }
+
+  const agents = await eligibleAgents();
+  if (!agents.length) {
+    return { assignees: Array(count).fill(String(fallback)), mode, automatic: false };
+  }
+
+  // Current open load per agent, read once.
+  const counts = await Client.aggregate([
+    { $match: { isDeleted: { $ne: true }, status: { $nin: ['won', 'lost'] } } },
+    { $group: { _id: '$assignedTo', n: { $sum: 1 } } },
+  ]);
+
+  const load = new Map(agents.map((a) => [String(a._id), 0]));
+  counts.forEach((c) => {
+    const id = String(c._id);
+    if (load.has(id)) load.set(id, c.n);
+  });
+
+  const assignees = [];
+  for (let i = 0; i < count; i += 1) {
+    // Always hand the next lead to whoever is currently lightest, counting the
+    // ones this batch has already dealt out.
+    let best = null;
+    let bestLoad = Infinity;
+    for (const agent of agents) {
+      const id = String(agent._id);
+      const n = load.get(id) ?? 0;
+      if (n < bestLoad) {
+        best = id;
+        bestLoad = n;
+      }
+    }
+
+    assignees.push(best || String(fallback));
+    if (best) load.set(best, bestLoad + 1);
+  }
+
+  return { assignees, mode, automatic: true };
+}

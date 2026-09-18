@@ -35,8 +35,9 @@ async function findDuplicateClient({ phone, email }) {
 
   const key = phoneKey(phone);
   if (key.length >= 10) {
-    // Matched on the trailing digits so stored formatting does not matter.
-    clauses.push({ phone: { $regex: `${key}$` } });
+    // Matched on the derived, indexed key rather than a suffix regex, which no
+    // index can serve.
+    clauses.push({ phoneKey: key });
   }
 
   if (email && String(email).trim()) {

@@ -6,7 +6,7 @@ import {
   buildLeadRow,
   leadDedupeKey,
 } from '../utils/leadImportMapping.js';
-import { chooseAssignee } from '../tenancy/leadAssignment.js';
+import { chooseAssigneesForBatch } from '../tenancy/leadAssignment.js';
 import { asyncHandler, sendSuccessResponse, ValidationError } from '../utils/error.js';
 import { logFromRequest } from '../utils/activity.js';
 import { emitEvent } from '../utils/webhooks.js';
@@ -24,6 +24,30 @@ import { emitEvent } from '../utils/webhooks.js';
 
 /** Enough to be useful, small enough that one request cannot exhaust memory. */
 const MAX_ROWS = 5000;
+
+/**
+ * Which of this file's phone numbers are already on file.
+ *
+ * One indexed lookup on the derived `phoneKey`. This was a `$or` of one suffix
+ * regex per row, which no index can serve — on a 5,000-row portal export that
+ * is 5,000 collection scans in a single query.
+ */
+async function findExistingKeys(parsed) {
+  const keys = [...new Set(
+    parsed.map((p) => leadDedupeKey(p.values)).filter((k) => k.length >= 10)
+  )];
+
+  if (!keys.length) return new Set();
+
+  const existing = await Client.find({
+    isDeleted: { $ne: true },
+    phoneKey: { $in: keys },
+  })
+    .select('phoneKey')
+    .lean();
+
+  return new Set(existing.map((c) => c.phoneKey));
+}
 
 /** Where a row would land, without writing anything. */
 function classify(values, existingKeys) {
@@ -64,16 +88,7 @@ export const previewLeadImport = asyncHandler(async (req, res) => {
 
   const parsed = rows.map((row, i) => buildLeadRow({ row, mapping: mapping || {}, rowNumber: i + 2 }));
 
-  // One query for every phone in the file, rather than one per row.
-  const keys = parsed.map((p) => leadDedupeKey(p.values)).filter((k) => k.length >= 10);
-  const existing = keys.length
-    ? await Client.find({
-        isDeleted: { $ne: true },
-        $or: keys.map((k) => ({ phone: { $regex: `${k}$` } })),
-      }).select('phone').lean()
-    : [];
-
-  const existingKeys = new Set(existing.map((c) => leadDedupeKey(c)));
+  const existingKeys = await findExistingKeys(parsed);
 
   // Duplicates inside the file itself, which a portal export routinely has
   // when the same person enquired twice.
@@ -119,19 +134,14 @@ export const commitLeadImport = asyncHandler(async (req, res) => {
 
   const parsed = rows.map((row, i) => buildLeadRow({ row, mapping: mapping || {}, rowNumber: i + 2 }));
 
-  const keys = parsed.map((p) => leadDedupeKey(p.values)).filter((k) => k.length >= 10);
-  const existing = keys.length
-    ? await Client.find({
-        isDeleted: { $ne: true },
-        $or: keys.map((k) => ({ phone: { $regex: `${k}$` } })),
-      }).select('phone').lean()
-    : [];
-  const existingKeys = new Set(existing.map((c) => leadDedupeKey(c)));
+  const existingKeys = await findExistingKeys(parsed);
 
-  const created = [];
   const skipped = { duplicates: 0, errors: 0 };
   const seen = new Set();
 
+  // Decide what will be written before writing any of it, so the assignment
+  // can be dealt out in one pass.
+  const writable = [];
   for (const { values, errors } of parsed) {
     if (errors.length) { skipped.errors += 1; continue; }
 
@@ -139,18 +149,24 @@ export const commitLeadImport = asyncHandler(async (req, res) => {
     if (key && (existingKeys.has(key) || seen.has(key))) { skipped.duplicates += 1; continue; }
     if (key) seen.add(key);
 
-    // The workspace's assignment rule applies to an imported lead exactly as it
-    // does to one typed in by hand — otherwise a 400-row import all lands on
-    // whoever pressed the button.
-    const { assignedTo } = await chooseAssignee({
-      fallback: req.user.id,
-      locality: values.preferredLocations?.[0],
-    });
+    writable.push(values);
+  }
 
+  /*
+   * The workspace's assignment rule applies to imported leads exactly as it
+   * does to one typed in by hand — otherwise a 400-row import all lands on
+   * whoever pressed the button. Resolved for the whole batch at once: per-row
+   * it cost two aggregates each, and the counts shifted underneath as the rows
+   * it had just written landed.
+   */
+  const { assignees } = await chooseAssigneesForBatch(writable.length, { fallback: req.user.id });
+
+  const created = [];
+  for (const [i, values] of writable.entries()) {
     const doc = new Client({
       ...values,
       source: values.source || defaultSource || 'Import',
-      assignedTo,
+      assignedTo: assignees[i],
       createdBy: req.user.id,
       status: 'lead',
     });

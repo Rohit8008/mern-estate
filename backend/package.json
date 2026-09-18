@@ -30,7 +30,8 @@
     "pm2:restart": "pm2 restart mern-estate-api",
     "pm2:logs": "pm2 logs mern-estate-api",
     "pm2:monit": "pm2 monit",
-    "db:restore": "node scripts/restore.js"
+    "db:restore": "node scripts/restore.js",
+    "db:backfill-phone-keys": "node scripts/backfillPhoneKeys.js"
   },
   "keywords": [],
   "author": "",
