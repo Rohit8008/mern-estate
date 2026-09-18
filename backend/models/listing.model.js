@@ -5,19 +5,24 @@ const listingSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
+      maxlength: 200,
     },
     description: {
       type: String,
       required: false,
       default: '',
+      maxlength: 5000,
     },
     address: {
       type: String,
-      required: true,
+      required: false,
+      default: '',
+      maxlength: 300,
     },
     regularPrice: {
       type: Number,
-      required: true,
+      required: false,
+      default: 0,
     },
     discountPrice: {
       type: Number,
@@ -34,26 +39,47 @@ const listingSchema = new mongoose.Schema(
       required: false,
       default: 1,
     },
+    /**
+     * @deprecated Retired 2026-09-04 by scripts/migrateFieldStores.js.
+     *
+     * A second dynamic-field store that ran in parallel with `attributes`.
+     * Nothing displayed it, so anything written here was invisible — not on the
+     * form, not in filters, not in search — and it silently disagreed with the
+     * native columns (one listing held sqYard 16.66 in the column and 166.66
+     * here).
+     *
+     * Kept on the schema, without a default, purely so an older client sending
+     * the key does not error. Nothing reads it. Dynamic fields go to
+     * `attributes`, or to their native column when NATIVE_FIELD_ALIASES maps
+     * them there.
+     */
     propertyTypeFields: {
       type: Map,
       of: mongoose.Schema.Types.Mixed,
-      default: {},
+      default: undefined,
+      select: false,
     },
     furnished: {
       type: Boolean,
-      required: true,
+      required: false,
+      default: false,
     },
     parking: {
       type: Boolean,
-      required: true,
+      required: false,
+      default: false,
     },
     type: {
       type: String,
-      required: true,
+      required: false,
+      default: 'sale',
+      enum: ['sale', 'rent', 'lease'],
+      index: true,
     },
     offer: {
       type: Boolean,
-      required: true,
+      required: false,
+      default: false,
     },
     imageUrls: {
       type: [String],
@@ -64,7 +90,7 @@ const listingSchema = new mongoose.Schema(
       type: [
         new mongoose.Schema({
           url:       { type: String, required: true },
-          label:     { type: String, default: '' },
+          label:     { type: String, default: '', maxlength: 200 },
           duration:  { type: Number, default: 0 }, // seconds
           createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         }, { timestamps: true })
@@ -106,6 +132,7 @@ const listingSchema = new mongoose.Schema(
       default: '',
       index: true,
       trim: true,
+      maxlength: 100,
     },
     locality: {
       type: String,
@@ -113,18 +140,21 @@ const listingSchema = new mongoose.Schema(
       default: '',
       index: true,
       trim: true,
+      maxlength: 100,
     },
     state: {
       type: String,
       required: false,
       default: '',
       trim: true,
+      maxlength: 100,
     },
     pincode: {
       type: String,
       required: false,
       default: '',
       trim: true,
+      maxlength: 20,
     },
     areaSqFt: {
       type: Number,
@@ -146,7 +176,7 @@ const listingSchema = new mongoose.Schema(
     },
     propertyCategory: {
       type: String,
-      enum: ['residential', 'commercial', 'land', 'unknown'],
+      enum: ['residential', 'commercial', 'land', 'industrial', 'other', 'unknown'],
       default: 'unknown',
       index: true,
     },
@@ -167,6 +197,14 @@ const listingSchema = new mongoose.Schema(
       default: '',
       index: true,
     },
+    /**
+     * Workspace tags, by id.
+     *
+     * Referenced rather than embedded as text so a rename or recolour applies
+     * everywhere at once. The older free-text `tags` array is left in place for
+     * records that already carry values.
+     */
+    tagIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag', index: true }],
     isDeleted: {
       type: Boolean,
       default: false,
@@ -175,18 +213,19 @@ const listingSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null,
-      index: true,
     },
     // New property fields
     areaName: {
       type: String,
       required: false,
       default: '',
+      maxlength: 100,
     },
     plotSize: {
       type: String,
       required: false,
       default: '',
+      maxlength: 50,
     },
     sqYard: {
       type: Number,
@@ -207,11 +246,13 @@ const listingSchema = new mongoose.Schema(
       type: String,
       required: false,
       default: '',
+      maxlength: 50,
     },
     remarks: {
       type: String,
       required: false,
       default: '',
+      maxlength: 3000,
     },
     otherAttachment: {
       type: String, // Store file URL
@@ -223,35 +264,68 @@ const listingSchema = new mongoose.Schema(
 );
 
 // Indexes for better performance
-listingSchema.index({ name: 'text', description: 'text', address: 'text' }); // Text search
-listingSchema.index({ regularPrice: 1 }); // Price range queries
-listingSchema.index({ type: 1, offer: 1 }); // Type and offer filters
-listingSchema.index({ furnished: 1, parking: 1 }); // Boolean filters
-listingSchema.index({ bedrooms: 1, bathrooms: 1 }); // Room count filters
-listingSchema.index({ category: 1 }); // Category filter
-listingSchema.index({ createdAt: -1 }); // Default sort
-listingSchema.index({ regularPrice: 1, createdAt: -1 }); // Price sort with secondary sort
-listingSchema.index({ city: 1, locality: 1 });
-listingSchema.index({ status: 1, assignedAgent: 1, createdAt: -1 });
-listingSchema.index({ propertyCategory: 1, regularPrice: 1, createdAt: -1 });
-listingSchema.index({ isDeleted: 1, createdAt: -1 });
-listingSchema.index({ assignedAgent: 1, city: 1, locality: 1, status: 1 });
+// Text search. Weighted, because a term in a property's NAME is a far stronger
+// signal than the same term buried in a 5,000-character description — without
+// weights every field counts equally and the ranking is meaningless.
+//
+// A collection may have only one text index, so all searchable prose lives
+// here. Locality, area and city are included: "Sushant Lok" and "Sector 57"
+// are the two things people actually type, and leaving them out sent every
+// such search down to the unindexed fuzzy fallback.
+// Every index below is prefixed with `tenantId`.
+//
+// The global tenant plugin adds a `tenantId` equality predicate to EVERY query,
+// so an index that does not lead with it cannot serve `{tenantId: X} sort {…}`:
+// MongoDB has to either scan the tenantId index and sort in memory (32MB cap) or
+// walk the sort index across every workspace's rows and throw most away. On a
+// shared database that also means one large agency degrades search for all the
+// others. An equality prefix is exactly what a compound index wants here.
+listingSchema.index(
+  {
+    tenantId: 1,
+    name: 'text',
+    locality: 'text',
+    areaName: 'text',
+    city: 'text',
+    address: 'text',
+    description: 'text',
+  },
+  {
+    name: 'listing_search_text',
+    weights: { name: 10, locality: 8, areaName: 8, city: 6, address: 4, description: 1 },
+  }
+);
+listingSchema.index({ tenantId: 1, regularPrice: 1 }); // Price range queries
+listingSchema.index({ tenantId: 1, type: 1, offer: 1 }); // Type and offer filters
+listingSchema.index({ tenantId: 1, furnished: 1, parking: 1 }); // Boolean filters
+listingSchema.index({ tenantId: 1, bedrooms: 1, bathrooms: 1 }); // Room count filters
+listingSchema.index({ tenantId: 1, category: 1 }); // Category filter
+listingSchema.index({ tenantId: 1, createdAt: -1 }); // Default sort
+listingSchema.index({ tenantId: 1, regularPrice: 1, createdAt: -1 }); // Price sort with secondary sort
+listingSchema.index({ tenantId: 1, city: 1, locality: 1 });
+listingSchema.index({ tenantId: 1, status: 1, assignedAgent: 1, createdAt: -1 });
+listingSchema.index({ tenantId: 1, propertyCategory: 1, regularPrice: 1, createdAt: -1 });
+listingSchema.index({ tenantId: 1, isDeleted: 1, createdAt: -1 }); // The board's default shape
+listingSchema.index({ tenantId: 1, assignedAgent: 1, city: 1, locality: 1, status: 1 });
 
 // Compound indexes for common query patterns
-listingSchema.index({ 
-  type: 1, 
-  offer: 1, 
-  regularPrice: 1, 
-  createdAt: -1 
-});
-
-listingSchema.index({ 
-  category: 1, 
-  type: 1, 
-  regularPrice: 1 
+listingSchema.index({
+  tenantId: 1,
+  type: 1,
+  offer: 1,
+  regularPrice: 1,
+  createdAt: -1,
 });
 
 listingSchema.index({
+  tenantId: 1,
+  category: 1,
+  type: 1,
+  regularPrice: 1,
+});
+
+listingSchema.index({
+  tenantId: 1,
   city: 1,
   locality: 1,
   propertyCategory: 1,
@@ -263,16 +337,12 @@ listingSchema.index({
 
 // Pre-save middleware for data validation
 listingSchema.pre('save', function(next) {
-  // Ensure regularPrice is positive
-  if (this.regularPrice <= 0) {
-    return next(new Error('Regular price must be positive'));
-  }
-  
-  // Ensure discountPrice is less than regularPrice
-  if (this.discountPrice && this.discountPrice >= this.regularPrice) {
+  // Price is optional (many listings are imported without one) — only enforce the
+  // discount-vs-regular relationship once a real regularPrice is actually set.
+  if (this.discountPrice && this.regularPrice > 0 && this.discountPrice >= this.regularPrice) {
     return next(new Error('Discount price must be less than regular price'));
   }
-  
+
   next();
 });
 

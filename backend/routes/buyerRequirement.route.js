@@ -12,6 +12,8 @@ import {
   removeMatchedProperty,
   updateBuyerStatus,
   getBuyerStats,
+  exportBuyerRequirements,
+  bulkUpdateBuyerRequirements,
 } from '../controllers/buyerRequirement.controller.js';
 
 const router = express.Router();
@@ -27,6 +29,12 @@ router.get('/', getBuyerRequirements);
 
 // Get buyer requirement stats
 router.get('/stats', getBuyerStats);
+
+// Export the filtered set. Before '/:id' so "export" is not read as an id.
+router.get('/export', exportBuyerRequirements);
+
+// Act on a selection. Scoping is enforced in the controller.
+router.post('/bulk', bulkUpdateBuyerRequirements);
 
 // Get specific buyer requirement
 router.get('/:id', getBuyerRequirement);

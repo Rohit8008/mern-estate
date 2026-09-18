@@ -1,12 +1,19 @@
 import Owner from '../models/owner.model.js';
 import { errorHandler } from '../utils/error.js';
-import { io } from '../socket.js';
+import { emitToTenant } from '../socket.js';
+import { logFromRequest, diffFields } from '../utils/activity.js';
 
 export const createOwner = async (req, res, next) => {
   try {
     const owner = await Owner.create(req.body);
+    logFromRequest(req, {
+      entityType: 'owner',
+      entityId: owner._id,
+      action: 'owner.created',
+      message: `Created owner ${owner.name || ''}`.trim(),
+    });
     // Notify all clients that owners list changed
-    try { io.emit('owners:changed'); } catch (_) {}
+    emitToTenant(req.tenantId, 'owners:changed');
     res.status(201).json(owner);
   } catch (e) {
     next(e);
@@ -15,9 +22,18 @@ export const createOwner = async (req, res, next) => {
 
 export const updateOwner = async (req, res, next) => {
   try {
+    // Read first so the trail can record what the values were before.
+    const before = await Owner.findById(req.params.id).lean();
     const updated = await Owner.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updated) return next(errorHandler(404, 'Owner not found'));
-    try { io.emit('owners:changed'); } catch (_) {}
+    logFromRequest(req, {
+      entityType: 'owner',
+      entityId: updated._id,
+      action: 'owner.updated',
+      message: `Updated owner ${updated.name || ''}`.trim(),
+      changes: diffFields(before, updated.toObject(), Object.keys(req.body || {})),
+    });
+    emitToTenant(req.tenantId, 'owners:changed');
     res.status(200).json(updated);
   } catch (e) {
     next(e);
@@ -36,7 +52,13 @@ export const deleteOwner = async (req, res, next) => {
       { new: true }
     );
     if (!deleted) return next(errorHandler(404, 'Owner not found'));
-    try { io.emit('owners:changed'); } catch (_) {}
+    logFromRequest(req, {
+      entityType: 'owner',
+      entityId: deleted._id,
+      action: 'owner.deleted',
+      message: `Deleted owner ${deleted.name || ''}`.trim(),
+    });
+    emitToTenant(req.tenantId, 'owners:changed');
     res.status(200).json({ success: true });
   } catch (e) {
     next(e);

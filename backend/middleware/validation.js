@@ -63,6 +63,17 @@ export const ownerValidation = {
 
 // Client validation schemas
 export const clientValidation = {
+  /**
+   * A bulk action names the records, the action and (for most actions) a value.
+   * The id list is capped here as well as in the controller so an oversized
+   * body is rejected before it is parsed into memory.
+   */
+  bulk: Joi.object({
+    ids: Joi.array().items(Joi.string().hex().length(24)).min(1).max(500).required(),
+    action: Joi.string().valid('assign', 'status', 'delete', 'tag', 'untag').required(),
+    value: Joi.string().max(60).optional().allow('', null),
+  }),
+
   create: Joi.object({
     name: Joi.string().min(2).max(120).required(),
     email: Joi.string().email().max(254).optional().allow(''),
@@ -70,6 +81,7 @@ export const clientValidation = {
     alternatePhone: Joi.string().max(30).optional().allow(''),
     status: Joi.string().valid('lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost').optional(),
     priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional().allow(''),
+    temperature: Joi.string().valid('hot', 'warm', 'cold').optional(),
     notes: Joi.string().max(2000).optional().allow(''),
     requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
@@ -95,6 +107,7 @@ export const clientValidation = {
     alternatePhone: Joi.string().max(30).optional().allow(''),
     status: Joi.string().valid('lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost').optional(),
     priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional().allow(''),
+    temperature: Joi.string().valid('hot', 'warm', 'cold').optional(),
     notes: Joi.string().max(2000).optional().allow(''),
     requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
@@ -235,6 +248,18 @@ export const crmValidation = {
     duration: Joi.number().min(0).max(100000).optional(),
     outcome: Joi.string().max(200).optional().allow(''),
   }),
+
+  // An amendment sends only what changed, so every field is optional — but at
+  // least one must be present, or the request is a no-op that still writes an
+  // "amended" line to the audit trail.
+  updateCommunication: Joi.object({
+    type: Joi.string().valid('call', 'email', 'sms', 'meeting', 'whatsapp', 'site_visit', 'note').optional(),
+    direction: Joi.string().valid('inbound', 'outbound').optional(),
+    summary: Joi.string().min(2).max(500).optional(),
+    details: Joi.string().max(5000).optional().allow(''),
+    duration: Joi.number().min(0).max(100000).optional(),
+    outcome: Joi.string().max(200).optional().allow(''),
+  }).min(1),
 };
 
 // Newsletter/subscriber validation
@@ -305,7 +330,9 @@ export const userRouteValidation = {
     firstName: Joi.string().max(50).optional().allow(''),
     lastName: Joi.string().max(50).optional().allow(''),
     email: Joi.string().email().max(254).required(),
-    password: Joi.string().min(8).max(128).required(),
+    // No password. The account is created unusable and the recipient sets their
+    // own through a single-use invite link, so an admin never handles — and the
+    // product never transmits — a credential for someone else.
     assignedCategories: Joi.array().items(Joi.string().max(100)).max(200).optional(),
     phone: Joi.string().max(30).optional().allow(''),
     message: Joi.string().max(500).optional().allow(''),
@@ -330,7 +357,7 @@ export const userRouteValidation = {
   }),
 
   setUserRole: Joi.object({
-    role: Joi.string().valid('user', 'buyer', 'employee', 'admin').required(),
+    role: Joi.string().valid('user', 'buyer', 'seller', 'employee', 'admin').required(),
     assignedCategories: Joi.array().items(Joi.string().max(100)).max(200).optional(),
   }),
 };
@@ -432,66 +459,57 @@ export const listingValidation = {
       }),
     description: Joi.string().max(2000).optional().allow(''),
     address: Joi.string()
-      .min(5)
       .max(200)
-      .required()
+      .optional()
+      .allow('')
       .messages({
-        'string.min': 'Address must be at least 5 characters long',
         'string.max': 'Address cannot exceed 200 characters',
-        'any.required': 'Address is required',
       }),
     regularPrice: Joi.number()
-      .positive()
+      .min(0)
       .max(1000000000)
-      .required()
+      .optional()
       .messages({
-        'number.positive': 'Price must be a positive number',
+        'number.min': 'Price cannot be negative',
         'number.max': 'Price cannot exceed 1 billion',
-        'any.required': 'Price is required',
       }),
     discountPrice: Joi.number()
       .min(0)
       .max(1000000000)
-      .less(Joi.ref('regularPrice'))
+      // Only meaningful once a real price is set. Most listings are imported or
+      // drafted with no price at all, and the form defaults both fields to 0 —
+      // `0 < 0` is false, so `exist()` rejected every priceless listing with
+      // "Discount price must be less than regular price". The controller already
+      // guards this correctly (effectiveRegularPrice > 0); validateBody runs
+      // first, so the stricter rule here made that fix unreachable.
+      .when('regularPrice', {
+        is: Joi.number().greater(0).required(),
+        then: Joi.number().less(Joi.ref('regularPrice')),
+        otherwise: Joi.number(),
+      })
       .optional()
       .messages({
         'number.min': 'Discount price cannot be negative',
         'number.max': 'Discount price cannot exceed 1 billion',
         'number.less': 'Discount price must be less than regular price',
       }),
-    bathrooms: Joi.when('propertyCategory', {
-      switch: [
-        { is: Joi.valid('land', 'industrial'), then: Joi.number().integer().min(0).max(20).optional().default(0) },
-        { is: 'commercial',                    then: Joi.number().integer().min(0).max(20).optional().default(0) },
-        { is: 'residential',                   then: Joi.number().integer().min(1).max(20).required() },
-      ],
-      otherwise: Joi.number().integer().min(0).max(20).optional().default(0),
-    }).messages({
-      'number.integer': 'Bathrooms must be a whole number',
-      'number.min': 'Must have at least 1 bathroom',
-      'number.max': 'Cannot have more than 20 bathrooms',
-      'any.required': 'Number of bathrooms is required',
-    }),
-    bedrooms: Joi.when('propertyCategory', {
-      switch: [
-        { is: Joi.valid('land', 'industrial', 'commercial'), then: Joi.number().integer().min(0).max(20).optional().default(0) },
-        { is: 'residential',                                 then: Joi.number().integer().min(1).max(20).required() },
-      ],
-      otherwise: Joi.number().integer().min(0).max(20).optional().default(0),
-    }).messages({
-      'number.integer': 'Bedrooms must be a whole number',
-      'number.min': 'Must have at least 1 bedroom',
-      'number.max': 'Cannot have more than 20 bedrooms',
-      'any.required': 'Number of bedrooms is required',
-    }),
+    bathrooms: Joi.number().integer().min(0).max(20).optional().default(0)
+      .messages({
+        'number.integer': 'Bathrooms must be a whole number',
+        'number.max': 'Cannot have more than 20 bathrooms',
+      }),
+    bedrooms: Joi.number().integer().min(0).max(20).optional().default(0)
+      .messages({
+        'number.integer': 'Bedrooms must be a whole number',
+        'number.max': 'Cannot have more than 20 bedrooms',
+      }),
     furnished: Joi.boolean().optional(),
     parking: Joi.boolean().optional(),
     type: Joi.string()
       .valid('sale', 'rent')
-      .required()
+      .optional()
       .messages({
         'any.only': 'Type must be either "sale" or "rent"',
-        'any.required': 'Property type is required',
       }),
     offer: Joi.boolean().optional(),
     imageUrls: Joi.array()
@@ -535,8 +553,8 @@ export const listingValidation = {
   update: Joi.object({
     name: Joi.string().min(3).max(100).optional(),
     description: Joi.string().max(2000).optional().allow(''),
-    address: Joi.string().min(5).max(200).optional(),
-    regularPrice: Joi.number().positive().max(1000000000).optional(),
+    address: Joi.string().max(200).optional().allow(''),
+    regularPrice: Joi.number().min(0).max(1000000000).optional(),
     discountPrice: Joi.number()
       .min(0)
       .max(1000000000)
@@ -822,10 +840,29 @@ export const categoryValidation = {
     fields: Joi.array().items(Joi.object().unknown(true)).max(200).optional(),
   }),
 
-  updateFields: Joi.object({
-    fields: Joi.array().items(Joi.object().unknown(true)).max(200).required().messages({
-      'any.required': 'fields is required',
+  rename: Joi.object({
+    name: Joi.string().min(2).max(50).required().messages({
+      'string.min': 'Category name must be at least 2 characters long',
+      'string.max': 'Category name cannot exceed 50 characters',
+      'any.required': 'Category name is required',
     }),
+  }),
+
+  // Shape only. The field definitions themselves are checked by
+  // utils/categoryFields.js, which knows about reserved keys, duplicates and
+  // patterns that can hang the process — none of which Joi can express here.
+  updateFields: Joi.object({
+    fields: Joi.array().items(Joi.object().unknown(true)).max(100).required().messages({
+      'any.required': 'fields is required',
+      'array.max': 'A category can have at most 100 fields',
+    }),
+  }),
+
+  updateLocation: Joi.object({
+    defaultLocation: Joi.object({
+      lat: Joi.number().allow(null).optional(),
+      lng: Joi.number().allow(null).optional(),
+    }).allow(null).required(),
   }),
 };
 
