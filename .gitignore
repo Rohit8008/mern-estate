@@ -55,3 +55,5 @@ backend/dist/
 
 # OS
 Thumbs.db
+# gstack local artifacts (security reports stay off the remote)
+.gstack/

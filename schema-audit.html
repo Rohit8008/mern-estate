@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Schema Audit — mern-estate</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;background:#f8fafc;color:#0f172a;font-size:14px;line-height:1.6}
+  .page{max-width:1100px;margin:0 auto;padding:32px 24px}
+  h1{font-size:22px;font-weight:800;color:#0f172a;margin-bottom:4px}
+  .subtitle{color:#64748b;font-size:13px;margin-bottom:28px}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+  .stat{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:110px;text-align:center}
+  .stat-n{font-size:26px;font-weight:800}
+  .stat-l{font-size:11px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .stat.red .stat-n{color:#dc2626}
+  .stat.amber .stat-n{color:#d97706}
+  .stat.blue .stat-n{color:#2563eb}
+  .stat.slate .stat-n{color:#475569}
+  .section-title{font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin:28px 0 10px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px}
+  th{background:#f1f5f9;text-align:left;padding:9px 12px;font-size:11.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e2e8f0}
+  td{padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#f8fafc}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+  .high{background:#fee2e2;color:#b91c1c}
+  .medium{background:#fef3c7;color:#92400e}
+  .low{background:#dbeafe;color:#1e40af}
+  .security{background:#fce7f3;color:#9d174d}
+  .correctness{background:#e0f2fe;color:#0369a1}
+  code{font-family:ui-monospace,monospace;font-size:12px;background:#f1f5f9;padding:1px 5px;border-radius:4px;color:#1e293b}
+  .model-tag{font-family:ui-monospace,monospace;font-size:11px;background:#f1f5f9;border:1px solid #e2e8f0;padding:1px 6px;border-radius:5px;color:#334155;white-space:nowrap}
+  .note{font-size:12px;color:#64748b;margin-top:3px}
+  .divider{height:1px;background:#e2e8f0;margin:8px 0}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Schema Audit — mern-estate</h1>
+  <p class="subtitle">19 Mongoose models &middot; Security &amp; correctness review &middot; All findings ranked by severity</p>
+
+  <div class="stats">
+    <div class="stat red"><div class="stat-n">8</div><div class="stat-l">High</div></div>
+    <div class="stat amber"><div class="stat-n">18</div><div class="stat-l">Medium</div></div>
+    <div class="stat blue"><div class="stat-n">21</div><div class="stat-l">Low</div></div>
+    <div class="stat slate"><div class="stat-n">19</div><div class="stat-l">Models reviewed</div></div>
+  </div>
+
+  <!-- HIGH -->
+  <div class="section-title">High severity</div>
+  <table>
+    <thead><tr><th style="width:160px">Model · Field</th><th style="width:80px">Type</th><th>Issue</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="model-tag">user</span><br><code>refreshTokens</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>select: false</code>. Live bearer tokens are returned by every <code>User.find()</code> / <code>User.findOne()</code> that doesn't explicitly project them out. <code>toJSON()</code> strips them but <code>toObject()</code> does not — any middleware or logging path that calls <code>.toObject()</code> leaks raw refresh tokens.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">user</span><br><code>loginAttempts</code> &amp; <code>lockedUntil</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>select: false</code>. Returned in all queries. An attacker who can read any user document knows exactly how many remaining attempts remain before lockout.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">user</span><br><code>passwordResetOtpExpires</code></td>
+        <td><span class="badge security">security</span></td>
+        <td><code>passwordResetOtpHash</code> has <code>select: false</code> but <code>passwordResetOtpExpires</code> does not. Expiry date leaks whether a reset is in-flight and how long the window is, reducing brute-force difficulty.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">owner</span><br><code>taxId</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>Stores GSTIN/PAN (per code comments). Missing <code>select: false</code> — sensitive PII is returned in every owner query by default. Also missing <code>maxlength</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">listing</span><br><code>type</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Required field with no <code>enum</code> constraint: <code>type: { type: String, required: true }</code>. The codebase treats this as <code>'sale' | 'rent'</code> but any string is accepted. All listing-type filters and <code>BuyerRequirement.matchesProperty()</code> silently match against arbitrary values.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">activityLog</span><br><code>entityType</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td><code>enum: ['client', 'task']</code> only. The transaction controller logs with <code>entityType: 'transaction'</code> — Mongoose will reject all those activity saves with a validation error, silently swallowed by the <code>catch (_) {}</code> wrapper in every controller. Transaction activity is never persisted.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">generatedReport</span><br><code>templateType</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>No <code>enum</code> constraint: <code>{ type: String, default: 'property_summary' }</code>. The equivalent field on <code>ReportTemplate</code> has a 6-value enum. The controller passes <code>templateType</code> from <code>req.body</code> without validation — any string is persisted.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">generatedReport</span><br><code>reportDate</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Typed as <code>String</code>, not <code>Date</code>: <code>{ type: String, default: '' }</code>. Date sorting and range queries are impossible. <code>sentAt</code> on the same model is correctly typed as <code>Date</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- MEDIUM -->
+  <div class="section-title">Medium severity</div>
+  <table>
+    <thead><tr><th style="width:160px">Model · Field</th><th style="width:80px">Type</th><th>Issue</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="model-tag">message</span><br><code>senderId</code> <code>receiverId</code> <code>listingId</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Typed as <code>String</code>, not <code>ObjectId</code>. No <code>ref</code> declarations. <code>.populate()</code> is impossible; the controller compensates with a manual <code>User.find()</code> query. <code>listingId</code> defaults to <code>''</code> (empty string) rather than <code>null</code>, making <code>$ne: null</code> / <code>$exists</code> queries unreliable.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">listing</span><br><code>propertyCategory</code> ↔ <code>PropertyType.category</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Enum mismatch. <code>Listing.propertyCategory</code> allows <code>'unknown'</code> but not <code>'industrial'</code> or <code>'other'</code>. <code>PropertyType.category</code> allows <code>'industrial'</code> and <code>'other'</code> but not <code>'unknown'</code>. Listings with a <code>PropertyType</code> in category <code>'industrial'</code> cannot store the matching <code>propertyCategory</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">transaction</span><br><code>dealRef</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Missing <code>ref</code>: <code>{ type: ObjectId, default: null }</code>. Cannot <code>.populate('dealRef')</code>. The field links to a deal subdocument inside <code>Client.deals</code> — populate across embedded arrays needs the parent model ref, but this is still a documentation/tooling gap.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">client (dealSchema)</span><br><code>stageHistory[].stage</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>No <code>enum</code> on the embedded stage history entry. The parent <code>stage</code> field has a 12-value enum, but history entries accept any string — typos and arbitrary values are silently persisted.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">buyerRequirement</span><br><code>propertyType</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Field name is semantically wrong. Enum is <code>['sale', 'rent']</code> — this is transaction/listing type, not property type. The schema already has a separate <code>propertyTypeInterest</code> field for property category. The <code>matchesProperty()</code> method compares this against <code>Listing.type</code> (which has no enum), creating a silent match-all risk if listing type is ever outside <code>['sale', 'rent']</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">owner</span><br><code>email</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>No <code>unique: true</code> and no format validation. Two owner records with the same email are silently permitted. No <code>match</code> regex (unlike <code>BuyerRequirement.buyerEmail</code> which validates format).</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">owner</span><br><code>active</code> + <code>isDeleted</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Two redundant soft-disable signals with no enforced relationship. A record can have <code>active: true</code> and <code>isDeleted: true</code> simultaneously — no pre-save hook or validation prevents this contradiction.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">listing</span><br><code>findByLocation</code> static</td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Uses <code>$near</code> / <code>$geometry</code> but <code>location</code> is stored as <code>{ lat: Number, lng: Number }</code> — a plain subdocument, not GeoJSON. No <code>2dsphere</code> index is declared. This static method throws a runtime error on every call.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">user</span><br><code>role</code> enum</td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Includes undocumented values <code>'user'</code> and <code>'buyer'</code> not present in any route guard (<code>requireAdmin</code>, <code>requireRole</code>) or CrmShell access check. CLAUDE.md defines only <code>admin | employee | seller</code>. These roles pass no gate and no page, creating ambiguous access state.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">role</span><br><code>getDefaultRoles</code> static</td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Seed objects omit <code>createdBy</code>, yet the schema marks it <code>required: true</code>. Running the seed script throws a Mongoose validation error on insert.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">document</span><br><code>url</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>URL is constructed from <code>req.protocol + req.get('host')</code> and stored verbatim with no validation or maxlength. A spoofed <code>Host</code> header poisons stored document URLs.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">document</span><br><code>mimeType</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>No <code>enum</code> allowlist and no <code>maxlength</code>. Taken directly from <code>file.mimetype</code> (multer reads from the <code>Content-Type</code> header). An attacker can store an arbitrary MIME type string.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">reportTemplate</span><br><code>createdBy</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>No <code>index: true</code>. All list/update/delete template operations filter by <code>createdBy: req.user.id</code> — every one is a full collection scan.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">task</span><br><code>related.kind</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td><code>enum: ['client', 'listing', 'none']</code> — no <code>'transaction'</code> or <code>'deal'</code>. Tasks cannot be linked to transactions even though transactions are a first-class entity. Attempting to set <code>related.kind = 'transaction'</code> fails validation.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">subscriber</span><br><code>deletedBy</code></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Soft-delete pattern includes <code>isDeleted</code> + <code>deletedAt</code> but omits <code>deletedBy</code>. Inconsistent with <code>user</code>, <code>role</code>, <code>client</code>, and <code>transaction</code> models which all track who performed the delete.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">savedSearch</span><br><code>parsedFilters</code></td>
+        <td><span class="badge security">security</span></td>
+        <td><code>Mixed</code> type with no size or shape constraint. User-supplied filter objects are persisted as-is. A crafted deeply-nested payload can bloat documents without limit.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">securityLog</span><br><code>email</code></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>index: true</code>. Security logs are routinely queried by email (failed login lookups, audit tools). Every such query is a full collection scan. Also stores plaintext PII with no <code>select: false</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">activityLog</span><br>compound index</td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>No compound index on <code>{ entityType: 1, entityId: 1, createdAt: -1 }</code>. The dominant query pattern is "all logs for entity X, newest first." Five separate single-field indexes exist but no compound covering this pattern.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- LOW -->
+  <div class="section-title">Low severity — missing maxlength / minor gaps</div>
+  <table>
+    <thead><tr><th style="width:160px">Model</th><th style="width:80px">Type</th><th>Issue</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="model-tag">user</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>username</code>, <code>firstName</code>, <code>lastName</code>, <code>phone</code>, <code>avatar</code>, all address fields (<code>addressLine1</code>, <code>city</code>, <code>state</code>, <code>postalCode</code>, <code>country</code>, <code>company</code>, <code>website</code>).</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">listing</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>name</code>, <code>address</code>, <code>description</code>, <code>areaName</code>, <code>plotSize</code>, <code>propertyNo</code>, <code>remarks</code>, <code>otherAttachment</code>, <code>city</code>, <code>locality</code>, <code>state</code>, <code>pincode</code>, <code>voiceNotes[].label</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">owner</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>name</code>, <code>email</code>, <code>phone</code>, <code>taxId</code>, <code>companyName</code>, all address fields.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">client</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>name</code>, <code>email</code>, <code>phone</code>, <code>alternatePhone</code>, <code>organization</code>, <code>notes</code>, <code>lostReason</code>, embedded <code>deals.notes</code>, <code>deals.coAgentName</code>, <code>followUp.notes</code>, <code>communication.outcome</code>. Also <code>source</code> and <code>propertyType</code> need an enum. <code>budget.currency</code> should be an enum. <code>score</code> needs <code>min/max</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">transaction</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>propertyName</code>, <code>clientName</code>, <code>coAgentName</code>, <code>notes</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">task</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>title</code>, <code>description</code>. <code>priority</code> missing <code>index: true</code> (used in board filtering).</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">document</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>title</code>, <code>filename</code>, each tag in <code>tags</code> array. <code>uploadedBy</code> missing <code>index: true</code>. No compound index on <code>(related.kind, related.clientId)</code> / <code>(related.kind, related.listingId)</code> to cover the polymorphic list query.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">reportTemplate</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>name</code>, <code>description</code>, <code>sections[]</code> items. <code>type</code> field missing <code>required: true</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">generatedReport</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>html</code> (unlimited rendered HTML), <code>agentName</code>, <code>clientName</code>, <code>propertyName</code>, <code>templateName</code>, <code>notes</code>. <code>clientEmail</code> needs format validation. <code>clientId</code> and <code>listingId</code> missing <code>index: true</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">propertyType</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>name</code>, <code>slug</code>, all embedded <code>fieldSchema</code> strings (<code>key</code>, <code>label</code>, <code>placeholder</code>, <code>helpText</code>, <code>group</code>, <code>unit</code>). Redundant standalone <code>name</code> index alongside compound <code>{ name: 1, isActive: 1 }</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">category</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>name</code>, <code>slug</code>, all embedded <code>fields[]</code> strings. No auto-slug pre-save hook (unlike <code>PropertyType</code>). No <code>isActive</code> flag (unlike <code>PropertyType</code>). <code>fields[].type</code> missing <code>required: true</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">buyerRequirement</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>buyerName</code>, <code>buyerEmail</code>, <code>preferredLocation</code>, <code>preferredArea</code>, <code>additionalRequirements</code> (also in a text index), <code>notes</code>, <code>budget</code> (string), <code>timeline</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">securityLog</span></td>
+        <td><span class="badge security">security</span></td>
+        <td>Missing <code>maxlength</code> on: <code>ip</code>, <code>userAgent</code>, <code>reason</code>. <code>status</code> default is <code>'blocked'</code> — a log entry created without an explicit status is recorded as blocked.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">savedSearch</span></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td><code>deletedAt</code> and <code>deletedBy</code> absent (other models have both). <code>runCount</code> missing <code>min: 0</code>. <code>entities</code> array has no enum constraint on item values. <code>query</code> field missing <code>maxlength</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">searchLog</span></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td><code>userId</code> missing <code>default: null</code> (anonymous searches store <code>undefined</code>, making <code>{ userId: null }</code> queries unreliable). <code>responseTimeMs</code> missing <code>min: 0</code>. <code>clickedResult.entity</code> missing enum. <code>parsedFilters</code> / <code>resultCounts</code> are <code>Mixed</code> with no size constraints.</td>
+      </tr>
+      <tr>
+        <td><span class="model-tag">role</span></td>
+        <td><span class="badge correctness">correctness</span></td>
+        <td>Redundant standalone <code>name</code> index alongside compound <code>{ name: 1, isActive: 1 }</code>. <code>updatedBy</code> not <code>required</code>. <code>isSystem</code> and <code>isDeleted</code> not <code>immutable</code>. <code>permissions</code> object fully exposed in all queries.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:8px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;font-size:13px;color:#166534">
+    <strong>Recommended fix order:</strong> (1) Add <code>select: false</code> to <code>refreshTokens</code>, <code>loginAttempts</code>, <code>lockedUntil</code>, <code>passwordResetOtpExpires</code>, and <code>taxId</code>.
+    (2) Fix <code>activityLog.entityType</code> enum to include <code>'transaction'</code>, <code>'listing'</code>, <code>'deal'</code>.
+    (3) Add <code>enum</code> to <code>Listing.type</code> and <code>GeneratedReport.templateType</code>.
+    (4) Fix <code>Message</code> id fields to <code>ObjectId</code> with <code>ref</code>.
+    (5) Fix <code>GeneratedReport.reportDate</code> to <code>Date</code>.
+    (6) Align <code>Listing.propertyCategory</code> ↔ <code>PropertyType.category</code> enums.
+    (7) Add <code>maxlength</code> across all unguarded string fields in bulk.
+  </div>
+</div>
+</body>
+</html>

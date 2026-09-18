@@ -13,7 +13,7 @@ This project is designed for teams (admins + employees/agents) who need a modern
 - **Database**: MongoDB (local or Atlas)
 - **Auth**: JWT access tokens + refresh token flow (httpOnly cookies)
 - **Real-time**: Socket.IO (live updates/messaging)
-- **Storage**: Firebase Storage for images (client-side upload)
+- **Storage**: Cloudinary for images and voice notes (client-side unsigned upload)
 - **Observability**: structured logging + health endpoints (+ optional Sentry)
 
 ---
@@ -125,9 +125,9 @@ mern-estate/
 
 ### Prerequisites
 
-- Node.js **18+**
+- Node.js **20 LTS** (Node 25 removed `SlowBuffer`, which `jsonwebtoken`'s dependency chain still uses — the backend crashes on require under it)
 - MongoDB **5+** (local or Atlas)
-- Firebase project (for image storage)
+- Cloudinary account with an unsigned upload preset (for image/voice-note storage)
 
 ### Install
 
@@ -161,7 +161,8 @@ Create `frontend/.env.local` (start from `frontend/.env.example`).
 Common:
 
 - `VITE_API_URL` (leave empty in dev when using proxy)
-- `VITE_FIREBASE_*` (Firebase Storage)
+- `VITE_CLOUDINARY_CLOUD_NAME`, `VITE_CLOUDINARY_UPLOAD_PRESET` (Cloudinary uploads)
+- `VITE_API_RESPONSE_SECRET` (response decryption), `VITE_SOCKET_URL` (Socket.IO)
 
 ---
 
