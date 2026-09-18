@@ -4,18 +4,19 @@ import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import { PageHeader, Button } from '../design-system';
+import { PageHeader, Button, Modal } from '../design-system';
 import {
   HiPlus, HiSearch, HiX, HiChevronDown, HiChevronRight,
   HiCheck, HiPencil, HiTrash, HiRefresh, HiClock,
   HiViewGrid, HiViewList, HiUser, HiCalendar, HiFlag,
   HiClipboardList, HiExclamation,
 } from 'react-icons/hi';
+import { useTranslation } from 'react-i18next';
 
 const STATUS_CONFIG = {
   todo: { label: 'To Do', color: 'bg-slate-400', textColor: 'text-slate-600', bgLight: 'bg-slate-50', border: 'border-slate-200' },
   in_progress: { label: 'In Progress', color: 'bg-amber-500', textColor: 'text-amber-700', bgLight: 'bg-amber-50', border: 'border-amber-200' },
-  review: { label: 'Review', color: 'bg-blue-500', textColor: 'text-blue-700', bgLight: 'bg-blue-50', border: 'border-blue-200' },
+  review: { label: 'Review', color: 'bg-indigo-500', textColor: 'text-indigo-700', bgLight: 'bg-indigo-50', border: 'border-indigo-200' },
   done: { label: 'Done', color: 'bg-emerald-500', textColor: 'text-emerald-700', bgLight: 'bg-emerald-50', border: 'border-emerald-200' },
   blocked: { label: 'Blocked', color: 'bg-rose-500', textColor: 'text-rose-700', bgLight: 'bg-rose-50', border: 'border-rose-200' },
 };
@@ -31,6 +32,7 @@ const STATUS_ORDER = ['todo', 'in_progress', 'review', 'done', 'blocked'];
 const PRIORITY_ORDER = ['urgent', 'high', 'medium', 'low'];
 
 export default function TasksBoard() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
@@ -171,14 +173,14 @@ export default function TasksBoard() {
     if (days < 0) return { text: 'Overdue', class: 'text-rose-600 bg-rose-50' };
     if (days === 0) return { text: 'Today', class: 'text-amber-600 bg-amber-50' };
     if (days === 1) return { text: 'Tomorrow', class: 'text-amber-600 bg-amber-50' };
-    if (days <= 7) return { text: `${days} days`, class: 'text-blue-600 bg-blue-50' };
+    if (days <= 7) return { text: `${days} days`, class: 'text-indigo-600 bg-indigo-50' };
     return { text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), class: 'text-slate-600 bg-slate-50' };
   };
 
   if (!canAccess) {
     return (
       <div className='min-h-screen flex items-center justify-center'>
-        <p className='text-slate-600'>Access denied</p>
+        <p className='text-slate-600'>{t('tasks.accessDenied')}</p>
       </div>
     );
   }
@@ -186,16 +188,12 @@ export default function TasksBoard() {
   return (
     <div className='space-y-6'>
       <PageHeader
-        title='Tasks'
-        description='Manage your team tasks, track progress and meet deadlines'
+        title={t('tasks.tasks')}
+        description={t('tasks.manageYourTeamTasksTrackProgress')}
         actions={
           <>
-            <Button variant='secondary' size='sm' icon={HiRefresh} onClick={fetchTasks} className={loading ? '[&>svg]:animate-spin' : ''}>
-              Refresh
-            </Button>
-            <Button variant='primary' size='sm' icon={HiPlus} onClick={() => setShowCreateModal(true)}>
-              New task
-            </Button>
+            <Button variant='secondary' size='sm' icon={HiRefresh} onClick={fetchTasks} className={loading ? '[&>svg]:animate-spin' : ''}>{t('tasks.refresh')}</Button>
+            <Button variant='primary' size='sm' icon={HiPlus} onClick={() => setShowCreateModal(true)}>{t('tasks.newTask')}</Button>
           </>
         }
       />
@@ -212,18 +210,14 @@ export default function TasksBoard() {
                 view === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewGrid className='w-4 h-4' />
-              Cards
-            </button>
+              <HiViewGrid className='w-4 h-4' />{t('tasks.cards')}</button>
             <button
               onClick={() => setView('table')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewList className='w-4 h-4' />
-              Table
-            </button>
+              <HiViewList className='w-4 h-4' />{t('tasks.table')}</button>
           </div>
 
           <div className='h-6 w-px bg-slate-200 hidden lg:block' />
@@ -234,7 +228,7 @@ export default function TasksBoard() {
               <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' />
               <input
                 className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition-all placeholder:text-slate-400'
-                placeholder='Search tasks...'
+                placeholder={t('tasks.searchTasks')}
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
               />
@@ -250,7 +244,7 @@ export default function TasksBoard() {
               onChange={(e) => setParam('status', e.target.value)}
               className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none transition-all'
             >
-              <option value=''>All statuses</option>
+              <option value=''>{t('tasks.allStatuses')}</option>
               {STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
               ))}
@@ -261,7 +255,7 @@ export default function TasksBoard() {
               onChange={(e) => setParam('priority', e.target.value)}
               className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none transition-all'
             >
-              <option value=''>All priorities</option>
+              <option value=''>{t('tasks.allPriorities')}</option>
               {PRIORITY_ORDER.map((p) => (
                 <option key={p} value={p}>{PRIORITY_CONFIG[p]?.label || p}</option>
               ))}
@@ -271,9 +265,7 @@ export default function TasksBoard() {
               <button
                 onClick={() => setSearchParams(new URLSearchParams())}
                 className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
-              >
-                Clear all
-              </button>
+              >{t('tasks.clearAll')}</button>
             )}
           </div>
         </div>
@@ -359,7 +351,7 @@ export default function TasksBoard() {
                         className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-amber-300 hover:text-amber-500 hover:bg-amber-50/30 transition-colors'
                       >
                         <HiPlus className='w-6 h-6 mb-2' />
-                        <span className='text-sm font-medium'>Add task</span>
+                        <span className='text-sm font-medium'>{t('tasks.addTask')}</span>
                       </button>
                     </div>
                   )}
@@ -372,11 +364,9 @@ export default function TasksBoard() {
                 <div className='w-16 h-16 rounded-2xl bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center mx-auto mb-5'>
                   <HiClipboardList className='w-8 h-8 text-amber-500' />
                 </div>
-                <h3 className='text-lg font-semibold text-slate-900 mb-1.5'>No tasks yet</h3>
-                <p className='text-slate-500 text-sm mb-6 max-w-xs'>Create your first task to start tracking work across your team. Assign priorities, set due dates, and monitor progress.</p>
-                <Button variant='primary' size='md' icon={HiPlus} onClick={() => setShowCreateModal(true)}>
-                  Create your first task
-                </Button>
+                <h3 className='text-lg font-semibold text-slate-900 mb-1.5'>{t('tasks.noTasksYet')}</h3>
+                <p className='text-slate-500 text-sm mb-6 max-w-xs'>{t('tasks.createYourFirstTaskToStart')}</p>
+                <Button variant='primary' size='md' icon={HiPlus} onClick={() => setShowCreateModal(true)}>{t('tasks.createYourFirstTask')}</Button>
               </div>
             )}
           </div>
@@ -388,11 +378,11 @@ export default function TasksBoard() {
             <table className='min-w-full text-sm'>
               <thead className='bg-slate-50/80 sticky top-0 z-10'>
                 <tr className='border-b border-slate-200'>
-                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[300px]'>Task</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Status</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Priority</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Due Date</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Description</th>
+                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[300px]'>{t('tasks.task')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.status')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.priority')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.dueDate')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.description')}</th>
                   <th className='text-right px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[100px]'></th>
                 </tr>
               </thead>
@@ -431,14 +421,14 @@ export default function TasksBoard() {
                         return (
                           <tr
                             key={task._id}
-                            className='group hover:bg-blue-50/40 transition-colors cursor-pointer'
+                            className='group hover:bg-indigo-50/40 transition-colors cursor-pointer'
                             onClick={() => setSelectedTask(task)}
                           >
                             <td className='pl-4 pr-2 py-3'>
                               <div className='flex items-center gap-3'>
                                 <div className={`w-1 h-8 rounded-full ${config.color} flex-shrink-0`} />
                                 <div className='min-w-0'>
-                                  <div className='font-semibold text-slate-900 text-[13px] truncate group-hover:text-blue-700 transition-colors'>
+                                  <div className='font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors'>
                                     {task.title}
                                   </div>
                                 </div>
@@ -475,14 +465,14 @@ export default function TasksBoard() {
                                 <button
                                   onClick={(e) => { e.stopPropagation(); openEditModal(task); }}
                                   className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors'
-                                  title='Edit'
+                                  title={t('tasks.edit')}
                                 >
                                   <HiPencil className='w-4 h-4' />
                                 </button>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setPendingDelete(task._id); }}
                                   className='p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors'
-                                  title='Delete'
+                                  title={t('tasks.delete')}
                                 >
                                   <HiTrash className='w-4 h-4' />
                                 </button>
@@ -501,13 +491,11 @@ export default function TasksBoard() {
                         <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
                           <HiClipboardList className='w-6 h-6 text-slate-400' />
                         </div>
-                        <p className='text-slate-500 text-sm'>No tasks found</p>
+                        <p className='text-slate-500 text-sm'>{t('tasks.noTasksFound')}</p>
                         <button
                           onClick={() => setShowCreateModal(true)}
-                          className='text-sm font-medium text-blue-600 hover:text-blue-700'
-                        >
-                          + Create your first task
-                        </button>
+                          className='text-sm font-medium text-indigo-600 hover:text-indigo-700'
+                        >{t('tasks.createYourFirstTask2')}</button>
                       </div>
                     </td>
                   </tr>
@@ -543,7 +531,7 @@ export default function TasksBoard() {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateTask}
           loading={creating}
-          title='Create New Task'
+          title={t('tasks.createNewTask')}
         />
       )}
 
@@ -554,14 +542,14 @@ export default function TasksBoard() {
           onClose={() => { setShowEditModal(false); setEditingTask(null); }}
           onSubmit={(data) => handleUpdateTask(editingTask._id, data)}
           loading={false}
-          title='Edit Task'
+          title={t('tasks.editTask')}
         />
       )}
       <ConfirmDialog
         open={!!pendingDelete}
-        title='Delete task?'
-        description='This cannot be undone.'
-        confirmLabel='Delete'
+        title={t('tasks.deleteTask')}
+        description={t('tasks.thisCannotBeUndone')}
+        confirmLabel={t('tasks.delete')}
         onConfirm={() => { handleDeleteTask(pendingDelete); setPendingDelete(null); }}
         onCancel={() => setPendingDelete(null)}
       />
@@ -584,7 +572,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
       <div className='flex items-start justify-between mb-3'>
         <div className='flex items-center gap-2 min-w-0'>
           <div className={`w-1 h-8 rounded-full ${config.color} flex-shrink-0`} />
-          <h3 className='font-semibold text-slate-900 text-sm truncate group-hover:text-blue-700 transition-colors'>
+          <h3 className='font-semibold text-slate-900 text-sm truncate group-hover:text-indigo-700 transition-colors'>
             {task.title}
           </h3>
         </div>
@@ -592,14 +580,14 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             className='p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100'
-            title='Edit'
+            title={t('tasks.edit')}
           >
             <HiPencil className='w-3.5 h-3.5' />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className='p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-            title='Delete'
+            title={t('tasks.delete')}
           >
             <HiTrash className='w-3.5 h-3.5' />
           </button>
@@ -656,7 +644,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
                 >
                   <div className={`w-2 h-2 rounded-full ${sConfig.color}`} />
                   {sConfig.label}
-                  {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-blue-600' />}
+                  {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' />}
                 </button>
               );
             })}
@@ -689,90 +677,80 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
   };
 
   return (
-    <div className='fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4'>
-      <div className='bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col'>
-        <div className='px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0'>
-          <h2 className='text-lg font-semibold text-slate-900'>{title}</h2>
-          <button onClick={onClose} className='p-1 rounded hover:bg-slate-100 text-slate-500'>
-            <HiX className='w-5 h-5' />
+    <Modal open onClose={onClose} title={title} size='lg'>
+      <form onSubmit={handleSubmit} className='space-y-4'>
+        <div>
+          <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.taskTitle')}</label>
+          <input
+            type='text'
+            required
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+            placeholder={t('tasks.enterTaskTitle')}
+          />
+        </div>
+        <div className='grid grid-cols-2 gap-4'>
+          <div>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.status')}</label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all bg-white'
+            >
+              {STATUS_ORDER.map((s) => (
+                <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.priority')}</label>
+            <select
+              value={formData.priority}
+              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all bg-white'
+            >
+              {PRIORITY_ORDER.map((p) => (
+                <option key={p} value={p}>{PRIORITY_CONFIG[p]?.label || p}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.dueDate')}</label>
+          <input
+            type='date'
+            value={formData.dueAt}
+            onChange={(e) => setFormData({ ...formData, dueAt: e.target.value })}
+            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+          />
+        </div>
+        <div>
+          <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.description')}</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            rows={4}
+            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all resize-none'
+            placeholder={t('tasks.addTaskDescription')}
+          />
+        </div>
+        <div className='flex items-center justify-end gap-3 pt-2'>
+          <button
+            type='button'
+            onClick={onClose}
+            className='px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'
+          >{t('tasks.cancel')}</button>
+          <button
+            type='submit'
+            disabled={loading || !formData.title}
+            className='px-4 py-2 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+          >
+            {loading ? 'Saving...' : task ? 'Save Changes' : 'Create Task'}
           </button>
         </div>
-        <form onSubmit={handleSubmit} className='p-6 space-y-4 overflow-y-auto flex-1'>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Task Title *</label>
-            <input
-              type='text'
-              required
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
-              placeholder='Enter task title'
-            />
-          </div>
-          <div className='grid grid-cols-2 gap-4'>
-            <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Status</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
-              >
-                {STATUS_ORDER.map((s) => (
-                  <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Priority</label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all bg-white'
-              >
-                {PRIORITY_ORDER.map((p) => (
-                  <option key={p} value={p}>{PRIORITY_CONFIG[p]?.label || p}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Due Date</label>
-            <input
-              type='date'
-              value={formData.dueAt}
-              onChange={(e) => setFormData({ ...formData, dueAt: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all'
-            />
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={4}
-              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none transition-all resize-none'
-              placeholder='Add task description...'
-            />
-          </div>
-          <div className='flex items-center justify-end gap-3 pt-2'>
-            <button
-              type='button'
-              onClick={onClose}
-              className='px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'
-            >
-              Cancel
-            </button>
-            <button
-              type='submit'
-              disabled={loading || !formData.title}
-              className='px-4 py-2 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-            >
-              {loading ? 'Saving...' : task ? 'Save Changes' : 'Create Task'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -782,6 +760,12 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const due = formatDueDate(task.dueAt);
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   const formatFullDate = (dateStr) => {
     if (!dateStr) return '—';
@@ -805,9 +789,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
                 onClick={onEdit}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 transition-colors'
               >
-                <HiPencil className='w-4 h-4' />
-                Edit
-              </button>
+                <HiPencil className='w-4 h-4' />{t('tasks.edit')}</button>
               <button
                 onClick={onDelete}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-rose-600 hover:bg-rose-50 hover:border-rose-200 flex items-center gap-1.5 transition-colors'
@@ -844,7 +826,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
                       >
                         <div className={`w-2.5 h-2.5 rounded-full ${sConfig.color}`} />
                         {sConfig.label}
-                        {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-blue-600' />}
+                        {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' />}
                       </button>
                     );
                   })}
@@ -864,9 +846,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
             {/* Due Date */}
             <div className='bg-slate-50 rounded-xl p-5'>
               <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                <HiCalendar className='w-5 h-5 text-slate-400' />
-                Due Date
-              </h3>
+                <HiCalendar className='w-5 h-5 text-slate-400' />{t('tasks.dueDate')}</h3>
               {due ? (
                 <div className='flex items-center gap-3'>
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${due.class}`}>
@@ -876,32 +856,28 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
                   <span className='text-sm text-slate-500'>{formatFullDate(task.dueAt)}</span>
                 </div>
               ) : (
-                <p className='text-sm text-slate-400'>No due date set</p>
+                <p className='text-sm text-slate-400'>{t('tasks.noDueDateSet')}</p>
               )}
             </div>
 
             {/* Description */}
             <div className='bg-slate-50 rounded-xl p-5'>
               <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                <HiClipboardList className='w-5 h-5 text-slate-400' />
-                Description
-              </h3>
+                <HiClipboardList className='w-5 h-5 text-slate-400' />{t('tasks.description')}</h3>
               <p className='text-sm text-slate-700 whitespace-pre-wrap'>{task.description || 'No description added.'}</p>
             </div>
 
             {/* Timestamps */}
             <div className='bg-slate-50 rounded-xl p-5'>
               <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                <HiClock className='w-5 h-5 text-slate-400' />
-                Timeline
-              </h3>
+                <HiClock className='w-5 h-5 text-slate-400' />{t('tasks.timeline')}</h3>
               <div className='grid grid-cols-2 gap-4'>
                 <div>
-                  <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>Created</label>
+                  <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('tasks.created')}</label>
                   <p className='text-sm text-slate-900 mt-1'>{formatFullDate(task.createdAt)}</p>
                 </div>
                 <div>
-                  <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>Last Updated</label>
+                  <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('tasks.lastUpdated')}</label>
                   <p className='text-sm text-slate-900 mt-1'>{formatFullDate(task.updatedAt)}</p>
                 </div>
               </div>

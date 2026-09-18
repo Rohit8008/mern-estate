@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function PropertyTypeFields({ fields = [], values = {}, onChange, errors = {} }) {
+  const { t } = useTranslation();
   const groupedFields = useMemo(() => {
     const groups = {};
     const sortedFields = [...fields].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -112,7 +114,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
                 onChange={() => handleFieldChange(field.key, true)}
                 className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
               />
-              <span className="ml-2 text-slate-700">Yes</span>
+              <span className="ml-2 text-slate-700">{t('propertyTypeFields.yes')}</span>
             </label>
             <label className="inline-flex items-center">
               <input
@@ -122,7 +124,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
                 onChange={() => handleFieldChange(field.key, false)}
                 className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
               />
-              <span className="ml-2 text-slate-700">No</span>
+              <span className="ml-2 text-slate-700">{t('propertyTypeFields.no')}</span>
             </label>
           </div>
         );

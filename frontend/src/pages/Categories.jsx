@@ -1,301 +1,497 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { HiViewList, HiPlus, HiExternalLink, HiTable, HiPencil, HiTrash, HiUpload, HiX, HiCheck } from 'react-icons/hi';
+import {
+  HiOutlineAdjustments,
+  HiOutlineCollection,
+  HiOutlineExclamation,
+  HiOutlineOfficeBuilding,
+  HiOutlinePencil,
+  HiOutlinePlus,
+  HiOutlineSearch,
+  HiOutlineTable,
+  HiOutlineTrash,
+  HiOutlineUpload,
+  HiOutlineX,
+} from 'react-icons/hi';
 import { apiClient } from '../utils/http';
 import { usePermissions } from '../contexts/PermissionsContext';
+import { useNotification } from '../contexts/NotificationContext';
+import { Button, Input, Modal, PageHeader, EmptyState } from '../design-system';
+import { formatNumber } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
-function CategoryCard({ c, hasPerm, onDelete, deletingId }) {
+/**
+ * The colonies, projects and property groups this agency deals in.
+ *
+ * A category is the unit an agent actually thinks in — "Amoha Gardens",
+ * "Sector 57" — and it decides which extra fields a property in it collects. So
+ * the card leads with how much stock sits in each one and which fields it
+ * defines: those are the two things that make "can I delete this?" and "is this
+ * set up yet?" answerable without opening anything.
+ */
+
+function cx(...xs) {
+  return xs.filter(Boolean).join(' ');
+}
+
+function slugPreview(name) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// ─── One category ─────────────────────────────────────────────────────────────
+
+function CategoryCard({ category, hasPerm, onDelete, onRename, deleting }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(category.name);
+  const [savingName, setSavingName] = useState(false);
 
-  const handleDeleteClick = () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      // Auto-cancel confirmation after 4 seconds
-      setTimeout(() => setConfirmDelete(false), 4000);
+  const inUse = category.listingCount || 0;
+  const fieldCount = category.fields?.length || 0;
+
+  async function saveName() {
+    const next = draft.trim();
+    if (!next || next === category.name) {
+      setRenaming(false);
+      setDraft(category.name);
       return;
     }
-    onDelete(c);
-    setConfirmDelete(false);
-  };
+    setSavingName(true);
+    const ok = await onRename(category, next);
+    setSavingName(false);
+    if (ok) setRenaming(false);
+    else setDraft(category.name);
+  }
 
   return (
-    <div className='bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col gap-4'>
-      {/* Header */}
-      <div className='flex items-start justify-between gap-3'>
-        <div className='flex items-center gap-3 min-w-0'>
-          <div className='w-9 h-9 rounded-xl bg-slate-50 ring-1 ring-slate-100 flex items-center justify-center flex-shrink-0'>
-            <HiViewList className='w-4 h-4 text-slate-600' />
+    <div className="group bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 hover:shadow-sm transition-all flex flex-col">
+      <div className="p-4 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {renaming ? (
+              <input
+                autoFocus
+                value={draft}
+                maxLength={50}
+                disabled={savingName}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveName();
+                  if (e.key === 'Escape') { setDraft(category.name); setRenaming(false); }
+                }}
+                className="w-full text-sm font-semibold text-slate-900 border border-indigo-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+            ) : (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h2 className="text-sm font-semibold text-slate-900 truncate">{category.name}</h2>
+                {hasPerm('updateCategory') && (
+                  <button
+                    type="button"
+                    onClick={() => setRenaming(true)}
+                    aria-label={`Rename ${category.name}`}
+                    className="text-slate-300 hover:text-slate-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+                  >
+                    <HiOutlinePencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+            {/* The address never changes on rename — properties refer to their
+                category by it, so changing it would orphan every one of them. */}
+            <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">{category.slug}</p>
           </div>
-          <div className='min-w-0'>
-            <div className='text-sm font-semibold text-slate-900 truncate'>{c.name}</div>
-            <div className='text-xs text-slate-400 font-mono mt-0.5'>{c.slug}</div>
+
+          <div className="text-right flex-shrink-0">
+            <div className="text-lg font-semibold text-slate-900 tabular-nums leading-none">
+              {formatNumber(inUse)}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {inUse === 1 ? 'property' : 'properties'}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Actions */}
-      <div className='flex items-center gap-2 flex-wrap'>
-        <Link
-          to={`/category/${c.slug}`}
-          className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors border border-slate-200'
-        >
-          <HiExternalLink className='w-3 h-3' />
-          View Listings
-        </Link>
-        <Link
-          to={`/dynamic-listings/${c.slug}`}
-          className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium transition-colors border border-emerald-200'
-        >
-          <HiTable className='w-3 h-3' />
-          Excel View
-        </Link>
-      </div>
-
-      {/* Admin/edit actions */}
-      {(hasPerm('updateCategory') || hasPerm('deleteCategory')) && (
-        <div className='flex items-center justify-between pt-3 border-t border-slate-100'>
-          <div className='flex items-center gap-3'>
-            {hasPerm('updateCategory') && (
-              <Link
-                to={`/admin/categories/${c.slug}/fields`}
-                className='inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 font-medium transition-colors'
-              >
-                <HiPencil className='w-3 h-3' />
-                Edit Fields
-              </Link>
-            )}
-          </div>
-
-          {hasPerm('deleteCategory') && (
-            <div className='flex items-center gap-1.5'>
-              {confirmDelete && (
-                <span className='text-xs text-red-600 font-medium'>Confirm?</span>
+        {/* Which details this category asks for. "None" is worth saying — such a
+            category collects nothing beyond the built-in fields. */}
+        <div className="mt-3">
+          {fieldCount === 0 ? (
+            <p className="text-xs text-slate-400">
+              No custom fields.{' '}
+              {hasPerm('updateCategory') && (
+                <Link to={`/admin/categories/${category.slug}/fields`} className="text-indigo-600 hover:underline">{t('categories.addSome')}</Link>
               )}
-              <button
-                onClick={handleDeleteClick}
-                disabled={deletingId === c._id}
-                className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors px-2.5 py-1 rounded-lg ${
-                  confirmDelete
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                } disabled:opacity-50`}
-              >
-                {deletingId === c._id ? (
-                  <span>Deleting…</span>
-                ) : confirmDelete ? (
-                  <>
-                    <HiCheck className='w-3 h-3' />
-                    Yes, Delete
-                  </>
-                ) : (
-                  <>
-                    <HiTrash className='w-3 h-3' />
-                    Delete
-                  </>
-                )}
-              </button>
-              {confirmDelete && (
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className='p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors'
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {category.fields.slice(0, 4).map((f) => (
+                <span
+                  key={f.key}
+                  className="px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[11px] text-slate-600"
                 >
-                  <HiX className='w-3 h-3' />
-                </button>
+                  {f.label}
+                  {f.required && <span className="text-rose-400 ml-0.5">*</span>}
+                </span>
+              ))}
+              {fieldCount > 4 && (
+                <span className="px-2 py-0.5 text-[11px] text-slate-400">+{fieldCount - 4}</span>
               )}
             </div>
           )}
         </div>
-      )}
+      </div>
+
+      <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-0.5">
+          <Link
+            to={`/properties?category=${encodeURIComponent(category.slug)}`}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
+          >
+            <HiOutlineOfficeBuilding className="w-3.5 h-3.5" />{t('categories.properties')}</Link>
+          <Link
+            to={`/dynamic-listings/${category.slug}`}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
+          >
+            <HiOutlineTable className="w-3.5 h-3.5" />{t('categories.table')}</Link>
+          {hasPerm('updateCategory') && (
+            <Link
+              to={`/admin/categories/${category.slug}/fields`}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
+            >
+              <HiOutlineAdjustments className="w-3.5 h-3.5" />{t('categories.setUp')}</Link>
+          )}
+        </div>
+
+        {hasPerm('deleteCategory') && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {confirmDelete && (
+              <span className="text-[11px] text-rose-600 font-medium whitespace-nowrap">
+                {inUse > 0 ? `${inUse} in use —` : ''} sure?
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => {
+                if (!confirmDelete) {
+                  setConfirmDelete(true);
+                  setTimeout(() => setConfirmDelete(false), 4000);
+                  return;
+                }
+                onDelete(category);
+                setConfirmDelete(false);
+              }}
+              className={cx(
+                'p-1.5 rounded-md transition-colors disabled:opacity-50',
+                confirmDelete
+                  ? 'bg-rose-600 text-white hover:bg-rose-700'
+                  : 'text-slate-400 hover:text-rose-600 hover:bg-white'
+              )}
+              aria-label={`Delete ${category.name}`}
+            >
+              <HiOutlineTrash className="w-3.5 h-3.5" />
+            </button>
+            {confirmDelete && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-white"
+                aria-label={t('categories.cancel')}
+              >
+                <HiOutlineX className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function Categories() {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const { can: hasPerm } = usePermissions();
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
+
+  const [categories, setCategories] = useState(null);
+  const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [blockedDelete, setBlockedDelete] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const catData = await apiClient.get('/category/list').catch(() => []);
-        if (Array.isArray(catData)) {
-          if (currentUser?.role === 'employee' && currentUser.assignedCategories?.length) {
-            setCategories(catData.filter((c) => currentUser.assignedCategories.includes(c.slug)));
-          } else {
-            setCategories(catData);
-          }
-        }
-      } catch {
-        setError('Failed to load categories');
-      } finally {
-        setLoading(false);
-      }
+    apiClient
+      .get('/category/list')
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch((e) => {
+        setCategories([]);
+        showError(e?.message || 'Could not load your categories.');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totals = useMemo(() => {
+    const list = categories || [];
+    return {
+      count: list.length,
+      properties: list.reduce((n, c) => n + (c.listingCount || 0), 0),
+      unconfigured: list.filter((c) => !c.fields?.length).length,
     };
-    fetchData();
-  }, [currentUser]);
+  }, [categories]);
 
-  const handleCreate = async () => {
-    if (!newCategoryName.trim()) {
-      setError('Please enter a category name');
-      return;
-    }
+  const shown = useMemo(() => {
+    const list = categories || [];
+    const q = query.trim().toLowerCase();
+    const filtered = q ? list.filter((c) => `${c.name} ${c.slug}`.toLowerCase().includes(q)) : list;
+    // Busiest first — the categories carrying stock are the ones people open.
+    return [...filtered].sort((a, b) => (b.listingCount || 0) - (a.listingCount || 0));
+  }, [categories, query]);
+
+  async function create() {
+    const name = newName.trim();
+    if (!name) return;
+    setSaving(true);
     try {
-      setCreating(true);
-      setError('');
-      const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
-      if (data?.slug) {
-        setCategories((prev) => [...prev, data]);
-        setNewCategoryName('');
-        setSuccessMsg(`"${data.name}" created successfully`);
-        setTimeout(() => setSuccessMsg(''), 3000);
-      } else {
-        setError(data?.message || 'Failed to create category');
-      }
-    } catch {
-      setError('Failed to create category');
-    } finally {
+      const created = await apiClient.post('/category/create', { name });
+      setCategories((prev) => [{ ...created, listingCount: 0 }, ...(prev || [])]);
+      setNewName('');
       setCreating(false);
-    }
-  };
-
-  const handleDelete = async (c) => {
-    try {
-      setDeletingId(c._id);
-      await apiClient.delete(`/category/delete/${c._id}`);
-      setCategories((prev) => prev.filter((x) => x._id !== c._id));
-      setSuccessMsg(`"${c.name}" deleted`);
-      setTimeout(() => setSuccessMsg(''), 3000);
+      showSuccess(`"${created.name}" created. Set up its fields next.`);
     } catch (e) {
-      setError(e.message || 'Failed to delete category');
+      showError(e?.message || 'Could not create that category.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(category, { force = false } = {}) {
+    setDeletingId(category._id);
+    try {
+      await apiClient.delete(`/category/delete/${category._id}${force ? '?force=true' : ''}`);
+      setCategories((prev) => prev.filter((c) => c._id !== category._id));
+      showSuccess(`"${category.name}" deleted.`);
+    } catch (e) {
+      // The server refuses to delete a category properties still use, and says
+      // how many. That is information to act on, not a failure to re-read.
+      if (e?.statusCode === 409) setBlockedDelete({ category, message: e.message });
+      else showError(e?.message || 'Could not delete that category.');
     } finally {
       setDeletingId('');
     }
-  };
+  }
+
+  async function rename(category, name) {
+    try {
+      const updated = await apiClient.patch(`/category/${category._id}`, { name });
+      setCategories((prev) => prev.map((c) => (c._id === category._id ? { ...c, name: updated.name } : c)));
+      showSuccess(`Renamed to "${updated.name}".`);
+      return true;
+    } catch (e) {
+      showError(e?.message || 'Could not rename that category.');
+      return false;
+    }
+  }
+
+  const loading = categories === null;
+  const isEmpty = !loading && categories.length === 0;
 
   return (
-    <main>
-      {/* Page header */}
-      <div className='flex items-center justify-between mb-6 gap-4 flex-wrap'>
-        <div>
-          <h1 className='text-xl font-bold text-slate-900'>Categories</h1>
-          <p className='text-sm text-slate-500 mt-0.5'>
-            {categories.length} {categories.length === 1 ? 'category' : 'categories'}
-          </p>
-        </div>
-        {currentUser?.role === 'admin' && (
-          <Link
-            to='/admin/import'
-            className='inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700 transition-colors'
-          >
-            <HiUpload className='w-3.5 h-3.5' />
-            Bulk Import
-          </Link>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title={t('categories.categories')}
+        description={
+          loading
+            ? 'Loading…'
+            : isEmpty
+              ? 'The colonies, projects and property groups you deal in.'
+              : `${totals.count} ${totals.count === 1 ? 'category' : 'categories'} · ${formatNumber(totals.properties)} propert${totals.properties === 1 ? 'y' : 'ies'}`
+        }
+        actions={
+          <>
+            {currentUser?.role === 'admin' && (
+              <Button variant="secondary" icon={HiOutlineUpload} onClick={() => navigate('/admin/import')}>{t('categories.import')}</Button>
+            )}
+            {hasPerm('createCategory') && (
+              <Button icon={HiOutlinePlus} onClick={() => setCreating(true)}>{t('categories.newCategory')}</Button>
+            )}
+          </>
+        }
+      />
 
-      {/* Create form */}
-      {hasPerm('createCategory') && (
-        <div className='bg-white border border-slate-200 rounded-2xl p-5 mb-6'>
-          <div className='text-sm font-semibold text-slate-700 mb-3'>Create New Category</div>
-          <div className='flex gap-3 flex-wrap'>
-            <input
-              type='text'
-              placeholder='e.g., DLF Phase 5, Sector 42…'
-              className='flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
-              value={newCategoryName}
-              onChange={(e) => {
-                setNewCategoryName(e.target.value);
-                setError('');
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            />
+      {/* A nudge, not a nag — shown only while something is genuinely unfinished. */}
+      {!loading && totals.count > 0 && totals.unconfigured > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <HiOutlineExclamation className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-900">
+            {totals.unconfigured === 1 ? 'One category has' : `${totals.unconfigured} categories have`}{' '}
+            no custom fields yet, so properties in {totals.unconfigured === 1 ? 'it' : 'them'} record
+            only the built-in details. Use <strong>{t('categories.setUp')}</strong>{t('categories.onACardToAddFields')}</p>
+        </div>
+      )}
+
+      {/* Search earns its place only once scanning stops being enough. */}
+      {!loading && categories.length > 6 && (
+        <div className="relative max-w-sm">
+          <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('categories.findACategory')}
+            className="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
+          />
+          {query && (
             <button
-              disabled={creating || !newCategoryName.trim()}
-              onClick={handleCreate}
-              className='inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0'
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              aria-label={t('categories.clear')}
             >
-              <HiPlus className='w-3.5 h-3.5' />
-              {creating ? 'Creating…' : 'Create Category'}
+              <HiOutlineX className="w-4 h-4" />
             </button>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Alerts */}
-      {error && (
-        <div className='mb-4 flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium'>
-          <span className='flex-1'>{error}</span>
-          <button onClick={() => setError('')} className='text-red-400 hover:text-red-600'>
-            <HiX className='w-4 h-4' />
-          </button>
-        </div>
-      )}
-      {successMsg && (
-        <div className='mb-4 flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm font-medium'>
-          <HiCheck className='w-4 h-4 flex-shrink-0' />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* Loading skeleton */}
       {loading && (
-        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4'>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className='bg-white border border-slate-200 rounded-2xl p-5 animate-pulse'>
-              <div className='flex items-center gap-3 mb-4'>
-                <div className='w-10 h-10 rounded-xl bg-slate-100' />
-                <div className='flex-1'>
-                  <div className='h-3.5 bg-slate-100 rounded w-3/4 mb-2' />
-                  <div className='h-2.5 bg-slate-100 rounded w-1/2' />
+            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 animate-pulse">
+              <div className="flex justify-between gap-3">
+                <div className="flex-1">
+                  <div className="h-3.5 bg-slate-100 rounded w-2/3 mb-2" />
+                  <div className="h-2.5 bg-slate-100 rounded w-1/3" />
                 </div>
+                <div className="h-6 w-8 bg-slate-100 rounded" />
               </div>
-              <div className='flex gap-2'>
-                <div className='h-7 bg-slate-100 rounded-lg w-28' />
-                <div className='h-7 bg-slate-100 rounded-lg w-24' />
+              <div className="flex gap-1 mt-4">
+                <div className="h-5 w-16 bg-slate-100 rounded-md" />
+                <div className="h-5 w-14 bg-slate-100 rounded-md" />
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Grid */}
-      {!loading && (
-        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4'>
-          {categories.map((c) => (
+      {/* The first screen on a new workspace, so it explains what a category is
+          for rather than only reporting that there are none. */}
+      {isEmpty && (
+        <div className="bg-white border border-slate-200 rounded-xl">
+          <EmptyState
+            icon={HiOutlineCollection}
+            title={t('categories.startWithACategory')}
+            body={
+              hasPerm('createCategory')
+                ? 'A category is a colony, project or group of properties — "Amoha Gardens", "Sector 57". It decides which extra details a property in it records: plot size, facing, khasra number.'
+                : 'No categories have been set up yet. Ask an administrator to add one.'
+            }
+            action={
+              hasPerm('createCategory') ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button icon={HiOutlinePlus} onClick={() => setCreating(true)}>{t('categories.createTheFirstOne')}</Button>
+                  {currentUser?.role === 'admin' && (
+                    <Button variant="secondary" icon={HiOutlineUpload} onClick={() => navigate('/admin/import')}>{t('categories.orImportASpreadsheet')}</Button>
+                  )}
+                </div>
+              ) : null
+            }
+          />
+        </div>
+      )}
+
+      {!loading && categories.length > 0 && shown.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl">
+          <EmptyState
+            icon={HiOutlineSearch}
+            title={t('categories.nothingMatches')}
+            body={`No category contains "${query}".`}
+            action={<Button variant="secondary" onClick={() => setQuery('')}>{t('categories.clearTheSearch')}</Button>}
+          />
+        </div>
+      )}
+
+      {shown.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {shown.map((c) => (
             <CategoryCard
               key={c._id}
-              c={c}
+              category={c}
               hasPerm={hasPerm}
-              onDelete={handleDelete}
-              deletingId={deletingId}
+              onDelete={remove}
+              onRename={rename}
+              deleting={deletingId === c._id}
             />
           ))}
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && categories.length === 0 && (
-        <div className='flex flex-col items-center justify-center py-20 text-center'>
-          <div className='w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4'>
-            <HiViewList className='w-7 h-7 text-slate-400' />
+      {/* ── New category ──────────────────────────────────────────────────── */}
+      <Modal open={creating} onClose={() => setCreating(false)} title={t('categories.newCategory')}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            create();
+          }}
+          className="space-y-4"
+        >
+          <Input
+            label={t('categories.name')}
+            required
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={t('categories.amohaGardens')}
+            hint="The colony, project or group as your team refers to it."
+          />
+          {newName.trim() && (
+            <p className="text-xs text-slate-500">
+              Its address will be{' '}
+              <span className="font-mono text-slate-700">{slugPreview(newName)}</span>{t('categories.thisNeverChangesEvenIfYou')}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setCreating(false)}>{t('categories.cancel')}</Button>
+            <Button type="submit" loading={saving} disabled={!newName.trim()}>{t('categories.create')}</Button>
           </div>
-          <div className='text-base font-semibold text-slate-700 mb-1'>No categories yet</div>
-          <p className='text-sm text-slate-500 max-w-xs'>
-            {hasPerm('createCategory')
-              ? 'Create your first category using the form above.'
-              : 'No categories have been assigned to you yet. Contact your administrator.'}
-          </p>
-        </div>
-      )}
-    </main>
+        </form>
+      </Modal>
+
+      {/* ── A delete the server refused ───────────────────────────────────── */}
+      <Modal
+        open={Boolean(blockedDelete)}
+        onClose={() => setBlockedDelete(null)}
+        title={blockedDelete ? `Delete "${blockedDelete.category.name}"?` : ''}
+      >
+        {blockedDelete && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">{blockedDelete.message}</p>
+            <p className="text-sm text-slate-500">
+              Those properties keep their data, but they will stop showing this category&rsquo;s
+              fields and will drop out of its filter.
+            </p>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link
+                to={`/properties?category=${encodeURIComponent(blockedDelete.category.slug)}`}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors"
+              >{t('categories.seeTheProperties')}</Link>
+              <Button variant="secondary" onClick={() => setBlockedDelete(null)}>{t('categories.keepIt')}</Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  const target = blockedDelete.category;
+                  setBlockedDelete(null);
+                  remove(target, { force: true });
+                }}
+              >{t('categories.deleteAnyway')}</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
   );
 }

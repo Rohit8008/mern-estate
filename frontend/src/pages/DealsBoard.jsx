@@ -1,50 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiClient } from '../utils/http';
+import { apiClient, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useTenant } from '../contexts/TenantProvider';
 import { PageHeader, Button } from '../design-system';
-import { HiRefresh, HiEye, HiEyeOff, HiPlusSm } from 'react-icons/hi';
+import { HiRefresh, HiPlusSm, HiDownload } from 'react-icons/hi';
+import { currencySymbol, formatCurrency } from '../utils/currency';
+import DealActivityFeed from '../components/DealActivityFeed';
+import PrintButton from '../components/PrintButton';
+import { useTranslation } from 'react-i18next';
 
-const STAGES = [
-  { id: 'new_lead',              label: 'New Lead',            dot: 'bg-slate-400'   },
-  { id: 'contacted',             label: 'Contacted',           dot: 'bg-blue-500'    },
-  { id: 'qualified',             label: 'Qualified',           dot: 'bg-indigo-500'  },
-  { id: 'site_visit_scheduled',  label: 'Site Visit',          dot: 'bg-purple-500'  },
-  { id: 'negotiation',           label: 'Negotiation',         dot: 'bg-amber-500'   },
-  { id: 'booking_token',         label: 'Booking / Token',     dot: 'bg-orange-500'  },
-  { id: 'documentation',         label: 'Documentation',       dot: 'bg-yellow-500'  },
-  { id: 'closed_won',            label: 'Won',                 dot: 'bg-emerald-500' },
-  { id: 'closed_lost',           label: 'Lost',                dot: 'bg-rose-500'    },
-  // Legacy stages (hidden by default)
-  { id: 'initial_contact',       label: 'Initial Contact',     dot: 'bg-slate-400'   },
-  { id: 'site_visit_done',       label: 'Site Visit Done',     dot: 'bg-indigo-400'  },
-  { id: 'payment_pending',       label: 'Payment Pending',     dot: 'bg-orange-400'  },
-];
-
-const LEGACY_STAGE_IDS = ['initial_contact', 'site_visit_done', 'payment_pending'];
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(amount || 0);
-}
+/**
+ * Column colours by the catalogue's colour name. The pipeline itself — which
+ * stages, in what order, called what — comes from the workspace's own config,
+ * so an agency that never takes a token payment simply doesn't have that column.
+ */
+const STAGE_DOT = {
+  slate: 'bg-slate-400', blue: 'bg-blue-500', indigo: 'bg-indigo-500',
+  purple: 'bg-purple-500', amber: 'bg-amber-500', orange: 'bg-orange-500',
+  yellow: 'bg-yellow-500', emerald: 'bg-emerald-500', rose: 'bg-rose-500',
+};
 
 export default function DealsBoard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
+  const { tenant } = useTenant();
+  // Memoised: a bare `|| []` creates a new array each render, which would make
+  // the columns useMemo below recompute on every one.
+  const stages = useMemo(() => tenant?.dealStages || [], [tenant]);
+  const pipelineLabel =
+    (tenant?.screens || []).find((sc) => sc.id === 'pipeline')?.label || 'Sales Pipeline';
 
   const [pipeline, setPipeline] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [dragOverStage, setDragOverStage] = useState('');
-  const [showLegacy, setShowLegacy] = useState(false);
   const [addingDealFor, setAddingDealFor] = useState(null); // clientId string
   const [quickDealValue, setQuickDealValue] = useState('');
+  const [openHistory, setOpenHistory] = useState(null);
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -137,15 +134,28 @@ export default function DealsBoard() {
 
   const columns = useMemo(() => {
     const map = new Map();
-    for (const stage of STAGES) map.set(stage.id, { ...stage, count: 0, totalValue: 0, deals: [] });
+    for (const stage of stages) {
+      map.set(stage.id, {
+        id: stage.id,
+        label: stage.label,
+        dot: STAGE_DOT[stage.color] || 'bg-slate-400',
+        count: 0,
+        totalValue: 0,
+        deals: [],
+      });
+    }
 
     for (const col of pipeline || []) {
       const stageId = col?._id;
+      // A deal sitting in a stage this workspace has since removed still has to
+      // appear somewhere — dropping the column would hide live deals, which is
+      // far worse than an extra column labelled with its raw stage name.
       if (!map.has(stageId)) {
         map.set(stageId, {
           id: stageId,
           label: stageId,
-          header: 'bg-slate-50 text-slate-700 border-slate-200',
+          dot: 'bg-slate-300',
+          retired: true,
           count: 0,
           totalValue: 0,
           deals: [],
@@ -158,33 +168,53 @@ export default function DealsBoard() {
       map.set(stageId, existing);
     }
 
-    const all = Array.from(map.values());
-    return showLegacy ? all : all.filter((col) => !LEGACY_STAGE_IDS.includes(col.id));
-  }, [pipeline, showLegacy]);
+    // Retired stages only show while they still hold deals.
+    return Array.from(map.values()).filter((col) => !col.retired || col.count > 0);
+  }, [pipeline, stages]);
 
   if (!canAccess) return null;
+
+
+  /**
+   * Export the filtered set, server-side.
+   *
+   * Via fetch rather than a link so the session cookie and the refresh-on-401
+   * path apply, and so the file reflects the whole filtered result rather than
+   * the page of rows that happens to be loaded.
+   */
+  const exportCsv = async () => {
+    try {
+      const params = new URLSearchParams();
+      const response = await fetchWithRefresh(`/api/crm/pipeline/export?${params}`);
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pipeline-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div className='space-y-5'>
       <PageHeader
-        title='Sales Pipeline'
-        description='Drag deals across stages to track your pipeline progress'
+        title={pipelineLabel}
+        description={t('deals.dragDealsAcrossStagesToTrack')}
         actions={
           <>
-            <Button
-              variant='secondary'
-              size='sm'
-              icon={showLegacy ? HiEyeOff : HiEye}
-              onClick={() => setShowLegacy((v) => !v)}
-            >
-              {showLegacy ? 'Hide legacy' : 'Legacy stages'}
-            </Button>
+            <Button variant='secondary' size='sm' icon={HiDownload} onClick={exportCsv}>{t('deals.export')}</Button>
+            <PrintButton />
             <Link
               to='/clients'
               className='inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 rounded-lg transition-colors'
-            >
-              Clients
-            </Link>
+            >{t('deals.clients')}</Link>
             <Button
               variant='primary'
               size='sm'
@@ -192,9 +222,7 @@ export default function DealsBoard() {
               onClick={loadPipeline}
               disabled={loading}
               className={loading ? '[&>svg]:animate-spin' : ''}
-            >
-              Refresh
-            </Button>
+            >{t('deals.refresh')}</Button>
           </>
         }
       />
@@ -205,7 +233,8 @@ export default function DealsBoard() {
           </div>
         )}
 
-        <div className='overflow-x-auto pb-2'>
+        {/* print-stack: the columns run across on screen and stack on paper. */}
+        <div className='print-stack overflow-x-auto pb-2'>
           <div className='flex gap-3' style={{ minWidth: `${columns.length * 272}px` }}>
             {columns.map((col) => (
               <div key={col.id} style={{ minWidth: '256px', width: '256px' }}>
@@ -248,7 +277,7 @@ export default function DealsBoard() {
                           {d.clientName || 'Client'}
                         </Link>
                         {!d.dealId && (
-                          <span className='text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded shrink-0'>No deal</span>
+                          <span className='text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded shrink-0'>{t('deals.noDeal')}</span>
                         )}
                       </div>
                       {d.dealId ? (
@@ -259,12 +288,38 @@ export default function DealsBoard() {
                               Close: {new Date(d.expectedCloseDate).toLocaleDateString()}
                             </div>
                           )}
+
+                          {/*
+                            * Collapsed by default: a board is for scanning, and
+                            * an always-open history on every card would bury
+                            * the numbers people come here to read.
+                            */}
+                          <button
+                            type='button'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenHistory((id) => (id === String(d.dealId) ? null : String(d.dealId)));
+                            }}
+                            className='mt-2 text-[11px] text-slate-400 hover:text-slate-600 transition-colors'
+                          >
+                            {openHistory === String(d.dealId) ? 'Hide history' : 'History'}
+                          </button>
+
+                          {openHistory === String(d.dealId) && (
+                            <div
+                              className='mt-2 pt-2 border-t border-slate-100'
+                              onClick={(e) => e.stopPropagation()}
+                              role='presentation'
+                            >
+                              <DealActivityFeed dealId={String(d.dealId)} />
+                            </div>
+                          )}
                         </>
                       ) : addingDealFor === String(d.clientId) ? (
                         <div className='mt-2 space-y-2' onClick={e => e.stopPropagation()}>
                           <input
                             type='number'
-                            placeholder='Deal value (₹)'
+                            placeholder={`Deal value (${currencySymbol()})`}
                             value={quickDealValue}
                             onChange={e => setQuickDealValue(e.target.value)}
                             className='w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400'
@@ -276,16 +331,12 @@ export default function DealsBoard() {
                               onClick={() => handleQuickAddDeal(d.clientId, col.id)}
                               disabled={updating}
                               className='flex-1 text-xs bg-slate-900 text-white rounded px-2 py-1.5 hover:bg-slate-800 disabled:opacity-50 transition-colors'
-                            >
-                              Save
-                            </button>
+                            >{t('deals.save')}</button>
                             <button
                               type='button'
                               onClick={() => { setAddingDealFor(null); setQuickDealValue(''); }}
                               className='text-xs border border-slate-200 rounded px-2 py-1.5 hover:bg-slate-50 transition-colors'
-                            >
-                              Cancel
-                            </button>
+                            >{t('deals.cancel')}</button>
                           </div>
                         </div>
                       ) : (
@@ -293,15 +344,14 @@ export default function DealsBoard() {
                           onClick={() => { setAddingDealFor(String(d.clientId)); setQuickDealValue(''); }}
                           className='mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 transition-colors'
                         >
-                          <HiPlusSm className='w-3.5 h-3.5' /> Add deal value
-                        </button>
+                          <HiPlusSm className='w-3.5 h-3.5' />{t('deals.addDealValue')}</button>
                       )}
                     </div>
                   ))}
 
                   {(!col.deals || col.deals.length === 0) && (
                     <div className='flex items-center justify-center py-6 text-slate-400'>
-                      <span className='text-xs'>No deals</span>
+                      <span className='text-xs'>{t('deals.noDeals')}</span>
                     </div>
                   )}
                 </div>
@@ -311,7 +361,7 @@ export default function DealsBoard() {
         </div>
 
       {updating && (
-        <div className='text-sm text-slate-500'>Updating stage…</div>
+        <div className='text-sm text-slate-500'>{t('deals.updatingStage')}</div>
       )}
     </div>
   );

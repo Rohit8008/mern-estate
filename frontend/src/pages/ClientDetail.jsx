@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { HiPhone, HiMail, HiChat, HiCalendar, HiPlusSm, HiCheck } from 'react-icons/hi';
+import { Card, Badge, Input, Select, Textarea, Button } from '../design-system';
+import { currencySymbol, formatCurrency, getLocaleConfig } from '../utils/currency';
+import TagPicker from '../components/TagPicker';
+import { useNotification } from '../contexts/NotificationContext';
+import TemperatureControl from '../components/TemperatureControl';
+import SequenceEnrollments from '../components/SequenceEnrollments';
+import ClientPhotos from '../components/ClientPhotos';
+import { useTranslation } from 'react-i18next';
 
 const DEAL_STAGES = [
   // Professional stages
@@ -32,7 +40,9 @@ const FOLLOW_UP_TYPES = [
 const COMM_TYPES = ['call', 'email', 'sms', 'meeting', 'whatsapp', 'site_visit', 'note'];
 
 export default function ClientDetail() {
+  const { t } = useTranslation();
   const { id } = useParams();
+  const { showError } = useNotification();
   const [client, setClient] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);   // initial page load only
@@ -102,7 +112,7 @@ export default function ClientDetail() {
         preferredLocations: preferredLocations
           ? preferredLocations.split(',').map((s) => s.trim()).filter(Boolean)
           : [],
-        budget: { min: Number(budgetMin) || 0, max: Number(budgetMax) || 0, currency: 'INR' },
+        budget: { min: Number(budgetMin) || 0, max: Number(budgetMax) || 0, currency: getLocaleConfig().currency },
       });
       setEditingReqs(false);
       await loadClient();
@@ -290,17 +300,24 @@ export default function ClientDetail() {
     } catch (_) {}
   }
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount || 0);
+  /**
+   * Choosing a temperature pins it: the server sets temperatureManual, so the
+   * nightly rescore stops overwriting what a person decided.
+   */
+  const setTemperature = async (temperature) => {
+    const previous = client.temperature;
+    setClient((c) => ({ ...c, temperature, temperatureManual: true }));
+    try {
+      await apiClient.patch(`/clients/${client._id}`, { temperature });
+    } catch (err) {
+      setClient((c) => ({ ...c, temperature: previous }));
+      showError(err?.message || 'Could not save that');
+    }
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500 text-sm">{t('clientDetail.loading')}</div>;
   if (error) return <div className="p-4 text-rose-600 text-sm">{error}</div>;
-  if (!client) return <div className="p-4 text-slate-500 text-sm">Not found</div>;
+  if (!client) return <div className="p-4 text-slate-500 text-sm">{t('clientDetail.notFound')}</div>;
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -321,56 +338,58 @@ export default function ClientDetail() {
           <div className="text-slate-600 text-sm flex items-center gap-3">
             {client.email && <span>{client.email}</span>}
             {client.phone && <span>{client.phone}</span>}
-            <span className={`px-2 py-0.5 rounded text-xs capitalize ${
-              client.status === 'won' ? 'bg-green-100 text-green-700' :
-              client.status === 'lost' ? 'bg-red-100 text-red-700' :
-              'bg-slate-100 text-slate-700'
-            }`}>{client.status}</span>
-            <span className={`px-2 py-0.5 rounded text-xs capitalize ${
-              client.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-              client.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-              'bg-slate-100 text-slate-700'
-            }`}>{client.priority}</span>
+            <Badge
+              variant={client.status === 'won' ? 'success' : client.status === 'lost' ? 'error' : 'default'}
+              className='capitalize'
+            >
+              {client.status}
+            </Badge>
+            <Badge
+              variant={client.priority === 'urgent' ? 'error' : client.priority === 'high' ? 'warning' : 'default'}
+              className='capitalize'
+            >
+              {client.priority}
+            </Badge>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {saving && <span className="text-xs text-slate-400 animate-pulse">Saving…</span>}
-          <Link to="/clients" className="text-sm text-slate-600 hover:text-slate-900 hover:underline">← Clients</Link>
+          {saving && <span className="text-xs text-slate-400 animate-pulse">{t('clientDetail.saving')}</span>}
+          <Link to="/clients" className="text-sm text-slate-600 hover:text-slate-900 hover:underline">{t('clientDetail.clients')}</Link>
         </div>
       </div>
 
       {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border p-4">
-            <div className="text-sm text-slate-500">Active Deals</div>
+          <Card>
+            <div className="text-sm text-slate-500">{t('clientDetail.activeDeals')}</div>
             <div className="text-2xl font-bold">{summary.deals?.active || 0}</div>
-          </div>
-          <div className="bg-white rounded-lg border p-4">
-            <div className="text-sm text-slate-500">Won Value</div>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(summary.deals?.wonValue)}</div>
-          </div>
-          <div className="bg-white rounded-lg border p-4">
-            <div className="text-sm text-slate-500">Pending Follow-ups</div>
+          </Card>
+          <Card>
+            <div className="text-sm text-slate-500">{t('clientDetail.wonValue')}</div>
+            <div className="text-2xl font-bold text-emerald-600">{formatCurrency(summary.deals?.wonValue)}</div>
+          </Card>
+          <Card>
+            <div className="text-sm text-slate-500">{t('clientDetail.pendingFollowUps')}</div>
             <div className="text-2xl font-bold text-amber-600">{summary.followUps?.pending || 0}</div>
-          </div>
-          <div className="bg-white rounded-lg border p-4">
-            <div className="text-sm text-slate-500">Lead Score</div>
+          </Card>
+          <Card>
+            <div className="text-sm text-slate-500">{t('clientDetail.leadScore')}</div>
             <div className="text-2xl font-bold">{client.score || 0}</div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b overflow-x-auto">
+      <div className="bg-white border border-slate-200 rounded-xl flex overflow-x-auto shadow-sm">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
+            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
               activeTab === tab.id
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'text-slate-900 border-slate-900 bg-slate-50'
+                : 'text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50'
             }`}
           >
             {tab.label}
@@ -390,156 +409,159 @@ export default function ClientDetail() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="font-semibold mb-3">Contact Information</h3>
+            <Card>
+              <h3 className="font-semibold mb-3">{t('clientDetail.contactInformation')}</h3>
               <div className="space-y-2 text-sm">
-                <div><span className="text-slate-500">Email:</span> {client.email || '—'}</div>
-                <div><span className="text-slate-500">Phone:</span> {client.phone || '—'}</div>
-                <div><span className="text-slate-500">Alt Phone:</span> {client.alternatePhone || '—'}</div>
-                <div><span className="text-slate-500">Organization:</span> {client.organization || '—'}</div>
-                <div><span className="text-slate-500">Source:</span> {client.source || '—'}</div>
+                <div><span className="text-slate-500">{t('clientDetail.email')}</span> {client.email || '—'}</div>
+                <div><span className="text-slate-500">{t('clientDetail.phone')}</span> {client.phone || '—'}</div>
+                <div><span className="text-slate-500">{t('clientDetail.altPhone')}</span> {client.alternatePhone || '—'}</div>
+                <div><span className="text-slate-500">{t('clientDetail.organization')}</span> {client.organization || '—'}</div>
+                <div><span className="text-slate-500">{t('clientDetail.source')}</span> {client.source || '—'}</div>
               </div>
-            </div>
-            <div className="bg-white rounded-lg border p-4">
+            </Card>
+            <Card>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">Requirements</h3>
+                <h3 className="font-semibold">{t('clientDetail.requirements')}</h3>
                 {!editingReqs && (
                   <button
                     onClick={startEditReqs}
                     className="text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 border border-indigo-200 rounded transition-colors"
-                  >
-                    Edit
-                  </button>
+                  >{t('clientDetail.edit')}</button>
                 )}
               </div>
               {editingReqs ? (
                 <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Property Type</label>
-                    <select
-                      value={reqsForm.propertyType}
-                      onChange={(e) => setReqsForm((p) => ({ ...p, propertyType: e.target.value }))}
-                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none bg-white"
-                    >
-                      <option value="">Any</option>
-                      <option value="residential">Residential</option>
-                      <option value="commercial">Commercial</option>
-                      <option value="plot">Plot / Land</option>
-                      <option value="villa">Villa</option>
-                      <option value="apartment">Apartment</option>
-                      <option value="office">Office</option>
-                      <option value="shop">Shop</option>
-                      <option value="warehouse">Warehouse</option>
-                    </select>
-                  </div>
+                  <Select
+                    label={t('clientDetail.propertyType')}
+                    value={reqsForm.propertyType}
+                    onChange={(e) => setReqsForm((p) => ({ ...p, propertyType: e.target.value }))}
+                  >
+                    <option value="">{t('clientDetail.any')}</option>
+                    <option value="residential">{t('clientDetail.residential')}</option>
+                    <option value="commercial">{t('clientDetail.commercial')}</option>
+                    <option value="plot">{t('clientDetail.plotLand')}</option>
+                    <option value="villa">{t('clientDetail.villa')}</option>
+                    <option value="apartment">{t('clientDetail.apartment')}</option>
+                    <option value="office">{t('clientDetail.office')}</option>
+                    <option value="shop">{t('clientDetail.shop')}</option>
+                    <option value="warehouse">{t('clientDetail.warehouse')}</option>
+                  </Select>
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Budget Min (₹)</label>
-                      <input
-                        type="number"
-                        value={reqsForm.budgetMin}
-                        onChange={(e) => setReqsForm((p) => ({ ...p, budgetMin: e.target.value }))}
-                        className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none"
-                        placeholder="0"
-                        min={0}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Budget Max (₹)</label>
-                      <input
-                        type="number"
-                        value={reqsForm.budgetMax}
-                        onChange={(e) => setReqsForm((p) => ({ ...p, budgetMax: e.target.value }))}
-                        className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none"
-                        placeholder="0"
-                        min={0}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Preferred Locations</label>
-                    <input
-                      type="text"
-                      value={reqsForm.preferredLocations}
-                      onChange={(e) => setReqsForm((p) => ({ ...p, preferredLocations: e.target.value }))}
-                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none"
-                      placeholder="Bandra, Andheri (comma-separated)"
+                    <Input
+                      label={`Budget Min (${currencySymbol()})`}
+                      type="number"
+                      value={reqsForm.budgetMin}
+                      onChange={(e) => setReqsForm((p) => ({ ...p, budgetMin: e.target.value }))}
+                      placeholder="0"
+                      min={0}
+                    />
+                    <Input
+                      label={`Budget Max (${currencySymbol()})`}
+                      type="number"
+                      value={reqsForm.budgetMax}
+                      onChange={(e) => setReqsForm((p) => ({ ...p, budgetMax: e.target.value }))}
+                      placeholder="0"
+                      min={0}
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Detailed Requirements</label>
-                    <textarea
-                      value={reqsForm.requirements}
-                      onChange={(e) => setReqsForm((p) => ({ ...p, requirements: e.target.value }))}
-                      rows={3}
-                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 outline-none resize-none"
-                      placeholder="3BHK, south-facing, near school..."
-                    />
-                  </div>
+                  <Input
+                    label={t('clientDetail.preferredLocations')}
+                    type="text"
+                    value={reqsForm.preferredLocations}
+                    onChange={(e) => setReqsForm((p) => ({ ...p, preferredLocations: e.target.value }))}
+                    placeholder="Bandra, Andheri (comma-separated)"
+                  />
+                  <Textarea
+                    label={t('clientDetail.detailedRequirements')}
+                    value={reqsForm.requirements}
+                    onChange={(e) => setReqsForm((p) => ({ ...p, requirements: e.target.value }))}
+                    rows={3}
+                    placeholder={t('clientDetail.3bhkSouthFacingNearSchool')}
+                  />
                   <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={saveReqs}
-                      disabled={reqsSaving}
-                      className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                    >
+                    <Button onClick={saveReqs} disabled={reqsSaving} loading={reqsSaving} size='xs'>
                       {reqsSaving ? 'Saving…' : 'Save'}
-                    </button>
-                    <button
-                      onClick={() => setEditingReqs(false)}
-                      className="px-3 py-1.5 text-xs border border-slate-200 rounded hover:bg-slate-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                    </Button>
+                    <Button onClick={() => setEditingReqs(false)} variant='secondary' size='xs'>{t('clientDetail.cancel')}</Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2 text-sm">
-                  <div><span className="text-slate-500">Budget:</span> {client.budget?.min || client.budget?.max ? `${formatCurrency(client.budget.min)} – ${formatCurrency(client.budget.max)}` : '—'}</div>
-                  <div><span className="text-slate-500">Property Type:</span> {client.propertyType || '—'}</div>
-                  <div><span className="text-slate-500">Locations:</span> {client.preferredLocations?.join(', ') || '—'}</div>
-                  <div><span className="text-slate-500">Tags:</span> {client.tags?.join(', ') || '—'}</div>
+                  <div><span className="text-slate-500">{t('clientDetail.budget')}</span> {client.budget?.min || client.budget?.max ? `${formatCurrency(client.budget.min)} – ${formatCurrency(client.budget.max)}` : '—'}</div>
+                  <div><span className="text-slate-500">{t('clientDetail.propertyType2')}</span> {client.propertyType || '—'}</div>
+                  <div><span className="text-slate-500">{t('clientDetail.locations')}</span> {client.preferredLocations?.join(', ') || '—'}</div>
+                  {/*
+                    * Editable, and backed by the workspace taxonomy.
+                    * `client.tags` was a render-only string array with no input
+                    * anywhere in the product, so nobody could ever set one.
+                    */}
+                  <div className="flex items-start gap-2">
+                    <span className="text-slate-500 flex-shrink-0 pt-0.5">{t('clientDetail.tags')}</span>
+                    <TagPicker
+                      kind="client"
+                      recordId={client._id}
+                      value={client.tagIds || []}
+                      onChange={(tagIds) => setClient((c) => ({ ...c, tagIds }))}
+                    />
+                  </div>
                   {client.requirements && (
                     <div className="pt-2 border-t border-slate-100">
-                      <span className="text-slate-500 block mb-1">Requirements:</span>
+                      <span className="text-slate-500 block mb-1">{t('clientDetail.requirements2')}</span>
                       <p className="whitespace-pre-wrap">{client.requirements}</p>
                     </div>
                   )}
                   {!client.requirements && !client.propertyType && !client.budget?.min && !client.budget?.max && (
-                    <p className="text-slate-400 text-xs italic">No requirements set — click Edit to add</p>
+                    <p className="text-slate-400 text-xs italic">{t('clientDetail.noRequirementsSetClickEditTo')}</p>
                   )}
                 </div>
               )}
-            </div>
-            <div className="bg-white rounded-lg border p-4 md:col-span-2">
-              <h3 className="font-semibold mb-3">Notes</h3>
+            </Card>
+            <Card>
+              <h3 className="font-semibold mb-3">{t('clientDetail.temperature')}</h3>
+              <TemperatureControl
+                value={client.temperature}
+                manual={client.temperatureManual}
+                score={client.score}
+                onChange={setTemperature}
+              />
+            </Card>
+
+            <Card>
+              <SequenceEnrollments clientId={client._id} clientStatus={client.status} />
+            </Card>
+
+            <Card>
+              <ClientPhotos
+                clientId={client._id}
+                photos={client.photos || []}
+                onChange={(photos) => setClient((c) => ({ ...c, photos }))}
+              />
+            </Card>
+
+            <Card className='md:col-span-2'>
+              <h3 className="font-semibold mb-3">{t('clientDetail.notes')}</h3>
               <p className="text-sm whitespace-pre-wrap">{client.notes || '—'}</p>
-            </div>
+            </Card>
           </div>
         )}
 
         {/* Timeline Tab */}
         {activeTab === 'timeline' && (
-          <div className="bg-white rounded-lg border p-4">
+          <Card>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Timeline</h3>
-              <button
-                onClick={loadTimeline}
-                className="px-3 py-2 border rounded text-sm hover:bg-slate-50"
-                disabled={timelineLoading}
-              >
-                Refresh
-              </button>
+              <h3 className="font-semibold">{t('clientDetail.timeline')}</h3>
+              <Button onClick={loadTimeline} disabled={timelineLoading} variant='secondary' size='sm'>{t('clientDetail.refresh')}</Button>
             </div>
 
-            {timelineLoading && <div className="text-sm text-slate-500">Loading timeline...</div>}
+            {timelineLoading && <div className="text-sm text-slate-500">{t('clientDetail.loadingTimeline')}</div>}
 
             {!timelineLoading && timeline.length === 0 && (
-              <div className="text-sm text-slate-500">No timeline events yet.</div>
+              <div className="text-sm text-slate-500">{t('clientDetail.noTimelineEventsYet')}</div>
             )}
 
             <div className="space-y-3">
               {timeline.map((ev) => (
-                <div key={ev._id} className="border rounded-lg p-3">
+                <div key={ev._id} className="border border-slate-200 rounded-lg p-3">
                   <div className="flex items-center justify-between gap-4">
                     <div className="font-medium text-sm">{ev.message || ev.action}</div>
                     <div className="text-xs text-slate-500">{new Date(ev.createdAt).toLocaleString()}</div>
@@ -550,38 +572,36 @@ export default function ClientDetail() {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Deals Tab */}
         {activeTab === 'deals' && (
           <div className="space-y-4">
             {/* Add Deal Form */}
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="font-semibold mb-3">Add New Deal</h3>
-              <form onSubmit={handleAddDeal} className="grid md:grid-cols-4 gap-3">
-                <select name="stage" className="border rounded px-3 py-2">
+            <Card>
+              <h3 className="font-semibold mb-3">{t('clientDetail.addNewDeal')}</h3>
+              <form onSubmit={handleAddDeal} className="grid md:grid-cols-4 gap-3 items-end">
+                <Select name="stage" className='mb-0'>
                   {DEAL_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
-                <input name="value" type="number" placeholder="Deal Value" className="border rounded px-3 py-2" />
-                <input name="commission" type="number" placeholder="Commission %" max="100" className="border rounded px-3 py-2" />
-                <input name="notes" placeholder="Notes" className="border rounded px-3 py-2" />
-                <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded flex items-center gap-2">
-                  <HiPlusSm className='w-4 h-4' /> Add Deal
-                </button>
+                </Select>
+                <Input name="value" type="number" placeholder={t('clientDetail.dealValue')} className='mb-0' />
+                <Input name="commission" type="number" placeholder={t('clientDetail.commission')} max="100" className='mb-0' />
+                <Input name="notes" placeholder={t('clientDetail.notes')} className='mb-0' />
+                <Button type="submit" icon={HiPlusSm} className='md:col-span-4 justify-center'>{t('clientDetail.addDeal')}</Button>
               </form>
-            </div>
+            </Card>
 
             {/* Deal List */}
             <div className="space-y-3">
               {(client.deals || []).map(deal => (
-                <div key={deal._id} className={`rounded-lg border p-4 ${DEAL_STAGES.find(s => s.id === deal.stage)?.color || 'bg-white'}`}>
+                <div key={deal._id} className={`rounded-lg border border-slate-200 p-4 ${DEAL_STAGES.find(s => s.id === deal.stage)?.color || 'bg-white'}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-semibold text-lg">{formatCurrency(deal.value)}</div>
                     <select
                       value={deal.stage}
                       onChange={(e) => updateDealStage(deal._id, e.target.value)}
-                      className="border rounded px-2 py-1 text-sm bg-white"
+                      className="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     >
                       {DEAL_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
@@ -594,7 +614,7 @@ export default function ClientDetail() {
                 </div>
               ))}
               {(!client.deals || client.deals.length === 0) && (
-                <p className="text-slate-500 text-center py-8">No deals yet</p>
+                <p className="text-slate-500 text-center py-8">{t('clientDetail.noDealsYet')}</p>
               )}
             </div>
           </div>
@@ -604,19 +624,17 @@ export default function ClientDetail() {
         {activeTab === 'followups' && (
           <div className="space-y-4">
             {/* Add Follow-up Form */}
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="font-semibold mb-3">Schedule Follow-up</h3>
-              <form onSubmit={handleAddFollowUp} className="grid md:grid-cols-4 gap-3">
-                <input name="dueAt" type="datetime-local" required className="border rounded px-3 py-2" />
-                <select name="type" className="border rounded px-3 py-2">
+            <Card>
+              <h3 className="font-semibold mb-3">{t('clientDetail.scheduleFollowUp')}</h3>
+              <form onSubmit={handleAddFollowUp} className="grid md:grid-cols-4 gap-3 items-end">
+                <Input name="dueAt" type="datetime-local" required className='mb-0' />
+                <Select name="type" className='mb-0'>
                   {FOLLOW_UP_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-                <input name="notes" placeholder="Notes" className="border rounded px-3 py-2 md:col-span-2" />
-                <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded flex items-center gap-2">
-                  <HiPlusSm className='w-4 h-4' /> Schedule
-                </button>
+                </Select>
+                <Input name="notes" placeholder={t('clientDetail.notes')} className="mb-0 md:col-span-2" />
+                <Button type="submit" icon={HiPlusSm} className='md:col-span-4 justify-center'>{t('clientDetail.schedule')}</Button>
               </form>
-            </div>
+            </Card>
 
             {/* Follow-up List */}
             <div className="space-y-2">
@@ -625,9 +643,9 @@ export default function ClientDetail() {
                 .map(fu => {
                   const isOverdue = !fu.completed && new Date(fu.dueAt) < new Date();
                   return (
-                    <div key={fu._id} className={`rounded-lg border p-3 flex items-center justify-between ${fu.completed ? 'bg-slate-50 opacity-60' : isOverdue ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
+                    <div key={fu._id} className={`rounded-lg border p-3 flex items-center justify-between ${fu.completed ? 'bg-slate-50 border-slate-200 opacity-60' : isOverdue ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'}`}>
                       <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded ${fu.completed ? 'bg-green-100' : 'bg-blue-100'}`}>
+                        <div className={`p-2 rounded-lg ${fu.completed ? 'bg-emerald-100' : 'bg-indigo-100'}`}>
                           {FOLLOW_UP_TYPES.find(t => t.id === fu.type)?.icon && (
                             <span className="text-sm">{fu.type}</span>
                           )}
@@ -636,21 +654,24 @@ export default function ClientDetail() {
                           <div className="font-medium capitalize">{fu.type.replace('_', ' ')}</div>
                           <div className="text-sm text-slate-500">
                             {new Date(fu.dueAt).toLocaleString()}
-                            {isOverdue && <span className="text-red-600 ml-2">Overdue!</span>}
+                            {isOverdue && <span className="text-rose-600 ml-2">{t('clientDetail.overdue')}</span>}
                           </div>
                           {fu.notes && <div className="text-sm">{fu.notes}</div>}
                         </div>
                       </div>
                       {!fu.completed && (
-                        <button onClick={() => completeFollowUp(fu._id)} className="px-3 py-1 bg-green-600 text-white rounded text-sm flex items-center gap-1">
-                          <HiCheck className='w-4 h-4' /> Done
-                        </button>
+                        <button
+                          type='button'
+                          onClick={() => completeFollowUp(fu._id)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1"
+                        >
+                          <HiCheck className='w-4 h-4' />{t('clientDetail.done')}</button>
                       )}
                     </div>
                   );
                 })}
               {(!client.followUps || client.followUps.length === 0) && (
-                <p className="text-slate-500 text-center py-8">No follow-ups scheduled</p>
+                <p className="text-slate-500 text-center py-8">{t('clientDetail.noFollowUpsScheduled')}</p>
               )}
             </div>
           </div>
@@ -660,35 +681,33 @@ export default function ClientDetail() {
         {activeTab === 'communications' && (
           <div className="space-y-4">
             {/* Add Communication Form */}
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="font-semibold mb-3">Log Activity</h3>
+            <Card>
+              <h3 className="font-semibold mb-3">{t('clientDetail.logActivity')}</h3>
               <form onSubmit={handleAddCommunication} className="grid md:grid-cols-4 gap-3">
-                <select name="type" className="border rounded px-3 py-2">
+                <Select name="type" className='mb-0'>
                   {COMM_TYPES.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
-                </select>
-                <select name="direction" className="border rounded px-3 py-2">
-                  <option value="outbound">Outbound</option>
-                  <option value="inbound">Inbound</option>
-                </select>
-                <input name="summary" required placeholder="Summary *" className="border rounded px-3 py-2 md:col-span-2" />
-                <textarea name="details" placeholder="Details (optional)" className="border rounded px-3 py-2 md:col-span-4" rows="2" />
-                <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded flex items-center gap-2">
-                  <HiPlusSm className='w-4 h-4' /> Log Activity
-                </button>
+                </Select>
+                <Select name="direction" className='mb-0'>
+                  <option value="outbound">{t('clientDetail.outbound')}</option>
+                  <option value="inbound">{t('clientDetail.inbound')}</option>
+                </Select>
+                <Input name="summary" required placeholder={t('clientDetail.summary')} className="mb-0 md:col-span-2" />
+                <Textarea name="details" placeholder="Details (optional)" className="mb-0 md:col-span-4" rows="2" />
+                <Button type="submit" icon={HiPlusSm} className='md:col-span-4 justify-center'>{t('clientDetail.logActivity')}</Button>
               </form>
-            </div>
+            </Card>
 
             {/* Communication History */}
             <div className="space-y-2">
               {(client.communications || [])
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
                 .map(comm => (
-                  <div key={comm._id} className="rounded-lg border p-3 bg-white">
+                  <div key={comm._id} className="rounded-lg border border-slate-200 p-3 bg-white">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-xs capitalize ${comm.direction === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                        <Badge variant={comm.direction === 'inbound' ? 'info' : 'success'} className='capitalize'>
                           {comm.direction}
-                        </span>
+                        </Badge>
                         <span className="font-medium capitalize">{comm.type}</span>
                       </div>
                       <span className="text-xs text-slate-500">{new Date(comm.createdAt).toLocaleString()}</span>
@@ -698,7 +717,7 @@ export default function ClientDetail() {
                   </div>
                 ))}
               {(!client.communications || client.communications.length === 0) && (
-                <p className="text-slate-500 text-center py-8">No activity logged</p>
+                <p className="text-slate-500 text-center py-8">{t('clientDetail.noActivityLogged')}</p>
               )}
             </div>
           </div>
@@ -706,49 +725,47 @@ export default function ClientDetail() {
 
         {/* Documents Tab */}
         {activeTab === 'documents' && (
-          <div className="bg-white rounded-lg border p-4">
+          <Card>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Documents</h3>
-              <button onClick={loadDocs} className="text-sm px-3 py-1 border rounded">Refresh</button>
+              <h3 className="font-semibold">{t('clientDetail.documents')}</h3>
+              <Button onClick={loadDocs} variant='secondary' size='sm'>{t('clientDetail.refresh')}</Button>
             </div>
 
             {docsLoading ? (
-              <div>Loading...</div>
+              <div>{t('clientDetail.loading2')}</div>
             ) : (
               <ul className="space-y-2">
                 {docs.map(d => (
-                  <li key={d._id} className="border rounded p-3 flex items-center justify-between">
+                  <li key={d._id} className="border border-slate-200 rounded-lg p-3 flex items-center justify-between">
                     <div>
-                      <a href={d.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">{d.title}</a>
+                      <a href={d.url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-medium">{d.title}</a>
                       <div className="text-xs text-slate-600">{d.mimeType} · {(d.size/1024).toFixed(1)} KB</div>
                     </div>
                   </li>
                 ))}
-                {docs.length === 0 && <li className="text-sm text-slate-500">No documents</li>}
+                {docs.length === 0 && <li className="text-sm text-slate-500">{t('clientDetail.noDocuments')}</li>}
               </ul>
             )}
 
             <form onSubmit={handleUpload} className="mt-4 flex items-center gap-3">
-              <input type="file" name="file" className="border rounded px-3 py-2 flex-1" />
-              <button type="submit" disabled={uploading} className="px-4 py-2 bg-slate-900 text-white rounded">
-                {uploading ? 'Uploading...' : 'Upload'}
-              </button>
+              <input type="file" name="file" className="border border-slate-300 rounded-lg px-3 py-2 flex-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              <Button type="submit" disabled={uploading} loading={uploading}>{t('clientDetail.upload')}</Button>
             </form>
-          </div>
+          </Card>
         )}
 
         {activeTab === 'tasks' && (
-          <div className="bg-white rounded-lg border p-4">
+          <Card>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Tasks</h3>
+              <h3 className="font-semibold">{t('clientDetail.tasks')}</h3>
             </div>
 
             {tasksLoading ? (
-              <div className="text-sm text-slate-500">Loading…</div>
+              <div className="text-sm text-slate-500">{t('clientDetail.loading')}</div>
             ) : (
               <ul className="space-y-2 mb-6">
                 {tasks.map(t => (
-                  <li key={t._id} className="border rounded p-3 flex items-center gap-3">
+                  <li key={t._id} className="border border-slate-200 rounded-lg p-3 flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => toggleTaskStatus(t)}
@@ -768,51 +785,43 @@ export default function ClientDetail() {
                         </div>
                       )}
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded capitalize ${
-                      t.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                      t.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                      'bg-slate-100 text-slate-600'
-                    }`}>{t.priority || 'medium'}</span>
+                    <Badge variant={t.priority === 'urgent' ? 'error' : t.priority === 'high' ? 'warning' : 'default'} className='capitalize'>
+                      {t.priority || 'medium'}
+                    </Badge>
                   </li>
                 ))}
-                {tasks.length === 0 && <li className="text-sm text-slate-500">No tasks yet</li>}
+                {tasks.length === 0 && <li className="text-sm text-slate-500">{t('clientDetail.noTasksYet')}</li>}
               </ul>
             )}
 
-            <form onSubmit={handleCreateTask} className="border-t pt-4 space-y-3">
-              <h4 className="text-sm font-semibold text-slate-700">Add task</h4>
-              <input
+            <form onSubmit={handleCreateTask} className="border-t border-slate-100 pt-4 space-y-3">
+              <h4 className="text-sm font-semibold text-slate-700">{t('clientDetail.addTask')}</h4>
+              <Input
                 name="title"
                 required
-                placeholder="Task title"
-                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                placeholder={t('clientDetail.taskTitle')}
+                className='mb-0'
               />
               <div className="grid grid-cols-2 gap-3">
-                <input
+                <Input
                   name="dueAt"
                   type="date"
-                  className="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  className='mb-0'
                 />
-                <select
+                <Select
                   name="priority"
                   defaultValue="medium"
-                  className="border rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  className='mb-0'
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
+                  <option value="low">{t('clientDetail.low')}</option>
+                  <option value="medium">{t('clientDetail.medium')}</option>
+                  <option value="high">{t('clientDetail.high')}</option>
+                  <option value="urgent">{t('clientDetail.urgent')}</option>
+                </Select>
               </div>
-              <button
-                type="submit"
-                disabled={creatingTask}
-                className="px-4 py-2 bg-slate-900 text-white text-sm rounded hover:bg-slate-800 disabled:opacity-50 transition-colors"
-              >
-                {creatingTask ? 'Adding…' : 'Add Task'}
-              </button>
+              <Button type="submit" disabled={creatingTask} loading={creatingTask}>{t('clientDetail.addTask2')}</Button>
             </form>
-          </div>
+          </Card>
         )}
       </div>
     </div>

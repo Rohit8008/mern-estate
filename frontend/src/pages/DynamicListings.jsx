@@ -5,16 +5,20 @@ import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import DynamicListingTable from '../components/DynamicListingTable';
 import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useNotification } from '../contexts/NotificationContext';
+import { HiOutlineDocumentText } from 'react-icons/hi';
 
 const DynamicListings = () => {
   const { categorySlug } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
+  const { showError } = useNotification();
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [categoryDocs, setCategoryDocs] = useState([]);
 
   useEffect(() => {
     const fetchCategory = async () => {
@@ -41,6 +45,22 @@ const DynamicListings = () => {
     fetchCategory();
   }, [categorySlug]);
 
+  // Fetch any reference documents (e.g. a master-plan / site-plan PDF) attached to this category
+  useEffect(() => {
+    const fetchCategoryDocs = async () => {
+      if (!category?._id) return;
+      try {
+        const res = await fetchWithRefresh(`/api/documents?kind=category&categoryId=${category._id}`);
+        const data = await parseJsonSafely(res);
+        setCategoryDocs(Array.isArray(data?.data) ? data.data : []);
+      } catch (err) {
+        console.error('Error fetching category documents:', err);
+      }
+    };
+
+    fetchCategoryDocs();
+  }, [category?._id]);
+
   const handleEdit = (listing) => {
     // Check if user has permission to edit
     if (currentUser && 
@@ -49,7 +69,7 @@ const DynamicListings = () => {
          (currentUser.role === 'seller' && listing.userRef === currentUser._id))) {
       navigate(`/update-listing/${listing._id}`);
     } else {
-      alert('You do not have permission to edit this listing');
+      showError('You do not have permission to edit this listing');
     }
   };
 
@@ -152,6 +172,24 @@ const DynamicListings = () => {
       {category.description && (
         <div className="mb-6 p-4 bg-blue-50 rounded-lg">
           <p className="text-blue-800">{category.description}</p>
+        </div>
+      )}
+
+      {/* Reference documents (site plan / master layout, etc.) */}
+      {categoryDocs.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {categoryDocs.map((doc) => (
+            <a
+              key={doc._id}
+              href={doc.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              <HiOutlineDocumentText className="w-4 h-4" />
+              {doc.title}
+            </a>
+          ))}
         </div>
       )}
 

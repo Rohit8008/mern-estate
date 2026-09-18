@@ -2,9 +2,12 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { createSocket } from '../config/socket';
 import { apiClient } from '../utils/http';
+import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
 import { HiPaperAirplane } from 'react-icons/hi';
+import { useTranslation } from 'react-i18next';
 
 export default function Chat({ otherIdProp }) {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((s) => s.user);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -95,7 +98,7 @@ export default function Chat({ otherIdProp }) {
       {/* Header */}
       <div className='flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-shrink-0'>
         <img
-          src={otherUser?.avatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}
+          src={otherUser?.avatar || DEFAULT_AVATAR_URL}
           alt='avatar'
           className='w-9 h-9 rounded-full object-cover'
         />
@@ -134,7 +137,7 @@ export default function Chat({ otherIdProp }) {
         })}
         {messages.length === 0 && (
           <div className='flex items-center justify-center h-full'>
-            <p className='text-sm text-slate-400'>No messages yet. Say hello!</p>
+            <p className='text-sm text-slate-400'>{t('chat.noMessagesYetSayHello')}</p>
           </div>
         )}
         <div ref={bottomRef} />
@@ -144,7 +147,7 @@ export default function Chat({ otherIdProp }) {
       <form onSubmit={handleSend} className='flex items-center gap-2 px-4 py-3 border-t border-slate-100 flex-shrink-0'>
         <input
           className='flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
-          placeholder='Type a message...'
+          placeholder={t('chat.typeAMessage')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={sending}

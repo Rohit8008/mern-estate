@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { HiOutlineOfficeBuilding, HiOutlineExclamationCircle } from 'react-icons/hi';
 import {
   signInStart,
   signInSuccess,
@@ -8,16 +9,18 @@ import {
 } from '../redux/user/userSlice';
 import { apiClient, handleApiError, setUserSignedOut } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { Input, Button } from '../design-system';
 import usePageTitle from '../hooks/usePageTitle';
+import { useTranslation } from 'react-i18next';
 
 export default function SignIn() {
+  const { t } = useTranslation();
   usePageTitle('Sign In');
   const [formData, setFormData] = useState({});
   const { loading, error } = useSelector((state) => state.user);
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess } = useNotification();
 
   const handleChange = (e) => {
     setFormData({
@@ -37,7 +40,6 @@ export default function SignIn() {
     } catch (error) {
       const apiError = handleApiError(error, error);
       dispatch(signInFailure(apiError.message));
-      showError(apiError.message);
     }
   };
 
@@ -47,76 +49,52 @@ export default function SignIn() {
         {/* Header */}
         <div className='text-center'>
           <div className='flex justify-center mb-8'>
-            <div className='w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg'>
-              <span className='text-white font-bold text-2xl'>R</span>
+            <div className='w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20'>
+              <HiOutlineOfficeBuilding className='w-8 h-8 text-white' />
             </div>
           </div>
-          <h1 className='text-4xl font-bold text-slate-900 mb-2'>Welcome back</h1>
-          <p className='text-lg text-slate-600'>Sign in to your account</p>
+          <h1 className='text-4xl font-bold text-slate-900 mb-2'>{t('signIn.welcomeBack')}</h1>
+          <p className='text-lg text-slate-600'>{t('signIn.signInToYourAccount')}</p>
         </div>
 
         {/* Form */}
         <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
-          <form onSubmit={handleSubmit} className='space-y-6'>
-            <div>
-              <label htmlFor='email' className='block text-sm font-semibold text-slate-700 mb-3'>
-                Email address
-              </label>
-              <input
-                type='email'
-                id='email'
-                placeholder='Enter your email'
-                className='w-full border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors hover:border-slate-300'
-                onChange={handleChange}
-                required
-              />
-            </div>
+          <form onSubmit={handleSubmit} className='space-y-5'>
+            <Input
+              label={t('signIn.emailAddress')}
+              type='email'
+              id='email'
+              placeholder={t('signIn.enterYourEmail')}
+              onChange={handleChange}
+              required
+            />
 
-            <div>
-              <label htmlFor='password' className='block text-sm font-semibold text-slate-700 mb-3'>
-                Password
-              </label>
-              <input
-                type='password'
-                id='password'
-                placeholder='Enter your password'
-                className='w-full border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors hover:border-slate-300'
-                onChange={handleChange}
-                required
-              />
-            </div>
+            <Input
+              label={t('signIn.password')}
+              type='password'
+              id='password'
+              placeholder={t('signIn.enterYourPassword')}
+              onChange={handleChange}
+              required
+            />
 
-            <div className='flex justify-end'>
+            <div className='flex justify-end -mt-1'>
               <Link
                 to='/forgot-password'
                 className='text-sm text-indigo-600 hover:text-indigo-800 font-medium'
-              >
-                Forgot password?
-              </Link>
+              >{t('signIn.forgotPassword')}</Link>
             </div>
 
-            <button
-              type='submit'
-              disabled={loading}
-              className='w-full bg-indigo-600 text-white py-3.5 px-6 rounded-xl font-semibold hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center'
-            >
-              {loading ? (
-                <LoadingSpinner size="sm" color="white" text="Signing in..." />
-              ) : (
-                'Sign in'
-              )}
-            </button>
+            <Button type='submit' size='lg' loading={loading} className='w-full justify-center'>{t('signIn.signIn')}</Button>
           </form>
 
           {/* Error Message */}
           {error && (
-            <div className='mt-6 p-4 bg-red-50 border border-red-200 rounded-xl'>
+            <div className='mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl'>
               <div className='flex items-start'>
-                <svg className='w-5 h-5 text-red-500 mt-0.5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
-                </svg>
+                <HiOutlineExclamationCircle className='w-5 h-5 text-rose-500 mt-0.5 flex-shrink-0' />
                 <div className='ml-3'>
-                  <p className='text-sm font-medium text-red-800'>{error}</p>
+                  <p className='text-sm font-medium text-rose-800'>{error}</p>
                 </div>
               </div>
             </div>
@@ -125,9 +103,7 @@ export default function SignIn() {
 
         {/* Footer */}
         <div className='text-center'>
-          <p className='text-sm text-slate-500 font-medium'>
-            Need access? Contact your administrator
-          </p>
+          <p className='text-sm text-slate-500 font-medium'>{t('signIn.needAccessContactYourAdministrator')}</p>
         </div>
       </div>
 

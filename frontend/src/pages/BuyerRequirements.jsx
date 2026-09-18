@@ -1,14 +1,20 @@
 import { useState, useEffect } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useSelector } from 'react-redux';
+import { Link } from 'react-router-dom';
 import {
   HiPlus, HiSearch, HiUser, HiPhone, HiMail, HiLocationMarker,
   HiHome, HiCurrencyDollar, HiCalendar, HiPencil, HiTrash, HiEye,
+  HiSparkles, HiExternalLink, HiDownload,
 } from 'react-icons/hi';
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { Modal, Input, Select, Textarea, Spinner, Button, EmptyState } from '../design-system';
+import { formatListingPrice } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 export default function BuyerRequirements() {
+  const { t } = useTranslation();
   const [buyerRequirements, setBuyerRequirements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -21,6 +27,19 @@ export default function BuyerRequirements() {
   const [editingId, setEditingId] = useState(null);
   const [viewingRequirement, setViewingRequirement] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+
+  /**
+   * Property matches for one buyer.
+   *
+   * The scoring engine (getMatchingScore in buyerRequirement.model.js) and its
+   * endpoint have existed since the model was written, and nothing in the app
+   * ever called them — so an agent had no way to see which of the workspace's
+   * properties fit a buyer. This is that screen.
+   */
+  const [matchesFor, setMatchesFor] = useState(null);
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesError, setMatchesError] = useState(null);
 
   const emptyForm = {
     buyerName: '',
@@ -137,6 +156,52 @@ export default function BuyerRequirements() {
     setFormData(emptyForm);
   };
 
+
+  /**
+   * Export the filtered set, server-side.
+   *
+   * Via fetch rather than a link so the session cookie and the refresh-on-401
+   * path apply, and so the file reflects the whole filtered result rather than
+   * the page of rows that happens to be loaded.
+   */
+  const exportCsv = async () => {
+    try {
+      const params = new URLSearchParams({ ...(searchTerm ? { search: searchTerm } : {}), ...(filterType !== 'all' ? { propertyType: filterType } : {}) });
+      const response = await fetchWithRefresh(`/api/buyer-requirements/export?${params}`);
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `buyers-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleShowMatches = async (requirement) => {
+    setMatchesFor(requirement);
+    setMatches([]);
+    setMatchesError(null);
+    setMatchesLoading(true);
+
+    try {
+      const response = await fetchWithRefresh(`/api/buyer-requirements/${requirement._id}/matches`);
+      const data = await parseJsonSafely(response);
+      if (!response.ok) throw new Error(data?.message || 'Could not load matches');
+      setMatches(data?.matchingProperties || []);
+    } catch (err) {
+      setMatchesError(err.message || 'Could not load matches');
+    } finally {
+      setMatchesLoading(false);
+    }
+  };
+
   const handleView = (requirement) => {
     setViewingRequirement(requirement);
     setEditingId(null);
@@ -172,22 +237,28 @@ export default function BuyerRequirements() {
         {/* Header */}
           <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
             <div>
-              <h1 className='text-xl font-bold text-slate-900'>Buyer Requirements</h1>
-              <p className='text-slate-500 mt-0.5'>Manage and track buyer requirements</p>
+              <h1 className='text-xl font-bold text-slate-900'>{t('buyerRequirements.buyerRequirements')}</h1>
+              <p className='text-slate-500 mt-0.5'>{t('buyerRequirements.manageAndTrackBuyerRequirements')}</p>
             </div>
 
-            {!isBuyerViewMode && (
+            <div className='flex items-center gap-2'>
               <button
-                onClick={() => {
-                  setViewingRequirement(null);
-                  setShowForm(true);
-                }}
-                className='inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors'
+                onClick={exportCsv}
+                className='inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors'
               >
-                <HiPlus className='w-4 h-4' />
-                Add Requirement
-              </button>
-            )}
+                <HiDownload className='w-4 h-4' />{t('buyerRequirements.export')}</button>
+
+              {!isBuyerViewMode && (
+                <button
+                  onClick={() => {
+                    setViewingRequirement(null);
+                    setShowForm(true);
+                  }}
+                  className='inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors'
+                >
+                  <HiPlus className='w-4 h-4' />{t('buyerRequirements.addRequirement')}</button>
+              )}
+            </div>
           </div>
 
         {/* Controls */}
@@ -199,7 +270,7 @@ export default function BuyerRequirements() {
                 <HiSearch className='absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400' />
                 <input
                   type='text'
-                  placeholder='Search buyers or requirements...'
+                  placeholder={t('buyerRequirements.searchBuyersOrRequirements')}
                   className='w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -212,234 +283,254 @@ export default function BuyerRequirements() {
                 onChange={(e) => setFilterType(e.target.value)}
                 className='px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
               >
-                <option value='all'>All Types</option>
-                <option value='sale'>For Sale</option>
-                <option value='rent'>For Rent</option>
+                <option value='all'>{t('buyerRequirements.allTypes')}</option>
+                <option value='sale'>{t('buyerRequirements.forSale')}</option>
+                <option value='rent'>{t('buyerRequirements.forRent')}</option>
               </select>
             </div>
           </div>
         </div>
 
+        {matchesFor && (
+          <Modal
+            open
+            onClose={() => setMatchesFor(null)}
+            title={`Properties for ${matchesFor.buyerName || 'this buyer'}`}
+            description={
+              matchesLoading
+                ? 'Scoring your properties against this requirement\u2026'
+                : `${matches.length} match${matches.length === 1 ? '' : 'es'}, best first`
+            }
+            size='2xl'
+          >
+            {matchesLoading ? (
+              <div className='py-12 flex justify-center'><Spinner /></div>
+            ) : matchesError ? (
+              <p className='text-sm text-rose-600 py-6 text-center'>{matchesError}</p>
+            ) : !matches.length ? (
+              <EmptyState
+                icon={HiHome}
+                title={t('buyerRequirements.noPropertiesMatchYet')}
+                body={t('buyerRequirements.nothingInYourPortfolioFitsThis')}
+              />
+            ) : (
+              <ul className='divide-y divide-slate-100 -my-2'>
+                {matches.map((property) => (
+                  <li key={property._id} className='py-3 flex items-start gap-3'>
+                    {/*
+                      * The score bands are literal class strings. Tailwind reads
+                      * source as plain text, so `bg-${x}-50` is never emitted.
+                      */}
+                    <span
+                      className={
+                        property.matchingScore >= 80
+                          ? 'px-2 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 flex-shrink-0'
+                          : property.matchingScore >= 50
+                            ? 'px-2 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-100 flex-shrink-0'
+                            : 'px-2 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 flex-shrink-0'
+                      }
+                    >
+                      {property.matchingScore}%
+                    </span>
+
+                    <div className='flex-1 min-w-0'>
+                      <div className='text-sm font-medium text-slate-900 truncate'>
+                        {property.name || 'Untitled property'}
+                      </div>
+                      <div className='text-xs text-slate-500 truncate'>{property.address}</div>
+                      <div className='text-xs text-slate-600 mt-0.5'>
+                        {formatListingPrice(property.regularPrice)}
+                        {property.bedrooms ? ` \u00b7 ${property.bedrooms} bed` : ''}
+                        {property.bathrooms ? ` \u00b7 ${property.bathrooms} bath` : ''}
+                      </div>
+                    </div>
+
+                    <Link
+                      to={`/listing/${property._id}`}
+                      className='p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0'
+                      title={t('buyerRequirements.openProperty')}
+                    >
+                      <HiExternalLink className='w-4 h-4' />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Modal>
+        )}
+
         {viewingRequirement && (
-          <div className='fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 z-50'>
-            <div className='bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-2xl'>
-              <div className='flex items-start justify-between gap-4 mb-4'>
-                <div>
-                  <h2 className='text-xl font-semibold text-slate-900'>Buyer Requirement</h2>
-                  <p className='text-slate-600 text-sm'>Details</p>
-                </div>
-                <button
-                  onClick={() => setViewingRequirement(null)}
-                  className='px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700'
-                >
-                  Close
-                </button>
+          <Modal
+            open
+            onClose={() => setViewingRequirement(null)}
+            title={t('buyerRequirements.buyerRequirement')}
+            description={t('buyerRequirements.details')}
+            size='2xl'
+            footer={!isBuyerViewMode ? (
+              <Button
+                icon={HiPencil}
+                onClick={() => {
+                  const req = viewingRequirement;
+                  setViewingRequirement(null);
+                  handleEdit(req);
+                }}
+              >{t('buyerRequirements.edit')}</Button>
+            ) : null}
+          >
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
+              <div>
+                <div className='text-slate-500'>{t('buyerRequirements.name')}</div>
+                <div className='font-medium text-slate-900'>{viewingRequirement.buyerName || '-'}</div>
               </div>
-
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
-                <div>
-                  <div className='text-slate-500'>Name</div>
-                  <div className='font-medium text-slate-900'>{viewingRequirement.buyerName || '-'}</div>
-                </div>
-                <div>
-                  <div className='text-slate-500'>Phone</div>
-                  <div className='font-medium text-slate-900'>{viewingRequirement.buyerPhone || '-'}</div>
-                </div>
-                <div>
-                  <div className='text-slate-500'>Email</div>
-                  <div className='font-medium text-slate-900'>{viewingRequirement.buyerEmail || '-'}</div>
-                </div>
-                <div>
-                  <div className='text-slate-500'>Location</div>
-                  <div className='font-medium text-slate-900'>{viewingRequirement.preferredLocation || '-'}</div>
-                </div>
-                <div>
-                  <div className='text-slate-500'>Type</div>
-                  <div className='font-medium text-slate-900'>{viewingRequirement.propertyType || '-'}</div>
-                </div>
-                <div>
-                  <div className='text-slate-500'>Budget</div>
-                  <div className='font-medium text-slate-900'>{viewingRequirement.budget || '-'}</div>
-                </div>
+              <div>
+                <div className='text-slate-500'>{t('buyerRequirements.phone')}</div>
+                <div className='font-medium text-slate-900'>{viewingRequirement.buyerPhone || '-'}</div>
               </div>
-
-              {(viewingRequirement.additionalRequirements || viewingRequirement.notes) && (
-                <div className='mt-4 space-y-3'>
-                  {viewingRequirement.additionalRequirements && (
-                    <div>
-                      <div className='text-slate-500 text-sm mb-1'>Additional Requirements</div>
-                      <div className='bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-sm'>
-                        {viewingRequirement.additionalRequirements}
-                      </div>
-                    </div>
-                  )}
-                  {viewingRequirement.notes && (
-                    <div>
-                      <div className='text-slate-500 text-sm mb-1'>Notes</div>
-                      <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 text-slate-800 text-sm'>
-                        {viewingRequirement.notes}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!isBuyerViewMode && (
-                <div className='flex justify-end gap-3 mt-6'>
-                  <button
-                    onClick={() => {
-                      const req = viewingRequirement;
-                      setViewingRequirement(null);
-                      handleEdit(req);
-                    }}
-                    className='inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium'
-                  >
-                    <HiPencil className='w-4 h-4' />
-                    Edit
-                  </button>
-                </div>
-              )}
+              <div>
+                <div className='text-slate-500'>{t('buyerRequirements.email')}</div>
+                <div className='font-medium text-slate-900'>{viewingRequirement.buyerEmail || '-'}</div>
+              </div>
+              <div>
+                <div className='text-slate-500'>{t('buyerRequirements.location')}</div>
+                <div className='font-medium text-slate-900'>{viewingRequirement.preferredLocation || '-'}</div>
+              </div>
+              <div>
+                <div className='text-slate-500'>{t('buyerRequirements.type')}</div>
+                <div className='font-medium text-slate-900'>{viewingRequirement.propertyType || '-'}</div>
+              </div>
+              <div>
+                <div className='text-slate-500'>{t('buyerRequirements.budget')}</div>
+                <div className='font-medium text-slate-900'>{viewingRequirement.budget || '-'}</div>
+              </div>
             </div>
-          </div>
+
+            {(viewingRequirement.additionalRequirements || viewingRequirement.notes) && (
+              <div className='mt-4 space-y-3'>
+                {viewingRequirement.additionalRequirements && (
+                  <div>
+                    <div className='text-slate-500 text-sm mb-1'>{t('buyerRequirements.additionalRequirements')}</div>
+                    <div className='bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-sm'>
+                      {viewingRequirement.additionalRequirements}
+                    </div>
+                  </div>
+                )}
+                {viewingRequirement.notes && (
+                  <div>
+                    <div className='text-slate-500 text-sm mb-1'>{t('buyerRequirements.notes')}</div>
+                    <div className='bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 text-sm'>
+                      {viewingRequirement.notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Modal>
         )}
 
         {/* Add Buyer Requirement Form */}
         {showForm && (
-          <div className='fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4 z-50'>
-            <div className='bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-5xl overflow-hidden'>
-              <div className='px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4'>
-                <div>
-                  <h2 className='text-xl font-semibold text-slate-900'>
-                    {editingId ? 'Edit Buyer Requirement' : 'Add Buyer Requirement'}
-                  </h2>
-                  <p className='text-sm text-slate-600 mt-0.5'>Capture the buyer profile and preferences.</p>
-                </div>
-                <button
-                  type='button'
-                  onClick={handleCancelForm}
-                  className='px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700'
-                >
-                  Close
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className='space-y-6 p-6 max-h-[75vh] overflow-auto'>
+          <Modal
+            open
+            onClose={handleCancelForm}
+            title={editingId ? 'Edit Buyer Requirement' : 'Add Buyer Requirement'}
+            description={t('buyerRequirements.captureTheBuyerProfileAndPreferences')}
+            size='2xl'
+            className='!max-w-4xl'
+            footer={
+              <>
+                <Button type='button' variant='secondary' onClick={handleCancelForm}>{t('buyerRequirements.cancel')}</Button>
+                <Button type='submit' form='buyer-requirement-form' loading={loading}>
+                  {editingId ? 'Save Changes' : 'Create Requirement'}
+                </Button>
+              </>
+            }
+          >
+            <form id='buyer-requirement-form' onSubmit={handleSubmit} className='space-y-6'>
               <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                 {/* Buyer Information */}
                 <div className='space-y-4'>
                   <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
-                    <HiUser className='w-5 h-5 text-slate-900' />
-                    Buyer Information
-                  </h3>
-                  
-                  <div>
-                    <label htmlFor='buyerName' className='block text-sm font-medium text-slate-700 mb-1'>Buyer Name *</label>
-                    <input
-                      id='buyerName'
-                      type='text'
-                      required
-                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                      value={formData.buyerName}
-                      onChange={(e) => setFormData({...formData, buyerName: e.target.value})}
-                    />
-                  </div>
+                    <HiUser className='w-5 h-5 text-slate-900' />{t('buyerRequirements.buyerInformation')}</h3>
 
-                  <div>
-                    <label htmlFor='buyerEmail' className='block text-sm font-medium text-slate-700 mb-1'>Email</label>
-                    <input
-                      id='buyerEmail'
-                      type='email'
-                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                      value={formData.buyerEmail}
-                      onChange={(e) => setFormData({...formData, buyerEmail: e.target.value})}
-                    />
-                  </div>
+                  <Input
+                    id='buyerName'
+                    label={t('buyerRequirements.buyerName')}
+                    type='text'
+                    required
+                    value={formData.buyerName}
+                    onChange={(e) => setFormData({...formData, buyerName: e.target.value})}
+                  />
 
-                  <div>
-                    <label htmlFor='buyerPhone' className='block text-sm font-medium text-slate-700 mb-1'>Phone *</label>
-                    <input
-                      id='buyerPhone'
-                      type='tel'
-                      required
-                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                      value={formData.buyerPhone}
-                      onChange={(e) => setFormData({...formData, buyerPhone: e.target.value})}
-                    />
-                  </div>
+                  <Input
+                    id='buyerEmail'
+                    label={t('buyerRequirements.email')}
+                    type='email'
+                    value={formData.buyerEmail}
+                    onChange={(e) => setFormData({...formData, buyerEmail: e.target.value})}
+                  />
+
+                  <Input
+                    id='buyerPhone'
+                    label={t('buyerRequirements.phone')}
+                    type='tel'
+                    required
+                    value={formData.buyerPhone}
+                    onChange={(e) => setFormData({...formData, buyerPhone: e.target.value})}
+                  />
                 </div>
 
                 {/* Property Requirements */}
                 <div className='space-y-4'>
                   <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
-                    <HiHome className='w-5 h-5 text-slate-900' />
-                    Property Requirements
-                  </h3>
+                    <HiHome className='w-5 h-5 text-slate-900' />{t('buyerRequirements.propertyRequirements')}</h3>
 
-                  <div>
-                    <label className='block text-sm font-medium text-slate-700 mb-1'>Property Type *</label>
-                    <select
-                      required
-                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
-                      value={formData.propertyType}
-                      onChange={(e) => setFormData({...formData, propertyType: e.target.value})}
-                    >
-                      <option value='sale'>For Sale</option>
-                      <option value='rent'>For Rent</option>
-                    </select>
-                  </div>
+                  <Select
+                    label={t('buyerRequirements.propertyType')}
+                    required
+                    value={formData.propertyType}
+                    onChange={(e) => setFormData({...formData, propertyType: e.target.value})}
+                  >
+                    <option value='sale'>{t('buyerRequirements.forSale')}</option>
+                    <option value='rent'>{t('buyerRequirements.forRent')}</option>
+                  </Select>
 
-                  <div>
-                    <label className='block text-sm font-medium text-slate-700 mb-1'>Preferred Location</label>
-                    <input
-                      type='text'
-                      className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                      value={formData.preferredLocation}
-                      onChange={(e) => setFormData({...formData, preferredLocation: e.target.value})}
+                  <Input
+                    label={t('buyerRequirements.preferredLocation')}
+                    type='text'
+                    value={formData.preferredLocation}
+                    onChange={(e) => setFormData({...formData, preferredLocation: e.target.value})}
+                  />
+
+                  <div className='grid grid-cols-2 gap-4'>
+                    <Input
+                      label={t('buyerRequirements.minPrice')}
+                      type='number'
+                      value={formData.minPrice}
+                      onChange={(e) => setFormData({...formData, minPrice: e.target.value})}
+                    />
+                    <Input
+                      label={t('buyerRequirements.maxPrice')}
+                      type='number'
+                      value={formData.maxPrice}
+                      onChange={(e) => setFormData({...formData, maxPrice: e.target.value})}
                     />
                   </div>
 
                   <div className='grid grid-cols-2 gap-4'>
-                    <div>
-                      <label className='block text-sm font-medium text-slate-700 mb-1'>Min Price</label>
-                      <input
-                        type='number'
-                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                        value={formData.minPrice}
-                        onChange={(e) => setFormData({...formData, minPrice: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <label className='block text-sm font-medium text-slate-700 mb-1'>Max Price</label>
-                      <input
-                        type='number'
-                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                        value={formData.maxPrice}
-                        onChange={(e) => setFormData({...formData, maxPrice: e.target.value})}
-                      />
-                    </div>
-                  </div>
-
-                  <div className='grid grid-cols-2 gap-4'>
-                    <div>
-                      <label className='block text-sm font-medium text-slate-700 mb-1'>Min Bedrooms</label>
-                      <input
-                        type='number'
-                        min='1'
-                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                        value={formData.minBedrooms}
-                        onChange={(e) => setFormData({...formData, minBedrooms: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <label className='block text-sm font-medium text-slate-700 mb-1'>Min Bathrooms</label>
-                      <input
-                        type='number'
-                        min='1'
-                        className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                        value={formData.minBathrooms}
-                        onChange={(e) => setFormData({...formData, minBathrooms: e.target.value})}
-                      />
-                    </div>
+                    <Input
+                      label={t('buyerRequirements.minBedrooms')}
+                      type='number'
+                      min='1'
+                      value={formData.minBedrooms}
+                      onChange={(e) => setFormData({...formData, minBedrooms: e.target.value})}
+                    />
+                    <Input
+                      label={t('buyerRequirements.minBathrooms')}
+                      type='number'
+                      min='1'
+                      value={formData.minBathrooms}
+                      onChange={(e) => setFormData({...formData, minBathrooms: e.target.value})}
+                    />
                   </div>
                 </div>
               </div>
@@ -447,85 +538,50 @@ export default function BuyerRequirements() {
               {/* Additional Information */}
               <div className='space-y-4'>
                 <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
-                  <HiCalendar className='w-5 h-5 text-slate-900' />
-                  Additional Information
-                </h3>
+                  <HiCalendar className='w-5 h-5 text-slate-900' />{t('buyerRequirements.additionalInformation')}</h3>
 
-                <div>
-                  <label className='block text-sm font-medium text-slate-700 mb-1'>Budget Range</label>
-                  <input
-                    type='text'
-                    placeholder='e.g., $300,000 - $500,000'
-                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                    value={formData.budget}
-                    onChange={(e) => setFormData({...formData, budget: e.target.value})}
-                  />
-                </div>
+                <Input
+                  label={t('buyerRequirements.budgetRange')}
+                  type='text'
+                  placeholder={t('buyerRequirements.eG300000500000')}
+                  value={formData.budget}
+                  onChange={(e) => setFormData({...formData, budget: e.target.value})}
+                />
 
-                <div>
-                  <label className='block text-sm font-medium text-slate-700 mb-1'>Timeline</label>
-                  <input
-                    type='text'
-                    placeholder='e.g., Within 3 months, ASAP'
-                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                    value={formData.timeline}
-                    onChange={(e) => setFormData({...formData, timeline: e.target.value})}
-                  />
-                </div>
+                <Input
+                  label={t('buyerRequirements.timeline')}
+                  type='text'
+                  placeholder={t('buyerRequirements.eGWithin3MonthsAsap')}
+                  value={formData.timeline}
+                  onChange={(e) => setFormData({...formData, timeline: e.target.value})}
+                />
 
-                <div>
-                  <label className='block text-sm font-medium text-slate-700 mb-1'>Additional Requirements</label>
-                  <textarea
-                    rows='3'
-                    placeholder='Any specific features, amenities, or preferences...'
-                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                    value={formData.additionalRequirements}
-                    onChange={(e) => setFormData({...formData, additionalRequirements: e.target.value})}
-                  />
-                </div>
+                <Textarea
+                  label={t('buyerRequirements.additionalRequirements')}
+                  rows={3}
+                  placeholder={t('buyerRequirements.anySpecificFeaturesAmenitiesOrPreferences')}
+                  value={formData.additionalRequirements}
+                  onChange={(e) => setFormData({...formData, additionalRequirements: e.target.value})}
+                />
 
-                <div>
-                  <label className='block text-sm font-medium text-slate-700 mb-1'>Notes</label>
-                  <textarea
-                    rows='2'
-                    placeholder='Internal notes about this buyer...'
-                    className='w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400'
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  />
-                </div>
+                <Textarea
+                  label={t('buyerRequirements.notes')}
+                  rows={2}
+                  placeholder={t('buyerRequirements.internalNotesAboutThisBuyer')}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                />
               </div>
-
-              {/* Form Actions */}
-              <div className='flex justify-end gap-3 pt-4 border-t border-slate-200'>
-                <button
-                  type='button'
-                  onClick={handleCancelForm}
-                  className='px-4 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-semibold transition-colors'
-                >
-                  Cancel
-                </button>
-                <button
-                  type='submit'
-                  disabled={loading}
-                  className='px-6 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl font-semibold transition-colors flex items-center gap-2'
-                >
-                  {loading
-                    ? (editingId ? 'Saving...' : 'Creating...')
-                    : (editingId ? 'Save Changes' : 'Create Requirement')}
-                </button>
-              </div>
-              </form>
-            </div>
-          </div>
+            </form>
+          </Modal>
         )}
 
         {/* Buyer Requirements List */}
         <div className='space-y-4'>
           {loading && (
             <div className='text-center py-8'>
-              <div className='inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900'></div>
-              <p className='mt-2 text-slate-500'>Loading buyer requirements...</p>
+              <Spinner size='lg' className='mx-auto' />
+              <p className='mt-2 text-slate-500'>{t('buyerRequirements.loadingBuyerRequirements')}</p>
             </div>
           )}
 
@@ -538,14 +594,12 @@ export default function BuyerRequirements() {
           {!loading && !error && filteredRequirements.length === 0 && (
             <div className='text-center py-12'>
               <HiUser className='w-14 h-14 text-slate-300 mx-auto mb-4' />
-              <h3 className='text-lg font-semibold text-slate-900 mb-2'>No buyer requirements found</h3>
-              <p className='text-slate-500 mb-4'>Start by adding your first buyer requirement</p>
+              <h3 className='text-lg font-semibold text-slate-900 mb-2'>{t('buyerRequirements.noBuyerRequirementsFound')}</h3>
+              <p className='text-slate-500 mb-4'>{t('buyerRequirements.startByAddingYourFirstBuyer')}</p>
               <button
                 onClick={() => setShowForm(true)}
                 className='bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors'
-              >
-                Add Buyer Requirement
-              </button>
+              >{t('buyerRequirements.addBuyerRequirement')}</button>
             </div>
           )}
 
@@ -588,44 +642,44 @@ export default function BuyerRequirements() {
                   <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4'>
                     <div className='flex items-center gap-2 text-sm'>
                       <HiLocationMarker className='w-4 h-4 text-slate-400' />
-                      <span className='text-slate-600'>Location:</span>
+                      <span className='text-slate-600'>{t('buyerRequirements.location2')}</span>
                       <span className='font-medium'>{requirement.preferredLocation}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
                       <HiHome className='w-4 h-4 text-slate-400' />
-                      <span className='text-slate-600'>Type:</span>
+                      <span className='text-slate-600'>{t('buyerRequirements.type2')}</span>
                       <span className='font-medium capitalize'>{requirement.propertyType}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
                       <HiCurrencyDollar className='w-4 h-4 text-slate-400' />
-                      <span className='text-slate-600'>Budget:</span>
+                      <span className='text-slate-600'>{t('buyerRequirements.budget2')}</span>
                       <span className='font-medium'>{requirement.budget || 'Not specified'}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <span className='text-slate-600'>Bedrooms:</span>
+                      <span className='text-slate-600'>{t('buyerRequirements.bedrooms')}</span>
                       <span className='font-medium'>{requirement.minBedrooms || 'Any'}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
-                      <span className='text-slate-600'>Bathrooms:</span>
+                      <span className='text-slate-600'>{t('buyerRequirements.bathrooms')}</span>
                       <span className='font-medium'>{requirement.minBathrooms || 'Any'}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
                       <HiCalendar className='w-4 h-4 text-slate-400' />
-                      <span className='text-slate-600'>Timeline:</span>
+                      <span className='text-slate-600'>{t('buyerRequirements.timeline2')}</span>
                       <span className='font-medium'>{requirement.timeline || 'Not specified'}</span>
                     </div>
                   </div>
 
                   {requirement.additionalRequirements && (
                     <div className='mb-3'>
-                      <p className='text-sm text-slate-600 mb-1'>Additional Requirements:</p>
+                      <p className='text-sm text-slate-600 mb-1'>{t('buyerRequirements.additionalRequirements2')}</p>
                       <p className='text-sm text-slate-800 bg-slate-50 p-3 rounded-lg'>{requirement.additionalRequirements}</p>
                     </div>
                   )}
 
                   {requirement.notes && (
                     <div className='mb-3'>
-                      <p className='text-sm text-slate-600 mb-1'>Notes:</p>
+                      <p className='text-sm text-slate-600 mb-1'>{t('buyerRequirements.notes2')}</p>
                       <p className='text-sm text-slate-800 bg-blue-50 p-3 rounded-lg'>{requirement.notes}</p>
                     </div>
                   )}
@@ -635,23 +689,30 @@ export default function BuyerRequirements() {
                   <button
                     onClick={() => handleView(requirement)}
                     className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
-                    title='View requirement'
+                    title={t('buyerRequirements.viewRequirement')}
                   >
                     <HiEye className='w-4 h-4' />
+                  </button>
+                  <button
+                    onClick={() => handleShowMatches(requirement)}
+                    className='p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors border border-violet-200'
+                    title={t('buyerRequirements.findMatchingProperties')}
+                  >
+                    <HiSparkles className='w-4 h-4' />
                   </button>
                   {!isBuyerViewMode && (
                     <>
                       <button
                         onClick={() => handleEdit(requirement)}
                         className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
-                        title='Edit requirement'
+                        title={t('buyerRequirements.editRequirement')}
                       >
                         <HiPencil className='w-4 h-4' />
                       </button>
                       <button
                         onClick={() => setPendingDelete(requirement._id)}
                         className='p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200'
-                        title='Delete requirement'
+                        title={t('buyerRequirements.deleteRequirement')}
                       >
                         <HiTrash className='w-4 h-4' />
                       </button>
@@ -665,9 +726,9 @@ export default function BuyerRequirements() {
       </div>
       <ConfirmDialog
         open={!!pendingDelete}
-        title='Delete buyer requirement?'
-        description='This cannot be undone.'
-        confirmLabel='Delete'
+        title={t('buyerRequirements.deleteBuyerRequirement')}
+        description={t('buyerRequirements.thisCannotBeUndone')}
+        confirmLabel={t('buyerRequirements.delete')}
         onConfirm={() => { handleDelete(pendingDelete); setPendingDelete(null); }}
         onCancel={() => setPendingDelete(null)}
       />

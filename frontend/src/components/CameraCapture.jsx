@@ -2,8 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { HiCamera, HiRefresh, HiCheck, HiX, HiSwitchHorizontal } from 'react-icons/hi';
 import Modal from '../design-system/Modal';
 import Button from '../design-system/Button';
+import { useTranslation } from 'react-i18next';
 
 export default function CameraCapture({ open, onClose, onCapture }) {
+  const { t } = useTranslation();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -98,7 +100,7 @@ export default function CameraCapture({ open, onClose, onCapture }) {
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title='Take a Photo' size='lg'>
+    <Modal open={open} onClose={handleClose} title={t('cameraCapture.takeAPhoto')} size='lg'>
       <div className='flex flex-col items-center gap-4'>
 
         {/* Error state */}
@@ -109,9 +111,7 @@ export default function CameraCapture({ open, onClose, onCapture }) {
               variant='secondary'
               className='mt-3'
               onClick={() => startCamera(facingMode)}
-            >
-              Try Again
-            </Button>
+            >{t('cameraCapture.tryAgain')}</Button>
           </div>
         )}
 
@@ -129,7 +129,7 @@ export default function CameraCapture({ open, onClose, onCapture }) {
             <button
               type='button'
               onClick={handleFlip}
-              title='Switch camera'
+              title={t('cameraCapture.switchCamera')}
               className='absolute top-3 right-3 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors'
             >
               <HiSwitchHorizontal className='w-5 h-5' />
@@ -140,7 +140,7 @@ export default function CameraCapture({ open, onClose, onCapture }) {
         {/* Captured preview */}
         {phase === 'captured' && capturedUrl && (
           <div className='relative w-full rounded-xl overflow-hidden bg-slate-900 aspect-video'>
-            <img src={capturedUrl} alt='Captured' className='w-full h-full object-cover' />
+            <img src={capturedUrl} alt={t('cameraCapture.captured')} className='w-full h-full object-cover' />
           </div>
         )}
 
@@ -151,30 +151,20 @@ export default function CameraCapture({ open, onClose, onCapture }) {
         <div className='flex items-center gap-3 w-full justify-center'>
           {phase === 'streaming' && (
             <>
-              <Button variant='secondary' icon={HiX} onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button icon={HiCamera} onClick={handleCapture}>
-                Capture
-              </Button>
+              <Button variant='secondary' icon={HiX} onClick={handleClose}>{t('cameraCapture.cancel')}</Button>
+              <Button icon={HiCamera} onClick={handleCapture}>{t('cameraCapture.capture')}</Button>
             </>
           )}
 
           {phase === 'captured' && (
             <>
-              <Button variant='secondary' icon={HiRefresh} onClick={handleRetake}>
-                Retake
-              </Button>
-              <Button icon={HiCheck} onClick={handleUse}>
-                Use Photo
-              </Button>
+              <Button variant='secondary' icon={HiRefresh} onClick={handleRetake}>{t('cameraCapture.retake')}</Button>
+              <Button icon={HiCheck} onClick={handleUse}>{t('cameraCapture.usePhoto')}</Button>
             </>
           )}
 
           {phase === 'error' && (
-            <Button variant='secondary' icon={HiX} onClick={handleClose}>
-              Close
-            </Button>
+            <Button variant='secondary' icon={HiX} onClick={handleClose}>{t('cameraCapture.close')}</Button>
           )}
         </div>
       </div>

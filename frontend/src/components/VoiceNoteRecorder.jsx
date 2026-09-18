@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { HiOutlineMicrophone, HiOutlineStop, HiOutlineUpload, HiX } from 'react-icons/hi';
+import { useTranslation } from 'react-i18next';
 
 function formatDuration(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -9,6 +10,7 @@ function formatDuration(seconds) {
 }
 
 export default function VoiceNoteRecorder({ onSave, disabled }) {
+  const { t } = useTranslation();
   const [state, setState] = useState('idle'); // idle | recording | uploading
   const [elapsed, setElapsed] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -92,9 +94,7 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
           disabled={disabled}
           className='flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
         >
-          <HiOutlineMicrophone className='w-4 h-4 text-rose-500' />
-          Record voice note
-        </button>
+          <HiOutlineMicrophone className='w-4 h-4 text-rose-500' />{t('voiceNoteRecorder.recordVoiceNote')}</button>
         {error && <p className='mt-1.5 text-xs text-rose-600'>{error}</p>}
       </div>
     );
@@ -110,9 +110,7 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
           onClick={stopAndSave}
           className='flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-md transition-colors'
         >
-          <HiOutlineStop className='w-3.5 h-3.5' />
-          Stop & save
-        </button>
+          <HiOutlineStop className='w-3.5 h-3.5' />{t('voiceNoteRecorder.stopSave')}</button>
         <button type='button' onClick={cancel} className='p-1 text-slate-400 hover:text-slate-600'>
           <HiX className='w-4 h-4' />
         </button>
@@ -126,7 +124,7 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
       <HiOutlineUpload className='w-4 h-4 text-indigo-500 flex-shrink-0' />
       <div className='flex-1'>
         <div className='flex justify-between text-xs text-slate-500 mb-1'>
-          <span>Uploading…</span>
+          <span>{t('voiceNoteRecorder.uploading')}</span>
           <span>{uploadProgress}%</span>
         </div>
         <div className='w-full bg-slate-200 rounded-full h-1.5'>

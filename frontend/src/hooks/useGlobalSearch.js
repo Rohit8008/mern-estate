@@ -4,16 +4,16 @@ import { apiClient } from '../utils/http';
 const DEBOUNCE_MS  = 200;
 const MAX_CACHE    = 40;   // evict oldest when exceeded
 
-export function useGlobalSearch(query, entity) {
+export function useGlobalSearch(query, entity, limit = 5) {
   const [results, setResults]  = useState(null);
   const [loading, setLoading]  = useState(false);
   const [error,   setError]    = useState(null);
   const abortRef  = useRef(null);
   const timerRef  = useRef(null);
-  const cacheRef  = useRef(new Map()); // keyed by "query::entity"
+  const cacheRef  = useRef(new Map()); // keyed by "query::entity::limit"
 
-  const doSearch = useCallback(async (q, ent) => {
-    const key = `${q}::${ent}`;
+  const doSearch = useCallback(async (q, ent, lim) => {
+    const key = `${q}::${ent}::${lim}`;
 
     if (cacheRef.current.has(key)) {
       setResults(cacheRef.current.get(key));
@@ -29,7 +29,7 @@ export function useGlobalSearch(query, entity) {
     setError(null);
 
     try {
-      const params = new URLSearchParams({ q: q.trim(), limit: '5' });
+      const params = new URLSearchParams({ q: q.trim(), limit: String(lim) });
       if (ent && ent !== 'all') params.set('entities', ent);
 
       const data = await apiClient.get(`/search?${params}`);
@@ -57,9 +57,9 @@ export function useGlobalSearch(query, entity) {
       return;
     }
 
-    timerRef.current = setTimeout(() => doSearch(query, entity), DEBOUNCE_MS);
+    timerRef.current = setTimeout(() => doSearch(query, entity, limit), DEBOUNCE_MS);
     return () => clearTimeout(timerRef.current);
-  }, [query, entity, doSearch]);
+  }, [query, entity, limit, doSearch]);
 
   // Invalidate the cache for this query when the user changes the entity tab
   // so they always get fresh grouped results.

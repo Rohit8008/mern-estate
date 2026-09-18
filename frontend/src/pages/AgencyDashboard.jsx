@@ -9,10 +9,14 @@ import {
   HiPlus, HiSearch, HiUsers, HiStar,
   HiClock, HiX, HiCheck, HiMail,
   HiHome, HiUserGroup, HiClipboardList, HiRefresh,
-  HiSwitchHorizontal,
+  HiSwitchHorizontal, HiOutlineLockClosed,
   HiHashtag, HiChartBar, HiLightningBolt, HiViewList, HiTable, HiTemplate,
 } from 'react-icons/hi';
-import { KpiCard, PageHeader, Button } from '../design-system';
+import { KpiCard, PageHeader, Button, Badge, Input, Select, Textarea } from '../design-system';
+import OnboardingChecklist from '../components/OnboardingChecklist';
+import DashboardCrmSearch from '../components/DashboardCrmSearch';
+import { formatDate, formatNumber } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -120,7 +124,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
     // --- Chart ---
     if (widget.type === 'chart') {
       if (widget.preset === 'status_bar') {
-        if (!statusBreakdown.length) return <p className='text-slate-400 text-sm'>No data</p>;
+        if (!statusBreakdown.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noData')}</p>;
         const max = Math.max(...statusBreakdown.map((s) => s.count), 1);
         return (
           <div className='h-36 flex items-end justify-center gap-6'>
@@ -136,7 +140,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
       }
       if (widget.preset === 'category_bar') {
         const cats = props.byCategory || [];
-        if (!cats.length) return <p className='text-slate-400 text-sm'>No data</p>;
+        if (!cats.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noData')}</p>;
         const max = Math.max(...cats.map((c) => c.count), 1);
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
         return (
@@ -152,7 +156,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
         );
       }
       if (widget.preset === 'monthly_line') {
-        if (monthlyTrend.length < 2) return <p className='text-slate-400 text-sm'>Not enough data</p>;
+        if (monthlyTrend.length < 2) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.notEnoughData')}</p>;
         const max = Math.max(...monthlyTrend.map((d) => d.count), 1);
         return (
           <div className='h-36 relative'>
@@ -172,7 +176,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
       }
       if (widget.preset === 'city_bar') {
         const cities = (props.byCity || []).slice(0, 5);
-        if (!cities.length) return <p className='text-slate-400 text-sm'>No data</p>;
+        if (!cities.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noData')}</p>;
         const max = Math.max(...cities.map((c) => c.count), 1);
         return (
           <div className='space-y-2'>
@@ -215,7 +219,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
         ...recentListings.map((l) => ({ type: 'listing', name: l.name, status: l.status, date: l.createdAt })),
         ...recentBuyers.map((b) => ({ type: 'buyer', name: b.buyerName, status: b.status, date: b.createdAt })),
       ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6);
-      if (!items.length) return <p className='text-slate-400 text-sm'>No recent activity</p>;
+      if (!items.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noRecentActivity')}</p>;
       return (
         <div className='space-y-3'>
           {items.map((item, i) => (
@@ -223,7 +227,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
               <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${item.type === 'listing' ? 'bg-blue-500' : 'bg-purple-500'}`} />
               <div className='min-w-0 flex-1'>
                 <p className='text-sm text-slate-800 truncate'>{item.name}</p>
-                <p className='text-[10px] text-slate-500'>{item.type === 'listing' ? 'Property' : 'Buyer'} - <span className='capitalize'>{(item.status || '').replace('_', ' ')}</span> - {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                <p className='text-[10px] text-slate-500'>{item.type === 'listing' ? 'Property' : 'Buyer'} - <span className='capitalize'>{(item.status || '').replace('_', ' ')}</span> - {formatDate(item.date, { day: 'numeric', year: undefined })}</p>
               </div>
             </div>
           ))}
@@ -234,17 +238,21 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
     // --- Table ---
     if (widget.type === 'table') {
       if (widget.preset === 'recent_listings') {
-        if (!recentListings.length) return <p className='text-slate-400 text-sm'>No listings</p>;
+        if (!recentListings.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noListings')}</p>;
         return (
           <div className='overflow-x-auto'>
             <table className='w-full text-xs'>
-              <thead><tr className='border-b border-slate-200'><th className='text-left py-1.5 text-slate-500 font-medium'>Name</th><th className='text-left py-1.5 text-slate-500 font-medium'>City</th><th className='text-left py-1.5 text-slate-500 font-medium'>Status</th></tr></thead>
+              <thead><tr className='border-b border-slate-200'><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.name')}</th><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.city')}</th><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.status')}</th></tr></thead>
               <tbody>
                 {recentListings.slice(0, 5).map((l) => (
                   <tr key={l._id} className='border-b border-slate-50'>
                     <td className='py-1.5 text-slate-800 truncate max-w-[120px]'>{l.name}</td>
                     <td className='py-1.5 text-slate-600'>{l.city || '-'}</td>
-                    <td className='py-1.5'><span className={`capitalize px-1.5 py-0.5 rounded text-[10px] font-medium ${l.status === 'available' ? 'bg-green-100 text-green-700' : l.status === 'sold' ? 'bg-blue-100 text-blue-700' : l.status === 'rented' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>{(l.status || '').replace('_', ' ')}</span></td>
+                    <td className='py-1.5'>
+                      <Badge size='xs' variant={l.status === 'available' ? 'success' : l.status === 'sold' ? 'info' : l.status === 'rented' ? 'purple' : 'warning'}>
+                        {(l.status || '').replace('_', ' ')}
+                      </Badge>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -253,17 +261,21 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
         );
       }
       if (widget.preset === 'recent_buyers') {
-        if (!recentBuyers.length) return <p className='text-slate-400 text-sm'>No buyers</p>;
+        if (!recentBuyers.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noBuyers')}</p>;
         return (
           <div className='overflow-x-auto'>
             <table className='w-full text-xs'>
-              <thead><tr className='border-b border-slate-200'><th className='text-left py-1.5 text-slate-500 font-medium'>Name</th><th className='text-left py-1.5 text-slate-500 font-medium'>Phone</th><th className='text-left py-1.5 text-slate-500 font-medium'>Status</th></tr></thead>
+              <thead><tr className='border-b border-slate-200'><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.name')}</th><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.phone')}</th><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.status')}</th></tr></thead>
               <tbody>
                 {recentBuyers.slice(0, 5).map((b) => (
                   <tr key={b._id} className='border-b border-slate-50'>
                     <td className='py-1.5 text-slate-800 truncate max-w-[120px]'>{b.buyerName}</td>
                     <td className='py-1.5 text-slate-600'>{b.buyerPhone || '-'}</td>
-                    <td className='py-1.5'><span className={`capitalize px-1.5 py-0.5 rounded text-[10px] font-medium ${b.status === 'active' ? 'bg-green-100 text-green-700' : b.status === 'matched' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>{b.status}</span></td>
+                    <td className='py-1.5'>
+                      <Badge size='xs' variant={b.status === 'active' ? 'success' : b.status === 'matched' ? 'info' : 'default'}>
+                        {b.status}
+                      </Badge>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -273,11 +285,11 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
       }
       if (widget.preset === 'top_cities') {
         const cities = (props.byCity || []).slice(0, 6);
-        if (!cities.length) return <p className='text-slate-400 text-sm'>No data</p>;
+        if (!cities.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noData')}</p>;
         return (
           <div className='overflow-x-auto'>
             <table className='w-full text-xs'>
-              <thead><tr className='border-b border-slate-200'><th className='text-left py-1.5 text-slate-500 font-medium'>City</th><th className='text-right py-1.5 text-slate-500 font-medium'>Properties</th></tr></thead>
+              <thead><tr className='border-b border-slate-200'><th className='text-left py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.city')}</th><th className='text-right py-1.5 text-slate-500 font-medium'>{t('agencyDashboard.properties')}</th></tr></thead>
               <tbody>
                 {cities.map((c) => (
                   <tr key={c._id} className='border-b border-slate-50'>
@@ -294,7 +306,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
 
     // --- Workload ---
     if (widget.type === 'workload') {
-      if (!teamMembers.length) return <p className='text-slate-400 text-sm'>No team members found</p>;
+      if (!teamMembers.length) return <p className='text-slate-400 text-sm'>{t('agencyDashboard.noTeamMembersFound')}</p>;
       return (
         <div className='space-y-3'>
           {teamMembers.slice(0, 6).map((m) => (
@@ -310,7 +322,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
       );
     }
 
-    return <p className='text-slate-400 text-sm'>Widget not configured</p>;
+    return <p className='text-slate-400 text-sm'>{t('agencyDashboard.widgetNotConfigured')}</p>;
   };
 
   return (
@@ -343,6 +355,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
 }
 
 export default function AgencyDashboard() {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
   const { resolvedTheme } = useAppearance();
@@ -354,7 +367,7 @@ export default function AgencyDashboard() {
   const [error, setError] = useState(null);
 
   // UI states
-  const [searchFilter, setSearchFilter] = useState('');
+  const [crmSearchQuery, setCrmSearchQuery] = useState('');
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
   const [widgetStep, setWidgetStep] = useState('type'); // 'type' | 'preset'
   const [selectedWidgetType, setSelectedWidgetType] = useState(null);
@@ -457,7 +470,7 @@ export default function AgencyDashboard() {
   const maxLineCount = Math.max(...(monthlyTrend.length ? monthlyTrend.map((d) => d.count) : [1]), 1);
 
   // Helpers
-  const fmt = (n) => new Intl.NumberFormat('en-IN').format(n || 0);
+  const fmt = formatNumber;
 
   const togglePerson = (id) => {
     setSelectedPeople((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
@@ -587,15 +600,19 @@ export default function AgencyDashboard() {
 
   if (!canAccess) {
     return (
-      <div className='min-h-screen flex items-center justify-center'>
-        <p className='text-slate-600'>Access denied</p>
+      <div className='min-h-[60vh] flex items-center justify-center'>
+        <div className='text-center max-w-sm px-6'>
+          <div className='mx-auto mb-4 w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100 flex items-center justify-center'>
+            <HiOutlineLockClosed className='w-7 h-7' />
+          </div>
+          <h2 className='text-lg font-semibold text-slate-900 mb-1'>{t('agencyDashboard.accessDenied')}</h2>
+          <p className='text-sm text-slate-500'>You don&apos;t have permission to view the agency dashboard.</p>
+        </div>
       </div>
     );
   }
 
-  const q = searchFilter.toLowerCase().trim();
-  const shouldShow = (...labels) => !q || labels.some((l) => l.toLowerCase().includes(q));
-  const filteredWidgets = customWidgets.filter((w) => shouldShow(w.label));
+  const isSearching = crmSearchQuery.trim().length >= 2;
 
   // Chart colors adapt to dark/light mode
   const isDark = resolvedTheme === 'dark';
@@ -624,29 +641,31 @@ export default function AgencyDashboard() {
               icon={HiRefresh}
               onClick={fetchData}
               className={loading ? '[&>svg]:animate-spin' : ''}
-            >
-              Refresh
-            </Button>
+            >{t('agencyDashboard.refresh')}</Button>
             {isAdmin && (
-              <Button variant='darkBrand' size='sm' icon={HiMail} onClick={() => setShowInviteModal(true)}>
-                Invite Member
-              </Button>
+              <Button variant='darkBrand' size='sm' icon={HiMail} onClick={() => setShowInviteModal(true)}>{t('agencyDashboard.inviteMember')}</Button>
             )}
           </>
         }
       />
 
+      {/* Renders nothing once the workspace is set up, or once dismissed. */}
+      <OnboardingChecklist />
+
       {/* Toolbar */}
       <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm'>
         <button onClick={() => openWidgetModal()} className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium flex items-center gap-1.5 hover:bg-slate-800 transition-colors'>
-          <HiPlus className='w-4 h-4' />
-          Add widget
-        </button>
+          <HiPlus className='w-4 h-4' />{t('agencyDashboard.addWidget')}</button>
         <div className='h-5 w-px bg-slate-200' />
-        <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-sm flex-1 max-w-xs focus-within:bg-white focus-within:border-slate-300 transition-colors'>
+        <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-sm flex-1 max-w-md focus-within:bg-white focus-within:border-slate-300 transition-colors'>
           <HiSearch className='w-4 h-4 text-slate-400 flex-shrink-0' />
-          <input className='bg-transparent outline-none flex-1 text-slate-700 placeholder:text-slate-400 text-sm' placeholder='Filter widgets...' value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} />
-          {searchFilter && (<button onClick={() => setSearchFilter('')} className='text-slate-400 hover:text-slate-600'><HiX className='w-4 h-4' /></button>)}
+          <input
+            className='bg-transparent outline-none flex-1 text-slate-700 placeholder:text-slate-400 text-sm'
+            placeholder={t('agencyDashboard.searchPropertiesLeadsOwnersBuyersTasks')}
+            value={crmSearchQuery}
+            onChange={(e) => setCrmSearchQuery(e.target.value)}
+          />
+          {crmSearchQuery && (<button onClick={() => setCrmSearchQuery('')} className='text-slate-400 hover:text-slate-600'><HiX className='w-4 h-4' /></button>)}
         </div>
 
         {/* People dropdown */}
@@ -660,7 +679,7 @@ export default function AgencyDashboard() {
             {showPeopleDropdown && (
               <div className='absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-20'>
                 <div className='p-2'>
-                  <div className='text-xs font-medium text-slate-500 px-2 py-1 mb-1'>Team Members</div>
+                  <div className='text-xs font-medium text-slate-500 px-2 py-1 mb-1'>{t('agencyDashboard.teamMembers')}</div>
                   {teamMembers.map((person) => (
                     <button key={person.id} onClick={() => togglePerson(person.id)} className={`w-full text-left px-2 py-2 rounded text-sm flex items-center gap-3 ${selectedPeople.includes(person.id) ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
                       <div className='w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-sm font-medium'>{person.avatar}</div>
@@ -672,7 +691,7 @@ export default function AgencyDashboard() {
                     </button>
                   ))}
                   {selectedPeople.length > 0 && (
-                    <button onClick={() => { setSelectedPeople([]); setShowPeopleDropdown(false); }} className='w-full text-left px-2 py-1.5 rounded text-sm text-rose-600 hover:bg-rose-50 mt-1'>Clear selection</button>
+                    <button onClick={() => { setSelectedPeople([]); setShowPeopleDropdown(false); }} className='w-full text-left px-2 py-1.5 rounded text-sm text-rose-600 hover:bg-rose-50 mt-1'>{t('agencyDashboard.clearSelection')}</button>
                   )}
                 </div>
               </div>
@@ -683,12 +702,17 @@ export default function AgencyDashboard() {
 
       {/* Error */}
       {error && (
-        <div className='bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between'>
-          <p className='text-red-700 text-sm'>{error}</p>
-          <button onClick={fetchData} className='text-red-700 hover:underline text-sm font-medium'>Retry</button>
+        <div className='bg-rose-50 border border-rose-200 rounded-lg p-4 flex items-center justify-between'>
+          <p className='text-rose-800 text-sm'>{error}</p>
+          <button onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>{t('agencyDashboard.retry')}</button>
         </div>
       )}
 
+      {/* Full CRM search results — replaces the widget/analytics view while searching */}
+      {isSearching && <DashboardCrmSearch query={crmSearchQuery.trim()} />}
+
+      {!isSearching && (
+        <>
       {/* Loading skeleton */}
       {loading && (
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
@@ -707,52 +731,52 @@ export default function AgencyDashboard() {
           {/* Section title */}
           <div className='flex items-center justify-between'>
             <div>
-              <h2 className='text-base font-semibold text-slate-900'>Properties Overview</h2>
-              <p className='text-slate-500 text-xs mt-0.5'>Real-time metrics from your portfolio</p>
+              <h2 className='text-base font-semibold text-slate-900'>{t('agencyDashboard.propertiesOverview')}</h2>
+              <p className='text-slate-500 text-xs mt-0.5'>{t('agencyDashboard.realTimeMetricsFromYourPortfolio')}</p>
             </div>
           </div>
 
           {/* KPI Cards */}
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-            {shouldShow('total properties', 'properties overview', 'kpi') && (
+            {(
               <KpiCard
-                title='Total Properties'
+                title={t('agencyDashboard.totalProperties')}
                 value={fmt(props.total)}
                 icon={HiHome}
                 color='blue'
                 sub={<><span className='text-emerald-600 font-medium'>{fmt(props.available)} available</span>{' · '}{fmt(props.sold)} sold</>}
               />
             )}
-            {shouldShow('under negotiation', 'deals', 'kpi') && (
+            {(
               <KpiCard
-                title='Under Negotiation'
+                title={t('agencyDashboard.underNegotiation')}
                 value={fmt(props.underNegotiation)}
                 icon={HiClock}
                 color='amber'
                 sub='Active deals in progress'
               />
             )}
-            {shouldShow('buyer requirements', 'buyers', 'kpi') && (
+            {(
               <KpiCard
-                title='Buyer Requirements'
+                title={t('agencyDashboard.buyerRequirements')}
                 value={fmt(buyers.total)}
                 icon={HiUserGroup}
                 color='purple'
                 sub={<><span className='text-emerald-600 font-medium'>{fmt(buyers.active)} active</span>{' · '}{fmt(buyers.matched)} matched</>}
               />
             )}
-            {isAdmin && shouldShow('team', 'employees', 'kpi') && (
+            {isAdmin && (
               <KpiCard
-                title='Team Members'
+                title={t('agencyDashboard.teamMembers')}
                 value={fmt(employees.total)}
                 icon={HiUsers}
                 color='emerald'
                 sub={<><span className='text-emerald-600 font-medium'>{fmt(employees.active)} active</span>{' employees'}</>}
               />
             )}
-            {!isAdmin && shouldShow('closed buyers', 'kpi') && (
+            {!isAdmin && (
               <KpiCard
-                title='Closed Buyers'
+                title={t('agencyDashboard.closedBuyers')}
                 value={fmt(buyers.closed)}
                 icon={HiCheck}
                 color='emerald'
@@ -764,9 +788,9 @@ export default function AgencyDashboard() {
           {/* Charts */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {/* Listing status bar chart */}
-            {shouldShow('listing status', 'chart', 'status') && (
+            {(
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-                <h3 className='text-sm font-semibold text-slate-700 mb-4'>Listing Status</h3>
+                <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.listingStatus')}</h3>
                 {statusBreakdown.length > 0 ? (
                   <Chart
                     type='bar'
@@ -785,15 +809,15 @@ export default function AgencyDashboard() {
                     series={[{ name: 'Properties', data: statusBreakdown.map((s) => s.count) }]}
                   />
                 ) : (
-                  <div className='h-48 flex items-center justify-center text-slate-400 text-sm'>No data yet</div>
+                  <div className='h-48 flex items-center justify-center text-slate-400 text-sm'>{t('agencyDashboard.noDataYet')}</div>
                 )}
               </div>
             )}
 
             {/* Monthly trend line chart */}
-            {shouldShow('monthly trend', 'chart', 'listings by month') && (
+            {(
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-                <h3 className='text-sm font-semibold text-slate-700 mb-4'>New Listings by Month</h3>
+                <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.newListingsByMonth')}</h3>
                 {monthlyTrend.length > 1 ? (
                   <Chart
                     type='area'
@@ -801,19 +825,19 @@ export default function AgencyDashboard() {
                     options={{
                       chart: { toolbar: { show: false }, fontFamily: 'inherit', sparkline: { enabled: false } },
                       stroke: { curve: 'smooth', width: 3 },
-                      colors: ['#3b82f6'],
+                      colors: ['#6366f1'],
                       fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1, stops: [0, 90, 100] } },
                       dataLabels: { enabled: false },
                       xaxis: { categories: monthlyTrend.map((d) => d.month), labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
                       yaxis: { labels: { style: { fontSize: '11px', colors: chartAxisColor } }, min: 0 },
                       grid: { borderColor: chartGridColor, strokeDashArray: 4 },
-                      markers: { size: 5, colors: ['#3b82f6'], strokeColors: chartStrokeColor, strokeWidth: 2, hover: { size: 7 } },
+                      markers: { size: 5, colors: ['#6366f1'], strokeColors: chartStrokeColor, strokeWidth: 2, hover: { size: 7 } },
                       tooltip: { theme: chartTooltipTheme },
                     }}
                     series={[{ name: 'Listings', data: monthlyTrend.map((d) => d.count) }]}
                   />
                 ) : (
-                  <div className='h-48 flex items-center justify-center text-slate-400 text-sm'>Not enough data for chart</div>
+                  <div className='h-48 flex items-center justify-center text-slate-400 text-sm'>{t('agencyDashboard.notEnoughDataForChart')}</div>
                 )}
               </div>
             )}
@@ -821,16 +845,16 @@ export default function AgencyDashboard() {
 
           {/* Properties by Category & City */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-            {shouldShow('category', 'residential', 'commercial', 'land') && props.byCategory?.length > 0 && (
+            {props.byCategory?.length > 0 && (
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-                <h3 className='text-sm font-semibold text-slate-700 mb-4'>Properties by Category</h3>
+                <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.propertiesByCategory')}</h3>
                 <Chart
                   type='donut'
                   height={220}
                   options={{
                     chart: { fontFamily: 'inherit' },
                     labels: props.byCategory.map((cat) => cat.categoryName || 'Unknown'),
-                    colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+                    colors: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
                     legend: { position: 'bottom', fontSize: '12px', labels: { colors: chartAxisColor } },
                     dataLabels: { enabled: true, style: { fontSize: '11px', fontWeight: 600 } },
                     plotOptions: { pie: { donut: { size: '55%', labels: { show: true, total: { show: true, label: 'Total', fontSize: '12px', color: chartAxisColor, formatter: () => props.total } } } } },
@@ -842,9 +866,9 @@ export default function AgencyDashboard() {
               </div>
             )}
 
-            {shouldShow('city', 'top cities', 'location') && props.byCity?.length > 0 && (
+            {props.byCity?.length > 0 && (
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-                <h3 className='text-sm font-semibold text-slate-700 mb-4'>Top Cities</h3>
+                <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.topCities')}</h3>
                 <Chart
                   type='bar'
                   height={220}
@@ -866,11 +890,11 @@ export default function AgencyDashboard() {
 
           {/* Recent Activity */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-            {shouldShow('recent listings', 'activity', 'properties') && (
+            {(
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
-                  <h3 className='text-sm font-semibold text-slate-700'>Recent Listings</h3>
-                  <Link to='/properties' className='text-xs font-medium text-slate-500 hover:text-slate-900'>View all</Link>
+                  <h3 className='text-sm font-semibold text-slate-700'>{t('agencyDashboard.recentListings')}</h3>
+                  <Link to='/properties' className='text-xs font-medium text-slate-500 hover:text-slate-900'>{t('agencyDashboard.viewAll')}</Link>
                 </div>
                 <div className='space-y-3'>
                   {recentListings.length > 0 ? recentListings.map((l) => (
@@ -879,24 +903,26 @@ export default function AgencyDashboard() {
                         <p className='font-medium text-slate-900 text-sm truncate'>{l.name}</p>
                         <p className='text-xs text-slate-500 truncate'>{l.city || 'N/A'}{l.locality ? `, ${l.locality}` : ''}</p>
                       </div>
-                      <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${l.status === 'available' ? 'bg-green-100 text-green-700' :
-                          l.status === 'sold' ? 'bg-blue-100 text-blue-700' :
-                          l.status === 'rented' ? 'bg-purple-100 text-purple-700' :
-                            'bg-amber-100 text-amber-700'
-                        }`}>{(l.status || '').replace('_', ' ')}</span>
+                      <Badge
+                        size='sm'
+                        className='ml-3 flex-shrink-0 capitalize'
+                        variant={l.status === 'available' ? 'success' : l.status === 'sold' ? 'info' : l.status === 'rented' ? 'purple' : 'warning'}
+                      >
+                        {(l.status || '').replace('_', ' ')}
+                      </Badge>
                     </div>
                   )) : (
-                    <p className='text-slate-400 text-sm text-center py-4'>No recent listings</p>
+                    <p className='text-slate-400 text-sm text-center py-4'>{t('agencyDashboard.noRecentListings')}</p>
                   )}
                 </div>
               </div>
             )}
 
-            {shouldShow('recent buyers', 'activity', 'buyer requirements') && (
+            {(
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
-                  <h3 className='text-sm font-semibold text-slate-700'>Recent Buyer Requirements</h3>
-                  <Link to='/buyer-requirements' className='text-xs font-medium text-slate-500 hover:text-slate-900'>View all</Link>
+                  <h3 className='text-sm font-semibold text-slate-700'>{t('agencyDashboard.recentBuyerRequirements')}</h3>
+                  <Link to='/buyer-requirements' className='text-xs font-medium text-slate-500 hover:text-slate-900'>{t('agencyDashboard.viewAll')}</Link>
                 </div>
                 <div className='space-y-3'>
                   {recentBuyers.length > 0 ? recentBuyers.map((b) => (
@@ -905,13 +931,16 @@ export default function AgencyDashboard() {
                         <p className='font-medium text-slate-900 text-sm truncate'>{b.buyerName}</p>
                         <p className='text-xs text-slate-500 truncate'>{b.buyerPhone || 'No phone'}</p>
                       </div>
-                      <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${b.status === 'active' ? 'bg-green-100 text-green-700' :
-                          b.status === 'matched' ? 'bg-blue-100 text-blue-700' :
-                            'bg-slate-100 text-slate-700'
-                        }`}>{b.status}</span>
+                      <Badge
+                        size='sm'
+                        className='ml-3 flex-shrink-0 capitalize'
+                        variant={b.status === 'active' ? 'success' : b.status === 'matched' ? 'info' : 'default'}
+                      >
+                        {b.status}
+                      </Badge>
                     </div>
                   )) : (
-                    <p className='text-slate-400 text-sm text-center py-4'>No recent buyers</p>
+                    <p className='text-slate-400 text-sm text-center py-4'>{t('agencyDashboard.noRecentBuyers')}</p>
                   )}
                 </div>
               </div>
@@ -921,14 +950,14 @@ export default function AgencyDashboard() {
           {/* Custom widgets - draggable grid */}
           <div>
             <div className='flex items-center justify-between mb-4'>
-              <h2 className='text-lg font-bold text-slate-900'>Custom Widgets</h2>
+              <h2 className='text-lg font-bold text-slate-900'>{t('agencyDashboard.customWidgets')}</h2>
               {customWidgets.length > 0 && (
-                <p className='text-xs text-slate-400'>Drag to reorder &middot; <HiSwitchHorizontal className='w-3.5 h-3.5 inline' /> to resize</p>
+                <p className='text-xs text-slate-400'>Drag to reorder &middot; <HiSwitchHorizontal className='w-3.5 h-3.5 inline' />{t('agencyDashboard.toResize')}</p>
               )}
             </div>
-            {filteredWidgets.length > 0 ? (
+            {customWidgets.length > 0 ? (
               <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
-                {filteredWidgets.map((widget) => (
+                {customWidgets.map((widget) => (
                   <CustomWidget
                     key={widget.id}
                     widget={widget}
@@ -950,9 +979,7 @@ export default function AgencyDashboard() {
                 ))}
                 <button onClick={() => openWidgetModal()} className='bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[7rem] flex items-center justify-center text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors cursor-pointer col-span-1'>
                   <span className='flex items-center gap-2 text-sm'>
-                    <HiPlus className='w-5 h-5' />
-                    Add widget
-                  </span>
+                    <HiPlus className='w-5 h-5' />{t('agencyDashboard.addWidget')}</span>
                 </button>
               </div>
             ) : (
@@ -960,14 +987,14 @@ export default function AgencyDashboard() {
                 {[1, 2, 3].map((i) => (
                   <button key={i} onClick={() => openWidgetModal()} className='bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 h-28 flex items-center justify-center text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors cursor-pointer'>
                     <span className='flex items-center gap-2 text-sm'>
-                      <HiPlus className='w-5 h-5' />
-                      Add widget
-                    </span>
+                      <HiPlus className='w-5 h-5' />{t('agencyDashboard.addWidget')}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
+        </>
+      )}
         </>
       )}
 
@@ -982,8 +1009,15 @@ export default function AgencyDashboard() {
                     <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' /></svg>
                   </button>
                 )}
-                <h2 className='text-lg font-semibold text-slate-900'>
-                  {widgetStep === 'type' ? 'Add Widget' : `${selectedWidgetType?.icon} ${selectedWidgetType?.label}`}
+                <h2 className='text-lg font-semibold text-slate-900 flex items-center gap-2'>
+                  {widgetStep === 'type' ? (
+                    'Add Widget'
+                  ) : (
+                    <>
+                      {selectedWidgetType?.icon && <selectedWidgetType.icon className='w-5 h-5 text-slate-500' />}
+                      {selectedWidgetType?.label}
+                    </>
+                  )}
                 </h2>
               </div>
               <button onClick={() => setShowAddWidgetModal(false)} className='p-1 rounded hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' /></button>
@@ -991,7 +1025,7 @@ export default function AgencyDashboard() {
             <div className='p-6'>
               {widgetStep === 'type' ? (
                 <>
-                  <p className='text-sm text-slate-600 mb-4'>Choose a widget type:</p>
+                  <p className='text-sm text-slate-600 mb-4'>{t('agencyDashboard.chooseAWidgetType')}</p>
                   <div className='grid grid-cols-2 gap-3'>
                     {WIDGET_TYPES.map((w) => {
                       const WIcon = w.icon;
@@ -1009,7 +1043,7 @@ export default function AgencyDashboard() {
                 </>
               ) : (
                 <>
-                  <p className='text-sm text-slate-600 mb-4'>Select data to display:</p>
+                  <p className='text-sm text-slate-600 mb-4'>{t('agencyDashboard.selectDataToDisplay')}</p>
                   <div className='space-y-2'>
                     {(WIDGET_PRESETS[selectedWidgetType?.id] || []).map((preset) => (
                       <button key={preset.key} onClick={() => addWidget(selectedWidgetType, preset)} className='w-full p-3 border border-slate-200 rounded-lg hover:border-slate-400 hover:bg-slate-50 transition-colors text-left flex items-center justify-between'>
@@ -1030,7 +1064,7 @@ export default function AgencyDashboard() {
         <div className='fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4'>
           <div className='bg-white rounded-xl shadow-2xl w-full max-w-md'>
             <div className='px-6 py-4 border-b border-slate-200 flex items-center justify-between'>
-              <h2 className='text-lg font-semibold text-slate-900'>Invite Team Member</h2>
+              <h2 className='text-lg font-semibold text-slate-900'>{t('agencyDashboard.inviteTeamMember')}</h2>
               <button onClick={closeInviteModal} className='p-1 rounded hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' /></button>
             </div>
             <div className='p-6 space-y-4'>
@@ -1038,40 +1072,31 @@ export default function AgencyDashboard() {
                 <div className='bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 whitespace-pre-wrap font-mono leading-relaxed'>{inviteSuccess}</div>
               )}
               {inviteError && (
-                <div className='bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700'>{inviteError}</div>
+                <div className='bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-700'>{inviteError}</div>
               )}
-              <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>Email address *</label>
-                <input
-                  type='email'
-                  placeholder='colleague@company.com'
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none'
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>Role</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none bg-white'
-                >
-                  <option value='employee'>Employee</option>
-                </select>
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>Message (optional)</label>
-                <textarea
-                  rows={3}
-                  placeholder='Add a personal message...'
-                  value={inviteMessage}
-                  onChange={(e) => setInviteMessage(e.target.value)}
-                  className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 outline-none resize-none'
-                />
-              </div>
+              <Input
+                label={t('agencyDashboard.emailAddress')}
+                type='email'
+                placeholder={t('agencyDashboard.colleagueCompanyCom')}
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+              <Select
+                label={t('agencyDashboard.role')}
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+              >
+                <option value='employee'>{t('agencyDashboard.employee')}</option>
+              </Select>
+              <Textarea
+                label='Message (optional)'
+                rows={3}
+                placeholder={t('agencyDashboard.addAPersonalMessage')}
+                value={inviteMessage}
+                onChange={(e) => setInviteMessage(e.target.value)}
+              />
               <div className='flex items-center justify-end gap-3 pt-2'>
-                <button onClick={closeInviteModal} className='px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'>Cancel</button>
+                <button onClick={closeInviteModal} className='px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'>{t('agencyDashboard.cancel')}</button>
                 <button
                   onClick={handleSendInvite}
                   disabled={inviteLoading || !inviteEmail.trim()}

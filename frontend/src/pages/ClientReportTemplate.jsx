@@ -3,6 +3,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient, normalizeImageUrl } from '../utils/http';
+import { formatDate, formatListingPrice } from '../utils/currency';
 import {
   HiRefresh, HiPlus, HiSearch, HiX,
   HiDocumentText, HiDownload, HiPrinter, HiMail, HiEye,
@@ -11,6 +12,7 @@ import {
   HiHome, HiChartBar, HiCheckCircle,
   HiClock, HiExclamationCircle,
 } from 'react-icons/hi';
+import { useTranslation } from 'react-i18next';
 
 const REPORT_TYPES = [
   { id: 'property_summary',   label: 'Property Summary',    Component: HiHome,          color: 'text-blue-600 bg-blue-50',    border: 'border-blue-200',    accent: '#2563eb', description: 'Overview of property details and status' },
@@ -64,7 +66,7 @@ const DEFAULT_TEMPLATES = [
 function buildReportHtml({ template, clientName, propertyName, notes, agentName, reportDate, listing }) {
   const typeInfo  = REPORT_TYPES.find(t => t.id === template.type) || REPORT_TYPES[0];
   const accent    = typeInfo.accent || '#2563eb';
-  const fmtCurrency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+  const fmtCurrency = formatListingPrice;
   const fmt         = (n) => new Intl.NumberFormat('en-IN').format(n || 0);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -98,7 +100,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
 
   // ── Section builders ───────────────────────────────────────────────────────
   function buildPropertyDetails() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">Property details for <strong style="color:#0f172a;">${propertyName}</strong> will be provided separately upon request.</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.propertyDetailsFor')}<strong style="color:#0f172a;">${propertyName}</strong>{t('clientReport.willBeProvidedSeparatelyUponRequest')}</div>`;
     const l = listing;
     const statusMap = { available: 'Available', sold: 'Sold', rented: 'Rented', under_negotiation: 'Under Negotiation' };
     const statusColor = { available: '#16a34a', sold: '#dc2626', rented: '#7c3aed', under_negotiation: '#d97706' };
@@ -128,7 +130,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   }
 
   function buildPricing() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">Pricing information will be shared upon request.</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.pricingInformationWillBeSharedUpon')}</div>`;
     const l = listing;
     const saving      = l.offer && l.discountPrice ? l.regularPrice - l.discountPrice : 0;
     const savingPct   = saving > 0 ? Math.round((saving / l.regularPrice) * 100) : 0;
@@ -137,19 +139,19 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
     return `
       <div style="display:grid;grid-template-columns:1fr 1fr${l.offer && l.discountPrice ? ' 1fr' : ''};gap:12px;margin-bottom:20px;">
         <div style="background:linear-gradient(135deg,${accent}08,${accent}15);border:1px solid ${accent}25;border-radius:12px;padding:18px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${accent};margin-bottom:6px;">Listed Price</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${accent};margin-bottom:6px;">{t('clientReport.listedPrice')}</div>
           <div style="font-size:24px;font-weight:900;color:#0f172a;">${fmtCurrency(l.regularPrice)}</div>
           ${pricePerSqFt ? `<div style="font-size:12px;color:#64748b;margin-top:4px;">${fmtCurrency(pricePerSqFt)} / sq.ft</div>` : ''}
         </div>
         ${l.offer && l.discountPrice ? `
         <div style="background:linear-gradient(135deg,#f0fdf415,#dcfce7);border:1px solid #bbf7d0;border-radius:12px;padding:18px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#16a34a;margin-bottom:6px;">Negotiated Price</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#16a34a;margin-bottom:6px;">{t('clientReport.negotiatedPrice')}</div>
           <div style="font-size:24px;font-weight:900;color:#15803d;">${fmtCurrency(l.discountPrice)}</div>
           ${saving > 0 ? `<div style="font-size:12px;color:#16a34a;margin-top:4px;font-weight:600;">Saving ${fmtCurrency(saving)} (${savingPct}% off)</div>` : ''}
         </div>` : ''}
         ${pricePerSqFt ? `
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:6px;">Rate / sq.ft</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:6px;">{t('clientReport.rateSqFt')}</div>
           <div style="font-size:24px;font-weight:900;color:#0f172a;">${fmtCurrency(pricePerSqFt)}</div>
           ${l.areaSqFt ? `<div style="font-size:12px;color:#64748b;margin-top:4px;">${fmt(l.areaSqFt)} sq.ft total</div>` : ''}
         </div>` : ''}
@@ -159,18 +161,17 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
         ${l.sqYardRate  ? row('Rate per sq.yd', fmtCurrency(l.sqYardRate), false) : ''}
         ${l.totalValue  ? row('Total Value',    `<strong>${fmtCurrency(l.totalValue)}</strong>`, true) : ''}
       </table>` : ''}
-      ${l.offer ? `<div style="margin-top:14px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">Special offer pricing applies to this property. Subject to negotiation.</div>` : ''}`;
+      ${l.offer ? `<div style="margin-top:14px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">{t('clientReport.specialOfferPricingAppliesToThis')}</div>` : ''}`;
   }
 
   function buildMarketComparison() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">Comparative market analysis based on similar properties in the area.</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.comparativeMarketAnalysisBasedOnSimilar')}</div>`;
     const l = listing;
     const pricePerSqFt = l.areaSqFt ? Math.round(l.regularPrice / l.areaSqFt) : 0;
     const location = [l.locality, l.city].filter(Boolean).join(', ') || 'the subject area';
     return `
       <div style="padding:16px 20px;background:linear-gradient(to right,${accent}08,transparent);border-left:3px solid ${accent};border-radius:0 8px 8px 0;margin-bottom:20px;">
-        <p style="color:#334155;font-size:13.5px;line-height:1.8;margin:0;">
-          This <strong>${l.type || 'property'}</strong> in <strong>${location}</strong> is${pricePerSqFt ? ` priced at <strong>${fmtCurrency(pricePerSqFt)} per sq.ft</strong>,` : ''} positioned competitively within the micro-market. ${l.furnished ? 'The property is fully furnished, adding value beyond the base price.' : ''} ${l.parking ? 'Dedicated parking is available.' : ''}
+        <p style="color:#334155;font-size:13.5px;line-height:1.8;margin:0;">{t('clientReport.this')}<strong>${l.type || 'property'}</strong> in <strong>${location}</strong> is${pricePerSqFt ? ` priced at <strong>${fmtCurrency(pricePerSqFt)} per sq.ft</strong>,` : ''} positioned competitively within the micro-market. ${l.furnished ? 'The property is fully furnished, adding value beyond the base price.' : ''} ${l.parking ? 'Dedicated parking is available.' : ''}
         </p>
       </div>
       <table style="width:100%;border-collapse:collapse;border:1px solid #f1f5f9;border-radius:10px;overflow:hidden;">
@@ -182,11 +183,11 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
         ${row('Furnishing', l.furnished ? badge('Furnished', '#16a34a') : badge('Unfurnished', '#64748b'), true)}
         ${l.areaSqFt ? row('Built-up Area', `${fmt(l.areaSqFt)} sq.ft`, false) : ''}
       </table>
-      <p style="margin-top:12px;font-size:12px;color:#94a3b8;font-style:italic;">* A detailed CMA with 3–5 comparable sales is available on request.</p>`;
+      <p style="margin-top:12px;font-size:12px;color:#94a3b8;font-style:italic;">{t('clientReport.aDetailedCmaWith35')}</p>`;
   }
 
   function buildLocation() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">Location details and connectivity analysis will be provided separately.</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.locationDetailsAndConnectivityAnalysisWill')}</div>`;
     const l = listing;
     const parts = [l.address, l.areaName, l.locality, l.city, l.state, l.pincode].filter(Boolean);
     const fullAddress = parts.join(', ');
@@ -198,19 +199,19 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
       l.city       ? row('City',            `<strong>${l.city}</strong>`, idx++ % 2) : '',
       l.state      ? row('State',           l.state,     idx++ % 2) : '',
       l.pincode    ? row('Pincode',         l.pincode,   idx++ % 2) : '',
-      l.location?.lat && l.location?.lng
-        ? row('GPS Coordinates', `${l.location.lat.toFixed(5)}, ${l.location.lng.toFixed(5)}`, idx++ % 2) : '',
+      (l.effectiveLocation || l.location)?.lat && (l.effectiveLocation || l.location)?.lng
+        ? row('GPS Coordinates', `${(l.effectiveLocation || l.location).lat.toFixed(5)}, ${(l.effectiveLocation || l.location).lng.toFixed(5)}`, idx++ % 2) : '',
     ].filter(Boolean).join('');
     return `
       ${fullAddress ? `<div style="padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;">
         <div style="width:32px;height:32px;border-radius:8px;background:${accent};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">📍</div>
-        <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:4px;">Full Address</div><div style="font-size:13px;color:#0f172a;font-weight:600;line-height:1.6;">${fullAddress}</div></div>
+        <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:4px;">{t('clientReport.fullAddress')}</div><div style="font-size:13px;color:#0f172a;font-weight:600;line-height:1.6;">${fullAddress}</div></div>
       </div>` : ''}
       ${rows ? `<table style="width:100%;border-collapse:collapse;border:1px solid #f1f5f9;border-radius:10px;overflow:hidden;">${rows}</table>` : ''}`;
   }
 
   function buildInvestmentMetrics() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">Investment metrics and yield analysis will be provided upon request.</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.investmentMetricsAndYieldAnalysisWill')}</div>`;
     const l = listing;
     const acqPrice     = l.offer && l.discountPrice ? l.discountPrice : l.regularPrice;
     const saving       = l.offer && l.discountPrice ? l.regularPrice - l.discountPrice : 0;
@@ -226,20 +227,20 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
         ${annualRent ? metricCard('Gross Rental Yield', `${grossYield}%`, `${fmtCurrency(annualRent)} / year est.`, '#d97706') : ''}
       </div>
       <div style="padding:12px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;line-height:1.6;">
-        <strong>Note:</strong> Rental yield estimates are indicative and based on prevailing market averages (~3% gross annual yield). Actual rental income, appreciation, and total returns depend on location, demand, property condition, and market cycles. This is not financial advice.
+        <strong>{t('clientReport.note')}</strong> Rental yield estimates are indicative and based on prevailing market averages (~3% gross annual yield). Actual rental income, appreciation, and total returns depend on location, demand, property condition, and market cycles. This is not financial advice.
       </div>`;
   }
 
   function buildPhotos() {
-    if (!listing?.imageUrls?.length) return `<div style="padding:32px;text-align:center;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:10px;color:#94a3b8;font-size:13px;">Property photos are available upon request or will be shared via a secure link.</div>`;
+    if (!listing?.imageUrls?.length) return `<div style="padding:32px;text-align:center;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:10px;color:#94a3b8;font-size:13px;">{t('clientReport.propertyPhotosAreAvailableUponRequest')}</div>`;
     const imgs = listing.imageUrls.slice(0, 6);
     const hero = imgs[0];
     const rest = imgs.slice(1, 5);
     const heroSrc = normalizeImageUrl(hero) || hero;
-    const heroHtml = `<img src="${heroSrc}" alt="Property" style="width:100%;height:280px;object-fit:cover;border-radius:10px;display:block;margin-bottom:10px;" />`;
+    const heroHtml = `<img src="${heroSrc}" alt={t('clientReport.property')} style="width:100%;height:280px;object-fit:cover;border-radius:10px;display:block;margin-bottom:10px;" />`;
     const gridHtml = rest.length
       ? `<div style="display:grid;grid-template-columns:repeat(${Math.min(rest.length, 4)},1fr);gap:10px;">
-          ${rest.map(url => { const src = normalizeImageUrl(url) || url; return `<img src="${src}" alt="Property" style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />`; }).join('')}
+          ${rest.map(url => { const src = normalizeImageUrl(url) || url; return `<img src="${src}" alt={t('clientReport.property')} style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />`; }).join('')}
         </div>`
       : '';
     return heroHtml + gridHtml + (imgs.length > 5 ? `<p style="margin-top:10px;font-size:12px;color:#94a3b8;text-align:right;">+${listing.imageUrls.length - 5} more photos available on request</p>` : '');
@@ -270,7 +271,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   const notesHtml = notes
     ? `<div style="padding:32px 44px;border-bottom:1px solid #f1f5f9;">
         <div style="padding:18px 20px;background:#fefce8;border:1px solid #fde047;border-left:4px solid #eab308;border-radius:0 10px 10px 0;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#a16207;margin-bottom:8px;">Agent Notes</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#a16207;margin-bottom:8px;">{t('clientReport.agentNotes')}</div>
           <p style="color:#713f12;margin:0;font-size:13.5px;line-height:1.8;">${notes}</p>
         </div>
       </div>`
@@ -312,7 +313,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
 
     <!-- Top bar -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;">
-      <div style="font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.5);">Real Vista</div>
+      <div style="font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.5);">{t('clientReport.realVista')}</div>
       <div style="background:${accent};padding:4px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;">${typeInfo.label}</div>
     </div>
 
@@ -329,15 +330,15 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
     <!-- Meta cards -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">Prepared For</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">{t('clientReport.preparedFor')}</div>
         <div style="font-size:14px;font-weight:700;color:#fff;">${clientName}</div>
       </div>
       <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">Prepared By</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">{t('clientReport.preparedBy')}</div>
         <div style="font-size:14px;font-weight:700;color:#fff;">${agentName}</div>
       </div>
       <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">Report Date</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">{t('clientReport.reportDate')}</div>
         <div style="font-size:14px;font-weight:700;color:#fff;">${reportDate}</div>
       </div>
     </div>
@@ -347,7 +348,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   <div style="height:4px;background:linear-gradient(to right,${accent},${accent}80,transparent);"></div>
 
   <!-- ══ SECTIONS ══ -->
-  ${sectionsHtml || `<div style="padding:48px;text-align:center;color:#94a3b8;font-style:italic;">No sections selected for this template.</div>`}
+  ${sectionsHtml || `<div style="padding:48px;text-align:center;color:#94a3b8;font-style:italic;">{t('clientReport.noSectionsSelectedForThisTemplate')}</div>`}
 
   <!-- ══ NOTES ══ -->
   ${notesHtml}
@@ -355,13 +356,13 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   <!-- ══ DISCLAIMER ══ -->
   <div style="padding:24px 44px;">
     <div style="padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11.5px;color:#94a3b8;line-height:1.7;">
-      <strong style="color:#64748b;">Disclaimer:</strong> This report is prepared for informational purposes only and is intended solely for the named recipient. Information is based on sources deemed reliable but is not guaranteed. All figures are indicative and subject to change without notice. This document does not constitute a legal offer, binding agreement, or financial advice.
+      <strong style="color:#64748b;">{t('clientReport.disclaimer')}</strong> This report is prepared for informational purposes only and is intended solely for the named recipient. Information is based on sources deemed reliable but is not guaranteed. All figures are indicative and subject to change without notice. This document does not constitute a legal offer, binding agreement, or financial advice.
     </div>
   </div>
 
   <!-- ══ FOOTER ══ -->
   <div style="background:#0f172a;padding:20px 44px;display:flex;justify-content:space-between;align-items:center;">
-    <div style="font-size:12px;color:rgba(255,255,255,.5);">Prepared by <strong style="color:rgba(255,255,255,.8);">${agentName}</strong> · Real Vista</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);">{t('clientReport.preparedBy2')}<strong style="color:rgba(255,255,255,.8);">${agentName}</strong>{t('clientReport.realVista2')}</div>
     <div style="font-size:11px;color:rgba(255,255,255,.35);">Generated ${reportDate} · Confidential</div>
   </div>
 
@@ -409,7 +410,7 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
     <div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
       <div className='flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0'>
         <div>
-          <h2 className='text-sm font-semibold text-slate-900'>Report Preview</h2>
+          <h2 className='text-sm font-semibold text-slate-900'>{t('clientReport.reportPreview')}</h2>
           <p className='text-xs text-slate-500'>{report.templateName} · {report.clientName} · {report.propertyName}</p>
         </div>
         <div className='flex items-center gap-2'>
@@ -426,13 +427,9 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
             </button>
           )}
           <button onClick={handleDownload} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
-            <HiDownload className='w-4 h-4' />
-            Download
-          </button>
+            <HiDownload className='w-4 h-4' />{t('clientReport.download')}</button>
           <button onClick={handlePrint} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
-            <HiPrinter className='w-4 h-4' />
-            Print / PDF
-          </button>
+            <HiPrinter className='w-4 h-4' />{t('clientReport.printPdf')}</button>
           <button onClick={onClose} className='p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100'>
             <HiX className='w-5 h-5' />
           </button>
@@ -441,7 +438,7 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
       <div className='flex-1 bg-slate-200 overflow-auto p-4'>
         <iframe
           ref={iframeRef}
-          title='Report Preview'
+          title={t('clientReport.reportPreview')}
           className='w-full h-full bg-white rounded-lg shadow-lg mx-auto'
           style={{ maxWidth: 900, display: 'block', minHeight: 600 }}
         />
@@ -477,18 +474,18 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
         </div>
         <form onSubmit={handleSubmit} className='p-4 space-y-4'>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Template Name *</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.templateName')}</label>
             <input
               type='text'
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-              placeholder='Enter template name'
+              placeholder={t('clientReport.enterTemplateName')}
               required
             />
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Report Type</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.reportType')}</label>
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
@@ -498,17 +495,17 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
             </select>
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Description</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.description')}</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
               rows={3}
-              placeholder='Describe what this template includes...'
+              placeholder={t('clientReport.describeWhatThisTemplateIncludes')}
             />
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-2'>Include Sections</label>
+            <label className='block text-sm font-medium text-slate-700 mb-2'>{t('clientReport.includeSections')}</label>
             <div className='space-y-2'>
               {['Property Details', 'Pricing History', 'Market Comparison', 'Location Analysis', 'Investment Metrics', 'Photos Gallery'].map((section) => (
                 <label key={section} className='flex items-center gap-2 cursor-pointer'>
@@ -527,7 +524,7 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
             </div>
           </div>
           <div className='flex justify-end gap-2 pt-2'>
-            <button type='button' onClick={onClose} className='px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium'>Cancel</button>
+            <button type='button' onClick={onClose} className='px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium'>{t('clientReport.cancel')}</button>
             <button type='submit' className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'>
               {template ? 'Update' : 'Create'} Template
             </button>
@@ -629,7 +626,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 
   if (!isOpen) return null;
 
-  const fmtCurrency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+  const fmtCurrency = formatListingPrice;
 
   return (
     <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
@@ -638,18 +635,18 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
         <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
           <div>
             <h2 className='text-lg font-semibold text-slate-900'>{isEdit ? 'Edit & Regenerate Report' : 'Generate Report'}</h2>
-            {isEdit && <p className='text-xs text-slate-500 mt-0.5'>Changes will update the saved report</p>}
+            {isEdit && <p className='text-xs text-slate-500 mt-0.5'>{t('clientReport.changesWillUpdateTheSavedReport')}</p>}
           </div>
           <button onClick={onClose} className='p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100'><HiX className='w-5 h-5' /></button>
         </div>
         <form onSubmit={handleSubmit} className='p-4 space-y-4'>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Template *</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.template')}</label>
             {templates.length === 0 ? (
               <div className='rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center'>
                 <HiTemplate className='w-8 h-8 text-slate-300 mx-auto mb-2' />
-                <p className='text-xs font-medium text-slate-600 mb-1'>No templates yet</p>
-                <p className='text-xs text-slate-400 mb-3'>Install the 6 professional starter templates to get going instantly.</p>
+                <p className='text-xs font-medium text-slate-600 mb-1'>{t('clientReport.noTemplatesYet')}</p>
+                <p className='text-xs text-slate-400 mb-3'>{t('clientReport.installThe6ProfessionalStarterTemplates')}</p>
                 <button
                   type='button'
                   disabled={installing}
@@ -661,8 +658,8 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
                   className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1.5 mx-auto'
                 >
                   {installing
-                    ? <><div className='w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin' />Installing…</>
-                    : <><HiPlus className='w-3.5 h-3.5' />Install 6 Starter Templates</>}
+                    ? <><div className='w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin' />{t('clientReport.installing')}</>
+                    : <><HiPlus className='w-3.5 h-3.5' />{t('clientReport.install6StarterTemplates')}</>}
                 </button>
               </div>
             ) : (
@@ -672,7 +669,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
                 className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
                 required
               >
-                <option value=''>Choose a template…</option>
+                <option value=''>{t('clientReport.chooseATemplate')}</option>
                 {templates.map((t) => {
                   const ti = REPORT_TYPES.find(r => r.id === t.type);
                   return <option key={t._id} value={t._id}>{ti ? `[${ti.label}] ` : ''}{t.name}</option>;
@@ -683,7 +680,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 
           {/* Property picker */}
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Property Listing</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.propertyListing')}</label>
             <div className='relative' ref={listingRef}>
               <div className='flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm focus-within:ring-2 focus-within:ring-slate-900'>
                 <HiSearch className='w-4 h-4 text-slate-400 shrink-0' />
@@ -725,28 +722,28 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
                   <p className='text-xs font-semibold text-emerald-800'>{formData.listing.name}</p>
                   <p className='text-xs text-emerald-600'>{[formData.listing.locality, formData.listing.city].filter(Boolean).join(', ')} · {fmtCurrency(formData.listing.regularPrice)}</p>
                 </div>
-                <span className='text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium'>Real data</span>
+                <span className='text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium'>{t('clientReport.realData')}</span>
               </div>
             )}
             {!formData.listing && (
-              <p className='text-xs text-slate-500 mt-1'>Or enter a property name manually below.</p>
+              <p className='text-xs text-slate-500 mt-1'>{t('clientReport.orEnterAPropertyNameManually')}</p>
             )}
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Property / Subject *</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.propertySubject')}</label>
             <input
               type='text'
               value={formData.propertyName}
               onChange={(e) => setFormData({ ...formData, propertyName: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-              placeholder='Property name or report subject'
+              placeholder={t('clientReport.propertyNameOrReportSubject')}
               required
             />
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Client</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.client')}</label>
             <select
               value={formData.clientId}
               onChange={handleClientSelect}
@@ -760,48 +757,46 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 
           <div className='grid grid-cols-2 gap-3'>
             <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Client Name *</label>
+              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.clientName2')}</label>
               <input
                 type='text'
                 value={formData.clientName}
                 onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
                 className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-                placeholder='Client name'
+                placeholder={t('clientReport.clientName')}
                 required
               />
             </div>
             <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>Client Email</label>
+              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.clientEmail')}</label>
               <input
                 type='email'
                 value={formData.clientEmail}
                 onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
                 className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
-                placeholder='email@example.com'
+                placeholder={t('clientReport.emailExampleCom')}
               />
             </div>
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>Additional Notes</label>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.additionalNotes')}</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
               rows={3}
-              placeholder='Any specific notes for this report...'
+              placeholder={t('clientReport.anySpecificNotesForThisReport')}
             />
           </div>
 
           {!formData.clientEmail && (
             <p className='text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 flex items-center gap-1.5'>
-              <HiExclamationCircle className='w-4 h-4 shrink-0' />
-              Add a client email to enable sending the report via email.
-            </p>
+              <HiExclamationCircle className='w-4 h-4 shrink-0' />{t('clientReport.addAClientEmailToEnable')}</p>
           )}
 
           <div className='flex justify-end gap-2 pt-2'>
-            <button type='button' onClick={onClose} className='px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium'>Cancel</button>
+            <button type='button' onClick={onClose} className='px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium'>{t('clientReport.cancel')}</button>
             <button type='submit' className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-1.5'>
               {isEdit ? <HiRefresh className='w-4 h-4' /> : <HiDocumentText className='w-4 h-4' />}
               {isEdit ? 'Regenerate & Save' : 'Generate Report'}
@@ -820,6 +815,7 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
   const iframeRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !report?.html) return;
@@ -860,7 +856,7 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
   };
 
   const handleClose = () => {
-    if (dirty && !window.confirm('You have unsaved changes. Close anyway?')) return;
+    if (dirty) { setConfirmCloseOpen(true); return; }
     onClose();
   };
 
@@ -885,18 +881,14 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
       <div className='shrink-0 bg-white border-b border-slate-200 shadow-sm'>
         <div className='flex items-center justify-between px-4 py-2.5 border-b border-slate-100'>
           <div className='min-w-0'>
-            <h2 className='text-sm font-semibold text-slate-900'>Edit Report</h2>
+            <h2 className='text-sm font-semibold text-slate-900'>{t('clientReport.editReport')}</h2>
             <p className='text-xs text-slate-500 truncate'>{report.templateName} · {report.clientName} · {report.propertyName}</p>
           </div>
           <div className='flex items-center gap-2 shrink-0'>
             {dirty && (
-              <span className='text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full'>
-                Unsaved changes
-              </span>
+              <span className='text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full'>{t('clientReport.unsavedChanges')}</span>
             )}
-            <button onClick={handleClose} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium'>
-              Cancel
-            </button>
+            <button onClick={handleClose} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium'>{t('clientReport.cancel')}</button>
             <button
               onClick={handleSave}
               disabled={saving || !dirty}
@@ -911,24 +903,24 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
         {/* ── Formatting toolbar ── */}
         <div className='flex items-center gap-0.5 px-3 py-1.5 overflow-x-auto'>
           <TBtn onClick={() => exec('undo')} title='Undo (Ctrl+Z)'>
-            <span className='text-xs font-medium'>↩ Undo</span>
+            <span className='text-xs font-medium'>{t('clientReport.undo')}</span>
           </TBtn>
           <TBtn onClick={() => exec('redo')} title='Redo (Ctrl+Y)'>
-            <span className='text-xs font-medium'>↪ Redo</span>
+            <span className='text-xs font-medium'>{t('clientReport.redo')}</span>
           </TBtn>
           <Divider />
-          <TBtn onClick={() => exec('bold')} title='Bold' className='font-bold w-7 text-center'>B</TBtn>
-          <TBtn onClick={() => exec('italic')} title='Italic' className='italic w-7 text-center'>I</TBtn>
-          <TBtn onClick={() => exec('underline')} title='Underline' className='underline w-7 text-center'>U</TBtn>
+          <TBtn onClick={() => exec('bold')} title={t('clientReport.bold')} className='font-bold w-7 text-center'>B</TBtn>
+          <TBtn onClick={() => exec('italic')} title={t('clientReport.italic')} className='italic w-7 text-center'>I</TBtn>
+          <TBtn onClick={() => exec('underline')} title={t('clientReport.underline')} className='underline w-7 text-center'>U</TBtn>
           <Divider />
-          <TBtn onClick={() => exec('justifyLeft')} title='Align left'>
-            <span className='text-xs'>⬛ Left</span>
+          <TBtn onClick={() => exec('justifyLeft')} title={t('clientReport.alignLeft')}>
+            <span className='text-xs'>{t('clientReport.left')}</span>
           </TBtn>
-          <TBtn onClick={() => exec('justifyCenter')} title='Center'>
-            <span className='text-xs'>⬛ Center</span>
+          <TBtn onClick={() => exec('justifyCenter')} title={t('clientReport.center')}>
+            <span className='text-xs'>{t('clientReport.center2')}</span>
           </TBtn>
-          <TBtn onClick={() => exec('justifyRight')} title='Align right'>
-            <span className='text-xs'>Right ⬛</span>
+          <TBtn onClick={() => exec('justifyRight')} title={t('clientReport.alignRight')}>
+            <span className='text-xs'>{t('clientReport.right')}</span>
           </TBtn>
           <Divider />
           <select
@@ -937,11 +929,11 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             defaultValue=''
             className='text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 shrink-0'
           >
-            <option value='' disabled>Format…</option>
-            <option value='h1'>Heading 1</option>
-            <option value='h2'>Heading 2</option>
-            <option value='h3'>Heading 3</option>
-            <option value='p'>Paragraph</option>
+            <option value='' disabled>{t('clientReport.format')}</option>
+            <option value='h1'>{t('clientReport.heading1')}</option>
+            <option value='h2'>{t('clientReport.heading2')}</option>
+            <option value='h3'>{t('clientReport.heading3')}</option>
+            <option value='p'>{t('clientReport.paragraph')}</option>
           </select>
           <select
             onMouseDown={(e) => e.stopPropagation()}
@@ -949,16 +941,16 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             defaultValue=''
             className='text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 ml-1 shrink-0'
           >
-            <option value='' disabled>Size…</option>
-            <option value='1'>XSmall</option>
-            <option value='2'>Small</option>
-            <option value='3'>Normal</option>
-            <option value='5'>Large</option>
-            <option value='7'>XLarge</option>
+            <option value='' disabled>{t('clientReport.size')}</option>
+            <option value='1'>{t('clientReport.xsmall')}</option>
+            <option value='2'>{t('clientReport.small')}</option>
+            <option value='3'>{t('clientReport.normal')}</option>
+            <option value='5'>{t('clientReport.large')}</option>
+            <option value='7'>{t('clientReport.xlarge')}</option>
           </select>
           <Divider />
-          <label className='flex items-center gap-1.5 cursor-pointer shrink-0 px-2' title='Text color'>
-            <span className='text-xs text-slate-500'>Color</span>
+          <label className='flex items-center gap-1.5 cursor-pointer shrink-0 px-2' title={t('clientReport.textColor')}>
+            <span className='text-xs text-slate-500'>{t('clientReport.color')}</span>
             <input
               type='color'
               defaultValue='#0f172a'
@@ -967,8 +959,8 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
               className='w-5 h-5 rounded cursor-pointer border-0 p-0'
             />
           </label>
-          <label className='flex items-center gap-1.5 cursor-pointer shrink-0 px-2' title='Highlight color'>
-            <span className='text-xs text-slate-500'>Highlight</span>
+          <label className='flex items-center gap-1.5 cursor-pointer shrink-0 px-2' title={t('clientReport.highlightColor')}>
+            <span className='text-xs text-slate-500'>{t('clientReport.highlight')}</span>
             <input
               type='color'
               defaultValue='#fef08a'
@@ -978,14 +970,14 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             />
           </label>
           <Divider />
-          <TBtn onClick={() => exec('insertUnorderedList')} title='Bullet list'>
-            <span className='text-xs'>• List</span>
+          <TBtn onClick={() => exec('insertUnorderedList')} title={t('clientReport.bulletList')}>
+            <span className='text-xs'>{t('clientReport.list')}</span>
           </TBtn>
-          <TBtn onClick={() => exec('removeFormat')} title='Clear formatting'>
-            <span className='text-xs'>✕ Clear</span>
+          <TBtn onClick={() => exec('removeFormat')} title={t('clientReport.clearFormatting')}>
+            <span className='text-xs'>{t('clientReport.clear')}</span>
           </TBtn>
           <div className='ml-auto pl-4 shrink-0'>
-            <span className='text-xs text-slate-400 italic'>Click any text in the report to edit it</span>
+            <span className='text-xs text-slate-400 italic'>{t('clientReport.clickAnyTextInTheReport')}</span>
           </div>
         </div>
       </div>
@@ -994,11 +986,20 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
       <div className='flex-1 overflow-auto p-6'>
         <iframe
           ref={iframeRef}
-          title='Report Editor'
+          title={t('clientReport.reportEditor')}
           className='w-full bg-white rounded-xl shadow-lg mx-auto block'
           style={{ maxWidth: 900, minHeight: 1200 }}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title={t('clientReport.unsavedChanges')}
+        description={t('clientReport.youHaveUnsavedChangesCloseAnyway')}
+        confirmLabel={t('clientReport.closeAnyway')}
+        onConfirm={() => { setConfirmCloseOpen(false); onClose(); }}
+        onCancel={() => setConfirmCloseOpen(false)}
+      />
     </div>
   );
 }
@@ -1072,26 +1073,20 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
           <p className='text-xs text-slate-500'>{typeInfo.label} · Preview with sample data</p>
         </div>
         <div className='flex items-center gap-2'>
-          <span className='text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-medium'>
-            Sample Data
-          </span>
+          <span className='text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-medium'>{t('clientReport.sampleData')}</span>
           {isInstalled && onEdit && (
             <button
               onClick={() => { onEdit(template); onClose(); }}
               className='flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50'
             >
-              <HiPencil className='w-4 h-4' />
-              Edit Template
-            </button>
+              <HiPencil className='w-4 h-4' />{t('clientReport.editTemplate')}</button>
           )}
           {isInstalled && onUse && (
             <button
               onClick={() => { onUse(template._id); onClose(); }}
               className='flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800'
             >
-              <HiDocumentText className='w-4 h-4' />
-              Use Template
-            </button>
+              <HiDocumentText className='w-4 h-4' />{t('clientReport.useTemplate')}</button>
           )}
           <button
             onClick={() => {
@@ -1101,7 +1096,7 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
               w.print();
             }}
             className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-            title='Print'
+            title={t('clientReport.print')}
           >
             <HiPrinter className='w-5 h-5' />
           </button>
@@ -1117,7 +1112,7 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
       <div className='flex-1 overflow-hidden bg-slate-200'>
         <iframe
           ref={iframeRef}
-          title='Template Preview'
+          title={t('clientReport.templatePreview')}
           className='w-full h-full border-0'
           sandbox='allow-same-origin'
         />
@@ -1173,23 +1168,18 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
             {menuOpen && (
               <div className='absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1'>
                 <button onClick={() => { onView(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                  <HiEye className='w-4 h-4' /> Preview
-                </button>
+                  <HiEye className='w-4 h-4' />{t('clientReport.preview')}</button>
                 <button onClick={() => { onEditContent(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                  <HiPencil className='w-4 h-4' /> Edit Content
-                </button>
+                  <HiPencil className='w-4 h-4' />{t('clientReport.editContent')}</button>
                 <button onClick={() => { onEdit(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                  <HiRefresh className='w-4 h-4' /> Regenerate
-                </button>
+                  <HiRefresh className='w-4 h-4' />{t('clientReport.regenerate')}</button>
                 {report.clientEmail && (
                   <button onClick={() => { onSend(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                    <HiMail className='w-4 h-4' /> Send by Email
-                  </button>
+                    <HiMail className='w-4 h-4' />{t('clientReport.sendByEmail')}</button>
                 )}
                 <div className='h-px bg-slate-100 my-1' />
                 <button onClick={() => { onDelete(report._id); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 flex items-center gap-2 text-rose-600'>
-                  <HiTrash className='w-4 h-4' /> Delete
-                </button>
+                  <HiTrash className='w-4 h-4' />{t('clientReport.delete')}</button>
               </div>
             )}
           </div>
@@ -1209,8 +1199,8 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
         </div>
         <div className='flex items-center gap-2 text-xs text-slate-500'>
           <HiCalendar className='w-3.5 h-3.5 text-slate-400 shrink-0' />
-          <span>{new Date(report.createdAt || report.generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-          {report.sentAt && <span className='text-emerald-600'>· Sent {new Date(report.sentAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>}
+          <span>{formatDate(report.createdAt || report.generatedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+          {report.sentAt && <span className='text-emerald-600'>· Sent {formatDate(report.sentAt, { day: 'numeric', month: 'short' })}</span>}
         </div>
       </div>
 
@@ -1232,14 +1222,12 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
           onClick={() => onView(report)}
           className='flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5'
         >
-          <HiEye className='w-3.5 h-3.5' /> Preview
-        </button>
+          <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
         <button
           onClick={() => onEditContent(report)}
           className='flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5'
         >
-          <HiPencil className='w-3.5 h-3.5' /> Edit
-        </button>
+          <HiPencil className='w-3.5 h-3.5' />{t('clientReport.edit')}</button>
         {report.clientEmail && (
           <button
             onClick={() => onSend(report)}
@@ -1257,6 +1245,7 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ClientReportTemplate() {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
 
@@ -1466,7 +1455,7 @@ export default function ClientReportTemplate() {
   if (!canAccess) {
     return (
       <div className='min-h-screen flex items-center justify-center'>
-        <p className='text-slate-600'>Access denied</p>
+        <p className='text-slate-600'>{t('clientReport.accessDenied')}</p>
       </div>
     );
   }
@@ -1477,7 +1466,7 @@ export default function ClientReportTemplate() {
       <div className='bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-5'>
         <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
           <div>
-            <h1 className='text-xl font-bold text-white'>Client Reports</h1>
+            <h1 className='text-xl font-bold text-white'>{t('clientReport.clientReports')}</h1>
             <p className='text-sm text-slate-400 mt-1'>{templates.length} templates · {generatedReports.length} reports generated</p>
           </div>
           <div className='flex items-center gap-2'>
@@ -1485,16 +1474,12 @@ export default function ClientReportTemplate() {
               onClick={() => openGenerateModal()}
               className='px-4 py-2 rounded-lg border border-white/10 bg-white/10 hover:bg-white/20 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
-              <HiDocumentText className='w-4 h-4' />
-              Generate Report
-            </button>
+              <HiDocumentText className='w-4 h-4' />{t('clientReport.generateReport')}</button>
             <button
               onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}
               className='px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
-              <HiPlus className='w-4 h-4' />
-              New Template
-            </button>
+              <HiPlus className='w-4 h-4' />{t('clientReport.newTemplate')}</button>
           </div>
         </div>
       </div>
@@ -1550,7 +1535,7 @@ export default function ClientReportTemplate() {
               <button
                 onClick={() => { fetchTemplates(); fetchReports(); }}
                 className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50'
-                title='Refresh'
+                title={t('clientReport.refresh')}
               >
                 <HiRefresh className='w-4 h-4' />
               </button>
@@ -1560,7 +1545,7 @@ export default function ClientReportTemplate() {
                   type='text'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder='Search...'
+                  placeholder={t('clientReport.search')}
                   className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-36'
                 />
                 {searchQuery && (
@@ -1577,7 +1562,7 @@ export default function ClientReportTemplate() {
             {loadingTemplates ? (
               <div className='py-16 text-center'>
                 <div className='w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin mx-auto mb-3' />
-                <p className='text-sm text-slate-500'>Loading templates...</p>
+                <p className='text-sm text-slate-500'>{t('clientReport.loadingTemplates')}</p>
               </div>
             ) : (
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
@@ -1608,27 +1593,23 @@ export default function ClientReportTemplate() {
                                 onClick={() => { setPreviewTemplate(template); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
-                                <HiEye className='w-4 h-4' /> Preview
-                              </button>
+                                <HiEye className='w-4 h-4' />{t('clientReport.preview')}</button>
                               <button
                                 onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
-                                <HiPencil className='w-4 h-4' /> Edit
-                              </button>
+                                <HiPencil className='w-4 h-4' />{t('clientReport.edit')}</button>
                               <button
                                 onClick={() => handleDuplicateTemplate(template)}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
-                                <HiDuplicate className='w-4 h-4' /> Duplicate
-                              </button>
+                                <HiDuplicate className='w-4 h-4' />{t('clientReport.duplicate')}</button>
                               <div className='h-px bg-slate-100 my-1' />
                               <button
                                 onClick={() => { setPendingDeleteTemplate(template._id); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2'
                               >
-                                <HiTrash className='w-4 h-4' /> Delete
-                              </button>
+                                <HiTrash className='w-4 h-4' />{t('clientReport.delete')}</button>
                             </div>
                           )}
                         </div>
@@ -1652,7 +1633,7 @@ export default function ClientReportTemplate() {
                       <div className='flex items-center gap-3 text-xs text-slate-500 mb-3'>
                         <span className='flex items-center gap-1'>
                           <HiCalendar className='w-3.5 h-3.5' />
-                          {new Date(template.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          {formatDate(template.createdAt, { day: 'numeric', month: 'short' })}
                         </span>
                         <span className='flex items-center gap-1'>
                           <HiClipboardList className='w-3.5 h-3.5' />
@@ -1664,23 +1645,17 @@ export default function ClientReportTemplate() {
                         <button
                           onClick={() => openGenerateModal(null, template._id)}
                           className='flex-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors'
-                        >
-                          Use Template
-                        </button>
+                        >{t('clientReport.useTemplate')}</button>
                         <button
                           onClick={() => setPreviewTemplate(template)}
                           className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
                         >
-                          <HiEye className='w-3.5 h-3.5' />
-                          Preview
-                        </button>
+                          <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
                         <button
                           onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); }}
                           className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
                         >
-                          <HiPencil className='w-3.5 h-3.5' />
-                          Edit
-                        </button>
+                          <HiPencil className='w-3.5 h-3.5' />{t('clientReport.edit')}</button>
                       </div>
                     </div>
                   );
@@ -1691,12 +1666,12 @@ export default function ClientReportTemplate() {
                       <div className='w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4'>
                         <HiTemplate className='w-7 h-7 text-slate-400' />
                       </div>
-                      <p className='text-sm font-semibold text-slate-800 mb-1'>No templates yet</p>
-                      <p className='text-xs text-slate-500 mb-6'>Get started instantly with 6 professionally designed report templates, or build your own from scratch.</p>
+                      <p className='text-sm font-semibold text-slate-800 mb-1'>{t('clientReport.noTemplatesYet')}</p>
+                      <p className='text-xs text-slate-500 mb-6'>{t('clientReport.getStartedInstantlyWith6Professionally')}</p>
 
                       {/* Starter templates preview */}
                       <div className='bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 text-left'>
-                        <p className='text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide'>Included starter templates</p>
+                        <p className='text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide'>{t('clientReport.includedStarterTemplates')}</p>
                         <div className='space-y-1.5'>
                           {DEFAULT_TEMPLATES.map((t, i) => {
                             const ti = REPORT_TYPES.find(r => r.id === t.type);
@@ -1714,9 +1689,7 @@ export default function ClientReportTemplate() {
                                   onClick={() => setPreviewTemplate(t)}
                                   className='shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity'
                                 >
-                                  <HiEye className='w-3.5 h-3.5' />
-                                  Preview
-                                </button>
+                                  <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
                               </div>
                             );
                           })}
@@ -1730,17 +1703,15 @@ export default function ClientReportTemplate() {
                           className='w-full px-4 py-2.5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center justify-center gap-2'
                         >
                           {seedingTemplates ? (
-                            <><div className='w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin' />Installing…</>
+                            <><div className='w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin' />{t('clientReport.installing')}</>
                           ) : (
-                            <><HiPlus className='w-4 h-4' />Install 6 Starter Templates</>
+                            <><HiPlus className='w-4 h-4' />{t('clientReport.install6StarterTemplates')}</>
                           )}
                         </button>
                         <button
                           onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}
                           className='w-full px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50'
-                        >
-                          Build from scratch
-                        </button>
+                        >{t('clientReport.buildFromScratch')}</button>
                       </div>
                     </div>
                   </div>
@@ -1761,19 +1732,17 @@ export default function ClientReportTemplate() {
             {loadingReports ? (
               <div className='py-16 text-center'>
                 <div className='w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin mx-auto mb-3' />
-                <p className='text-sm text-slate-500'>Loading reports...</p>
+                <p className='text-sm text-slate-500'>{t('clientReport.loadingReports')}</p>
               </div>
             ) : filteredReports.length === 0 ? (
               <div className='py-16 text-center'>
                 <HiDocumentText className='w-12 h-12 text-slate-300 mx-auto mb-3' />
-                <p className='text-sm font-medium text-slate-700 mb-1'>No reports generated yet</p>
-                <p className='text-xs text-slate-500 mb-4'>Generate a report from any of your templates to see it here.</p>
+                <p className='text-sm font-medium text-slate-700 mb-1'>{t('clientReport.noReportsGeneratedYet')}</p>
+                <p className='text-xs text-slate-500 mb-4'>{t('clientReport.generateAReportFromAnyOf')}</p>
                 <button
                   onClick={() => openGenerateModal()}
                   className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800'
-                >
-                  Generate your first report
-                </button>
+                >{t('clientReport.generateYourFirstReport')}</button>
               </div>
             ) : (
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
@@ -1798,9 +1767,9 @@ export default function ClientReportTemplate() {
       {/* Confirm — delete template */}
       <ConfirmDialog
         open={!!pendingDeleteTemplate}
-        title='Delete template?'
-        description='This cannot be undone. Generated reports using this template will remain.'
-        confirmLabel='Delete'
+        title={t('clientReport.deleteTemplate')}
+        description={t('clientReport.thisCannotBeUndoneGeneratedReports')}
+        confirmLabel={t('clientReport.delete')}
         onConfirm={async () => {
           const id = pendingDeleteTemplate;
           setPendingDeleteTemplate(null);
@@ -1817,9 +1786,9 @@ export default function ClientReportTemplate() {
       {/* Confirm — delete generated report */}
       <ConfirmDialog
         open={!!pendingDeleteReport}
-        title='Delete report?'
-        description='This will permanently remove the saved report and its HTML. This cannot be undone.'
-        confirmLabel='Delete'
+        title={t('clientReport.deleteReport')}
+        description={t('clientReport.thisWillPermanentlyRemoveTheSaved')}
+        confirmLabel={t('clientReport.delete')}
         onConfirm={async () => {
           const id = pendingDeleteReport;
           setPendingDeleteReport(null);

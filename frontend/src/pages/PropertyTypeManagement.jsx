@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { HiOutlineOfficeBuilding } from 'react-icons/hi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { PageLoader, Modal, EmptyState, Button } from '../design-system';
+import { useTranslation } from 'react-i18next';
 
 const CATEGORIES = [
   { value: 'all', label: 'All' },
@@ -28,6 +30,7 @@ let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export default function PropertyTypeManagement() {
+  const { t } = useTranslation();
   const [propertyTypes, setPropertyTypes] = useState(cachedPropertyTypes || []);
   const [loading, setLoading] = useState(!cachedPropertyTypes);
   const [expandedId, setExpandedId] = useState(null);
@@ -241,11 +244,7 @@ export default function PropertyTypeManagement() {
     : propertyTypes.filter(t => t.category === activeCategory);
 
   if (loading) {
-    return (
-      <div className='flex justify-center items-center min-h-[60vh]'>
-        <LoadingSpinner size='lg' />
-      </div>
-    );
+    return <PageLoader message='Loading property types…' />;
   }
 
   return (
@@ -253,7 +252,7 @@ export default function PropertyTypeManagement() {
       {/* Header */}
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>Property Types</h1>
+          <h1 className='text-xl font-bold text-slate-900'>{t('propertyType.propertyTypes')}</h1>
           <p className='text-sm text-slate-500 mt-0.5'>
             {propertyTypes.length} type{propertyTypes.length !== 1 && 's'} configured
           </p>
@@ -262,15 +261,11 @@ export default function PropertyTypeManagement() {
           <button
             onClick={handleSeedDefaults}
             className='px-4 py-2 text-sm font-medium border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors'
-          >
-            Seed Defaults
-          </button>
+          >{t('propertyType.seedDefaults')}</button>
           <button
             onClick={() => setShowCreateModal(true)}
             className='px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
-          >
-            + New Type
-          </button>
+          >{t('propertyType.newType')}</button>
         </div>
       </div>
 
@@ -293,24 +288,21 @@ export default function PropertyTypeManagement() {
 
       {/* Empty State */}
       {filtered.length === 0 && (
-        <div className='text-center py-16 bg-white rounded-xl border border-slate-200'>
-          <div className='text-4xl mb-4'>🏗️</div>
-          <h3 className='text-lg font-semibold text-slate-900 mb-2'>
-            {propertyTypes.length === 0 ? 'No property types yet' : 'No types in this category'}
-          </h3>
-          <p className='text-sm text-slate-500 mb-6'>
-            {propertyTypes.length === 0
-              ? 'Get started by seeding the default types or creating a new one.'
-              : 'Try selecting a different category above.'}
-          </p>
-          {propertyTypes.length === 0 && (
-            <button
-              onClick={handleSeedDefaults}
-              className='px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors'
-            >
-              Seed Default Types
-            </button>
-          )}
+        <div className='bg-white rounded-xl border border-slate-200'>
+          <EmptyState
+            icon={HiOutlineOfficeBuilding}
+            title={propertyTypes.length === 0 ? 'No property types yet' : 'No types in this category'}
+            body={
+              propertyTypes.length === 0
+                ? 'Get started by seeding the default types or creating a new one.'
+                : 'Try selecting a different category above.'
+            }
+            action={
+              propertyTypes.length === 0 && (
+                <Button onClick={handleSeedDefaults}>{t('propertyType.seedDefaultTypes')}</Button>
+              )
+            }
+          />
         </div>
       )}
 
@@ -335,19 +327,15 @@ export default function PropertyTypeManagement() {
                         {type.category}
                       </span>
                       {type.isSystem && (
-                        <span className='text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium'>
-                          System
-                        </span>
+                        <span className='text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium'>{t('propertyType.system')}</span>
                       )}
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        type.isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                        type.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
                       }`}>
                         {type.isActive ? 'Active' : 'Inactive'}
                       </span>
                       {isDirty && (
-                        <span className='text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium'>
-                          Unsaved changes
-                        </span>
+                        <span className='text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium'>{t('propertyType.unsavedChanges')}</span>
                       )}
                     </div>
                     <p className='text-sm text-slate-500 mt-0.5 truncate'>{type.description}</p>
@@ -358,8 +346,8 @@ export default function PropertyTypeManagement() {
                     onClick={() => handleToggleActive(type._id, type.isActive)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                       type.isActive
-                        ? 'border-orange-200 text-orange-700 hover:bg-orange-50'
-                        : 'border-green-200 text-green-700 hover:bg-green-50'
+                        ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                        : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                     }`}
                   >
                     {type.isActive ? 'Deactivate' : 'Activate'}
@@ -367,10 +355,8 @@ export default function PropertyTypeManagement() {
                   {!type.isSystem && (
                     <button
                       onClick={() => setPendingDelete(type._id)}
-                      className='px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'
-                    >
-                      Delete
-                    </button>
+                      className='px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors'
+                    >{t('propertyType.delete')}</button>
                   )}
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : type._id)}
@@ -390,9 +376,7 @@ export default function PropertyTypeManagement() {
               {isExpanded && (
                 <div className='border-t border-slate-100 bg-slate-50/50 p-5'>
                   <div className='flex items-center justify-between mb-4'>
-                    <h4 className='text-sm font-semibold text-slate-700'>
-                      Fields
-                      <span className='ml-2 text-xs font-normal text-slate-400'>
+                    <h4 className='text-sm font-semibold text-slate-700'>{t('propertyType.fields')}<span className='ml-2 text-xs font-normal text-slate-400'>
                         ({displayFields.length})
                       </span>
                     </h4>
@@ -403,13 +387,11 @@ export default function PropertyTypeManagement() {
                             onClick={() => discardFieldChanges(type._id)}
                             disabled={isSaving}
                             className='px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50'
-                          >
-                            Discard
-                          </button>
+                          >{t('propertyType.discard')}</button>
                           <button
                             onClick={() => saveFields(type._id)}
                             disabled={isSaving}
-                            className='px-3 py-1.5 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50'
+                            className='px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50'
                           >
                             {isSaving ? 'Saving...' : 'Save Fields'}
                           </button>
@@ -418,9 +400,7 @@ export default function PropertyTypeManagement() {
                       <button
                         onClick={() => addLocalField(type._id)}
                         className='px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
-                      >
-                        + Add Field
-                      </button>
+                      >{t('propertyType.addField')}</button>
                     </div>
                   </div>
 
@@ -430,7 +410,7 @@ export default function PropertyTypeManagement() {
                         <div key={idx} className='bg-white rounded-lg border border-slate-200 p-4'>
                           <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Key</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.key')}</label>
                               <input
                                 type='text'
                                 value={field.key}
@@ -440,17 +420,17 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Label</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.label')}</label>
                               <input
                                 type='text'
                                 value={field.label}
                                 onChange={(e) => updateLocalField(type._id, idx, { label: e.target.value })}
                                 className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                                placeholder='Bedrooms'
+                                placeholder={t('propertyType.bedrooms')}
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Type</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.type')}</label>
                               <select
                                 value={field.type}
                                 onChange={(e) => updateLocalField(type._id, idx, { type: e.target.value })}
@@ -462,7 +442,7 @@ export default function PropertyTypeManagement() {
                               </select>
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Group</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.group')}</label>
                               <input
                                 type='text'
                                 value={field.group}
@@ -480,13 +460,11 @@ export default function PropertyTypeManagement() {
                                   type='checkbox'
                                   checked={field.required}
                                   onChange={(e) => updateLocalField(type._id, idx, { required: e.target.checked })}
-                                  className='rounded border-slate-300 text-indigo-600 focus:ring-blue-500'
-                                />
-                                Required
-                              </label>
+                                  className='rounded border-slate-300 text-indigo-600 focus:ring-indigo-500'
+                                />{t('propertyType.required')}</label>
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Min</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.min')}</label>
                               <input
                                 type='number'
                                 value={field.min ?? ''}
@@ -495,7 +473,7 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Max</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.max')}</label>
                               <input
                                 type='number'
                                 value={field.max ?? ''}
@@ -504,17 +482,17 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Unit</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.unit')}</label>
                               <input
                                 type='text'
                                 value={field.unit || ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { unit: e.target.value })}
                                 className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                                placeholder='sq.ft'
+                                placeholder={t('propertyType.sqFt')}
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Order</label>
+                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.order')}</label>
                               <input
                                 type='number'
                                 value={field.order || 0}
@@ -534,7 +512,7 @@ export default function PropertyTypeManagement() {
                                   options: e.target.value.split(',').map(o => o.trim()).filter(Boolean)
                                 })}
                                 className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                                placeholder='North, South, East, West'
+                                placeholder={t('propertyType.northSouthEastWest')}
                               />
                             </div>
                           )}
@@ -542,36 +520,30 @@ export default function PropertyTypeManagement() {
                           <div className='mt-3 flex justify-end'>
                             <button
                               onClick={() => removeLocalField(type._id, idx)}
-                              className='text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors'
-                            >
-                              Remove
-                            </button>
+                              className='text-xs px-3 py-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors'
+                            >{t('propertyType.remove')}</button>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className='text-center py-8 text-sm text-slate-400'>
-                      No fields configured. Click "+ Add Field" to start.
-                    </div>
+                    <div className='text-center py-8 text-sm text-slate-400'>{t('propertyType.noFieldsConfiguredClickAddField')}</div>
                   )}
 
                   {/* Bottom save bar when dirty */}
                   {isDirty && (
                     <div className='mt-4 flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg'>
-                      <span className='text-sm text-amber-800'>You have unsaved changes</span>
+                      <span className='text-sm text-amber-800'>{t('propertyType.youHaveUnsavedChanges')}</span>
                       <div className='flex gap-2'>
                         <button
                           onClick={() => discardFieldChanges(type._id)}
                           disabled={isSaving}
                           className='px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-white transition-colors disabled:opacity-50'
-                        >
-                          Discard
-                        </button>
+                        >{t('propertyType.discard')}</button>
                         <button
                           onClick={() => saveFields(type._id)}
                           disabled={isSaving}
-                          className='px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50'
+                          className='px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50'
                         >
                           {isSaving ? 'Saving...' : 'Save Fields'}
                         </button>
@@ -586,78 +558,72 @@ export default function PropertyTypeManagement() {
       </div>
 
       {/* Create Modal */}
-      {showCreateModal && (
-        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4'>
-          <div className='bg-white rounded-2xl shadow-2xl max-w-md w-full p-6'>
-            <h3 className='text-xl font-bold text-slate-900 mb-5'>Create Property Type</h3>
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>Name</label>
-                <input
-                  type='text'
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                  placeholder='e.g., Warehouse'
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                  rows={3}
-                  placeholder='Brief description...'
-                />
-              </div>
-              <div className='grid grid-cols-2 gap-4'>
-                <div>
-                  <label className='block text-sm font-medium text-slate-700 mb-1'>Icon</label>
-                  <input
-                    type='text'
-                    value={formData.icon}
-                    onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                    className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-center text-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                  />
-                </div>
-                <div>
-                  <label className='block text-sm font-medium text-slate-700 mb-1'>Category</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-                  >
-                    {CATEGORIES.filter(c => c.value !== 'all').map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+      <Modal
+        open={showCreateModal}
+        onClose={() => { setShowCreateModal(false); setFormData({ name: '', description: '', icon: '🏠', category: 'residential' }); }}
+        title={t('propertyType.createPropertyType')}
+        footer={
+          <>
+            <Button
+              variant='secondary'
+              onClick={() => { setShowCreateModal(false); setFormData({ name: '', description: '', icon: '🏠', category: 'residential' }); }}
+            >{t('propertyType.cancel')}</Button>
+            <Button onClick={handleCreateType}>{t('propertyType.create')}</Button>
+          </>
+        }
+      >
+        <div className='space-y-4'>
+          <div>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.name')}</label>
+            <input
+              type='text'
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+              placeholder={t('propertyType.eGWarehouse')}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.description')}</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+              rows={3}
+              placeholder={t('propertyType.briefDescription')}
+            />
+          </div>
+          <div className='grid grid-cols-2 gap-4'>
+            <div>
+              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.icon')}</label>
+              <input
+                type='text'
+                value={formData.icon}
+                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+                className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-center text-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+              />
             </div>
-            <div className='flex gap-3 mt-6'>
-              <button
-                onClick={() => { setShowCreateModal(false); setFormData({ name: '', description: '', icon: '🏠', category: 'residential' }); }}
-                className='flex-1 px-4 py-2.5 text-sm font-medium border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors'
+            <div>
+              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.category')}</label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateType}
-                className='flex-1 px-4 py-2.5 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
-              >
-                Create
-              </button>
+                {CATEGORIES.filter(c => c.value !== 'all').map(cat => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
       <ConfirmDialog
         open={!!pendingDelete}
-        title='Delete this property type?'
-        description='This cannot be undone.'
-        confirmLabel='Delete'
+        title={t('propertyType.deleteThisPropertyType')}
+        description={t('propertyType.thisCannotBeUndone')}
+        confirmLabel={t('propertyType.delete')}
         onConfirm={() => { handleDeleteType(pendingDelete); setPendingDelete(null); }}
         onCancel={() => setPendingDelete(null)}
       />
