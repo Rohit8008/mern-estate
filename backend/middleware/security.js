@@ -5,12 +5,48 @@ import xss from 'xss';
 import validator from 'validator';
 import { config } from '../config/environment.js';
 import { logger } from '../utils/logger.js';
+import { RedisStore } from 'rate-limit-redis';
+import { getRedis } from '../utils/redis.js';
+
+/**
+ * The store every limiter shares.
+ *
+ * express-rate-limit counts in process memory by default. Under the PM2 cluster
+ * config and on multi-instance hosting that means each instance keeps its own
+ * tally, so a "20 sign-in attempts per 15 minutes" limit is really 20 × the
+ * number of instances — which is most of the protection gone, silently, the
+ * moment the app is scaled out.
+ *
+ * Built once and shared by every limiter. With no REDIS_URL this is undefined
+ * and express-rate-limit uses its memory store exactly as before, which is
+ * correct on a single instance.
+ */
+let sharedStore;
+let storeResolved = false;
+
+function rateLimitStore() {
+  if (storeResolved) return sharedStore;
+  storeResolved = true;
+
+  const redis = getRedis();
+  if (!redis) return undefined;
+
+  sharedStore = new RedisStore({
+    // ioredis exposes `call`; this is the adapter rate-limit-redis expects.
+    sendCommand: (...args) => redis.call(...args),
+    prefix: 'rl:',
+  });
+
+  logger.info('Rate limiting is shared across instances via Redis');
+  return sharedStore;
+}
 
 // Advanced rate limiting configurations
 export const createRateLimit = (windowMs, max, message, extra = {}) => {
   return rateLimit({
     windowMs,
     max,
+    store: rateLimitStore(),
     message: {
       success: false,
       statusCode: 429,
@@ -54,6 +90,15 @@ export const strictRateLimit = createRateLimit(
 );
 
 // Higher allowance for token refresh to avoid UX issues
+// Opening a share link. Generous enough that a buyer refreshing the page or
+// forwarding it to their spouse is never inconvenienced, tight enough that the
+// endpoint is not a comfortable place to guess tokens from.
+export const shareRateLimit = createRateLimit(
+  15 * 60 * 1000,
+  60,
+  'Too many attempts. Please wait a few minutes and try the link again.'
+);
+
 export const refreshRateLimit = createRateLimit(
   config.rateLimit.windowMs,
   config.server.isDevelopment ? 5000 : Math.max(config.rateLimit.authMaxRequests * 5, 500),

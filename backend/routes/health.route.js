@@ -3,6 +3,7 @@ import databaseConnection from '../config/database.js';
 import { config } from '../config/environment.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccessResponse, sendErrorResponse } from '../utils/error.js';
+import { APP_VERSION } from '../utils/version.js';
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ router.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: config.server.nodeEnv,
-      version: process.env.npm_package_version || '1.0.0',
+      version: APP_VERSION,
       responseTime: `${responseTime}ms`,
       database: dbHealth,
       memory: {
@@ -178,7 +179,7 @@ router.get('/detailed', async (req, res) => {
       responseTime: `${responseTime}ms`,
       checks,
       uptime: Math.round(process.uptime()),
-      version: process.env.npm_package_version || '1.0.0',
+      version: APP_VERSION,
       environment: config.server.nodeEnv,
     };
 

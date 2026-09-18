@@ -2,8 +2,8 @@ import Task from '../models/task.model.js';
 import Client from '../models/client.model.js';
 import Listing from '../models/listing.model.js';
 import { errorHandler } from '../utils/error.js';
-import { sendMail } from '../utils/mailer.js';
 import { logActivity } from '../utils/activity.js';
+import { notify } from '../utils/notify.js';
 
 function canAccessUser(user, targetUserId) {
   return user.role === 'admin' || String(user.id) === String(targetUserId);
@@ -66,14 +66,23 @@ export const createTask = async (req, res, next) => {
       } catch (_) {}
     }
 
-    // Notify by email (best-effort)
-    if (doc.dueAt) {
-      sendMail({
-        to: process.env.NOTIFY_TO || '',
-        subject: `New Task Assigned: ${doc.title}`,
-        text: `A task has been assigned and is due at ${doc.dueAt}.`,
-      }).catch(() => {});
-    }
+    // Tell the person the task is actually for.
+    //
+    // This used to email process.env.NOTIFY_TO — one global address for the
+    // whole deployment — so in a multi-tenant product the assignee was never
+    // told and somebody at the vendor got every agency's task mail. It also
+    // only fired when a due date happened to be set.
+    notify({
+      to: assignedTo,
+      actorId: req.user.id,
+      type: 'task.assigned',
+      title: `New task: ${doc.title}`,
+      body: doc.dueAt
+        ? `Due ${new Date(doc.dueAt).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+        : (doc.description || ''),
+      link: '/tasks',
+      entity: { type: 'task', id: doc._id },
+    });
 
     res.status(201).json({ success: true, data: doc });
   } catch (err) {

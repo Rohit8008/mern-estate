@@ -29,6 +29,14 @@ import dashboardRouter from './routes/dashboard.route.js';
 import propertyTypeRouter from './routes/propertyType.route.js';
 import subscriberRouter from './routes/subscriber.route.js';
 import activityRouter from './routes/activity.route.js';
+import notificationRouter from './routes/notification.route.js';
+import tagRouter from './routes/tag.route.js';
+import leadSourceRouter from './routes/leadSource.route.js';
+import dataRightsRouter from './routes/dataRights.route.js';
+import webhookRouter from './routes/webhook.route.js';
+import emailTemplateRouter from './routes/emailTemplate.route.js';
+import rulesRouter from './routes/rules.route.js';
+import sequenceRouter from './routes/sequence.route.js';
 import geocodeRouter from './routes/geocode.route.js';
 import reportTemplateRouter from './routes/reportTemplate.route.js';
 import generatedReportRouter from './routes/generatedReport.route.js';
@@ -48,6 +56,12 @@ import {
 import { config } from './config/environment.js';
 import { globalErrorHandler } from './utils/error.js';
 import { encryptResponse } from './middleware/encryptResponse.js';
+import { resolveTenant } from './tenancy/resolveTenant.js';
+import { readOnlyWhileActing } from './tenancy/readOnlyWhileActing.js';
+import { requireCsrfToken } from './middleware/csrf.js';
+import tenantRouter from './routes/tenant.route.js';
+import platformRouter from './routes/platform.route.js';
+import shareRouter from './routes/share.route.js';
 
 const __dirname = path.resolve();
 
@@ -93,7 +107,27 @@ export function createApp() {
 
   app.use('/api', encryptResponse);
 
+  // Health checks answer before tenant resolution: a load balancer probe has no
+  // workspace, and a broken tenant lookup must not take the pod out of service.
   app.use('/api/health', healthRouter);
+
+  // Everything past this line runs inside a tenant context, so every query is
+  // scoped without any handler having to remember to scope it.
+  app.use('/api', resolveTenant());
+  // A platform operator viewing a customer's workspace can read it, not change
+  // it. Enforced once at the edge so a controller added later inherits it.
+  app.use('/api', readOnlyWhileActing);
+
+  // Cookie-only auth plus sameSite:'none' in production means a cross-site
+  // form POST would otherwise carry the session. Exemptions come from
+  // security/publicRoutes.js, so they cannot drift from the route allowlist.
+  app.use('/api', requireCsrfToken);
+
+  app.use('/api/tenant', tenantRouter);
+  // Sharing chosen properties outside the agency — what replaced public browsing.
+  app.use('/api/share', shareRouter);
+  // The vendor's own console. Guarded by the platform flag inside the router.
+  app.use('/api/platform', platformRouter);
   app.use('/api/user', userRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/listing', listingRouter);
@@ -112,6 +146,14 @@ export function createApp() {
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/activity', activityRouter);
+  app.use('/api/notifications', notificationRouter);
+  app.use('/api/tags', tagRouter);
+  app.use('/api/lead-sources', leadSourceRouter);
+  app.use('/api/data-rights', dataRightsRouter);
+  app.use('/api/webhooks', webhookRouter);
+  app.use('/api/email-templates', emailTemplateRouter);
+  app.use('/api/rules', rulesRouter);
+  app.use('/api/sequences', sequenceRouter);
   app.use('/api/newsletter', subscriberRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/report-templates', reportTemplateRouter);
@@ -122,6 +164,22 @@ export function createApp() {
   app.use('/api/transactions', transactionRouter);
 
   app.use(express.static(path.join(__dirname, '/frontend/dist')));
+  // Documents are NOT public. This directory holds client contracts, RERA
+  // certificates and layout plans, and the static mount below sits outside
+  // `/api`, so nothing resolved a tenant or checked a session on the way past.
+  // Old rows still carry absolute `/uploads/docs/...` URLs, so redirect rather
+  // than 404 — the request then goes through verifyToken and the ownership
+  // check like any other. Always terminates: never falls through to static.
+  app.use('/uploads/docs', (req, res) => {
+    const name = req.path.replace(/^\/+/, '');
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
+      return res.status(400).json({ success: false, message: 'Not a valid document reference.' });
+    }
+    return res.redirect(307, `/api/documents/file/${name}`);
+  });
+
+  // Listing photographs and avatars only. These are referenced by <img> from
+  // share pages, which have no session by design.
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
   app.use('/api', (req, res) => {

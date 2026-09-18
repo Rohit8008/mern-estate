@@ -1,12 +1,16 @@
 import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
-import { sendMail } from '../utils/mailer.js';
+import { sendMail, isMailConfigured } from '../utils/mailer.js';
 import SecurityLog from '../models/securityLog.model.js';
 import User from '../models/user.model.js';
 import { errorHandler } from '../utils/error.js';
+import { assertWithinLimit } from '../tenancy/limits.js';
 import Listing from '../models/listing.model.js';
 import { validatePassword } from '../middleware/security.js';
 import { config } from '../config/environment.js';
+import { inHomeTenant } from '../tenancy/tenantContext.js';
+import { logger } from '../utils/logger.js';
+import { attachInvite, sendInviteEmail } from '../tenancy/invites.js';
 
 export const test = (req, res) => {
   res.json({
@@ -107,55 +111,152 @@ export const updateUser = async (req, res, next) => {
 };
 
 
+/**
+ * How many wrong codes before the OTP is burned.
+ *
+ * Low on purpose: a legitimate person mistypes once or twice, an attacker needs
+ * thousands. Burning the code rather than locking the account means the remedy
+ * is simply to request a new one, so this cannot be used to lock somebody out.
+ */
+const MAX_OTP_ATTEMPTS = 5;
+
+/** Mask whatever address was submitted, without implying it exists. */
+function maskEmail(email) {
+  return String(email).replace(/(^.).+(@.*$)/, (_, a, b) => `${a}***${b}`);
+}
+
+/**
+ * Start a password reset.
+ *
+ * The response is identical whether or not the address has an account. It used
+ * to answer 404 "User not found", which turned this endpoint into a membership
+ * oracle: anyone could test an address and learn whether it belonged to a
+ * customer of this workspace. Password reset is reachable without a session, so
+ * that was readable by anyone at all.
+ *
+ * The tell to avoid is not just the status code — it is every observable
+ * difference. Same message, same shape, same fields, and the mail send is not
+ * awaited so a real address does not take measurably longer than a fictional
+ * one.
+ */
 export const requestPasswordReset = async (req, res, next) => {
   try {
     const { email } = req.body;
+    // A missing field is about the REQUEST, not about any account, so this one
+    // may still be answered honestly.
     if (!email) return next(errorHandler(400, 'Email is required'));
-    const user = await User.findOne({ email }).select('+passwordResetOtpHash +passwordResetOtpExpires');
-    if (!user) return next(errorHandler(404, 'User not found'));
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const hash = crypto.createHash('sha256').update(otp).digest('hex');
-    user.passwordResetOtpHash = hash;
-    user.passwordResetOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
-    await user.save();
-    const masked = email.replace(/(^.).+(@.*$)/, (_, a, b) => a + '***' + b);
-    const subject = 'Your password reset OTP';
-    const text = `Your OTP is ${otp}. It expires in 10 minutes.`;
-    const html = `<p>Your OTP is <b>${otp}</b>. It expires in 10 minutes.</p>`;
-    const result = await sendMail({ to: email, subject, text, html });
 
-    // SEC-002: Never return the OTP in a production response, even when email
-    // delivery fails. In development, expose it only when SMTP is unconfigured
-    // so engineers can test the flow without a real mail server.
-    const devOtp = (!config.server.isProduction && !result.sent) ? otp : undefined;
+    const user = await User.findOne({ email, isDeleted: { $ne: true } })
+      .select('+passwordResetOtpHash +passwordResetOtpExpires +passwordResetOtpAttempts');
+
+    let otp = null;
+
+    if (user) {
+      otp = String(Math.floor(100000 + Math.random() * 900000));
+      user.passwordResetOtpHash = crypto.createHash('sha256').update(otp).digest('hex');
+      user.passwordResetOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+      user.passwordResetOtpAttempts = 0;
+      await user.save({ validateBeforeSave: false });
+
+      // Deliberately not awaited: awaiting it makes a real address take an SMTP
+      // round trip longer than an unknown one, which is the same leak measured
+      // with a stopwatch instead of read off the status code.
+      sendMail({
+        to: email,
+        subject: 'Your password reset OTP',
+        text: `Your OTP is ${otp}. It expires in 10 minutes.`,
+        html: `<p>Your OTP is <b>${otp}</b>. It expires in 10 minutes.</p>`,
+      }).catch(() => {});
+    } else {
+      logger.security?.('password_reset_unknown_address', { email: maskEmail(email), ip: req.ip });
+    }
+
+    // In development with no SMTP server, hand the code back so the flow can be
+    // tested without a mail server. Never in production, and never for an
+    // address that has no account — that would restore the oracle.
+    const devOtp = otp && !config.server.isProduction && !(await isMailConfigured()) ? otp : undefined;
 
     res.status(200).json({
-      message: result.sent ? 'OTP sent to email' : 'OTP generated (email delivery failed)',
-      to: masked,
+      message: 'If that address has an account, a code is on its way.',
+      to: maskEmail(email),
       ...(devOtp !== undefined && { devOtp }),
-      mailDelivery: result.sent ? 'sent' : 'failed',
-      ...(!result.sent && !config.server.isProduction && { errorReason: result.reason || 'unknown' }),
     });
   } catch (e) {
     next(e);
   }
 };
 
+/**
+ * Finish a password reset.
+ *
+ * Every failure answers the same way. Distinguishing "no such account" from
+ * "wrong code" here would give back exactly the membership oracle the request
+ * endpoint no longer offers — the second half of the flow is just as reachable
+ * as the first.
+ */
 export const resetPasswordWithOtp = async (req, res, next) => {
   try {
     const { email, otp, newPassword } = req.body;
     if (!email || !otp || !newPassword) return next(errorHandler(400, 'Missing fields'));
-    const user = await User.findOne({ email }).select('+passwordResetOtpHash +passwordResetOtpExpires');
-    if (!user) return next(errorHandler(404, 'User not found'));
-    if (!user.passwordResetOtpHash || !user.passwordResetOtpExpires || user.passwordResetOtpExpires < new Date()) {
-      return next(errorHandler(400, 'OTP expired'));
+
+    // One message for every way this can fail.
+    const reject = () => next(errorHandler(400, 'That code is not valid or has expired.'));
+
+    const user = await User.findOne({ email, isDeleted: { $ne: true } })
+      .select('+passwordResetOtpHash +passwordResetOtpExpires +passwordResetOtpAttempts');
+
+    if (!user) return reject();
+    if (!user.passwordResetOtpHash || !user.passwordResetOtpExpires) return reject();
+    if (user.passwordResetOtpExpires < new Date()) return reject();
+
+    // Cap the guesses before comparing, so a burned code cannot be ground down
+    // by simply continuing to ask.
+    if ((user.passwordResetOtpAttempts || 0) >= MAX_OTP_ATTEMPTS) {
+      logger.security?.('password_reset_otp_attempts_exceeded', {
+        userId: String(user._id),
+        ip: req.ip,
+      });
+      return reject();
     }
-    const hash = crypto.createHash('sha256').update(String(otp)).digest('hex');
-    if (hash !== user.passwordResetOtpHash) return next(errorHandler(400, 'Invalid OTP'));
+
+    const supplied = crypto.createHash('sha256').update(String(otp)).digest('hex');
+    const expected = user.passwordResetOtpHash;
+    const ok =
+      supplied.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+
+    if (!ok) {
+      // Counted, and the code dies at the cap — the whole point of a cap is
+      // that it is enforced across requests, not within one.
+      user.passwordResetOtpAttempts = (user.passwordResetOtpAttempts || 0) + 1;
+      if (user.passwordResetOtpAttempts >= MAX_OTP_ATTEMPTS) {
+        user.passwordResetOtpHash = null;
+        user.passwordResetOtpExpires = null;
+      }
+      await user.save({ validateBeforeSave: false });
+      return reject();
+    }
+
+    // Hold the new password to the same policy as every other place one is set;
+    // a reset was the way to sidestep it.
+    const strength = validatePassword(String(newPassword));
+    if (!strength.isValid) {
+      return next(
+        errorHandler(
+          400,
+          'Use at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol.'
+        )
+      );
+    }
+
     user.password = newPassword;
     user.passwordResetOtpHash = null;
     user.passwordResetOtpExpires = null;
+    user.passwordResetOtpAttempts = 0;
     await user.save();
+
+    logger.security?.('password_reset_completed', { userId: String(user._id), ip: req.ip });
+
     res.status(200).json({ message: 'Password updated' });
   } catch (e) {
     next(e);
@@ -278,7 +379,13 @@ export const getUser = async (req, res, next) => {
 
 export const getUserPublic = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id).select('username email avatar phone role _id createdAt');
+    // isDeleted filter matches getUser above: a de-provisioned employee's
+    // contact details should not stay readable after their account is gone.
+    // Tenant scoping is automatic, so this cannot reach another workspace.
+    const user = await User.findOne({
+      _id: req.params.id,
+      isDeleted: { $ne: true },
+    }).select('username email avatar phone role _id createdAt');
     if (!user) return next(errorHandler(404, 'User not found!'));
     res.status(200).json(user);
   } catch (error) {
@@ -290,7 +397,9 @@ export const me = async (req, res, next) => {
   try {
     // verifyToken middleware sets req.user
     if (!req.user?.id) return next(errorHandler(401, 'Unauthorized'));
-    const user = await User.findById(req.user.id).select('-password');
+    // The caller's own record, which lives in their home workspace — not
+    // necessarily the one this request is scoped to. See inHomeTenant.
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('-password'));
     if (!user) return next(errorHandler(404, 'User not found!'));
     res.status(200).json(user);
   } catch (error) {
@@ -314,7 +423,7 @@ export const myPermissions = async (req, res, next) => {
       return res.status(200).json({ permissions: allPerms, role: 'admin', isAdmin: true });
     }
 
-    const user = await User.findById(req.user.id).populate('assignedRole');
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).populate('assignedRole'));
     if (!user) return next(errorHandler(404, 'User not found!'));
 
     if (!user.assignedRole || !user.assignedRole.isActive) {
@@ -399,11 +508,8 @@ export const searchUsers = async (req, res, next) => {
 export const createEmployee = async (req, res, next) => {
   try {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
-    const { username, firstName, lastName, email, password, assignedCategories, phone, message } = req.body;
-    if (!username || !email || !password) return next(errorHandler(400, 'Missing fields'));
-
-    const pw = validatePassword(String(password));
-    if (!pw.isValid) return next(errorHandler(400, 'Password does not meet security requirements'));
+    const { username, firstName, lastName, email, assignedCategories, phone, message } = req.body;
+    if (!username || !email) return next(errorHandler(400, 'Missing fields'));
 
     const exists = await User.findOne({ email });
     if (exists) return next(errorHandler(409, 'Email already in use'));
@@ -415,69 +521,61 @@ export const createEmployee = async (req, res, next) => {
       }
     }
 
+    // Seats are counted before the write, not after: an agency that has filled
+    // its plan should be told so, not billed for an overage they didn't choose.
+    await assertWithinLimit('maxUsers', () =>
+      User.countDocuments({ isDeleted: { $ne: true } })
+    );
+
     const user = await User.create({
       username,
       firstName: firstName || '',
       lastName: lastName || '',
       email,
-      password: String(password),
+      // Never chosen by the admin and never sent anywhere. The account is
+      // unusable until the recipient sets their own password through the
+      // invite link, so there is no credential in existence to leak.
+      password: crypto.randomBytes(32).toString('base64url'),
       role: 'employee',
       assignedCategories: assignedCategories || [],
       phone: phone?.trim() || null,
     });
 
-    // Send welcome email with credentials (fire-and-forget — don't fail the request if mail fails)
-    const appUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const displayName = firstName ? `${firstName}${lastName ? ' ' + lastName : ''}` : username;
-    const personalNote = message?.trim()
-      ? `<p style="background:#f8fafc;border-left:3px solid #6366f1;padding:12px 16px;border-radius:4px;color:#334155;font-style:italic;">${message.trim()}</p>`
-      : '';
+    // An invitation, not a credential.
+    //
+    // This used to email the password in plaintext, in both the text and HTML
+    // bodies, so it persisted in two mailboxes and every SMTP hop between them
+    // — outside any rotation the product controls. tenancy/invites.js already
+    // had the right answer and provisionTenant already used it: a 32-byte
+    // single-use token, stored only as a SHA-256 hash, expiring in a week, with
+    // the recipient choosing their own password. This path now uses it too.
+    const inviteToken = attachInvite(user, { invitedBy: req.user.id });
+    await user.save({ validateBeforeSave: false });
 
-    sendMail({
-      to: email,
-      subject: "You've been invited to join the team",
-      text: [
-        `Hi ${displayName},`,
-        '',
-        "You've been added as a team member. Here are your login credentials:",
-        `  Email:    ${email}`,
-        `  Password: ${password}`,
-        '',
-        `Sign in at: ${appUrl}/sign-in`,
-        '',
-        'Please change your password after your first login.',
-        message?.trim() ? `\nMessage from your admin:\n${message.trim()}` : '',
-      ].join('\n'),
-      html: `
-        <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:520px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-          <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:28px 32px;">
-            <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">You've been invited!</h1>
-            <p style="margin:6px 0 0;color:#94a3b8;font-size:14px;">You now have access to the team workspace.</p>
-          </div>
-          <div style="padding:28px 32px;">
-            <p style="color:#334155;margin:0 0 20px;">Hi <strong>${displayName}</strong>,</p>
-            ${personalNote}
-            <p style="color:#334155;margin:16px 0 12px;">Your login credentials:</p>
-            <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:8px;overflow:hidden;">
-              <tr>
-                <td style="padding:12px 16px;color:#64748b;font-size:13px;width:90px;border-bottom:1px solid #e2e8f0;">Email</td>
-                <td style="padding:12px 16px;color:#0f172a;font-weight:600;font-size:13px;border-bottom:1px solid #e2e8f0;">${email}</td>
-              </tr>
-              <tr>
-                <td style="padding:12px 16px;color:#64748b;font-size:13px;">Password</td>
-                <td style="padding:12px 16px;color:#0f172a;font-weight:600;font-size:13px;font-family:monospace;">${password}</td>
-              </tr>
-            </table>
-            <div style="margin:24px 0;">
-              <a href="${appUrl}/sign-in" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">Sign in now →</a>
-            </div>
-            <p style="color:#94a3b8;font-size:12px;margin:0;">Please change your password after your first login.</p>
-          </div>
-        </div>`,
-    }).catch((e) => console.error('[invite] email send failed:', e));
+    let inviteUrlForAdmin = null;
+    try {
+      const sent = await sendInviteEmail({
+        to: email,
+        token: inviteToken,
+        tenant: req.tenant,
+        inviterName: req.user?.username || null,
+      });
+      // Returned to the ADMIN so they can pass it on by hand when mail is down.
+      // Never logged: the token is the credential.
+      inviteUrlForAdmin = sent.url;
+      if (!sent.sent) {
+        logger.warn('Employee invite email not delivered', { email, reason: sent.reason });
+      }
+    } catch (err) {
+      logger.warn('Employee invite email failed', { email, error: err?.message });
+    }
 
-    const { password: pass, ...rest } = user._doc;
-    res.status(201).json({ ...rest, emailSent: true });
+    if (message?.trim()) {
+      logger.info('Employee invited with a personal note', { userId: String(user._id) });
+    }
+
+    const { password: pass, inviteTokenHash, ...rest } = user._doc;
+    res.status(201).json({ ...rest, invited: true, inviteUrl: inviteUrlForAdmin });
   } catch (error) {
     next(error);
   }

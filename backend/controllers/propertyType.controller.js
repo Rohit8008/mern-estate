@@ -1,14 +1,18 @@
 import PropertyType from '../models/propertyType.model.js';
 import { asyncHandler, ValidationError, NotFoundError } from '../utils/error.js';
 import { config } from '../config/environment.js';
-import { getCache } from '../utils/cache.js';
+import { getTenantScopedCache, invalidateEverywhere } from '../utils/cache.js';
 
 const CACHE_TTL_MS = (Number(config?.cache?.ttl) > 0 ? Number(config.cache.ttl) : 300) * 1000;
 const MAX_CACHE_SIZE = Number(config?.cache?.maxSize) > 0 ? Number(config.cache.maxSize) : 100;
-const cache = getCache({ ttlMs: CACHE_TTL_MS, maxSize: MAX_CACHE_SIZE });
+// Tenant-scoped: two agencies each have their own categories, and a shared
+// `category:list` key would serve one of them the other's.
+const cache = getTenantScopedCache({ ttlMs: CACHE_TTL_MS, maxSize: MAX_CACHE_SIZE });
 
 function clearPropertyTypeCache() {
-  cache.clearByPrefix('propertyType:');
+  // Clears this instance AND tells the others, so a second instance
+  // cannot keep answering from a cache the write just invalidated.
+  invalidateEverywhere({ prefix: 'propertyType:' });
 }
 
 export const getAllPropertyTypes = asyncHandler(async (req, res) => {

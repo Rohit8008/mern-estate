@@ -3,9 +3,9 @@ import User from '../models/user.model.js';
 import Owner from '../models/owner.model.js';
 import Category from '../models/category.model.js';
 import PropertyType from '../models/propertyType.model.js';
-import { io } from '../socket.js';
+import { io, emitToTenant } from '../socket.js';
 import { config } from '../config/environment.js';
-import { getCache } from '../utils/cache.js';
+import { getTenantScopedCache, invalidateEverywhere } from '../utils/cache.js';
 import {
   errorHandler,
   ValidationError,
@@ -15,19 +15,27 @@ import {
   sendSuccessResponse,
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
-import { canAccessListing } from '../middleware/permissions.js';
+import { canAccessListing, listingScope } from '../middleware/permissions.js';
+import { assertWithinLimit } from '../tenancy/limits.js';
+import { runHook } from '../plugins/registry.js';
+import { emitEvent } from '../utils/webhooks.js';
+import { resolveEffectiveLocation, attachEffectiveLocations } from '../utils/listingDefaults.js';
 import {
-  tokenize,
-  buildFuzzyRegex,
-  scoreDocument,
-  generateSearchVariations,
-  generateSuggestions,
-  highlightMatches,
-} from '../utils/search.js';
+  searchListings as runListingSearch,
+  getListingFacets,
+  LIST_PROJECTION,
+} from '../search/listingSearch.js';
+
+/** Everything a CRM user may see, on top of the public field set. */
+const STAFF_PROJECTION =
+  `${LIST_PROJECTION} ownerIds assignedAgent userRef attributes ` +
+  'remarks plotSize sqYardRate totalValue state pincode furnished parking voiceNotes';
 
 const CACHE_TTL_MS = (Number(config?.cache?.ttl) > 0 ? Number(config.cache.ttl) : 300) * 1000;
 const MAX_CACHE_SIZE = Number(config?.cache?.maxSize) > 0 ? Number(config.cache.maxSize) : 100;
-const cache = getCache({ ttlMs: CACHE_TTL_MS, maxSize: MAX_CACHE_SIZE });
+// Tenant-scoped — search results, suggestions and popular searches are all
+// derived from one workspace's listings.
+const cache = getTenantScopedCache({ ttlMs: CACHE_TTL_MS, maxSize: MAX_CACHE_SIZE });
 
 function getCachedResults(key) {
   return cache.get(key);
@@ -58,8 +66,10 @@ function setCachedResults(key, data) {
   cache.set(key, data);
 }
 
-function clearSearchCache() {
-  cache.clearByPrefix('listing:');
+export function clearSearchCache() {
+  // Clears this instance AND tells the others, so a second instance
+  // cannot keep answering from a cache the write just invalidated.
+  invalidateEverywhere({ prefix: 'listing:' });
   logger.info('Search cache cleared');
 }
 
@@ -145,7 +155,9 @@ function buildListingPayload(body, userId) {
     imageUrls: body.imageUrls,
     category: body.category,
     attributes: body.attributes,
-    propertyTypeFields: body.propertyTypeFields,
+    // propertyTypeFields is deliberately absent: it was a parallel dynamic
+    // store nothing displayed, retired by scripts/migrateFieldStores.js.
+    // Accepting it again would start re-creating invisible data.
     location: body.location,
     ownerIds: body.ownerIds,
     city: body.city,
@@ -238,7 +250,29 @@ export const createListing = asyncHandler(async (req, res, next) => {
     if (inferred) listingData.propertyCategory = inferred;
   }
 
-  const listing = await Listing.create(listingData);
+  await assertWithinLimit('maxListings', () =>
+    Listing.countDocuments({ isDeleted: { $ne: true } })
+  );
+
+  /*
+   * Workspace rules get to normalise or veto before the write.
+   *
+   * A rule that throws becomes the user's validation error — which is how
+   * "refuse to publish without a price" is expressed as configuration rather
+   * than a branch in this function.
+   */
+  const ruled = await runHook('listing.beforeSave', { listing: listingData, user: req.user });
+  const listing = await Listing.create(ruled.listing || listingData);
+
+  await runHook('listing.afterSave', { listing: listing.toObject(), user: req.user, created: true });
+
+  emitEvent('listing.created', {
+    id: String(listing._id),
+    name: listing.name,
+    category: listing.category,
+    city: listing.city,
+    price: listing.regularPrice,
+  });
 
   await emitListingUpdate('created', listing, listing?.category);
   clearSearchCache(); // Clear search cache on listing creation
@@ -295,10 +329,17 @@ export const updateListing = asyncHandler(async (req, res, next) => {
   // Whitelist fields — userRef, assignedAgent, isDeleted, deletedAt are not updatable here
   const updates = buildListingPayload(req.body, null);
 
-  // Cross-field price guard: Joi can't compare discountPrice against the stored regularPrice
-  if (updates.discountPrice !== undefined) {
+  // Cross-field price guard: Joi can't compare discountPrice against the stored
+  // regularPrice.
+  //
+  // Both halves of the condition matter, and matching the model's own pre-save
+  // rule is the point. Price is optional here — plenty of properties are listed
+  // "on request", and both fields then sit at their 0 default. Comparing those
+  // gives `0 >= 0`, so a stricter guard rejected every edit of a property with
+  // no price, making a listing saved with just a name permanently uneditable.
+  if (updates.discountPrice) {
     const effectiveRegularPrice = updates.regularPrice ?? listing.regularPrice;
-    if (effectiveRegularPrice != null && updates.discountPrice >= effectiveRegularPrice) {
+    if (effectiveRegularPrice > 0 && updates.discountPrice >= effectiveRegularPrice) {
       throw new ValidationError('Discount price must be less than regular price', 'discountPrice');
     }
   }
@@ -334,6 +375,14 @@ export const getListing = asyncHandler(async (req, res, next) => {
     response.voiceNotes = voiceNotes || [];
     response.assignedAgent = assignedAgent || null;
   }
+
+  if (listing.category) {
+    const cat = await Category.findOne({ slug: listing.category }).select('defaultLocation').lean();
+    response.effectiveLocation = resolveEffectiveLocation(listing.location, cat?.defaultLocation);
+  } else {
+    response.effectiveLocation = resolveEffectiveLocation(listing.location, null);
+  }
+
   res.status(200).json(response);
 });
 
@@ -409,7 +458,7 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
     throw new AuthorizationError('Only employees and admins can access assigned listings');
   }
 
-  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const limit = Math.min(parseInt(req.query.limit) || 20, 500);
   const startIndex = Math.max(parseInt(req.query.startIndex) || 0, 0);
 
   const query = {
@@ -507,6 +556,8 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
     Listing.countDocuments(query)
   ]);
 
+  await attachEffectiveLocations(listings, Category);
+
   const response = {
     listings,
     pagination: {
@@ -572,235 +623,48 @@ export const restoreListing = asyncHandler(async (req, res, next) => {
   sendSuccessResponse(res, listing, 'Listing restored successfully');
 });
 
-export const getListings = asyncHandler(async (req, res, next) => {
-  const startTime = Date.now();
-  
-  // Parse and validate query parameters
-  const limit = Math.min(parseInt(req.query.limit) || 9, 50); // Cap at 50
-  const startIndex = Math.max(parseInt(req.query.startIndex) || 0, 0);
-  
-  // Build query object
-  const query = {};
-  
-  // Exclude soft-deleted by default (admin can override with includeDeleted=true)
-  if (req.query.includeDeleted !== 'true' || req.user?.role !== 'admin') {
-    query.isDeleted = { $ne: true };
-  }
-  
-  // City filter
-  const city = req.query.city;
-  if (city && city.trim() && city !== 'all') {
-    query.city = { $regex: city.trim(), $options: 'i' };
-  }
-  
-  // Locality filter
-  const locality = req.query.locality;
-  if (locality && locality.trim() && locality !== 'all') {
-    query.locality = { $regex: locality.trim(), $options: 'i' };
-  }
-  
-  // Status filter
-  const status = req.query.status;
-  if (status && status !== 'all') {
-    query.status = status;
-  }
-  
-  // Assigned agent filter
-  const assignedAgent = req.query.assignedAgent;
-  if (assignedAgent && assignedAgent !== 'all') {
-    if (assignedAgent === 'unassigned') {
-      query.assignedAgent = null;
-    } else {
-      query.assignedAgent = assignedAgent;
-    }
-  }
-  
-  // Property category filter
-  const propertyCategory = req.query.propertyCategory;
-  if (propertyCategory && propertyCategory !== 'all') {
-    query.propertyCategory = propertyCategory;
-  }
-  
-  // Property type filters (residential/commercial/land subtypes)
-  const propertyType = req.query.propertyType;
-  if (propertyType && propertyType !== 'all') {
-    query.propertyType = propertyType;
-  }
-  
-  const commercialType = req.query.commercialType;
-  if (commercialType && commercialType !== 'all') {
-    query.commercialType = commercialType;
-  }
-  
-  const plotType = req.query.plotType;
-  if (plotType && plotType !== 'all') {
-    query.plotType = plotType;
-  }
-  
-  // Area range filter
-  const minAreaSqFt = parseInt(req.query.minAreaSqFt);
-  const maxAreaSqFt = parseInt(req.query.maxAreaSqFt);
-  if (!isNaN(minAreaSqFt) || !isNaN(maxAreaSqFt)) {
-    query.areaSqFt = {};
-    if (!isNaN(minAreaSqFt) && minAreaSqFt > 0) {
-      query.areaSqFt.$gte = minAreaSqFt;
-    }
-    if (!isNaN(maxAreaSqFt) && maxAreaSqFt > 0) {
-      query.areaSqFt.$lte = maxAreaSqFt;
-    }
-  }
-  
-  // Boolean filters with proper handling
-  const booleanFilters = ['offer', 'furnished', 'parking'];
-  booleanFilters.forEach(filter => {
-    const value = req.query[filter];
-    if (value !== undefined && value !== 'false') {
-      query[filter] = value === 'true';
-    }
+export const getListings = asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 9, 500);
+  const skip = Math.max(parseInt(req.query.startIndex, 10) || 0, 0);
+
+  // One search service behind every caller. The board's `searchTerm` and the
+  // public `q` used to run different code with different fields and different
+  // access rules, so a property found in one was missing from the other.
+  const { listings, total, tier, tookMs } = await runListingSearch({
+    q: req.query.searchTerm,
+    params: req.query,
+    user: req.user,
+    limit,
+    skip,
+    sort: req.query.sort || (req.query.searchTerm ? 'relevance' : 'createdAt'),
+    order: req.query.order,
+    projection: isPrivilegedUser(req) ? STAFF_PROJECTION : LIST_PROJECTION,
   });
-  
-  // Type filter (legacy - keep for backward compatibility)
-  const type = req.query.type;
-  if (type && type !== 'all') {
-    query.type = type;
+
+  // Populate is applied after the aggregation, which returns plain documents.
+  if (shouldPopulate(req, 'agent')) {
+    await Listing.populate(listings, { path: 'assignedAgent', select: 'username avatar role' });
   }
-  
-  // Price range
-  const minPrice = parseInt(req.query.minPrice) || 0;
-  const maxPrice = parseInt(req.query.maxPrice) || 100000000;
-  query.regularPrice = { $gte: minPrice, $lte: maxPrice };
-  
-  // Bedroom and bathroom filters
-  const minBedrooms = parseInt(req.query.minBedrooms);
-  if (!isNaN(minBedrooms)) {
-    query.bedrooms = { $gte: minBedrooms };
-  }
-  
-  const minBathrooms = parseInt(req.query.minBathrooms);
-  if (!isNaN(minBathrooms)) {
-    query.bathrooms = { $gte: minBathrooms };
-  }
-  
-  // Category filter
-  const category = req.query.category;
-  if (category && category !== 'all') {
-    query.category = category;
+  if (shouldPopulate(req, 'owners')) {
+    await Listing.populate(listings, { path: 'ownerIds', select: 'name email phone companyName' });
   }
 
-  // Owner filter
-  const ownerId = req.query.ownerId;
-  if (ownerId && ownerId !== 'all') {
-    query.ownerIds = ownerId;
-  }
-  
-  // Advanced fuzzy search functionality
-  const searchTerm = req.query.searchTerm;
-  const fuzzyLevel = req.query.fuzzyLevel || 'medium'; // strict, medium, loose
+  await attachEffectiveLocations(listings, Category);
 
-  if (searchTerm && searchTerm.trim()) {
-    const terms = tokenize(searchTerm);
-    const searchConditions = [];
-
-    terms.forEach(term => {
-      // Build fuzzy regex for the term
-      const fuzzyRegex = buildFuzzyRegex(term, { fuzzyLevel });
-
-      // Primary field searches with fuzzy matching
-      searchConditions.push(
-        { name: fuzzyRegex },
-        { description: fuzzyRegex },
-        { address: fuzzyRegex },
-        { city: fuzzyRegex },
-        { locality: fuzzyRegex },
-        { areaName: fuzzyRegex },
-        { propertyNo: fuzzyRegex }
-      );
-
-      // Add search variations for typo tolerance
-      const variations = generateSearchVariations(term);
-      variations.slice(1, 3).forEach(variation => {
-        const varRegex = new RegExp(variation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-        searchConditions.push(
-          { name: varRegex },
-          { city: varRegex },
-          { locality: varRegex }
-        );
-      });
-
-      // Numeric search for prices if term is numeric
-      const numericValue = parseFloat(term);
-      if (!isNaN(numericValue) && numericValue > 0) {
-        const tolerance = numericValue * 0.1; // 10% tolerance
-        searchConditions.push(
-          { regularPrice: { $gte: numericValue - tolerance, $lte: numericValue + tolerance } }
-        );
-      }
-    });
-
-    query.$or = searchConditions;
-  }
-  
-  // Sorting
-  const sort = req.query.sort || 'createdAt';
-  const order = req.query.order === 'asc' ? 1 : -1;
-  const sortObj = { [sort]: order };
-  
-  // Add secondary sort for consistent results
-  if (sort !== 'createdAt') {
-    sortObj.createdAt = -1;
-  }
-  
-  // Execute query with performance optimizations
-  const privileged = isPrivilegedUser(req);
-  const [listings, totalCount] = await Promise.all([
-    (async () => {
-      const projection = privileged
-        ? '-__v'
-        : '-__v -voiceNotes -ownerIds -assignedAgent -userRef -isDeleted -deletedAt';
-      let qy = Listing.find(query)
-        .select(projection)
-        .sort(sortObj)
-        .limit(limit)
-        .skip(startIndex);
-      if (shouldPopulate(req, 'agent')) {
-        qy = qy.populate('assignedAgent', 'username avatar role');
-      }
-      if (shouldPopulate(req, 'owners')) {
-        qy = qy.populate('ownerIds', 'name email phone companyName');
-      }
-      return qy.lean(); // Use lean() for better performance
-    })(),
-    Listing.countDocuments(query)
-  ]);
-  
-  const responseTime = Date.now() - startTime;
-  
-  // Log performance metrics
   logger.info('Listings query executed', {
-    query: Object.keys(query),
-    resultCount: listings.length,
-    totalCount,
-    responseTime: `${responseTime}ms`,
-    userId: req.user?.id,
-    ip: req.ip,
+    resultCount: listings.length, totalCount: total, tier,
+    responseTime: `${tookMs}ms`, userId: req.user?.id,
   });
-  
-  // Return paginated response
-  const response = {
-    listings,
-    pagination: {
-      total: totalCount,
-      limit,
-      startIndex,
-      hasMore: startIndex + limit < totalCount,
+
+  sendSuccessResponse(
+    res,
+    {
+      listings,
+      pagination: { total, limit, startIndex: skip, hasMore: skip + limit < total },
+      meta: { queryTime: `${tookMs}ms`, matchedBy: tier },
     },
-    meta: {
-      queryTime: `${responseTime}ms`,
-      filters: Object.keys(query),
-    }
-  };
-  
-  sendSuccessResponse(res, response, 'Listings retrieved successfully');
+    'Listings retrieved successfully'
+  );
 });
 
 // Bulk import listings from CSV/Excel data
@@ -871,28 +735,38 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
         };
       }
 
-      // Handle property type fields
-      if (data.propertyTypeFields && typeof data.propertyTypeFields === 'object') {
-        listingData.propertyTypeFields = data.propertyTypeFields;
+      // Dynamic fields land in `attributes` — the store the Category system and
+      // the whole UI actually read. This used to write `propertyTypeFields`,
+      // which nothing displays, so imported extras silently vanished.
+      if (data.attributes && typeof data.attributes === 'object') {
+        listingData.attributes = data.attributes;
       } else {
-        // Extract common property type fields from flat data
-        const propertyTypeFields = {};
-        const ptFieldKeys = ['floors', 'plotSize', 'areaSqFt', 'sqYard', 'sqYardRate', 'facing', 'floor', 'totalFloors', 'lift', 'balcony', 'garden', 'boundaryWall', 'cornerPlot'];
-        ptFieldKeys.forEach(key => {
+        const attributes = {};
+        const extraKeys = ['floors', 'facing', 'floor', 'totalFloors', 'lift', 'balcony', 'garden', 'boundaryWall', 'cornerPlot'];
+        const numericKeys = ['floors', 'floor', 'totalFloors'];
+        const booleanKeys = ['lift', 'balcony', 'garden', 'boundaryWall', 'cornerPlot'];
+        extraKeys.forEach(key => {
           if (data[key] !== undefined && data[key] !== '') {
-            if (['floors', 'areaSqFt', 'sqYard', 'sqYardRate', 'floor', 'totalFloors'].includes(key)) {
-              propertyTypeFields[key] = parseFloat(data[key]) || 0;
-            } else if (['lift', 'balcony', 'garden', 'boundaryWall', 'cornerPlot'].includes(key)) {
-              propertyTypeFields[key] = data[key] === true || data[key] === 'true' || data[key] === 'Yes' || data[key] === 'yes';
+            if (numericKeys.includes(key)) {
+              attributes[key] = parseFloat(data[key]) || 0;
+            } else if (booleanKeys.includes(key)) {
+              attributes[key] = data[key] === true || data[key] === 'true' || data[key] === 'Yes' || data[key] === 'yes';
             } else {
-              propertyTypeFields[key] = data[key];
+              attributes[key] = data[key];
             }
           }
         });
-        if (Object.keys(propertyTypeFields).length > 0) {
-          listingData.propertyTypeFields = propertyTypeFields;
+        if (Object.keys(attributes).length > 0) {
+          listingData.attributes = attributes;
         }
       }
+
+      // These have real indexed columns on the model — keep them there rather
+      // than burying them in the dynamic map.
+      ['plotSize', 'areaSqFt', 'sqYard', 'sqYardRate', 'totalValue'].forEach(key => {
+        if (data[key] === undefined || data[key] === '') return;
+        listingData[key] = key === 'plotSize' ? String(data[key]).trim() : (parseFloat(data[key]) || 0);
+      });
 
       // Additional fields
       if (data.areaName) listingData.areaName = String(data.areaName).trim();
@@ -916,7 +790,7 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
 
   // Notify about new listings and clear cache
   if (results.success.length > 0) {
-    io.emit('listing:update', { action: 'bulk_import', count: results.success.length });
+    emitToTenant(req.tenantId, 'listing:update', { action: 'bulk_import', count: results.success.length });
     clearSearchCache(); // Clear search cache after bulk import
   }
 
@@ -931,196 +805,78 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
  * Professional Search Endpoint
  * Fast, fuzzy search with relevance scoring and filtering
  */
-export const searchListings = asyncHandler(async (req, res, next) => {
-  const startTime = Date.now();
+export const searchListings = asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+  const skip =
+    req.query.startIndex !== undefined
+      ? Math.max(parseInt(req.query.startIndex, 10) || 0, 0)
+      : (Math.max(parseInt(req.query.page, 10) || 1, 1) - 1) * limit;
 
-  const {
-    q: searchTerm,
-    fuzzyLevel = 'medium',
-    limit: rawLimit = 20,
-    page = 1,
-    sort = 'relevance',
-    order = 'desc',
-    // Filters
-    type,
-    minPrice,
-    maxPrice,
-    bedrooms,
-    bathrooms,
-    city,
-    locality,
-    propertyCategory,
-    propertyType,
-    status = 'available',
-    offer,
-    furnished,
-    parking,
-  } = req.query;
+  // Cached per workspace by getTenantScopedCache, so two agencies never share
+  // a result. Every parameter that changes the result set is in the key.
+  const cacheKey = `listing:search:${JSON.stringify({
+    q: req.query.q, limit, skip, sort: req.query.sort, order: req.query.order,
+    ...req.query,
+  })}:${req.user?.id || 'anon'}`;
+  const cached = getCachedResults(cacheKey);
+  if (cached) return sendSuccessResponse(res, cached, 'Search results (cached)');
 
-  const limit = Math.min(parseInt(rawLimit) || 20, 50);
-  const skip = (Math.max(parseInt(page) || 1, 1) - 1) * limit;
+  const { listings, total, tier, tookMs } = await runListingSearch({
+    q: req.query.q,
+    params: req.query,
+    user: req.user,
+    limit,
+    skip,
+    sort: req.query.sort || 'relevance',
+    order: req.query.order,
+    // Anonymous browsing means "what can I buy", so sold and rented stock is
+    // out unless asked for. Staff see everything by default.
+    defaultStatus: isPrivilegedUser(req) ? null : 'available',
+  });
 
-  // Check cache for identical queries
-  const cacheKey = `listing:search:${JSON.stringify({ searchTerm, fuzzyLevel, limit, page, sort, order, type, minPrice, maxPrice, city, locality })}`;
-  const cachedResult = getCachedResults(cacheKey);
-  if (cachedResult) {
-    logger.info('Search cache hit', { searchTerm, responseTime: `${Date.now() - startTime}ms` });
-    return sendSuccessResponse(res, cachedResult, 'Search results (cached)');
-  }
-
-  // Build base query
-  const query = { isDeleted: { $ne: true } };
-
-  // Apply filters
-  if (type && type !== 'all') query.type = type;
-  if (status && status !== 'all') query.status = status;
-  if (propertyCategory && propertyCategory !== 'all') query.propertyCategory = propertyCategory;
-  if (propertyType && propertyType !== 'all') query.propertyType = propertyType;
-  if (offer === 'true') query.offer = true;
-  if (furnished === 'true') query.furnished = true;
-  if (parking === 'true') query.parking = true;
-
-  // Price range
-  if (minPrice || maxPrice) {
-    query.regularPrice = {};
-    if (minPrice) query.regularPrice.$gte = parseFloat(minPrice);
-    if (maxPrice) query.regularPrice.$lte = parseFloat(maxPrice);
-  }
-
-  // Bedrooms/Bathrooms
-  if (bedrooms) query.bedrooms = { $gte: parseInt(bedrooms) };
-  if (bathrooms) query.bathrooms = { $gte: parseInt(bathrooms) };
-
-  // Location filters with fuzzy matching
-  if (city && city !== 'all') {
-    query.city = { $regex: city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
-  }
-  if (locality && locality !== 'all') {
-    query.locality = { $regex: locality.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
-  }
-
-  let listings = [];
-  let totalCount = 0;
-
-  if (searchTerm && searchTerm.trim()) {
-    const terms = tokenize(searchTerm);
-    const searchConditions = [];
-
-    terms.forEach(term => {
-      const fuzzyRegex = buildFuzzyRegex(term, { fuzzyLevel });
-      const variations = generateSearchVariations(term);
-
-      // Primary searches
-      searchConditions.push(
-        { name: fuzzyRegex },
-        { description: fuzzyRegex },
-        { address: fuzzyRegex },
-        { city: fuzzyRegex },
-        { locality: fuzzyRegex },
-        { areaName: fuzzyRegex },
-        { propertyNo: fuzzyRegex }
-      );
-
-      // Variation searches for typo tolerance
-      variations.slice(1, 3).forEach(variation => {
-        const varRegex = new RegExp(variation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-        searchConditions.push(
-          { name: varRegex },
-          { city: varRegex },
-          { address: varRegex }
-        );
-      });
-    });
-
-    const searchQuery = { ...query, $or: searchConditions };
-
-    // Get all matching results for scoring (limited for performance)
-    const allResults = await Listing.find(searchQuery)
-      .select('name description address city locality areaName propertyNo regularPrice discountPrice offer bedrooms bathrooms imageUrls type propertyType propertyCategory status createdAt')
-      .limit(500)
-      .lean();
-
-    // Score and rank results
-    const scoredResults = allResults.map(doc => {
-      const scoreData = scoreDocument(doc, terms);
-      return { ...doc, _searchScore: scoreData.score, _matchedFields: scoreData.matchedFields };
-    });
-
-    // Sort by relevance or specified field
-    if (sort === 'relevance') {
-      scoredResults.sort((a, b) => b._searchScore - a._searchScore);
-    } else {
-      const sortOrder = order === 'asc' ? 1 : -1;
-      scoredResults.sort((a, b) => {
-        const aVal = a[sort] || 0;
-        const bVal = b[sort] || 0;
-        return (aVal - bVal) * sortOrder;
-      });
-    }
-
-    totalCount = scoredResults.length;
-    listings = scoredResults.slice(skip, skip + limit);
-
-    // Add highlighting to results
-    listings = listings.map(listing => ({
-      ...listing,
-      _highlights: {
-        name: highlightMatches(listing.name, terms),
-        address: highlightMatches(listing.address, terms),
-        city: highlightMatches(listing.city, terms),
-      }
-    }));
-  } else {
-    // No search term - just apply filters
-    const sortObj = {};
-    if (sort && sort !== 'relevance') {
-      sortObj[sort] = order === 'asc' ? 1 : -1;
-    } else {
-      sortObj.createdAt = -1;
-    }
-
-    [listings, totalCount] = await Promise.all([
-      Listing.find(query)
-        .select('name description address city locality areaName regularPrice discountPrice offer bedrooms bathrooms imageUrls type propertyType propertyCategory status createdAt')
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Listing.countDocuments(query)
-    ]);
-  }
-
-  const responseTime = Date.now() - startTime;
+  await attachEffectiveLocations(listings, Category);
 
   const result = {
     listings,
     pagination: {
-      total: totalCount,
-      page: parseInt(page) || 1,
+      total,
+      page: Math.floor(skip / limit) + 1,
       limit,
-      totalPages: Math.ceil(totalCount / limit),
-      hasMore: skip + limit < totalCount,
+      totalPages: Math.ceil(total / limit),
+      hasMore: skip + limit < total,
     },
-    meta: {
-      searchTerm: searchTerm || null,
-      fuzzyLevel,
-      responseTime: `${responseTime}ms`,
-      filters: { type, minPrice, maxPrice, city, locality, propertyCategory, status },
-    }
+    meta: { searchTerm: req.query.q || null, matchedBy: tier, responseTime: `${tookMs}ms` },
   };
 
-  // Cache the result
   setCachedResults(cacheKey, result);
 
   logger.info('Search executed', {
-    searchTerm,
-    resultCount: listings.length,
-    totalCount,
-    responseTime: `${responseTime}ms`,
-    userId: req.user?.id,
+    searchTerm: req.query.q, tier, total, responseTime: `${tookMs}ms`, userId: req.user?.id,
   });
 
   sendSuccessResponse(res, result, 'Search results');
+});
+
+// ─── GET /api/listing/facets ──────────────────────────────────────────────────
+
+/**
+ * Counts across the whole filtered set.
+ *
+ * The board's pipeline columns and map used to group whatever 50-row page was
+ * loaded, so a column header counted a page sample and showed it as the total.
+ */
+export const getListingFacetCounts = asyncHandler(async (req, res) => {
+  const started = Date.now();
+  const facets = await getListingFacets({
+    params: req.query,
+    user: req.user,
+    defaultStatus: isPrivilegedUser(req) ? null : 'available',
+  });
+  sendSuccessResponse(
+    res,
+    { ...facets, responseTime: `${Date.now() - started}ms` },
+    'Facet counts'
+  );
 });
 
 /**
@@ -1138,8 +894,11 @@ export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
   const limit = Math.min(parseInt(rawLimit) || 8, 15);
   const termLower = searchTerm.toLowerCase().trim();
 
-  // Check cache
-  const cacheKey = `listing:suggestions:${termLower}`;
+  // Keyed by the caller's access scope as well as the term, so one user's
+  // in-scope suggestions are never served to another. The workspace is added by
+  // the cache itself.
+  const scopeKey = req.user ? `${req.user.role}:${req.user.id}` : 'anon';
+  const cacheKey = `listing:suggestions:${scopeKey}:${termLower}`;
   const cached = getCachedResults(cacheKey);
   if (cached) {
     return sendSuccessResponse(res, cached, 'Suggestions (cached)');
@@ -1149,6 +908,14 @@ export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
   const prefixRegex = new RegExp(`^${termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
   const containsRegex = new RegExp(termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
+  // Suggestions must not leak names/localities from listings the caller cannot
+  // otherwise see, so they run inside the same access scope as the list query.
+  const scope = listingScope(req.user);
+  const inScope = (extra) =>
+    Object.keys(scope).length
+      ? { $and: [{ isDeleted: { $ne: true }, ...extra }, scope] }
+      : { isDeleted: { $ne: true }, ...extra };
+
   // Get suggestions from different fields
   const [
     nameSuggestions,
@@ -1157,16 +924,16 @@ export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
     areaSuggestions
   ] = await Promise.all([
     // Name suggestions (prefix match)
-    Listing.find({ name: prefixRegex, isDeleted: { $ne: true } })
+    Listing.find(inScope({ name: prefixRegex }))
       .select('name')
       .limit(limit)
       .lean(),
     // City suggestions (distinct values)
-    Listing.distinct('city', { city: containsRegex, isDeleted: { $ne: true } }),
+    Listing.distinct('city', inScope({ city: containsRegex })),
     // Locality suggestions
-    Listing.distinct('locality', { locality: containsRegex, isDeleted: { $ne: true } }),
+    Listing.distinct('locality', inScope({ locality: containsRegex })),
     // Area name suggestions
-    Listing.distinct('areaName', { areaName: containsRegex, isDeleted: { $ne: true } }),
+    Listing.distinct('areaName', inScope({ areaName: containsRegex })),
   ]);
 
   // Combine and dedupe suggestions
