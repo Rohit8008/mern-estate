@@ -452,7 +452,7 @@ export const getAgentPerformance = async (req, res, next) => {
             totalClients: { $sum: 1 },
             wonClients: { $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] } },
             lostClients: { $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] } },
-            activeClients: { $sum: { $cond: [{ $nin: ['$status', ['won', 'lost']] }, 1, 0] } },
+            activeClients: { $sum: { $cond: [{ $not: { $in: ['$status', ['won', 'lost']] } }, 1, 0] } },
             avgScore: { $avg: '$score' },
             totalCommunications: { $sum: { $size: { $ifNull: ['$communications', []] } } },
             totalFollowUps: { $sum: { $size: { $ifNull: ['$followUps', []] } } },

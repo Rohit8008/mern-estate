@@ -12,6 +12,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
 import authRouter from '../routes/auth.route.js';
 import { globalErrorHandler } from '../utils/error.js';
+import { resolveTenant } from '../tenancy/resolveTenant.js';
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
@@ -20,6 +21,10 @@ const createTestApp = () => {
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
+  // Mirrors app.js: everything under /api runs inside a tenant context, so
+  // these tests exercise the same scoping the real server applies. Without it
+  // they would pass with tenancy effectively switched off.
+  app.use('/api', resolveTenant());
   app.use('/api/auth', authRouter);
   app.use(globalErrorHandler);
   return app;
@@ -155,9 +160,11 @@ describe('Auth API', () => {
 
       const { refreshToken } = await global.testUtils.createAuthToken(jwt, testUser);
 
-      // Store hashed refresh token in the format the controller expects
+      // Store hashed refresh token in the format the controller expects.
+      // Writes go through the tenant plugin, so this needs a tenant context —
+      // in the app that comes from resolveTenant on the request.
       testUser.refreshTokens = [{ token: hashToken(refreshToken) }];
-      await testUser.save();
+      await global.testUtils.asTestTenant(() => testUser.save());
 
       const res = await request(app)
         .post('/api/auth/refresh')

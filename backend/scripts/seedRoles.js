@@ -1,16 +1,7 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import Role from '../models/role.model.js';
-import User from '../models/user.model.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-dotenv.config({ path: join(__dirname, '..', '.env') });
-
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ytreal';
+// Models come from _bootstrap so they are compiled AFTER the tenancy plugin is
+// registered — a static `import Role from ...` here would be hoisted above it
+// and produce roles with no tenantId, invisible to the application.
+import { bootstrapScript } from './_bootstrap.js';
 
 const roles = [
   {
@@ -87,9 +78,10 @@ const roles = [
 ];
 
 async function seedRoles() {
-  await mongoose.connect(MONGO_URI);
-  console.log('Connected to MongoDB');
+  const { models, inWorkspace, close } = await bootstrapScript();
+  const { Role, User } = models;
 
+  await inWorkspace(async () => {
   // Find any admin user to set as createdBy
   const adminUser = await User.findOne({ role: 'admin' });
   if (!adminUser) {
@@ -113,7 +105,9 @@ async function seedRoles() {
   }
 
   console.log(`\nDone. Created: ${created}, Skipped: ${skipped}`);
-  process.exit(0);
+  });
+
+  await close();
 }
 
 seedRoles().catch((err) => {

@@ -1,10 +1,11 @@
 import Message from '../models/message.model.js';
 import { errorHandler } from '../utils/error.js';
 import { io } from '../socket.js';
-import { onlineUsers } from '../utils/onlineUsers.js';
+import { onlineInTenant } from '../utils/onlineUsers.js';
 import User from '../models/user.model.js';
 import Listing from '../models/listing.model.js';
 import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../utils/encryption.js';
+import { inHomeTenant } from '../tenancy/tenantContext.js';
 
 /**
  * Helper function to decrypt message content if it's encrypted
@@ -62,7 +63,9 @@ export const sendMessage = async (req, res, next) => {
       isEncrypted: true,
     });
     // Fetch sender details for notification
-    const sender = await User.findById(req.user.id).select('username firstName lastName').lean();
+    const sender = await inHomeTenant(req, () =>
+      User.findById(req.user.id).select('username firstName lastName').lean()
+    );
     const senderName = sender?.firstName && sender?.lastName
       ? `${sender.firstName} ${sender.lastName}`
       : null;
@@ -177,7 +180,9 @@ export const getConversations = async (req, res, next) => {
 
 export const getOnlineUsers = async (req, res, next) => {
   try {
-    const ids = Array.from(onlineUsers).filter((id) => id !== req.user.id);
+    // This workspace's people only. It used to read a process-global Set, so
+    // the response enumerated every signed-in user on the deployment.
+    const ids = onlineInTenant(req.tenantId).filter((id) => id !== req.user.id);
     if (ids.length === 0) return res.status(200).json([]);
     const users = await User.find({ _id: { $in: ids }, status: { $ne: 'inactive' } })
       .select('username firstName lastName avatar _id')

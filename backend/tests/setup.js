@@ -7,8 +7,30 @@
 
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { registerTenancy } from '../tenancy/tenantPlugin.js';
+import { runWithTenant, runWithoutTenantScope } from '../tenancy/tenantContext.js';
+
+/**
+ * Tenancy is registered here, at module scope, so it is in place before any
+ * test file's model imports are evaluated — a global Mongoose plugin only
+ * applies to schemas compiled after it is registered.
+ *
+ * Without this the suite would run with tenant scoping switched off, and every
+ * test would pass while telling you nothing about the boundary that actually
+ * protects one agency's data from another's.
+ */
+registerTenancy(mongoose);
 
 let mongoServer;
+
+/** The tenant every test runs as, unless it says otherwise. */
+export let TEST_TENANT_ID = null;
+
+/** Run `fn` as the default test tenant. */
+export const asTestTenant = (fn) => runWithTenant({ tenantId: String(TEST_TENANT_ID) }, fn);
+
+/** Run `fn` as some other tenant — for asserting that data does not cross over. */
+export const asTenant = (tenantId, fn) => runWithTenant({ tenantId: String(tenantId) }, fn);
 
 /**
  * Setup test database before all tests
@@ -44,6 +66,26 @@ afterEach(async () => {
 });
 
 /**
+ * A fresh tenant per test. Recreated rather than preserved through the wipe
+ * above, so no test can depend on state another test left behind.
+ */
+beforeEach(async () => {
+  const Tenant = (await import('../models/tenant.model.js')).default;
+  const { invalidateTenantCache } = await import('../tenancy/resolveTenant.js');
+
+  // Slug 'default' so resolveTenant()'s fallback finds it, matching a
+  // single-workspace deployment.
+  const tenant = await runWithoutTenantScope('creating the fixture tenant', () =>
+    Tenant.create({ name: 'Test Workspace', slug: 'default', status: 'active' })
+  );
+  TEST_TENANT_ID = tenant._id;
+
+  // Each test gets a new tenant _id, and the resolver caches for 60s — without
+  // this, test two resolves to test one's deleted tenant.
+  invalidateTenantCache();
+});
+
+/**
  * Disconnect and stop database after all tests
  */
 afterAll(async () => {
@@ -68,9 +110,11 @@ export const createTestUser = async (User, overrides = {}) => {
     status: 'active',
   };
 
-  const user = new User({ ...defaultUser, ...overrides });
-  await user.save();
-  return user;
+  return asTestTenant(async () => {
+    const user = new User({ ...defaultUser, ...overrides });
+    await user.save();
+    return user;
+  });
 };
 
 /**
@@ -129,6 +173,11 @@ expect.extend({
 
 // Global test utilities
 global.testUtils = {
+  // Tenant helpers, so a test that writes directly to a model (rather than
+  // through an HTTP request) can supply the context resolveTenant would.
+  asTestTenant,
+  asTenant,
+  get tenantId() { return TEST_TENANT_ID; },
   createTestUser,
   createAuthToken,
   getAuthenticatedAgent,

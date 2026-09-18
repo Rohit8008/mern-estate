@@ -59,6 +59,15 @@ export const config = {
     audience: process.env.JWT_AUDIENCE || 'mern-estate-client',
   },
 
+  // Multi-tenancy
+  tenancy: {
+    // Subdomain host: acme.<appDomain> resolves to the tenant with slug "acme".
+    appDomain: process.env.APP_DOMAIN || '',
+    // Fallback tenant for single-workspace deployments and for the migration
+    // window before every session token carries a tenant claim.
+    defaultTenantSlug: process.env.DEFAULT_TENANT_SLUG || 'default',
+  },
+
   // Security configuration
   security: {
     maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5,
@@ -132,11 +141,40 @@ export const validateConfig = () => {
     errors.push('REFRESH_SECRET must be at least 32 characters long');
   }
 
+  // Multi-tenancy. A production deployment that can match no workspace to a
+  // request is not "mostly working" — every query throws by design, so the
+  // whole API is down. validateConfig already hard-exits on a weak JWT_SECRET;
+  // this is the same class of misconfiguration and was silent.
+  if (config.server.isProduction) {
+    // Checked against the raw env vars, not config: `defaultTenantSlug` falls
+    // back to the literal 'default', so reading config here would always look
+    // configured and this check would never fire.
+    const hasSubdomainRouting = Boolean(process.env.APP_DOMAIN);
+    const hasExplicitDefault = Boolean(process.env.DEFAULT_TENANT_SLUG);
+    if (!hasSubdomainRouting && !hasExplicitDefault) {
+      errors.push(
+        'Set APP_DOMAIN (for subdomain routing) or DEFAULT_TENANT_SLUG (for a ' +
+          'single-workspace deployment). With neither, requests fall back to a ' +
+          "workspace with the slug \"default\", which may not exist — and a query " +
+          'with no workspace throws, so the API is down rather than degraded.'
+      );
+    }
+  }
+
   // Validate database URI
   if (!config.database.uri || config.database.uri === 'mongodb://127.0.0.1:27017/ytreal') {
     if (config.server.isProduction) {
       errors.push('MONGO_URI must be set to a production database in production');
     }
+  }
+
+  // Observability. Not fatal — the app runs fine without it — but silence here
+  // is indistinguishable from health, so say it out loud once at boot.
+  if (config.server.isProduction && !(process.env.OPENOBSERVE_USERNAME && process.env.OPENOBSERVE_PASSWORD)) {
+    console.warn(
+      'Warning: OPENOBSERVE_USERNAME/PASSWORD not set. Logs, security events and ' +
+        'audit entries are written to stdout only and dropped after that.'
+    );
   }
 
   // Warn about email configuration for production (not required)

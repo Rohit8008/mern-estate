@@ -7,9 +7,11 @@ import PropertyType from './models/propertyType.model.js';
 import Message from './models/message.model.js';
 import User from './models/user.model.js';
 import Listing from './models/listing.model.js';
-import { onlineUsers } from './utils/onlineUsers.js';
+import { markOnline, markOffline, onlineInTenant, isOnline } from './utils/onlineUsers.js';
 import { initSocket, io } from './socket.js';
 import { encryptMessageWithKey, decryptMessageWithKey } from './utils/encryption.js';
+import { runWithTenant } from './tenancy/tenantContext.js';
+import { forEachTenant } from './tenancy/resolveTenant.js';
 
 export const app = createApp();
 export const server = http.createServer(app);
@@ -18,12 +20,30 @@ initSocket(server);
 
 export { io };
 
+/**
+ * Seed the default property types for any workspace that has none.
+ *
+ * Runs per tenant rather than once globally: "are there any property types?"
+ * has a different answer for every agency, and a bare countDocuments() here
+ * would now throw for want of a tenant context — correctly, since there is no
+ * single answer to give.
+ */
 async function seedPropertyTypesIfEmpty() {
+  try {
+    await forEachTenant('seeding default property types for new workspaces', (tenant) =>
+      seedPropertyTypesForTenant(tenant)
+    );
+  } catch (error) {
+    console.error('[seed] Failed to seed property types:', error.message);
+  }
+}
+
+async function seedPropertyTypesForTenant(tenant) {
   try {
     const count = await PropertyType.countDocuments();
     if (count > 0) return;
 
-    console.log('[seed] No property types found, seeding defaults...');
+    console.log(`[seed] No property types for "${tenant.slug}", seeding defaults...`);
     const defaultTypes = [
       { name: 'House', slug: 'house', description: 'Independent house or villa', icon: '🏠', category: 'residential', isSystem: true, order: 1, fields: [
         { key: 'bedrooms', label: 'Bedrooms', type: 'number', required: true, min: 1, max: 20, defaultValue: 1, order: 1, group: 'rooms' },
@@ -124,25 +144,51 @@ export function setupSocket() {
     // socket.userId is set and verified by the JWT middleware in socket.js.
     // Any connection that reaches here is authenticated.
     const userId = socket.userId;
+    // Bound at handshake in socket.js from the token's signed tenant claim.
+    // Every handler below touches the database, so each one enters this
+    // context — a socket is a long-lived connection, not a request, so nothing
+    // else establishes it.
+    const inTenant = (fn) => runWithTenant({ tenantId: socket.tenantId, userId }, fn);
 
+    // Two rooms. `user:` routes a message to one person; `tenant:` is the
+    // boundary — a bare io.emit() reaches every socket on the deployment, which
+    // in a shared-database product means every other agency.
+    const tenantRoom = `tenant:${socket.tenantId}`;
     socket.join(`user:${userId}`);
-    onlineUsers.add(userId);
-    io.emit('presence:update', { userId, online: true });
+    socket.join(tenantRoom);
+
+    markOnline(socket.tenantId, userId);
+    io.to(tenantRoom).emit('presence:update', { userId, online: true });
     try {
-      socket.emit('presence:bulk', Array.from(onlineUsers));
+      // Only this workspace's people. This used to send the process-global set,
+      // handing each connection every signed-in user id on the platform.
+      socket.emit('presence:bulk', onlineInTenant(socket.tenantId));
     } catch (_) {}
 
     // Push unread message count immediately on connect / reconnect
-    Message.countDocuments({ receiverId: userId, read: false })
+    inTenant(() => Message.countDocuments({ receiverId: userId, read: false }))
       .then((count) => { if (count > 0) socket.emit('unread:messages', { count }); })
       .catch(() => {});
 
     socket.on('message:send', async (payload, ack) => {
       const cb = typeof ack === 'function' ? ack : () => {};
       if (isMessageRateLimited(userId)) return cb({ error: 'Rate limited. Please slow down.' });
+      // The whole handler runs inside the sender's workspace, so the listing
+      // lookup, the message write and the sender lookup are all scoped without
+      // each one having to say so.
+      return inTenant(async () => {
       try {
         const { receiverId, content, listingId } = payload || {};
         if (!receiverId || !content) return cb({ error: 'Missing fields' });
+
+        // `user:` rooms are keyed on globally unique ObjectIds, so a receiverId
+        // from ANOTHER workspace would be routed to perfectly well. The Message
+        // row is tenant-stamped and so lands in the sender's workspace, which
+        // means the delivery would be socket-only and invisible in the victim's
+        // inbox. This lookup runs inside the sender's tenant, so a recipient
+        // outside it simply is not found.
+        const recipient = await User.findById(receiverId).select('_id').lean();
+        if (!recipient) return cb({ error: 'That person is not in this workspace.' });
 
         let finalContent = content;
         if (listingId) {
@@ -180,21 +226,24 @@ export function setupSocket() {
       } catch (_) {
         cb({ error: 'Failed to send message' });
       }
+      });
     });
 
     socket.on('typing', (payload) => {
       const { to } = payload || {};
-      if (to) io.to(`user:${to}`).emit('typing', { from: userId });
+      // Same reasoning as message:send — a typing ping to another workspace is
+      // still a signal crossing the boundary.
+      if (to && isOnline(socket.tenantId, to)) io.to(`user:${to}`).emit('typing', { from: userId });
     });
 
     socket.on('stop_typing', (payload) => {
       const { to } = payload || {};
-      if (to) io.to(`user:${to}`).emit('stop_typing', { from: userId });
+      if (to && isOnline(socket.tenantId, to)) io.to(`user:${to}`).emit('stop_typing', { from: userId });
     });
 
     socket.on('disconnect', () => {
-      onlineUsers.delete(userId);
-      io.emit('presence:update', { userId, online: false });
+      markOffline(socket.tenantId, userId);
+      io.to(tenantRoom).emit('presence:update', { userId, online: false });
     });
   });
 }

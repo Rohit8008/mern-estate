@@ -3,6 +3,7 @@ import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
 import { validateBody, userRouteValidation } from '../middleware/validation.js';
+import { authRateLimit } from '../middleware/security.js';
 
 
 const router = express.Router();
@@ -52,9 +53,14 @@ router.post('/admin/set-employee-password/:id', verifyToken, requireAdmin, valid
 router.get('/search', verifyToken, searchUsers)
 router.get('/listings/:id', verifyToken, getUserListings)
 router.get('/:id', verifyToken, getUser)
-router.get('/public/:id', getUserPublic)
+// Not public, despite the path. Kept at this URL because the profile page is
+// its only caller; the name is historical. Anonymous browsing was removed
+// from this product and this endpoint returns a colleague's email and phone.
+router.get('/public/:id', verifyToken, getUserPublic)
 router.post('/role/:id', verifyToken, validateBody(userRouteValidation.setUserRole), setUserRole)
-router.post('/password/request-otp', validateBody(userRouteValidation.requestPasswordOtp), requestPasswordReset)
-router.post('/password/reset', validateBody(userRouteValidation.resetPasswordWithOtp), resetPasswordWithOtp)
+// authRateLimit, not just the global API limiter: these are reachable without a
+// session and hand out / consume a credential.
+router.post('/password/request-otp', authRateLimit, validateBody(userRouteValidation.requestPasswordOtp), requestPasswordReset)
+router.post('/password/reset', authRateLimit, validateBody(userRouteValidation.resetPasswordWithOtp), resetPasswordWithOtp)
 
 export default router;

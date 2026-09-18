@@ -3,6 +3,7 @@ import { AuthorizationError, AuthenticationError } from './error.js';
 import { config } from '../config/environment.js';
 import User from '../models/user.model.js';
 import Role from '../models/role.model.js';
+import { runWithTenant } from '../tenancy/tenantContext.js';
 
 export const verifyToken = async (req, res, next) => {
   const token = req.cookies.access_token;
@@ -16,7 +17,14 @@ export const verifyToken = async (req, res, next) => {
   jwt.verify(token, config.jwt.secret, jwtOpts, async (err, payload) => {
     if (err) return next(new AuthenticationError('Unauthorized'));
     try {
-      const user = await User.findById(payload.id).select('-password +passwordChangedAt');
+      // Identity is resolved in the user's HOME workspace (`tid`), not in
+      // whatever workspace the request is scoped to. A platform operator
+      // viewing another agency is still themselves, and their account record
+      // lives where it always did — looking them up in the workspace they are
+      // viewing would simply not find them.
+      const user = await runWithTenant({ tenantId: String(payload.tid) }, () =>
+        User.findById(payload.id).select('-password +passwordChangedAt')
+      );
       if (!user) return next(new AuthenticationError('Unauthorized'));
 
       // Reject disabled accounts immediately — don't wait for token expiry
@@ -34,18 +42,24 @@ export const verifyToken = async (req, res, next) => {
 
       // Ensure employees have a role assigned so permissions are configurable.
       // If missing, assign the system "Employee" role (created by default roles initializer).
+      // Pinned to the user's own workspace, like the lookup above. Unpinned,
+      // an operator acting elsewhere would be handed a Role belonging to the
+      // CUSTOMER and have it written onto their account — a cross-tenant id
+      // that outlives the visit and quietly strips their permissions at home.
       if (user.role === 'employee' && !user.assignedRole) {
         try {
-          const defaultEmployeeRole = await Role.findOne({
-            name: { $regex: /^employee$/i },
-            isSystem: true,
-            isDeleted: { $ne: true },
-          }).select('_id');
+          await runWithTenant({ tenantId: String(payload.tid) }, async () => {
+            const defaultEmployeeRole = await Role.findOne({
+              name: { $regex: /^employee$/i },
+              isSystem: true,
+              isDeleted: { $ne: true },
+            }).select('_id');
 
-          if (defaultEmployeeRole?._id) {
-            user.assignedRole = defaultEmployeeRole._id;
-            await user.save();
-          }
+            if (defaultEmployeeRole?._id) {
+              user.assignedRole = defaultEmployeeRole._id;
+              await user.save();
+            }
+          });
         } catch (_) {}
       }
 
@@ -78,7 +92,15 @@ export const tryVerifyToken = async (req, res, next) => {
   jwt.verify(token, config.jwt.secret, jwtOpts, async (err, payload) => {
     if (err) return next();
     try {
-      const user = await User.findById(payload.id).select('-password');
+      // Pinned to the token's own workspace, exactly as verifyToken is. This
+      // one is easy to miss precisely because it fails quietly: an unpinned
+      // lookup during an acting session finds nothing, drops req.user, and
+      // every optional-auth handler downstream silently behaves as if nobody
+      // were signed in. That is how sign-out came to answer "signed out"
+      // while revoking nothing.
+      const user = await runWithTenant({ tenantId: String(payload.tid) }, () =>
+        User.findById(payload.id).select('-password')
+      );
       if (!user) return next();
 
       // Don't attach disabled accounts
@@ -90,18 +112,24 @@ export const tryVerifyToken = async (req, res, next) => {
         if (payload.iat < changedAt) return next();
       }
 
+      // Pinned to the user's own workspace, like the lookup above. Unpinned,
+      // an operator acting elsewhere would be handed a Role belonging to the
+      // CUSTOMER and have it written onto their account — a cross-tenant id
+      // that outlives the visit and quietly strips their permissions at home.
       if (user.role === 'employee' && !user.assignedRole) {
         try {
-          const defaultEmployeeRole = await Role.findOne({
-            name: { $regex: /^employee$/i },
-            isSystem: true,
-            isDeleted: { $ne: true },
-          }).select('_id');
+          await runWithTenant({ tenantId: String(payload.tid) }, async () => {
+            const defaultEmployeeRole = await Role.findOne({
+              name: { $regex: /^employee$/i },
+              isSystem: true,
+              isDeleted: { $ne: true },
+            }).select('_id');
 
-          if (defaultEmployeeRole?._id) {
-            user.assignedRole = defaultEmployeeRole._id;
-            await user.save();
-          }
+            if (defaultEmployeeRole?._id) {
+              user.assignedRole = defaultEmployeeRole._id;
+              await user.save();
+            }
+          });
         } catch (_) {}
       }
 
