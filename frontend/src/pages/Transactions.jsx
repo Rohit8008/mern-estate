@@ -1,12 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useCrmAccess } from '../hooks/useCrmAccess';
 import { apiClient } from '../utils/http';
+import { useNotification } from '../contexts/NotificationContext';
+import { toCsv, downloadTextFile } from '../utils/spreadsheet';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { Button, Badge, Input, Select, Textarea, KpiCard, EmptyState, Spinner } from '../design-system';
 import {
   HiPlus, HiSearch, HiX, HiCurrencyDollar, HiCheck, HiClock,
   HiDownload, HiPencil, HiTrash, HiHome, HiChevronDown,
 } from 'react-icons/hi';
+import { currencySymbol, formatCurrency, formatDate } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 // ─── constants ─────────────────────────────────────────────────────────────────
 const TYPE_OPTS   = ['All', 'Sale', 'Rent', 'Lease'];
@@ -20,10 +24,10 @@ const STATUS_META = {
 };
 
 const fmtINR = (n) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+  formatCurrency(n);
 
 const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  d ? formatDate(d, { day: 'numeric' }) : '—';
 
 // ─── EntityPicker ──────────────────────────────────────────────────────────────
 // Searchable async-dropdown linked to real DB records
@@ -97,8 +101,7 @@ function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem
           <div className='absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto'>
             {loading && (
               <div className='px-3 py-2 text-sm text-slate-400 flex items-center gap-2'>
-                <Spinner size='sm' /> Searching…
-              </div>
+                <Spinner size='sm' />{t('transactions.searching')}</div>
             )}
             {!loading && results.map((item) => (
               <button
@@ -306,8 +309,8 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
 
             {/* Property */}
             <EntityPicker
-              label='Property'
-              placeholder='Search listings…'
+              label={t('transactions.property')}
+              placeholder={t('transactions.searchListings')}
               value={form.property}
               onSelect={(item, query) => {
                 set('property', item);
@@ -323,8 +326,8 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
             />
             {!form.property && (
               <Input
-                label='Or enter property name'
-                placeholder='e.g. Green Valley Villa'
+                label={t('transactions.orEnterPropertyName')}
+                placeholder={t('transactions.eGGreenValleyVilla')}
                 value={form.manualPropertyName}
                 onChange={(e) => set('manualPropertyName', e.target.value)}
               />
@@ -332,8 +335,8 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
 
             {/* Client */}
             <EntityPicker
-              label='Client'
-              placeholder='Search clients…'
+              label={t('transactions.client')}
+              placeholder={t('transactions.searchClients')}
               value={form.client}
               onSelect={(item, query) => {
                 set('client', item);
@@ -349,29 +352,29 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
             />
             {!form.client && (
               <Input
-                label='Or enter client name'
-                placeholder='e.g. Rahul Sharma'
+                label={t('transactions.orEnterClientName')}
+                placeholder={t('transactions.eGRahulSharma')}
                 value={form.manualClientName}
                 onChange={(e) => set('manualClientName', e.target.value)}
               />
             )}
 
             <div className='grid grid-cols-2 gap-4'>
-              <Select label='Type' value={form.type} onChange={(e) => set('type', e.target.value)}>
-                <option value='sale'>Sale</option>
-                <option value='rent'>Rent</option>
-                <option value='lease'>Lease</option>
+              <Select label={t('transactions.type')} value={form.type} onChange={(e) => set('type', e.target.value)}>
+                <option value='sale'>{t('transactions.sale')}</option>
+                <option value='rent'>{t('transactions.rent')}</option>
+                <option value='lease'>{t('transactions.lease')}</option>
               </Select>
-              <Select label='Status' value={form.status} onChange={(e) => set('status', e.target.value)}>
-                <option value='pending'>Pending</option>
-                <option value='in_progress'>In Progress</option>
-                <option value='completed'>Completed</option>
-                <option value='cancelled'>Cancelled</option>
+              <Select label={t('transactions.status')} value={form.status} onChange={(e) => set('status', e.target.value)}>
+                <option value='pending'>{t('transactions.pending')}</option>
+                <option value='in_progress'>{t('transactions.inProgress')}</option>
+                <option value='completed'>{t('transactions.completed')}</option>
+                <option value='cancelled'>{t('transactions.cancelled')}</option>
               </Select>
             </div>
 
             <Input
-              label='Transaction Amount (₹)'
+              label={`Transaction Amount (${currencySymbol()})`}
               type='number'
               min='0'
               placeholder='0'
@@ -382,18 +385,18 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
 
             <div className='grid grid-cols-2 gap-4'>
               <Input
-                label='Commission %'
+                label={t('transactions.commission')}
                 type='number'
                 min='0'
                 max='100'
                 step='0.1'
-                placeholder='e.g. 2'
+                placeholder={t('transactions.eG2')}
                 value={form.commissionPercent}
                 onChange={(e) => handlePercentChange(e.target.value)}
                 hint='Auto-calculates amount →'
               />
               <Input
-                label='Commission (₹)'
+                label={`Commission (${currencySymbol()})`}
                 type='number'
                 min='0'
                 placeholder='0'
@@ -403,26 +406,26 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
             </div>
 
             <Input
-              label='Date'
+              label={t('transactions.date')}
               type='date'
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
             />
 
             <Textarea
-              label='Notes'
+              label={t('transactions.notes')}
               value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
               rows={3}
-              placeholder='Add any notes about this transaction…'
+              placeholder={t('transactions.addAnyNotesAboutThisTransaction')}
             />
 
             {/* Co-Agent */}
             <div className='border-t border-slate-100 pt-4 space-y-3'>
               <p className='text-xs font-semibold text-slate-400 uppercase tracking-wide'>Co-Agent (optional)</p>
               <EntityPicker
-                label='Co-Agent / Broker'
-                placeholder='Search co-agents…'
+                label={t('transactions.coAgentBroker')}
+                placeholder={t('transactions.searchCoAgents')}
                 value={form.coAgent}
                 onSelect={(item) => set('coAgent', item)}
                 fetchFn={fetchCoAgents}
@@ -437,7 +440,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
               {form.coAgent && (
                 <div className='grid grid-cols-2 gap-3'>
                   <div className='flex flex-col gap-1'>
-                    <label className='text-sm font-medium text-slate-700'>Their Commission %</label>
+                    <label className='text-sm font-medium text-slate-700'>{t('transactions.theirCommission')}</label>
                     <input
                       type='number'
                       min='0'
@@ -445,18 +448,18 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
                       step='0.1'
                       value={form.coAgentCommissionPercent}
                       onChange={(e) => handleCoAgentPercentChange(e.target.value)}
-                      placeholder='e.g. 1.5'
+                      placeholder={t('transactions.eG15')}
                       className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10'
                     />
                   </div>
                   <div className='flex flex-col gap-1'>
-                    <label className='text-sm font-medium text-slate-700'>Their Commission (₹)</label>
+                    <label className='text-sm font-medium text-slate-700'>Their Commission ({currencySymbol()})</label>
                     <input
                       type='number'
                       min='0'
                       value={form.coAgentCommission}
                       onChange={(e) => set('coAgentCommission', e.target.value)}
-                      placeholder='Auto-calculated'
+                      placeholder={t('transactions.autoCalculated')}
                       className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10'
                     />
                   </div>
@@ -469,7 +472,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
 
           {/* Footer */}
           <div className='flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 flex-shrink-0'>
-            <Button variant='secondary' type='button' onClick={onClose}>Cancel</Button>
+            <Button variant='secondary' type='button' onClick={onClose}>{t('transactions.cancel')}</Button>
             <Button variant='primary' type='submit' loading={saving}>
               {transaction ? 'Update' : 'Create'} Transaction
             </Button>
@@ -527,7 +530,9 @@ function FilterDropdown({ label, value, options, onChange }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function Transactions() {
+  const { t } = useTranslation();
   const { canAccess } = useCrmAccess();
+  const { showError } = useNotification();
 
   const [transactions, setTransactions] = useState([]);
   const [total, setTotal]               = useState(0);
@@ -572,6 +577,45 @@ export default function Transactions() {
     return () => clearTimeout(t);
   }, [canAccess, load, searchQuery]);
 
+  /**
+   * Export what the table is currently showing.
+   *
+   * `transactions` is the server-filtered set, so whatever the type, status and
+   * search filters are narrowed to is exactly what lands in the file. Exporting
+   * the unfiltered collection would quietly disagree with the screen.
+   *
+   * Amounts and dates go out raw rather than through fmtINR/fmtDate: a
+   * spreadsheet needs a number it can sum and a date it can sort, not
+   * "\u20b912,50,000" and "3 Aug 2026". Passing them as numbers also keeps them
+   * clear of toCsv's formula guard, which only applies to strings.
+   */
+  const handleExport = useCallback(() => {
+    if (!transactions.length) {
+      showError('Nothing to export. Adjust the filters and try again.');
+      return;
+    }
+
+    const grid = [
+      [
+        'Property', 'Client', 'Co-agent', 'Type', 'Amount (INR)',
+        'Commission (INR)', 'Commission %', 'Status', 'Date',
+      ],
+      ...transactions.map((t) => [
+        t.propertyName || '',
+        t.clientName || '',
+        t.coAgentName || '',
+        t.type || '',
+        t.amount ?? 0,
+        t.commission ?? 0,
+        t.commissionPercent ?? 0,
+        STATUS_META[t.status]?.label || t.status || '',
+        t.date ? new Date(t.date).toISOString().slice(0, 10) : '',
+      ]),
+    ];
+
+    downloadTextFile(`transactions-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(grid));
+  }, [transactions, showError]);
+
   const loadStats = useCallback(() => {
     apiClient.get('/transactions/stats')
       .then((res) => setStats(res.data || {}))
@@ -606,7 +650,7 @@ export default function Transactions() {
   if (!canAccess) {
     return (
       <div className='min-h-screen flex items-center justify-center'>
-        <p className='text-slate-600'>Access denied</p>
+        <p className='text-slate-600'>{t('transactions.accessDenied')}</p>
       </div>
     );
   }
@@ -616,21 +660,21 @@ export default function Transactions() {
       {/* Page header */}
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>Transactions</h1>
-          <p className='text-slate-500 text-sm mt-0.5'>Track and manage all property transactions</p>
+          <h1 className='text-xl font-bold text-slate-900'>{t('transactions.transactions')}</h1>
+          <p className='text-slate-500 text-sm mt-0.5'>{t('transactions.trackAndManageAllPropertyTransactions')}</p>
         </div>
         <div className='flex items-center gap-2'>
-          <Button variant='secondary' icon={HiDownload}>Export</Button>
-          <Button variant='primary' icon={HiPlus} onClick={openNew}>New Transaction</Button>
+          <Button variant='secondary' icon={HiDownload} onClick={handleExport} disabled={!transactions.length}>{t('transactions.export')}</Button>
+          <Button variant='primary' icon={HiPlus} onClick={openNew}>{t('transactions.newTransaction')}</Button>
         </div>
       </div>
 
       {/* KPI cards */}
       <div className='grid grid-cols-2 lg:grid-cols-4 gap-4'>
-        <KpiCard title='Total Pipeline' value={fmtINR(stats.totalPipeline)}    sub='All active deals'  color='emerald' icon={HiCurrencyDollar} />
-        <KpiCard title='Commission'    value={fmtINR(stats.totalCommission)}  sub='From completed'    color='blue'    icon={HiCurrencyDollar} />
-        <KpiCard title='Completed'     value={stats.completed ?? 0}           sub='Successful deals'  color='purple'  icon={HiCheck} />
-        <KpiCard title='Pending'       value={stats.pending   ?? 0}           sub='In progress'       color='amber'   icon={HiClock} />
+        <KpiCard title={t('transactions.totalPipeline')} value={fmtINR(stats.totalPipeline)}    sub='All active deals'  color='emerald' icon={HiCurrencyDollar} />
+        <KpiCard title={t('transactions.commission2')}    value={fmtINR(stats.totalCommission)}  sub='From completed'    color='blue'    icon={HiCurrencyDollar} />
+        <KpiCard title={t('transactions.completed')}     value={stats.completed ?? 0}           sub='Successful deals'  color='purple'  icon={HiCheck} />
+        <KpiCard title={t('transactions.pending')}       value={stats.pending   ?? 0}           sub='In progress'       color='amber'   icon={HiClock} />
       </div>
 
       {/* Filters */}
@@ -641,7 +685,7 @@ export default function Transactions() {
             type='text'
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder='Search by property or client…'
+            placeholder={t('transactions.searchByPropertyOrClient')}
             className='bg-transparent outline-none flex-1 text-sm text-slate-700 placeholder:text-slate-400 min-w-0'
           />
           {searchQuery && (
@@ -651,16 +695,15 @@ export default function Transactions() {
           )}
         </div>
 
-        <FilterDropdown label='Type'   value={typeFilter}   options={TYPE_OPTS}   onChange={setTypeFilter} />
-        <FilterDropdown label='Status' value={statusFilter} options={STATUS_OPTS} onChange={setStatusFilter} />
+        <FilterDropdown label={t('transactions.type')}   value={typeFilter}   options={TYPE_OPTS}   onChange={setTypeFilter} />
+        <FilterDropdown label={t('transactions.status')} value={statusFilter} options={STATUS_OPTS} onChange={setStatusFilter} />
 
         {(typeFilter !== 'All' || statusFilter !== 'All' || searchQuery) && (
           <button
             onClick={() => { setTypeFilter('All'); setStatusFilter('All'); setSearchQuery(''); }}
             className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-1'
           >
-            <HiX className='w-4 h-4' /> Clear
-          </button>
+            <HiX className='w-4 h-4' />{t('transactions.clear')}</button>
         )}
       </div>
 
@@ -671,9 +714,9 @@ export default function Transactions() {
         ) : transactions.length === 0 ? (
           <EmptyState
             icon={HiCurrencyDollar}
-            title='No transactions yet'
-            body='Create your first transaction to start tracking deals.'
-            action={<Button variant='primary' icon={HiPlus} onClick={openNew}>New Transaction</Button>}
+            title={t('transactions.noTransactionsYet')}
+            body={t('transactions.createYourFirstTransactionToStart')}
+            action={<Button variant='primary' icon={HiPlus} onClick={openNew}>{t('transactions.newTransaction')}</Button>}
           />
         ) : (
           <div className='overflow-x-auto'>
@@ -742,14 +785,14 @@ export default function Transactions() {
                           <button
                             onClick={() => openEdit(t)}
                             className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors'
-                            title='Edit'
+                            title={t('transactions.edit')}
                           >
                             <HiPencil className='w-4 h-4' />
                           </button>
                           <button
                             onClick={() => setPendingDelete(t._id)}
                             className='p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors'
-                            title='Delete'
+                            title={t('transactions.delete')}
                           >
                             <HiTrash className='w-4 h-4' />
                           </button>
@@ -778,9 +821,9 @@ export default function Transactions() {
 
       <ConfirmDialog
         open={!!pendingDelete}
-        title='Delete transaction?'
+        title={t('transactions.deleteTransaction')}
         description={deleteError || 'This action cannot be undone.'}
-        confirmLabel='Delete'
+        confirmLabel={t('transactions.delete')}
         onConfirm={handleDelete}
         onCancel={() => { setPendingDelete(null); setDeleteError(''); }}
       />

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { HiOutlineWifi, HiOutlineRefresh } from 'react-icons/hi';
+import { useTranslation } from 'react-i18next';
 
 export default function OfflineIndicator() {
+  const { t } = useTranslation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showBack, setShowBack] = useState(false);
 
@@ -26,9 +28,7 @@ export default function OfflineIndicator() {
   if (showBack) {
     return (
       <div className='fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-full shadow-lg animate-fade-in'>
-        <HiOutlineWifi className='w-4 h-4' />
-        Back online
-      </div>
+        <HiOutlineWifi className='w-4 h-4' />{t('offlineIndicator.backOnline')}</div>
     );
   }
 
@@ -36,16 +36,14 @@ export default function OfflineIndicator() {
     <div className='fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-500 text-white text-sm font-medium lg:left-64'>
       <div className='flex items-center gap-2'>
         <HiOutlineWifi className='w-4 h-4 flex-shrink-0' />
-        <span>You're offline — showing cached data</span>
+        <span>{t('offlineIndicator.youReOfflineShowingCachedData')}</span>
       </div>
       <button
         type='button'
         onClick={() => window.location.reload()}
         className='flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-xs font-semibold'
       >
-        <HiOutlineRefresh className='w-3.5 h-3.5' />
-        Retry
-      </button>
+        <HiOutlineRefresh className='w-3.5 h-3.5' />{t('offlineIndicator.retry')}</button>
     </div>
   );
 }

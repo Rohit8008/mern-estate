@@ -2,15 +2,15 @@ import mongoose from 'mongoose';
 
 const taskSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true, trim: true },
-    description: { type: String, default: '' },
+    title: { type: String, required: true, trim: true, maxlength: 200 },
+    description: { type: String, default: '', maxlength: 2000 },
     dueAt: { type: Date, default: null, index: true },
     status: { type: String, enum: ['todo', 'in_progress', 'review', 'done', 'blocked'], default: 'todo', index: true },
-    priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+    priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium', index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     related: {
-      kind: { type: String, enum: ['client', 'listing', 'none'], default: 'none' },
+      kind: { type: String, enum: ['client', 'listing', 'transaction', 'none'], default: 'none' },
       clientId: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', default: null, index: true },
       listingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', default: null, index: true },
     },
@@ -25,7 +25,8 @@ const taskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-taskSchema.index({ title: 'text', description: 'text' });
+taskSchema.index({ tenantId: 1, title: 'text', description: 'text' });
+taskSchema.index({ tenantId: 1, assignedTo: 1, isDeleted: 1, dueAt: 1 }); // the palette + board shape
 
 const Task = mongoose.model('Task', taskSchema);
 export default Task;

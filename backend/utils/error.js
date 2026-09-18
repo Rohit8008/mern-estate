@@ -186,6 +186,10 @@ export const globalErrorHandler = (err, req, res, next) => {
     statusCode: error.statusCode || 500,
     message: friendlyMessage,
     ...(error.type && { type: error.type }),
+    // Controllers attach `details` to say WHAT a 409 is about (how many
+    // listings use the category, which fields still hold values). Dropping
+    // it here left the UI unable to offer the ?force=true choice at all.
+    ...(error.details && { details: error.details }),
     ...(responseField && { field: responseField }),
     ...(isDevelopment && { 
       stack: error.stack,

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5"/>
-      <stop offset="100%" stop-color="#2d1b8f"/>
+      <stop offset="0%" stop-color="#2b6faa"/>
+      <stop offset="100%" stop-color="#143755"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="96" fill="url(#bg)"/>
@@ -13,11 +13,11 @@
   <!-- Walls -->
   <rect x="80" y="224" width="352" height="206" fill="white"/>
   <!-- Door -->
-  <rect x="211" y="320" width="90" height="110" rx="6" fill="#3730a3"/>
+  <rect x="211" y="320" width="90" height="110" rx="6" fill="#17456d"/>
   <!-- Left window -->
-  <rect x="108" y="256" width="74" height="56" rx="4" fill="#3730a3"/>
+  <rect x="108" y="256" width="74" height="56" rx="4" fill="#17456d"/>
   <!-- Right window -->
-  <rect x="330" y="256" width="74" height="56" rx="4" fill="#3730a3"/>
+  <rect x="330" y="256" width="74" height="56" rx="4" fill="#17456d"/>
   <!-- Brand name -->
   <text x="256" y="468" font-family="system-ui,-apple-system,sans-serif" font-size="40" font-weight="700" text-anchor="middle" fill="white" letter-spacing="3" opacity="0.9">REAL VISTA</text>
   <!-- Tagline -->

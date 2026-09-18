@@ -8,26 +8,17 @@
  * A demo employee + seller are created fresh.
  */
 
-import mongoose from 'mongoose';
+// Models come from _bootstrap so they compile AFTER the tenancy plugin is
+// registered. A hoisted static model import would build schemas without
+// tenantId and seed records the application can never see.
+//
+// Running inside a workspace also scopes the deletes below to that workspace,
+// where before they would have emptied the collections for everyone.
+import { bootstrapScript } from './_bootstrap.js';
 import bcryptjs from 'bcryptjs';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '..', '.env') });
 
-import User            from '../models/user.model.js';
-import Listing         from '../models/listing.model.js';
-import Owner           from '../models/owner.model.js';
-import Client          from '../models/client.model.js';
-import Task            from '../models/task.model.js';
-import BuyerRequirement from '../models/buyerRequirement.model.js';
-import Category        from '../models/category.model.js';
-import PropertyType    from '../models/propertyType.model.js';
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ytreal';
 
 function days(n) {
   const d = new Date();
@@ -38,8 +29,10 @@ function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 async function main() {
-  await mongoose.connect(MONGO_URI);
-  console.log('✓ Connected');
+  const { models, inWorkspace, close, tenant } = await bootstrapScript();
+  const { User, Listing, Owner, Client, Task, BuyerRequirement, Category, PropertyType } = models;
+
+  await inWorkspace(async () => {
 
   // ── Keep admin, wipe everything else ──────────────────────────────────────
   const admin = await User.findOne({ role: 'admin' }).sort({ createdAt: 1 });
@@ -513,8 +506,11 @@ async function main() {
   ]);
   console.log(`✓ Tasks: 12`);
 
-  await mongoose.disconnect();
-  console.log('\n✅ Fresh seed complete!\n');
+  });
+
+  await close();
+
+  console.log(`\n✅ Fresh seed complete for "${tenant.slug}"\n`);
   console.log('  Admin:    (existing account)');
   console.log('  Employee: arjun.mehta@demo.salescode.ai  / Agent@123');
   console.log('  Employee: priya.kapoor@demo.salescode.ai / Agent@123');

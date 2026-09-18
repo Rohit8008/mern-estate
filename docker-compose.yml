@@ -22,7 +22,11 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Persist user-uploaded files across container restarts
+      # Persist user-uploaded files across container restarts.
+      # The container runs as the `node` user (uid 1000, see Dockerfile), so a
+      # named volume is used rather than a host bind mount — Docker initialises
+      # a named volume with the image path's ownership, whereas a bind mount
+      # keeps the host's and the app cannot write to it.
       - uploads_data:/app/uploads
     restart: unless-stopped
 
@@ -43,6 +47,50 @@ services:
   #     - openobserve_data:/data
   #   restart: unless-stopped
 
+  # ── Nightly database backup ──────────────────────────────────────────────
+  # scripts/backup.js needs `mongodump`, which is NOT in node:20-alpine — so
+  # this runs from the mongo image rather than inside the app container, which
+  # is why it is a separate service and not a cron line in the Dockerfile.
+  #
+  # Keeps BACKUP_RETENTION_COUNT dumps and drops the rest. Sleeps 24h between
+  # runs: deliberately simple, because a backup that depends on a scheduler
+  # nobody monitors is the kind that is discovered missing during a restore.
+  #
+  # A dump is not a backup until it has been restored. Test one:
+  #   docker compose run --rm backup \
+  #     sh -c 'mongorestore --uri="$MONGO_URI" --drop --dryRun /backups/<dir>'
+  backup:
+    image: mongo:7
+    env_file:
+      - backend/.env          # MONGO_URI
+    environment:
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-7}
+    volumes:
+      - backups_data:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        while true; do
+          ts=$$(date -u +%Y%m%d-%H%M%S)
+          echo "[backup] starting $$ts"
+          if mongodump --uri="$$MONGO_URI" --out="/backups/backup-$$ts" --quiet; then
+            echo "[backup] wrote /backups/backup-$$ts"
+          else
+            echo "[backup] FAILED for $$ts" >&2
+          fi
+          # Retention: keep the newest N, remove the rest.
+          ls -1dt /backups/backup-* 2>/dev/null \
+            | tail -n +$$(( $${BACKUP_RETENTION_COUNT:-7} + 1 )) \
+            | xargs -r rm -rf
+          sleep 86400
+        done
+    depends_on:
+      - app
+    restart: unless-stopped
+
 volumes:
   uploads_data:
+  backups_data:
   # openobserve_data:

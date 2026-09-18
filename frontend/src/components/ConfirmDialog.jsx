@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function ConfirmDialog({
   open,
@@ -8,6 +9,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!open) return;
     const handleKey = (e) => {
@@ -50,9 +52,7 @@ export default function ConfirmDialog({
           <button
             onClick={onCancel}
             className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
+          >{t('confirm.cancel')}</button>
           <button
             onClick={onConfirm}
             className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"

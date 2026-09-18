@@ -6,11 +6,13 @@ const buyerRequirementSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Buyer name is required'],
       trim: true,
+      maxlength: 150,
     },
     buyerEmail: {
       type: String,
       trim: true,
       lowercase: true,
+      maxlength: 254,
     },
     buyerPhone: {
       type: String,
@@ -20,6 +22,7 @@ const buyerRequirementSchema = new mongoose.Schema(
     preferredLocation: {
       type: String,
       trim: true,
+      maxlength: 200,
     },
     preferredCity: {
       type: String,
@@ -62,10 +65,12 @@ const buyerRequirementSchema = new mongoose.Schema(
     preferredArea: {
       type: String,
       trim: true,
+      maxlength: 100,
     },
     additionalRequirements: {
       type: String,
       trim: true,
+      maxlength: 2000,
     },
     preferredMoveInDate: {
       type: Date,
@@ -78,14 +83,17 @@ const buyerRequirementSchema = new mongoose.Schema(
     notes: {
       type: String,
       trim: true,
+      maxlength: 2000,
     },
     budget: {
       type: String,
       trim: true,
+      maxlength: 100,
     },
     timeline: {
       type: String,
       trim: true,
+      maxlength: 100,
     },
     matchedProperties: [{
       type: mongoose.Schema.Types.ObjectId,
@@ -116,6 +124,9 @@ const buyerRequirementSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    /** Set when a data-subject erasure removed this record's personal details. */
+    erasedAt: { type: Date, default: null },
+    erasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -137,12 +148,12 @@ const buyerRequirementSchema = new mongoose.Schema(
 );
 
 // Index for better search performance
-buyerRequirementSchema.index({ buyerName: 'text', preferredLocation: 'text', additionalRequirements: 'text' });
-buyerRequirementSchema.index({ propertyType: 1, status: 1 });
-buyerRequirementSchema.index({ createdBy: 1 });
-buyerRequirementSchema.index({ preferredCity: 1, preferredLocality: 1 });
-buyerRequirementSchema.index({ assignedAgent: 1, status: 1, followUpDate: 1 });
-buyerRequirementSchema.index({ propertyTypeInterest: 1, status: 1 });
+buyerRequirementSchema.index({ tenantId: 1, buyerName: 'text', preferredLocation: 'text', additionalRequirements: 'text' });
+buyerRequirementSchema.index({ tenantId: 1, propertyType: 1, status: 1 });
+buyerRequirementSchema.index({ tenantId: 1, createdBy: 1 });
+buyerRequirementSchema.index({ tenantId: 1, preferredCity: 1, preferredLocality: 1 });
+buyerRequirementSchema.index({ tenantId: 1, assignedAgent: 1, status: 1, followUpDate: 1 });
+buyerRequirementSchema.index({ tenantId: 1, propertyTypeInterest: 1, status: 1 });
 
 // Virtual for full name
 buyerRequirementSchema.virtual('fullName').get(function() {

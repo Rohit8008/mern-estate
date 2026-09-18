@@ -6,24 +6,14 @@
  *   node scripts/seedDemo.js
  */
 
-import mongoose from 'mongoose';
+// Models come from _bootstrap so they compile AFTER the tenancy plugin is
+// registered. A hoisted static model import would build schemas without
+// tenantId and seed records the application can never see.
+import { bootstrapScript } from './_bootstrap.js';
 import bcryptjs from 'bcryptjs';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '..', '.env') });
 
-import User from '../models/user.model.js';
-import Listing from '../models/listing.model.js';
-import Owner from '../models/owner.model.js';
-import Client from '../models/client.model.js';
-import Task from '../models/task.model.js';
-import BuyerRequirement from '../models/buyerRequirement.model.js';
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ytreal';
 
 function daysFromNow(n) {
   const d = new Date();
@@ -40,8 +30,10 @@ async function upsert(Model, key, val, data) {
 }
 
 async function seed() {
-  await mongoose.connect(MONGO_URI);
-  console.log('✓ Connected to MongoDB');
+  const { models, inWorkspace, close, tenant } = await bootstrapScript();
+  const { User, Listing, Owner, Client, Task, BuyerRequirement } = models;
+
+  await inWorkspace(async () => {
 
   // ── ADMIN USER ──────────────────────────────────────────────────────────
   const admin = await User.findOne({ role: 'admin', isDeleted: { $ne: true } }).sort({ createdAt: 1 });
@@ -726,8 +718,10 @@ async function seed() {
   console.log('\n✅ Demo data seeded successfully!');
   console.log('   Login: ' + admin.email);
   console.log('   Employee login: rahul.verma@demo.salescode.ai / Agent@Demo123\n');
+  });
 
-  await mongoose.disconnect();
+  console.log(`   Workspace: ${tenant.slug}\n`);
+  await close();
 }
 
 seed().catch((e) => { console.error(e); process.exit(1); });

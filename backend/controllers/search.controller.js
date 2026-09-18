@@ -32,7 +32,7 @@ export const globalSearch = async (req, res, next) => {
       return res.json({ groups: [], query: q, annotations: [], totalResults: 0, responseTimeMs: 0 });
     }
 
-    const limitPerEntity  = Math.min(parseInt(req.query.limit, 10) || 5, 10);
+    const limitPerEntity  = Math.min(parseInt(req.query.limit, 10) || 5, 25);
     const entityParam     = req.query.entities;
     const parsed          = parseQuery(q);
 

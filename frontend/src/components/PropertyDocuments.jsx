@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { apiClient } from '../utils/http';
+import { formatDate } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 const MIME_ICONS = {
   'application/pdf': { icon: '📄', label: 'PDF', color: 'text-red-600 bg-red-50 border-red-200' },
@@ -24,10 +26,11 @@ function fmtSize(bytes) {
 }
 
 function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDate(iso, { day: 'numeric' });
 }
 
 export default function PropertyDocuments({ listingId, canEdit }) {
+  const { t } = useTranslation();
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -90,14 +93,14 @@ export default function PropertyDocuments({ listingId, canEdit }) {
       {/* Header */}
       <div className='flex items-center justify-between mb-4'>
         <div>
-          <h2 className='font-semibold text-lg text-slate-800'>Property Documents</h2>
-          <p className='text-xs text-slate-500 mt-0.5'>Sale deeds, agreements, NOCs, site plans and more</p>
+          <h2 className='font-semibold text-lg text-slate-800'>{t('propertyDocuments.propertyDocuments')}</h2>
+          <p className='text-xs text-slate-500 mt-0.5'>{t('propertyDocuments.saleDeedsAgreementsNocsSitePlans')}</p>
         </div>
         <div className='flex items-center gap-2'>
           <button
             onClick={loadDocs}
             className='p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            title='Refresh'
+            title={t('propertyDocuments.refresh')}
           >
             <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' />
@@ -144,11 +147,11 @@ export default function PropertyDocuments({ listingId, canEdit }) {
           </svg>
           <p className='text-sm text-slate-500'>
             {uploading
-              ? <span className='font-medium text-slate-700'>Uploading...</span>
-              : <><span className='font-medium text-slate-700'>Drop files here</span> or click to browse</>
+              ? <span className='font-medium text-slate-700'>{t('propertyDocuments.uploading')}</span>
+              : <><span className='font-medium text-slate-700'>{t('propertyDocuments.dropFilesHere')}</span>{t('propertyDocuments.orClickToBrowse')}</>
             }
           </p>
-          <p className='text-xs text-slate-400 mt-1'>PDF, Word, Excel, Images up to 10 MB</p>
+          <p className='text-xs text-slate-400 mt-1'>{t('propertyDocuments.pdfWordExcelImagesUpTo')}</p>
         </div>
       )}
 
@@ -164,7 +167,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
           <svg className='w-10 h-10 text-slate-200 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
           </svg>
-          <p className='text-sm text-slate-400'>No documents uploaded yet</p>
+          <p className='text-sm text-slate-400'>{t('propertyDocuments.noDocumentsUploadedYet')}</p>
         </div>
       ) : (
         <div className='space-y-2'>
@@ -191,16 +194,14 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                     </div>
                     <div className='flex-1 min-w-0'>
                       <p className='text-sm font-medium text-rose-800 truncate'>{doc.title}</p>
-                      <p className='text-xs text-rose-500'>Delete this document? This cannot be undone.</p>
+                      <p className='text-xs text-rose-500'>{t('propertyDocuments.deleteThisDocumentThisCannotBe')}</p>
                     </div>
                     <div className='flex items-center gap-2 shrink-0'>
                       <button
                         onClick={() => setConfirmDeleteId(null)}
                         disabled={deleting}
                         className='px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50'
-                      >
-                        Cancel
-                      </button>
+                      >{t('propertyDocuments.cancel')}</button>
                       <button
                         onClick={handleConfirmDelete}
                         disabled={deleting}
@@ -211,9 +212,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                             <svg className='w-3 h-3 animate-spin' fill='none' viewBox='0 0 24 24'>
                               <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
                               <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z' />
-                            </svg>
-                            Deleting…
-                          </>
+                            </svg>{t('propertyDocuments.deleting')}</>
                         ) : 'Delete'}
                       </button>
                     </div>
@@ -236,7 +235,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                         target='_blank'
                         rel='noreferrer'
                         className='p-1.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors'
-                        title='Download / View'
+                        title={t('propertyDocuments.downloadView')}
                       >
                         <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' />
@@ -246,7 +245,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                         <button
                           onClick={() => setConfirmDeleteId(doc._id)}
                           className='p-1.5 rounded hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition-colors'
-                          title='Delete'
+                          title={t('propertyDocuments.delete')}
                         >
                           <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' />

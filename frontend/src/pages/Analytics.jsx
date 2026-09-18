@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchWithRefresh, parseJsonSafely } from '../utils/http';
+import { toCsv, downloadTextFile } from '../utils/spreadsheet';
+import PrintButton from '../components/PrintButton';
 import { PageHeader, KpiCard, Button } from '../design-system';
 import {
   HiChartBar,
@@ -7,7 +9,6 @@ import {
   HiCurrencyRupee,
   HiHome,
   HiTrendingUp,
-  HiTrendingDown,
   HiClock,
   HiRefresh,
   HiCheckCircle,
@@ -17,8 +18,11 @@ import {
   HiUserGroup,
   HiSwitchHorizontal,
 } from 'react-icons/hi';
+import { formatCompactCurrency, formatCurrency, formatDate, formatNumber as formatNumberLocale } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 export default function Analytics() {
+  const { t } = useTranslation();
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -99,7 +103,7 @@ export default function Analytics() {
     })();
 
     return () => { mounted = false; };
-  }, [dateRange, activeTab, refreshCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dateRange, activeTab, refreshCount]);  
 
   function loadData(isRefresh = false) {
     if (isRefresh) isManualRefreshRef.current = true;
@@ -107,21 +111,51 @@ export default function Analytics() {
   }
 
   const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '₹0';
+    if (!amount && amount !== 0) return formatCompactCurrency(0);
     if (amount >= 10000000) {
-      return `₹${(amount / 10000000).toFixed(2)}Cr`;
+      return formatCompactCurrency(amount);
     } else if (amount >= 100000) {
-      return `₹${(amount / 100000).toFixed(2)}L`;
+      return formatCompactCurrency(amount);
     }
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return formatCurrency(amount);
   };
 
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat('en-IN').format(num || 0);
+  const formatNumber = formatNumberLocale;
+
+  /**
+   * Export the agent leaderboard for the range on screen.
+   *
+   * The button existed with no onClick since the page shipped. It exports what
+   * the table shows rather than re-querying, so the file always matches the
+   * figures the user is looking at, and reuses toCsv for quoting and the
+   * formula-injection guard.
+   */
+  const exportAgentsToCsv = () => {
+    const agents = data.agents?.agents || [];
+    if (!agents.length) return;
+
+    const grid = [
+      [
+        'Agent', 'Email', 'Total clients', 'Won', 'Lost',
+        'Conversion rate %', 'Avg score', 'Communications', 'Follow-ups',
+      ],
+      ...agents.map((a) => [
+        a.agentName || 'Unknown',
+        a.agentEmail || '',
+        a.totalClients || 0,
+        a.wonClients || 0,
+        a.lostClients || 0,
+        (a.conversionRate || 0).toFixed(1),
+        (a.avgScore || 0).toFixed(1),
+        a.totalCommunications || 0,
+        a.totalFollowUps || 0,
+      ]),
+    ];
+
+    downloadTextFile(
+      `agent-performance-${dateRange.startDate}-to-${dateRange.endDate}.csv`,
+      toCsv(grid),
+    );
   };
 
   const tabs = [
@@ -150,8 +184,8 @@ export default function Analytics() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Analytics"
-        description="Track your real estate performance metrics"
+        title={t('analytics.analytics')}
+        description={t('analytics.trackYourRealEstatePerformanceMetrics')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {/* Quick Date Ranges */}
@@ -196,9 +230,7 @@ export default function Analytics() {
               onClick={() => loadData(true)}
               disabled={refreshing}
               className={refreshing ? '[&>svg]:animate-spin' : ''}
-            >
-              Refresh
-            </Button>
+            >{t('analytics.refresh')}</Button>
           </div>
         }
       />
@@ -226,21 +258,16 @@ export default function Analytics() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <HiRefresh className="w-10 h-10 text-slate-500 animate-spin" />
-            <p className="text-slate-500 mt-4">Loading analytics data...</p>
+            <p className="text-slate-500 mt-4">{t('analytics.loadingAnalyticsData')}</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <HiExclamationCircle className="w-8 h-8 text-red-600" />
+            <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mb-4">
+              <HiExclamationCircle className="w-8 h-8 text-rose-600" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">Failed to Load Data</h3>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">{t('analytics.failedToLoadData')}</h3>
             <p className="text-slate-500 mb-4">{error}</p>
-            <button
-              onClick={() => loadData()}
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              Try Again
-            </button>
+            <Button onClick={() => loadData()}>{t('analytics.tryAgain')}</Button>
           </div>
         ) : (
           <div className="space-y-6">
@@ -250,14 +277,14 @@ export default function Analytics() {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <KpiCard
-                    title="Total Listings"
+                    title={t('analytics.totalListings')}
                     value={formatNumber(data.dashboard.listings?.total || 0)}
                     sub={`${formatNumber(data.dashboard.listings?.active || 0)} active`}
                     icon={HiHome}
                     color="blue"
                   />
                   <KpiCard
-                    title="Total Clients"
+                    title={t('analytics.totalClients')}
                     value={formatNumber(data.dashboard.clients?.total || 0)}
                     sub={`${formatNumber(data.dashboard.clients?.new || 0)} new this month`}
                     icon={HiUsers}
@@ -265,14 +292,14 @@ export default function Analytics() {
                     trend={data.dashboard.clients?.new > 0 ? { value: data.dashboard.clients.new, label: 'new' } : undefined}
                   />
                   <KpiCard
-                    title="Deals Won"
+                    title={t('analytics.dealsWon')}
                     value={formatNumber(data.dashboard.deals?.closedWon || 0)}
                     sub={formatCurrency(data.dashboard.deals?.totalValue)}
                     icon={HiSwitchHorizontal}
                     color="purple"
                   />
                   <KpiCard
-                    title="Follow-ups Due"
+                    title={t('analytics.followUpsDue')}
                     value={formatNumber(data.dashboard.upcomingFollowUps || 0)}
                     sub="Next 7 days"
                     icon={HiClock}
@@ -284,8 +311,8 @@ export default function Analytics() {
                 {data.dashboard.clients?.byStatus?.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                      <h2 className="text-lg font-semibold text-slate-900">Client Pipeline</h2>
-                      <p className="text-sm text-slate-500">Track clients through each stage</p>
+                      <h2 className="text-lg font-semibold text-slate-900">{t('analytics.clientPipeline')}</h2>
+                      <p className="text-sm text-slate-500">{t('analytics.trackClientsThroughEachStage')}</p>
                     </div>
                     <div className="p-6">
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -309,14 +336,14 @@ export default function Analytics() {
                 {data.dashboard.recentActivity?.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                      <h2 className="text-lg font-semibold text-slate-900">Recent Activity</h2>
-                      <p className="text-sm text-slate-500">Latest client updates</p>
+                      <h2 className="text-lg font-semibold text-slate-900">{t('analytics.recentActivity')}</h2>
+                      <p className="text-sm text-slate-500">{t('analytics.latestClientUpdates')}</p>
                     </div>
                     <div className="divide-y divide-slate-100">
                       {data.dashboard.recentActivity.map(item => (
                         <div key={item._id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center text-white font-semibold">
+                            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center text-white font-semibold">
                               {item.name?.charAt(0)?.toUpperCase() || '?'}
                             </div>
                             <div>
@@ -325,7 +352,7 @@ export default function Analytics() {
                             </div>
                           </div>
                           <div className="text-sm text-slate-400">
-                            {new Date(item.updatedAt).toLocaleDateString('en-IN', {
+                            {formatDate(item.updatedAt, {
                               day: 'numeric',
                               month: 'short',
                               year: 'numeric'
@@ -343,17 +370,15 @@ export default function Analytics() {
             {(activeTab === 'overview' || activeTab === 'properties') && data.properties && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                  <h2 className="text-lg font-semibold text-slate-900">Property Metrics</h2>
-                  <p className="text-sm text-slate-500">Breakdown by category and type</p>
+                  <h2 className="text-lg font-semibold text-slate-900">{t('analytics.propertyMetrics')}</h2>
+                  <p className="text-sm text-slate-500">{t('analytics.breakdownByCategoryAndType')}</p>
                 </div>
                 <div className="p-6">
                   <div className="grid md:grid-cols-2 gap-8">
                     {/* By Category */}
                     <div>
                       <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                        By Category
-                      </h3>
+                        <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>{t('analytics.byCategory')}</h3>
                       <div className="space-y-3">
                         {data.properties.byCategory?.slice(0, 5).map((cat, index) => {
                           const total = data.properties.byCategory.reduce((sum, c) => sum + c.count, 0);
@@ -366,7 +391,7 @@ export default function Analytics() {
                               </div>
                               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                                 <div
-                                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                                  className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
                                   style={{ width: `${percentage}%` }}
                                 />
                               </div>
@@ -379,9 +404,7 @@ export default function Analytics() {
                     {/* By Type */}
                     <div>
                       <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                        By Type
-                      </h3>
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>{t('analytics.byType')}</h3>
                       <div className="space-y-3">
                         {data.properties.byType?.map((type) => (
                           <div key={type._id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
@@ -405,55 +428,41 @@ export default function Analytics() {
             {(activeTab === 'overview' || activeTab === 'sales') && data.sales && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                  <h2 className="text-lg font-semibold text-slate-900">Sales Analytics</h2>
-                  <p className="text-sm text-slate-500">Deal performance and conversion</p>
+                  <h2 className="text-lg font-semibold text-slate-900">{t('analytics.salesAnalytics')}</h2>
+                  <p className="text-sm text-slate-500">{t('analytics.dealPerformanceAndConversion')}</p>
                 </div>
                 <div className="p-6">
                   {/* Sales Summary */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200">
-                      <div className="flex items-center gap-2 text-green-700 mb-2">
-                        <HiCheckCircle className="w-5 h-5" />
-                        <span className="text-sm font-medium">Closed Deals</span>
-                      </div>
-                      <div className="text-3xl font-bold text-green-800">
-                        {formatNumber(data.sales.closedDeals?.count || 0)}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl border border-blue-200">
-                      <div className="flex items-center gap-2 text-blue-700 mb-2">
-                        <HiCurrencyRupee className="w-5 h-5" />
-                        <span className="text-sm font-medium">Total Value</span>
-                      </div>
-                      <div className="text-3xl font-bold text-blue-800">
-                        {formatCurrency(data.sales.closedDeals?.totalValue)}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-gradient-to-br from-purple-50 to-violet-100 rounded-xl border border-purple-200">
-                      <div className="flex items-center gap-2 text-purple-700 mb-2">
-                        <HiTrendingUp className="w-5 h-5" />
-                        <span className="text-sm font-medium">Average Deal</span>
-                      </div>
-                      <div className="text-3xl font-bold text-purple-800">
-                        {formatCurrency(data.sales.closedDeals?.avgValue)}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-100 rounded-xl border border-amber-200">
-                      <div className="flex items-center gap-2 text-amber-700 mb-2">
-                        <HiCurrencyRupee className="w-5 h-5" />
-                        <span className="text-sm font-medium">Commission</span>
-                      </div>
-                      <div className="text-3xl font-bold text-amber-800">
-                        {formatCurrency(data.sales.closedDeals?.totalCommission)}
-                      </div>
-                    </div>
+                    <KpiCard
+                      title={t('analytics.closedDeals')}
+                      value={formatNumber(data.sales.closedDeals?.count || 0)}
+                      icon={HiCheckCircle}
+                      color="emerald"
+                    />
+                    <KpiCard
+                      title={t('analytics.totalValue')}
+                      value={formatCurrency(data.sales.closedDeals?.totalValue)}
+                      icon={HiCurrencyRupee}
+                      color="indigo"
+                    />
+                    <KpiCard
+                      title={t('analytics.averageDeal')}
+                      value={formatCurrency(data.sales.closedDeals?.avgValue)}
+                      icon={HiTrendingUp}
+                      color="purple"
+                    />
+                    <KpiCard
+                      title={t('analytics.commission')}
+                      value={formatCurrency(data.sales.closedDeals?.totalCommission)}
+                      icon={HiCurrencyRupee}
+                      color="amber"
+                    />
                   </div>
 
                   {/* Deal Stages */}
                   <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                    By Stage
-                  </h3>
+                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>{t('analytics.byStage')}</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {data.sales.byStage?.map((stage, index) => (
                       <div
@@ -476,20 +485,20 @@ export default function Analytics() {
             {(activeTab === 'overview' || activeTab === 'leads') && data.leads && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                  <h2 className="text-lg font-semibold text-slate-900">Lead Conversion</h2>
-                  <p className="text-sm text-slate-500">Track your lead funnel performance</p>
+                  <h2 className="text-lg font-semibold text-slate-900">{t('analytics.leadConversion')}</h2>
+                  <p className="text-sm text-slate-500">{t('analytics.trackYourLeadFunnelPerformance')}</p>
                 </div>
                 <div className="p-6">
                   {/* Conversion Metrics */}
                   <div className="flex flex-wrap items-center gap-6 mb-8">
-                    <div className="flex-1 min-w-[200px] p-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl text-white">
-                      <div className="text-sm opacity-80 mb-1">Conversion Rate</div>
+                    <div className="flex-1 min-w-[200px] p-6 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl text-white">
+                      <div className="text-sm opacity-80 mb-1">{t('analytics.conversionRate')}</div>
                       <div className="text-4xl font-bold">
                         {(data.leads.conversionRate || 0).toFixed(1)}%
                       </div>
                     </div>
                     <div className="flex-1 min-w-[200px] p-6 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl">
-                      <div className="text-sm text-slate-600 mb-1">Avg Days to Convert</div>
+                      <div className="text-sm text-slate-600 mb-1">{t('analytics.avgDaysToConvert')}</div>
                       <div className="text-4xl font-bold text-slate-800">
                         {data.leads.avgConversionDays || 0}
                       </div>
@@ -498,32 +507,30 @@ export default function Analytics() {
 
                   {/* Conversion Funnel */}
                   <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
-                    Conversion Funnel
-                  </h3>
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>{t('analytics.conversionFunnel')}</h3>
                   <div className="flex items-center justify-between py-8 px-4 bg-gradient-to-r from-slate-50 to-white rounded-2xl">
                     <FunnelStep
-                      label="Total Leads"
+                      label={t('analytics.totalLeads')}
                       value={formatNumber(data.leads.funnel?.total?.[0]?.count || 0)}
                       color="bg-slate-500"
                     />
                     <FunnelArrow />
                     <FunnelStep
-                      label="Contacted"
+                      label={t('analytics.contacted')}
                       value={formatNumber(data.leads.funnel?.contacted?.[0]?.count || 0)}
-                      color="bg-blue-500"
+                      color="bg-indigo-500"
                     />
                     <FunnelArrow />
                     <FunnelStep
-                      label="Qualified"
+                      label={t('analytics.qualified')}
                       value={formatNumber(data.leads.funnel?.qualified?.[0]?.count || 0)}
                       color="bg-purple-500"
                     />
                     <FunnelArrow />
                     <FunnelStep
-                      label="Won"
+                      label={t('analytics.won')}
                       value={formatNumber(data.leads.funnel?.won?.[0]?.count || 0)}
-                      color="bg-green-500"
+                      color="bg-emerald-500"
                       highlight
                     />
                   </div>
@@ -532,9 +539,7 @@ export default function Analytics() {
                   {data.leads.bySource?.length > 0 && (
                     <div className="mt-8">
                       <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
-                        By Source
-                      </h3>
+                        <span className="w-2 h-2 bg-teal-500 rounded-full"></span>{t('analytics.bySource')}</h3>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         {data.leads.bySource.slice(0, 10).map(source => (
                           <div key={source._id || 'unknown'} className="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-100 transition-colors">
@@ -553,53 +558,51 @@ export default function Analytics() {
             {(activeTab === 'overview' || activeTab === 'revenue') && data.revenue && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                  <h2 className="text-lg font-semibold text-slate-900">Revenue & Commission</h2>
-                  <p className="text-sm text-slate-500">Financial performance overview</p>
+                  <h2 className="text-lg font-semibold text-slate-900">{t('analytics.revenueCommission')}</h2>
+                  <p className="text-sm text-slate-500">{t('analytics.financialPerformanceOverview')}</p>
                 </div>
                 <div className="p-6">
                   {/* Revenue Summary */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200">
-                      <div className="text-sm text-green-700 font-medium mb-2">Total Deal Value</div>
-                      <div className="text-2xl font-bold text-green-800">
-                        {formatCurrency(data.revenue.summary?.totalDealValue)}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl border border-blue-200">
-                      <div className="text-sm text-blue-700 font-medium mb-2">Total Commission</div>
-                      <div className="text-2xl font-bold text-blue-800">
-                        {formatCurrency(data.revenue.summary?.totalCommission)}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-100 rounded-xl border border-amber-200">
-                      <div className="text-sm text-amber-700 font-medium mb-2">Pending</div>
-                      <div className="text-2xl font-bold text-amber-800">
-                        {formatCurrency(data.revenue.summary?.pendingCommission)}
-                      </div>
-                    </div>
-                    <div className="p-5 bg-gradient-to-br from-emerald-50 to-teal-100 rounded-xl border border-emerald-200">
-                      <div className="text-sm text-emerald-700 font-medium mb-2">Collected</div>
-                      <div className="text-2xl font-bold text-emerald-800">
-                        {formatCurrency(data.revenue.summary?.paidCommission)}
-                      </div>
-                    </div>
+                    <KpiCard
+                      title={t('analytics.totalDealValue')}
+                      value={formatCurrency(data.revenue.summary?.totalDealValue)}
+                      icon={HiCurrencyRupee}
+                      color="indigo"
+                    />
+                    <KpiCard
+                      title={t('analytics.totalCommission')}
+                      value={formatCurrency(data.revenue.summary?.totalCommission)}
+                      icon={HiCurrencyRupee}
+                      color="purple"
+                    />
+                    <KpiCard
+                      title={t('analytics.pending')}
+                      value={formatCurrency(data.revenue.summary?.pendingCommission)}
+                      icon={HiClock}
+                      color="amber"
+                    />
+                    <KpiCard
+                      title={t('analytics.collected')}
+                      value={formatCurrency(data.revenue.summary?.paidCommission)}
+                      icon={HiCheckCircle}
+                      color="emerald"
+                    />
                   </div>
 
                   {/* By Agent */}
                   {data.revenue.byAgent?.length > 0 && (
                     <div>
                       <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
-                        Commission by Agent
-                      </h3>
+                        <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>{t('analytics.commissionByAgent')}</h3>
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="bg-slate-50">
-                              <th className="text-left p-4 text-sm font-semibold text-slate-700 rounded-tl-xl">Agent</th>
-                              <th className="text-right p-4 text-sm font-semibold text-slate-700">Deals</th>
-                              <th className="text-right p-4 text-sm font-semibold text-slate-700">Value</th>
-                              <th className="text-right p-4 text-sm font-semibold text-slate-700 rounded-tr-xl">Commission</th>
+                              <th className="text-left p-4 text-sm font-semibold text-slate-700 rounded-tl-xl">{t('analytics.agent')}</th>
+                              <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.deals')}</th>
+                              <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.value')}</th>
+                              <th className="text-right p-4 text-sm font-semibold text-slate-700 rounded-tr-xl">{t('analytics.commission')}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -607,7 +610,7 @@ export default function Analytics() {
                               <tr key={agent._id} className="hover:bg-slate-50 transition-colors">
                                 <td className="p-4">
                                   <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
+                                    <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
                                       {agent.agentName?.charAt(0)?.toUpperCase() || '?'}
                                     </div>
                                     <span className="font-medium text-slate-800">{agent.agentName || 'Unknown'}</span>
@@ -616,7 +619,7 @@ export default function Analytics() {
                                 <td className="p-4 text-right text-slate-700">{formatNumber(agent.totalDeals)}</td>
                                 <td className="p-4 text-right text-slate-700">{formatCurrency(agent.totalValue)}</td>
                                 <td className="p-4 text-right">
-                                  <span className="font-semibold text-green-600">
+                                  <span className="font-semibold text-emerald-600">
                                     {formatCurrency(agent.totalCommission)}
                                   </span>
                                 </td>
@@ -636,27 +639,38 @@ export default function Analytics() {
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">Agent Performance</h2>
-                    <p className="text-sm text-slate-500">Individual agent metrics and conversion rates</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{t('analytics.agentPerformance')}</h2>
+                    <p className="text-sm text-slate-500">{t('analytics.individualAgentMetricsAndConversionRates')}</p>
                   </div>
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
-                    <HiDownload className="w-4 h-4" />
-                    Export
-                  </button>
+                  <div className='flex items-center gap-2'>
+                  <PrintButton />
+                  <button
+                    type="button"
+                    onClick={exportAgentsToCsv}
+                    disabled={!data.agents?.agents?.length}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <HiDownload className="w-4 h-4" />{t('analytics.export')}</button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="text-left p-4 text-sm font-semibold text-slate-700">Agent</th>
-                        <th className="text-right p-4 text-sm font-semibold text-slate-700">Clients</th>
-                        <th className="text-right p-4 text-sm font-semibold text-slate-700">Won</th>
-                        <th className="text-right p-4 text-sm font-semibold text-slate-700">Lost</th>
-                        <th className="text-right p-4 text-sm font-semibold text-slate-700">Conversion</th>
-                        <th className="text-right p-4 text-sm font-semibold text-slate-700">Activities</th>
+                        <th className="text-left p-4 text-sm font-semibold text-slate-700">{t('analytics.agent')}</th>
+                        <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.clients')}</th>
+                        <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.won')}</th>
+                        <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.lost')}</th>
+                        <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.conversion')}</th>
+                        <th className="text-right p-4 text-sm font-semibold text-slate-700">{t('analytics.activities')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
+                      {!data.agents.agents?.length && (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-400">{t('analytics.noAgentActivityInThisDate')}</td>
+                        </tr>
+                      )}
                       {data.agents.agents?.map(agent => (
                         <tr key={agent._id} className="hover:bg-slate-50 transition-colors">
                           <td className="p-4">
@@ -674,15 +688,15 @@ export default function Analytics() {
                             <span className="text-slate-700 font-medium">{formatNumber(agent.totalClients)}</span>
                           </td>
                           <td className="p-4 text-right">
-                            <span className="text-green-600 font-semibold">{formatNumber(agent.wonClients)}</span>
+                            <span className="text-emerald-600 font-semibold">{formatNumber(agent.wonClients)}</span>
                           </td>
                           <td className="p-4 text-right">
-                            <span className="text-red-500">{formatNumber(agent.lostClients)}</span>
+                            <span className="text-rose-500">{formatNumber(agent.lostClients)}</span>
                           </td>
                           <td className="p-4 text-right">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-semibold ${
                               agent.conversionRate > 30
-                                ? 'bg-green-100 text-green-700'
+                                ? 'bg-emerald-100 text-emerald-700'
                                 : agent.conversionRate > 15
                                   ? 'bg-amber-100 text-amber-700'
                                   : 'bg-slate-100 text-slate-600'
@@ -709,38 +723,13 @@ export default function Analytics() {
 }
 
 // Helper Components
-function MetricCard({ title, value, subtitle, icon: Icon, gradient, bgGradient, trend, alert }) {
-  return (
-    <div className={`relative overflow-hidden bg-gradient-to-br ${bgGradient} rounded-2xl p-5 border border-white/50 shadow-sm hover:shadow-md transition-all`}>
-      <div className="flex items-start justify-between">
-        <div className="relative z-10">
-          <div className="text-sm text-slate-600 font-medium">{title}</div>
-          <div className="text-3xl font-bold text-slate-900 mt-1">{value}</div>
-          {subtitle && (
-            <div className="flex items-center gap-1 mt-2">
-              {trend === 'up' && <HiTrendingUp className="w-4 h-4 text-green-600" />}
-              {trend === 'down' && <HiTrendingDown className="w-4 h-4 text-red-500" />}
-              <span className={`text-sm ${alert ? 'text-amber-600 font-medium' : 'text-slate-500'}`}>
-                {subtitle}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className={`p-3 bg-gradient-to-br ${gradient} rounded-xl shadow-lg`}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FunnelStep({ label, value, color, highlight }) {
   return (
     <div className="text-center flex-1">
-      <div className={`w-12 h-12 mx-auto ${color} rounded-xl flex items-center justify-center mb-2 ${highlight ? 'ring-4 ring-green-200' : ''}`}>
+      <div className={`w-12 h-12 mx-auto ${color} rounded-xl flex items-center justify-center mb-2 ${highlight ? 'ring-4 ring-emerald-200' : ''}`}>
         <span className="text-white font-bold">{value}</span>
       </div>
-      <div className={`text-sm font-medium ${highlight ? 'text-green-600' : 'text-slate-600'}`}>{label}</div>
+      <div className={`text-sm font-medium ${highlight ? 'text-emerald-600' : 'text-slate-600'}`}>{label}</div>
     </div>
   );
 }
@@ -758,12 +747,12 @@ function FunnelArrow() {
 function getStatusColor(status, index) {
   const colors = [
     'bg-slate-100 border border-slate-200',
-    'bg-blue-50 border border-blue-200',
+    'bg-indigo-50 border border-indigo-200',
     'bg-purple-50 border border-purple-200',
     'bg-amber-50 border border-amber-200',
     'bg-teal-50 border border-teal-200',
-    'bg-green-50 border border-green-200',
-    'bg-red-50 border border-red-200',
+    'bg-emerald-50 border border-emerald-200',
+    'bg-rose-50 border border-rose-200',
   ];
   return colors[index % colors.length];
 }
@@ -771,11 +760,11 @@ function getStatusColor(status, index) {
 function getStageColor(index) {
   const colors = [
     'bg-slate-100 border border-slate-200',
-    'bg-blue-50 border border-blue-200',
     'bg-indigo-50 border border-indigo-200',
+    'bg-violet-50 border border-violet-200',
     'bg-purple-50 border border-purple-200',
     'bg-emerald-50 border border-emerald-200',
-    'bg-green-50 border border-green-200',
+    'bg-teal-50 border border-teal-200',
   ];
   return colors[index % colors.length];
 }

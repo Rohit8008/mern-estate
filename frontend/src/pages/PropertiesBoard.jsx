@@ -2,11 +2,18 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient, normalizeImageUrl } from '../utils/http';
+import { formatListingPrice, formatNumber, isPlaceholderPrice } from '../utils/currency';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import SavedViewsBar from '../components/SavedViewsBar';
+import SharePropertiesDialog from '../components/SharePropertiesDialog';
+import { HiPlus, HiOfficeBuilding, HiOutlineUpload, HiOutlineShare, HiX } from 'react-icons/hi';
+import { PageHeader, Button, EmptyState, Modal } from '../design-system';
+import { useTranslation } from 'react-i18next';
+
+const PAGE_SIZE = 50;
 
 const VIEW_TABS = [
   { id: 'table', label: 'Main table' },
@@ -35,13 +42,7 @@ function classNames(...xs) {
   return xs.filter(Boolean).join(' ');
 }
 
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(amount || 0);
-}
+const formatCurrency = formatListingPrice;
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -51,6 +52,7 @@ L.Icon.Default.mergeOptions({
 });
 
 export default function PropertiesBoard() {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -77,13 +79,24 @@ export default function PropertiesBoard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [quickView, setQuickView] = useState(null);
   const [agents, setAgents] = useState([]);
   const [owners, setOwners] = useState([]);
   const [filesQ, setFilesQ] = useState('');
+  // Counts across the WHOLE filtered set. The pipeline columns and the map used
+  // to be built from `items`, which holds one 50-row page — so a column header
+  // counted a page sample and presented it as the total.
+  const [facets, setFacets] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState('');
+  // Properties picked for a share link. The book is not public, so this is the
+  // only way anything in it reaches someone outside the agency.
+  const [selectedToShare, setSelectedToShare] = useState([]);
+  const [shareOpen, setShareOpen] = useState(false);
   // Inline editing: { id: listingId, field: 'status'|'agent'|'owner' }
   const [editingCell, setEditingCell] = useState(null);
 
@@ -132,6 +145,55 @@ export default function PropertiesBoard() {
     setSearchParams(next);
   }
 
+  /**
+   * Every filter currently narrowing the list, as removable chips.
+   *
+   * A board can carry eight filters at once across a search box, four selects
+   * and a slide-over panel, and none of them are visible together — so an empty
+   * result looks like an empty database. Naming them, and letting each be lifted
+   * on its own, is what turns "nothing here" into something a person can act on.
+   */
+  const activeFilters = useMemo(() => {
+    const agentName = (id) => agents.find((a) => a._id === id)?.username || 'agent';
+    const ownerName = (id) => owners.find((o) => o._id === id)?.name || 'owner';
+    const chips = [
+      q && { key: 'q', label: `“${q}”` },
+      status && { key: 'status', label: STATUS_LABEL[status] || status },
+      assignedAgent && {
+        key: 'assignedAgent',
+        label: assignedAgent === 'unassigned' ? 'Unassigned' : agentName(assignedAgent),
+      },
+      ownerId && { key: 'ownerId', label: ownerName(ownerId) },
+      category && { key: 'category', label: category },
+      type && { key: 'type', label: type },
+      propertyCategory && { key: 'propertyCategory', label: propertyCategory },
+      propertyType && { key: 'propertyType', label: propertyType },
+      city && { key: 'city', label: city },
+      locality && { key: 'locality', label: locality },
+      (minPrice || maxPrice) && {
+        key: 'price',
+        label: `${minPrice ? formatCurrency(Number(minPrice)) : 'any'} – ${maxPrice ? formatCurrency(Number(maxPrice)) : 'any'}`,
+        clears: ['minPrice', 'maxPrice'],
+      },
+      minBedrooms && { key: 'minBedrooms', label: `${minBedrooms}+ beds` },
+      minBathrooms && { key: 'minBathrooms', label: `${minBathrooms}+ baths` },
+      furnished === 'true' && { key: 'furnished', label: 'Furnished' },
+      parking === 'true' && { key: 'parking', label: 'Parking' },
+      offer === 'true' && { key: 'offer', label: 'On offer' },
+    ].filter(Boolean);
+    return chips;
+  }, [
+    q, status, assignedAgent, ownerId, category, type, propertyCategory, propertyType,
+    city, locality, minPrice, maxPrice, minBedrooms, minBathrooms, furnished, parking, offer,
+    agents, owners,
+  ]);
+
+  function clearFilter(chip) {
+    const next = new URLSearchParams(searchParams);
+    (chip.clears || [chip.key]).forEach((k) => next.delete(k));
+    setSearchParams(next);
+  }
+
   const query = useMemo(() => {
     const params = new URLSearchParams();
 
@@ -156,10 +218,33 @@ export default function PropertiesBoard() {
 
     params.set('populate', 'agent,owners');
 
-    params.set('limit', '50');
-    params.set('startIndex', '0');
+    params.set('limit', String(PAGE_SIZE));
+    params.set('startIndex', String(page * PAGE_SIZE));
 
     return `?${params.toString()}`;
+  }, [
+    assignedAgent,
+    category,
+    city,
+    furnished,
+    locality,
+    maxPrice,
+    minBathrooms,
+    minBedrooms,
+    minPrice,
+    offer,
+    ownerId,
+    page,
+    parking,
+    propertyCategory,
+    propertyType,
+    status,
+    type,
+  ]);
+
+  // Reset to the first page whenever filters change (not on page changes themselves)
+  useEffect(() => {
+    setPage(0);
   }, [
     assignedAgent,
     category,
@@ -175,6 +260,7 @@ export default function PropertiesBoard() {
     parking,
     propertyCategory,
     propertyType,
+    q,
     status,
     type,
   ]);
@@ -205,9 +291,22 @@ export default function PropertiesBoard() {
 
         if (!mounted) return;
         setItems(normalized);
+        const pagination = data?.data?.pagination;
+        setTotalCount(pagination?.total ?? normalized.length);
+        setHasMore(Boolean(pagination?.hasMore));
+
+        // Same filters, minus paging — so the counts always describe the rows.
+        const facetQs = new URLSearchParams(adminQuery.replace(/^\?/, ''));
+        ['limit', 'startIndex', 'populate'].forEach((k) => facetQs.delete(k));
+        apiClient
+          .get(`/listing/facets?${facetQs}`, { silent: true })
+          .then((res) => { if (mounted) setFacets(res?.data || null); })
+          .catch(() => { if (mounted) setFacets(null); });
       } catch (e) {
         if (!mounted) return;
         setItems([]);
+        setTotalCount(0);
+        setHasMore(false);
         setError(e?.message || 'Failed to load properties');
       } finally {
         if (mounted) setLoading(false);
@@ -382,21 +481,26 @@ export default function PropertiesBoard() {
       }));
 
       const total = deals.reduce((acc, d) => acc + (Number(d.price) || 0), 0);
+      // The true count for this status comes from the facets; `deals` is only
+      // what fits on the current page. Showing the page length as the count is
+      // what made a board with 600 properties report 50.
+      const trueCount = facets?.status?.[s];
       return {
         id: s,
         label: STATUS_LABEL[s] || s,
         stripe: STATUS_STYLE[s]?.stripe || 'bg-slate-400',
         pill: STATUS_STYLE[s]?.pill || 'bg-slate-100 text-slate-700 border-slate-200',
-        count: deals.length,
+        count: trueCount ?? deals.length,
+        showing: deals.length,
         total,
         items: deals,
       };
     });
-  }, [groups]);
+  }, [groups, facets]);
 
-  const mapItems = useMemo(() => (items || []).filter((x) => x?.location?.lat && x?.location?.lng), [items]);
+  const mapItems = useMemo(() => (items || []).filter((x) => x?.effectiveLocation?.lat && x?.effectiveLocation?.lng), [items]);
   const mapCenter = useMemo(() => {
-    if (mapItems.length) return [Number(mapItems[0].location.lat), Number(mapItems[0].location.lng)];
+    if (mapItems.length) return [Number(mapItems[0].effectiveLocation.lat), Number(mapItems[0].effectiveLocation.lng)];
     return [28.6139, 77.209];
   }, [mapItems]);
 
@@ -423,27 +527,95 @@ export default function PropertiesBoard() {
     return files.filter((f) => `${f.name} ${f.url}`.toLowerCase().includes(term));
   }, [quickView, filesQ]);
 
+  /**
+   * "You have no properties" and "no property matches these filters" call for
+   * completely different advice, and the board used to give the first answer to
+   * both — telling someone with eight filters applied to add their first
+   * property. This decides which situation it actually is.
+   */
+  function BoardEmptyState() {
+    if (loading) return null;
+
+    if (activeFilters.length > 0) {
+      return (
+        <EmptyState
+          icon={HiOfficeBuilding}
+          title={t('properties.noPropertyMatchesTheseFilters')}
+          body={
+            activeFilters.length === 1
+              ? 'Try lifting the filter above.'
+              : `${activeFilters.length} filters are narrowing the list. Remove one or two and see what comes back.`
+          }
+          action={
+            <Button variant='secondary' onClick={clearAllFilters}>{t('properties.clearAllFilters')}</Button>
+          }
+        />
+      );
+    }
+
+    return (
+      <EmptyState
+        icon={HiOfficeBuilding}
+        title={t('properties.noPropertiesYet')}
+        body={t('properties.addOneByHandOrBring')}
+        action={
+          <div className='flex flex-wrap items-center justify-center gap-2'>
+            <Link
+              to='/create-listing'
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors'
+            >
+              <HiPlus className='w-4 h-4' />{t('properties.addAProperty')}</Link>
+            {currentUser?.role === 'admin' && (
+              <Link
+                to='/admin/import'
+                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'
+              >
+                <HiOutlineUpload className='w-4 h-4' />{t('properties.importASpreadsheet')}</Link>
+            )}
+          </div>
+        }
+      />
+    );
+  }
+
   if (!canAccess) return null;
 
   return (
     <div className='space-y-4'>
-      <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
-        <div className='flex items-center gap-3'>
-          <h1 className='text-xl font-bold text-slate-900'>Properties</h1>
-          <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full'>
-            {items.length}
-          </span>
-        </div>
-        <div className='flex items-center gap-2'>
-          <Link
-            to='/create-listing'
-            className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-2 shadow-sm transition-colors'
-          >
-            <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 4v16m8-8H4' /></svg>
-            New property
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title={t('properties.properties')}
+        description={`${totalCount} propert${totalCount === 1 ? 'y' : 'ies'}`}
+        actions={
+          <>
+            {currentUser?.role === 'admin' && (
+              <Link
+                to='/admin/import'
+                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              >
+                <HiOutlineUpload className='w-4 h-4' />{t('properties.import')}</Link>
+            )}
+            <button
+              type='button'
+              onClick={() => { setSelectedToShare(items); setShareOpen(true); }}
+              disabled={items.length === 0}
+              title={items.length ? `Share these ${items.length} properties` : 'Nothing to share'}
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+            >
+              <HiOutlineShare className='w-4 h-4' />{t('properties.share')}</button>
+            <Link
+              to='/create-listing'
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+            >
+              <HiPlus className='w-4 h-4' />{t('properties.newProperty')}</Link>
+          </>
+        }
+      />
+
+      <SharePropertiesDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        listings={selectedToShare}
+      />
 
       <div className='bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden'>
         <div className='px-4 py-2.5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center gap-3'>
@@ -455,7 +627,7 @@ export default function PropertiesBoard() {
                 onClick={() => setParam('view', t.id)}
                 className={classNames(
                   'px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors',
-                  view === t.id ? 'bg-[#cce5ff] text-[#0073ea]' : 'text-slate-600 hover:bg-slate-100'
+                  view === t.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
                 )}
               >
                 {t.label}
@@ -469,18 +641,18 @@ export default function PropertiesBoard() {
             <div className='relative w-full md:w-[280px]'>
               <svg className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /></svg>
               <input
-                className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 transition-all placeholder:text-slate-400'
-                placeholder='Search properties...'
+                className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 transition-all placeholder:text-slate-400'
+                placeholder={t('properties.searchProperties')}
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
               />
             </div>
             <select
-              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none transition-all'
+              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all'
               value={status}
               onChange={(e) => setParam('status', e.target.value)}
             >
-              <option value=''>All statuses</option>
+              <option value=''>{t('properties.allStatuses')}</option>
               {STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {STATUS_LABEL[s] || s}
@@ -490,12 +662,12 @@ export default function PropertiesBoard() {
 
             {currentUser?.role === 'admin' && (
               <select
-                className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none transition-all'
+                className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all'
                 value={assignedAgent}
                 onChange={(e) => setParam('assignedAgent', e.target.value)}
               >
-                <option value=''>All agents</option>
-                <option value='unassigned'>Unassigned</option>
+                <option value=''>{t('properties.allAgents')}</option>
+                <option value='unassigned'>{t('properties.unassigned')}</option>
                 {agents.map((a) => (
                   <option key={a._id} value={a._id}>
                     {a.username || a._id}
@@ -505,12 +677,12 @@ export default function PropertiesBoard() {
             )}
 
             <select
-              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 outline-none transition-all'
+              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all'
               value={ownerId}
               onChange={(e) => setParam('ownerId', e.target.value)}
               disabled={owners.length === 0}
             >
-              <option value=''>All owners</option>
+              <option value=''>{t('properties.allOwners')}</option>
               {owners.map((o) => (
                 <option key={o._id} value={o._id}>
                   {o.name || o._id}
@@ -523,17 +695,13 @@ export default function PropertiesBoard() {
               onClick={() => setFiltersOpen(true)}
               className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
-              <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' /></svg>
-              Filters
-            </button>
+              <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' /></svg>{t('properties.filters')}</button>
             {(q || status || assignedAgent || ownerId || city || locality || minPrice || maxPrice) && (
               <button
                 type='button'
                 onClick={clearAllFilters}
                 className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
-              >
-                Clear all
-              </button>
+              >{t('properties.clearAll')}</button>
             )}
           </div>
 
@@ -545,6 +713,33 @@ export default function PropertiesBoard() {
             />
           </div>
         </div>
+
+        {/* What is actually narrowing the list. Without this a board filtered
+            down to nothing is indistinguishable from an empty database. */}
+        {activeFilters.length > 0 && (
+          <div className='px-4 py-2.5 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center gap-1.5'>
+            <span className='text-xs text-slate-500 mr-0.5'>
+              Showing {formatNumber(totalCount)} matching
+            </span>
+            {activeFilters.map((chip) => (
+              <button
+                key={chip.key}
+                type='button'
+                onClick={() => clearFilter(chip)}
+                title={`Remove this filter`}
+                className='group inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md bg-white border border-slate-200 text-xs text-slate-700 hover:border-rose-300 hover:text-rose-700 transition-colors'
+              >
+                {chip.label}
+                <HiX className='w-3 h-3 text-slate-300 group-hover:text-rose-500' />
+              </button>
+            ))}
+            <button
+              type='button'
+              onClick={clearAllFilters}
+              className='text-xs text-slate-500 hover:text-rose-600 underline ml-1'
+            >{t('properties.clearAll')}</button>
+          </div>
+        )}
 
         {error && (
           <div className='px-4 py-2.5 text-sm bg-rose-50 border-b border-rose-200 text-rose-700 flex items-center gap-2'>
@@ -574,13 +769,13 @@ export default function PropertiesBoard() {
             <table className='min-w-full text-sm'>
               <thead className='bg-slate-50/80 sticky top-0 z-10'>
                 <tr className='border-b border-slate-200'>
-                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[280px]'>Property</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Location</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Type</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Price</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Agent</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Owner</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>Status</th>
+                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[280px]'>{t('properties.property')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.location')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.type')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.price')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.agent')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.owner')}</th>
+                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.status')}</th>
                   <th className='text-right px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[100px]'></th>
                 </tr>
               </thead>
@@ -589,10 +784,10 @@ export default function PropertiesBoard() {
                   const rows = groups.get(s) || [];
                   if (rows.length === 0) return null;
                   const stripe = STATUS_STYLE[s]?.stripe || 'bg-slate-300';
-                  const totalPrice = rows.reduce((acc, x) => acc + (Number(x.regularPrice) || 0), 0);
+                  const totalPrice = rows.reduce((acc, x) => acc + (isPlaceholderPrice(x.regularPrice) ? 0 : Number(x.regularPrice) || 0), 0);
 
                   return (
-                    <>{/* eslint-disable-next-line react/jsx-key */}
+                    <>{ }
                       <tr key={`${s}-header`}>
                         <td colSpan={8} className='px-0 py-0'>
                           <div className='flex items-center gap-3 px-4 py-2.5 bg-slate-50/60 border-y border-slate-200'>
@@ -613,7 +808,7 @@ export default function PropertiesBoard() {
                         return (
                           <tr
                             key={x._id}
-                            className='group hover:bg-blue-50/40 transition-colors cursor-pointer'
+                            className='group hover:bg-indigo-50/40 transition-colors cursor-pointer'
                             onClick={() => { setFilesQ(''); setQuickView(x); }}
                           >
                             <td className='pl-4 pr-2 py-2.5'>
@@ -628,7 +823,7 @@ export default function PropertiesBoard() {
                                   )}
                                 </div>
                                 <div className='min-w-0'>
-                                  <div className='font-semibold text-slate-900 truncate text-[13px] group-hover:text-blue-700 transition-colors'>{x.name}</div>
+                                  <div className='font-semibold text-slate-900 truncate text-[13px] group-hover:text-indigo-700 transition-colors'>{x.name}</div>
                                   {(x.bedrooms || x.bathrooms) && (
                                     <div className='text-[11px] text-slate-400 mt-0.5'>
                                       {x.bedrooms ? `${x.bedrooms} bed` : ''}{x.bedrooms && x.bathrooms ? ' · ' : ''}{x.bathrooms ? `${x.bathrooms} bath` : ''}
@@ -657,7 +852,7 @@ export default function PropertiesBoard() {
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'agent' ? null : { id: x._id, field: 'agent' }); }}
                                   className='flex items-center gap-2 rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left'
-                                  title='Click to assign agent'
+                                  title={t('properties.clickToAssignAgent')}
                                 >
                                   {agentName ? (
                                     <>
@@ -667,7 +862,7 @@ export default function PropertiesBoard() {
                                       <span className='text-[13px] text-slate-700 truncate'>{agentName}</span>
                                     </>
                                   ) : (
-                                    <span className='text-[12px] text-slate-400 italic'>+ Assign</span>
+                                    <span className='text-[12px] text-slate-400 italic'>{t('properties.assign')}</span>
                                   )}
                                 </button>
                                 {editingCell?.id === x._id && editingCell?.field === 'agent' && (
@@ -676,24 +871,22 @@ export default function PropertiesBoard() {
                                       type='button'
                                       onClick={() => inlineUpdate(x._id, 'agent', null)}
                                       className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
-                                    >
-                                      Unassigned
-                                    </button>
+                                    >{t('properties.unassigned')}</button>
                                     {agents.map((a) => (
                                       <button
                                         key={a._id}
                                         type='button'
                                         onClick={() => inlineUpdate(x._id, 'agent', a._id)}
-                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 ${x.assignedAgent?._id === a._id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${x.assignedAgent?._id === a._id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
                                       >
                                         <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
                                           {(a.username?.[0] || '?').toUpperCase()}
                                         </div>
                                         {a.username}
-                                        {x.assignedAgent?._id === a._id && <svg className='w-4 h-4 ml-auto text-blue-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                        {x.assignedAgent?._id === a._id && <svg className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                       </button>
                                     ))}
-                                    {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>No agents available</div>}
+                                    {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>{t('properties.noAgentsAvailable')}</div>}
                                   </div>
                                 )}
                               </div>
@@ -705,12 +898,12 @@ export default function PropertiesBoard() {
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'owner' ? null : { id: x._id, field: 'owner' }); }}
                                   className='rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left truncate block'
-                                  title='Click to assign owner'
+                                  title={t('properties.clickToAssignOwner')}
                                 >
                                   {ownerName ? (
                                     <span className='text-[13px] text-slate-700 truncate block max-w-[140px]'>{ownerName}</span>
                                   ) : (
-                                    <span className='text-[12px] text-slate-400 italic'>+ Assign</span>
+                                    <span className='text-[12px] text-slate-400 italic'>{t('properties.assign')}</span>
                                   )}
                                 </button>
                                 {editingCell?.id === x._id && editingCell?.field === 'owner' && (
@@ -719,9 +912,7 @@ export default function PropertiesBoard() {
                                       type='button'
                                       onClick={() => inlineUpdate(x._id, 'owner', null)}
                                       className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
-                                    >
-                                      No owner
-                                    </button>
+                                    >{t('properties.noOwner')}</button>
                                     {owners.map((o) => {
                                       const isActive = Array.isArray(x?.ownerIds) && x.ownerIds.some((ow) => ow?._id === o._id);
                                       return (
@@ -729,14 +920,14 @@ export default function PropertiesBoard() {
                                           key={o._id}
                                           type='button'
                                           onClick={() => inlineUpdate(x._id, 'owner', o._id)}
-                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
                                         >
                                           <span className='truncate'>{o.name || o.email || o._id}</span>
-                                          {isActive && <svg className='w-4 h-4 ml-auto text-blue-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                          {isActive && <svg className='w-4 h-4 ml-auto text-indigo-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                         </button>
                                       );
                                     })}
-                                    {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>No owners available</div>}
+                                    {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>{t('properties.noOwnersAvailable')}</div>}
                                   </div>
                                 )}
                               </div>
@@ -748,7 +939,7 @@ export default function PropertiesBoard() {
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'status' ? null : { id: x._id, field: 'status' }); }}
                                   className='rounded-lg px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-100 transition-colors'
-                                  title='Click to change status'
+                                  title={t('properties.clickToChangeStatus')}
                                 >
                                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border capitalize ${pill}`}>
                                     {(x.status || 'available').replace('_', ' ')}
@@ -768,7 +959,7 @@ export default function PropertiesBoard() {
                                         >
                                           <div className={`w-2 h-2 rounded-full ${stStripe}`} />
                                           <span className='capitalize'>{(STATUS_LABEL[st] || st).replace('_', ' ')}</span>
-                                          {x.status === st && <svg className='w-4 h-4 ml-auto text-blue-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                          {x.status === st && <svg className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                         </button>
                                       );
                                     })}
@@ -782,7 +973,7 @@ export default function PropertiesBoard() {
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setFilesQ(''); setQuickView(x); }}
                                   className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors'
-                                  title='Quick view'
+                                  title={t('properties.quickView')}
                                 >
                                   <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' /></svg>
                                 </button>
@@ -791,8 +982,8 @@ export default function PropertiesBoard() {
                                   target='_blank'
                                   rel='noreferrer'
                                   onClick={(e) => e.stopPropagation()}
-                                  className='p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors'
-                                  title='Open in new tab'
+                                  className='p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors'
+                                  title={t('properties.openInNewTab')}
                                 >
                                   <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14' /></svg>
                                 </Link>
@@ -807,14 +998,8 @@ export default function PropertiesBoard() {
 
                 {items.length === 0 && !loading && (
                   <tr>
-                    <td className='px-4 py-16 text-center' colSpan={8}>
-                      <div className='flex flex-col items-center gap-3'>
-                        <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
-                          <svg className='w-6 h-6 text-slate-400' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z' /></svg>
-                        </div>
-                        <p className='text-slate-500 text-sm'>No properties found</p>
-                        <Link to='/create-listing' className='text-sm font-medium text-blue-600 hover:text-blue-700'>+ Add your first property</Link>
-                      </div>
+                    <td colSpan={8}>
+                      <BoardEmptyState />
                     </td>
                   </tr>
                 )}
@@ -823,15 +1008,37 @@ export default function PropertiesBoard() {
 
             {/* Footer summary */}
             {items.length > 0 && (
-              <div className='px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between'>
-                <span className='text-xs text-slate-500'>{items.length} propert{items.length === 1 ? 'y' : 'ies'} total</span>
-                <span className='text-xs text-slate-500'>Total value: <span className='font-semibold text-slate-700'>{formatCurrency(items.reduce((a, x) => a + (Number(x.regularPrice) || 0), 0))}</span></span>
+              <div className='px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2'>
+                <span className='text-xs text-slate-500'>
+                  Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + items.length} of {totalCount} propert{totalCount === 1 ? 'y' : 'ies'}
+                </span>
+                <div className='flex items-center gap-3'>
+                  <span className='text-xs text-slate-500'>{t('properties.pageTotalValue')}<span className='font-semibold text-slate-700'>{formatCurrency(items.reduce((a, x) => a + (isPlaceholderPrice(x.regularPrice) ? 0 : Number(x.regularPrice) || 0), 0))}</span></span>
+                  <div className='flex items-center gap-1'>
+                    <button
+                      type='button'
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className='px-2.5 py-1 rounded-md text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+                    >{t('properties.prev')}</button>
+                    <button
+                      type='button'
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!hasMore}
+                      className='px-2.5 py-1 rounded-md text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+                    >{t('properties.next')}</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {view === 'pipeline' && (
+        {view === 'pipeline' && items.length === 0 && !loading && (
+          <BoardEmptyState />
+        )}
+
+        {view === 'pipeline' && (items.length > 0 || loading) && (
           <div className='overflow-x-auto'>
             <div className='min-w-[1100px] grid grid-cols-12 gap-3 p-4 bg-slate-50'>
               {columns.map((col) => (
@@ -843,7 +1050,11 @@ export default function PropertiesBoard() {
                         <div>
                           <div className='font-bold text-slate-900'>{col.label}</div>
                           <div className='text-xs text-slate-500 mt-0.5'>
-                            {col.count} item(s) · {formatCurrency(col.total)}
+                            {col.showing < col.count
+                              ? `${col.showing} of ${col.count}`
+                              : `${col.count} item(s)`}
+                            {' · '}
+                            {formatCurrency(col.total)}
                           </div>
                         </div>
                       </div>
@@ -876,7 +1087,7 @@ export default function PropertiesBoard() {
                                 loading='lazy'
                               />
                             ) : (
-                              <div className='w-full h-full flex items-center justify-center text-slate-400 text-sm'>No image</div>
+                              <div className='w-full h-full flex items-center justify-center text-slate-400 text-sm'>{t('properties.noImage')}</div>
                             )}
                           </div>
                           <div className='p-3'>
@@ -893,7 +1104,7 @@ export default function PropertiesBoard() {
                           </div>
                         </Link>
                       ))}
-                      {col.items.length === 0 && <div className='text-sm text-slate-500 px-1 py-2'>No items</div>}
+                      {col.items.length === 0 && <div className='text-sm text-slate-500 px-1 py-2'>{t('properties.noItems')}</div>}
                     </div>
                   </div>
                 </div>
@@ -924,7 +1135,7 @@ export default function PropertiesBoard() {
                         loading='lazy'
                       />
                     ) : (
-                      <div className='w-full h-full flex items-center justify-center text-slate-400 text-sm'>No image</div>
+                      <div className='w-full h-full flex items-center justify-center text-slate-400 text-sm'>{t('properties.noImage')}</div>
                     )}
                   </div>
                   <div className='p-3'>
@@ -948,18 +1159,31 @@ export default function PropertiesBoard() {
               ))}
 
               {items.length === 0 && !loading && (
-                <div className='col-span-full text-center text-slate-500 py-10'>No properties found</div>
+                <div className='col-span-full'><BoardEmptyState /></div>
               )}
             </div>
           </div>
         )}
 
-        {view === 'map' && (
+        {view === 'map' && items.length === 0 && !loading && (
+          <BoardEmptyState />
+        )}
+
+        {view === 'map' && (items.length > 0 || loading) && (
           <div className='p-4 bg-slate-50'>
             <div className='rounded-2xl border border-slate-200 bg-white overflow-hidden'>
               <div className='px-4 py-3 border-b border-slate-200 flex items-center justify-between'>
-                <div className='font-semibold text-slate-900'>Map</div>
-                <div className='text-sm text-slate-600'>{mapItems.length} property(ies) with location</div>
+                <div className='font-semibold text-slate-900'>{t('properties.map')}</div>
+                {/* Says plainly that the map shows this page, not the whole
+                    set — a map of 50 pins beside a filter matching 600 reads as
+                    "there are 50", which is the wrong thing to conclude. */}
+                <div className='text-sm text-slate-600'>
+                  {mapItems.length === 0
+                    ? 'None of these have a location yet'
+                    : totalCount > items.length
+                      ? `${mapItems.length} of ${totalCount} shown — narrow the filters to map more`
+                      : `${mapItems.length} propert${mapItems.length === 1 ? 'y' : 'ies'} on the map`}
+                </div>
               </div>
               <div className='h-[520px]'>
                 <MapContainer center={mapCenter} zoom={11} className='h-full w-full'>
@@ -968,7 +1192,7 @@ export default function PropertiesBoard() {
                     url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                   />
                   {mapItems.map((x) => (
-                    <Marker key={x._id} position={[Number(x.location.lat), Number(x.location.lng)]}>
+                    <Marker key={x._id} position={[Number(x.effectiveLocation.lat), Number(x.effectiveLocation.lng)]}>
                       <Popup>
                         <div className='space-y-1'>
                           <div className='font-semibold'>{x.name}</div>
@@ -981,9 +1205,7 @@ export default function PropertiesBoard() {
                               setFilesQ('');
                               setQuickView(x);
                             }}
-                          >
-                            Quick view
-                          </button>
+                          >{t('properties.quickView')}</button>
                         </div>
                       </Popup>
                     </Marker>
@@ -995,239 +1217,200 @@ export default function PropertiesBoard() {
         )}
       </div>
 
-      {filtersOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
-          <button
-            type='button'
-            className='absolute inset-0 bg-black/30'
-            onClick={() => setFiltersOpen(false)}
-            aria-label='Close'
-          />
-          <div className='relative w-full max-w-3xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden'>
-            <div className='px-5 py-4 border-b border-slate-200 flex items-center justify-between'>
-              <div>
-                <div className='text-lg font-bold text-slate-900'>Advanced filters</div>
-                <div className='text-sm text-slate-600 mt-0.5'>Where / condition / value</div>
-              </div>
-              <button
-                type='button'
-                onClick={() => setFiltersOpen(false)}
-                className='px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold'
-              >
-                Close
-              </button>
-            </div>
-
-            <div className='p-5 space-y-4'>
+      <Modal
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title={t('properties.advancedFilters')}
+        description={t('properties.whereConditionValue')}
+        size='2xl'
+        footer={<Button onClick={() => setFiltersOpen(false)}>{t('properties.apply')}</Button>}
+      >
+            <div className='space-y-4'>
               <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>City</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.city')}</label>
                   <input
                     value={city}
                     onChange={(e) => setParam('city', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. Delhi'
+                    placeholder={t('properties.eGDelhi')}
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Locality</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.locality')}</label>
                   <input
                     value={locality}
                     onChange={(e) => setParam('locality', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. Dwarka'
+                    placeholder={t('properties.eGDwarka')}
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Category</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.category')}</label>
                   <select
                     value={propertyCategory}
                     onChange={(e) => setParam('propertyCategory', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
                   >
-                    <option value=''>Any</option>
-                    <option value='residential'>Residential</option>
-                    <option value='commercial'>Commercial</option>
-                    <option value='land'>Land</option>
+                    <option value=''>{t('properties.any')}</option>
+                    <option value='residential'>{t('properties.residential')}</option>
+                    <option value='commercial'>{t('properties.commercial')}</option>
+                    <option value='land'>{t('properties.land')}</option>
                   </select>
                 </div>
               </div>
 
               <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Min price</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minPrice')}</label>
                   <input
                     value={minPrice}
                     onChange={(e) => setParam('minPrice', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. 5000000'
+                    placeholder={t('properties.eG5000000')}
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Max price</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.maxPrice')}</label>
                   <input
                     value={maxPrice}
                     onChange={(e) => setParam('maxPrice', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. 15000000'
+                    placeholder={t('properties.eG15000000')}
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Property type</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.propertyType')}</label>
                   <input
                     value={propertyType}
                     onChange={(e) => setParam('propertyType', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. apartment'
+                    placeholder={t('properties.eGApartment')}
                   />
                 </div>
               </div>
 
               <div className='grid grid-cols-1 md:grid-cols-4 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Min bedrooms</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minBedrooms')}</label>
                   <input
                     value={minBedrooms}
                     onChange={(e) => setParam('minBedrooms', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. 2'
+                    placeholder={t('properties.eG2')}
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Min bathrooms</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minBathrooms')}</label>
                   <input
                     value={minBathrooms}
                     onChange={(e) => setParam('minBathrooms', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. 2'
+                    placeholder={t('properties.eG2')}
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Furnished</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.furnished')}</label>
                   <select
                     value={furnished}
                     onChange={(e) => setParam('furnished', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
                   >
-                    <option value=''>Any</option>
-                    <option value='true'>Yes</option>
-                    <option value='false'>No</option>
+                    <option value=''>{t('properties.any')}</option>
+                    <option value='true'>{t('properties.yes')}</option>
+                    <option value='false'>{t('properties.no')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Parking</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.parking')}</label>
                   <select
                     value={parking}
                     onChange={(e) => setParam('parking', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
                   >
-                    <option value=''>Any</option>
-                    <option value='true'>Yes</option>
-                    <option value='false'>No</option>
+                    <option value=''>{t('properties.any')}</option>
+                    <option value='true'>{t('properties.yes')}</option>
+                    <option value='false'>{t('properties.no')}</option>
                   </select>
                 </div>
               </div>
 
-              <div className='grid grid-cols-1 md:grid-cols-4 gap-3'>
+              <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Offer</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.offer')}</label>
                   <select
                     value={offer}
                     onChange={(e) => setParam('offer', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
                   >
-                    <option value=''>Any</option>
-                    <option value='true'>Yes</option>
-                    <option value='false'>No</option>
+                    <option value=''>{t('properties.any')}</option>
+                    <option value='true'>{t('properties.yes')}</option>
+                    <option value='false'>{t('properties.no')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Listing type</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.listingType')}</label>
                   <select
                     value={type}
                     onChange={(e) => setParam('type', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
                   >
-                    <option value=''>Any</option>
-                    <option value='sale'>Sale</option>
-                    <option value='rent'>Rent</option>
+                    <option value=''>{t('properties.any')}</option>
+                    <option value='sale'>{t('properties.sale')}</option>
+                    <option value='rent'>{t('properties.rent')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Category slug</label>
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.categorySlug')}</label>
                   <input
                     value={category}
                     onChange={(e) => setParam('category', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder='e.g. apartment'
+                    placeholder={t('properties.eGApartment')}
                   />
                 </div>
-                <div className='flex items-end justify-end'>
-                  <button
-                    type='button'
-                    onClick={() => setFiltersOpen(false)}
-                    className='px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold'
-                  >
-                    Apply
-                  </button>
-                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {quickView && (
-        <div className='fixed inset-0 z-[9999] flex items-center justify-center p-4'>
-          <button
-            type='button'
-            className='absolute inset-0 bg-black/30'
-            onClick={() => setQuickView(null)}
-            aria-label='Close'
-          />
-          <div className='relative w-full max-w-5xl bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden'>
-            <div className='px-5 py-4 border-b border-slate-200 flex items-center justify-between'>
-              <div className='min-w-0'>
-                <div className='text-lg font-bold text-slate-900 truncate'>{quickView.name}</div>
-                <div className='text-sm text-slate-600 mt-0.5 truncate'>
-                  {[quickView.address, quickView.city, quickView.locality].filter(Boolean).join(', ') || '-'}
-                </div>
-              </div>
-              <div className='flex items-center gap-2'>
-                <Link
-                  to={`/listing/${quickView._id}`}
-                  target='_blank'
-                  rel='noreferrer'
-                  className='px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold'
-                >
-                  Open
-                </Link>
-                <button
-                  type='button'
-                  onClick={() => setQuickView(null)}
-                  className='px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold'
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-
-            <div className='grid grid-cols-1 lg:grid-cols-3'>
+      <Modal
+        open={!!quickView}
+        onClose={() => setQuickView(null)}
+        title={quickView?.name}
+        description={quickView ? ([quickView.address, quickView.city, quickView.locality].filter(Boolean).join(', ') || '-') : ''}
+        size='2xl'
+        className='max-w-5xl'
+        footer={
+          quickView && (
+            <>
+              <Button variant='secondary' onClick={() => setQuickView(null)}>{t('properties.close')}</Button>
+              <Link
+                to={`/listing/${quickView._id}`}
+                target='_blank'
+                rel='noreferrer'
+                className='px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              >{t('properties.open')}</Link>
+            </>
+          )
+        }
+      >
+        {quickView && (
+            <div className='grid grid-cols-1 lg:grid-cols-3 -mx-6 -my-5'>
               <div className='lg:col-span-2 border-b lg:border-b-0 lg:border-r border-slate-200'>
                 <div className='p-5 space-y-4'>
                   <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                     <div className='rounded-2xl border border-slate-200 p-4'>
-                      <div className='text-xs font-semibold text-slate-600'>Price</div>
+                      <div className='text-xs font-semibold text-slate-600'>{t('properties.price')}</div>
                       <div className='text-lg font-bold text-slate-900 mt-1'>{formatCurrency(quickView.regularPrice)}</div>
                     </div>
                     <div className='rounded-2xl border border-slate-200 p-4'>
-                      <div className='text-xs font-semibold text-slate-600'>Agent</div>
+                      <div className='text-xs font-semibold text-slate-600'>{t('properties.agent')}</div>
                       <div className='text-sm font-bold text-slate-900 mt-1'>
                         {quickView?.assignedAgent?.username || (quickView.assignedAgent ? 'Assigned' : '-')}
                       </div>
                     </div>
                     <div className='rounded-2xl border border-slate-200 p-4'>
-                      <div className='text-xs font-semibold text-slate-600'>Status</div>
+                      <div className='text-xs font-semibold text-slate-600'>{t('properties.status')}</div>
                       <div className='mt-2'>
                         <span
                           className={classNames(
@@ -1243,12 +1426,12 @@ export default function PropertiesBoard() {
 
                   <div className='rounded-2xl border border-slate-200 overflow-hidden'>
                     <div className='px-4 py-3 border-b border-slate-200 flex items-center justify-between'>
-                      <div className='font-semibold text-slate-900'>Files</div>
+                      <div className='font-semibold text-slate-900'>{t('properties.files')}</div>
                       <input
                         value={filesQ}
                         onChange={(e) => setFilesQ(e.target.value)}
                         className='px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white'
-                        placeholder='Search files'
+                        placeholder={t('properties.searchFiles')}
                       />
                     </div>
                     <div className='p-4 bg-slate-50'>
@@ -1265,9 +1448,7 @@ export default function PropertiesBoard() {
                               {f.kind === 'image' ? (
                                 <img src={f.url} alt={f.name} className='w-full h-full object-cover' loading='lazy' />
                               ) : (
-                                <div className='w-full h-full flex items-center justify-center text-slate-500 text-sm font-semibold'>
-                                  File
-                                </div>
+                                <div className='w-full h-full flex items-center justify-center text-slate-500 text-sm font-semibold'>{t('properties.file')}</div>
                               )}
                             </div>
                             <div className='p-3'>
@@ -1277,7 +1458,7 @@ export default function PropertiesBoard() {
                           </a>
                         ))}
                         {quickFiles.length === 0 && (
-                          <div className='col-span-full text-center text-slate-500 py-8'>No files found</div>
+                          <div className='col-span-full text-center text-slate-500 py-8'>{t('properties.noFilesFound')}</div>
                         )}
                       </div>
                     </div>
@@ -1285,7 +1466,7 @@ export default function PropertiesBoard() {
 
                   {quickView.remarks && (
                     <div className='rounded-2xl border border-slate-200 p-4'>
-                      <div className='text-xs font-semibold text-slate-600'>Notes</div>
+                      <div className='text-xs font-semibold text-slate-600'>{t('properties.notes')}</div>
                       <div className='text-sm text-slate-800 mt-2 whitespace-pre-wrap'>{quickView.remarks}</div>
                     </div>
                   )}
@@ -1294,7 +1475,7 @@ export default function PropertiesBoard() {
 
               <div className='p-5 space-y-4'>
                 <div className='rounded-2xl border border-slate-200 p-4'>
-                  <div className='text-xs font-semibold text-slate-600'>Owners</div>
+                  <div className='text-xs font-semibold text-slate-600'>{t('properties.owners')}</div>
                   {Array.isArray(quickView?.ownerIds) && quickView.ownerIds.length > 0 ? (
                     <div className='mt-2 space-y-2'>
                       {quickView.ownerIds.map((o) => (
@@ -1307,34 +1488,29 @@ export default function PropertiesBoard() {
                       ))}
                     </div>
                   ) : (
-                    <div className='text-sm text-slate-500 mt-2'>No owners linked</div>
+                    <div className='text-sm text-slate-500 mt-2'>{t('properties.noOwnersLinked')}</div>
                   )}
                 </div>
 
                 <div className='rounded-2xl border border-slate-200 p-4'>
-                  <div className='text-xs font-semibold text-slate-600'>Quick actions</div>
+                  <div className='text-xs font-semibold text-slate-600'>{t('properties.quickActions')}</div>
                   <div className='mt-3 space-y-2'>
                     <Link
                       to={`/update-listing/${quickView._id}`}
                       className='block px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-800'
-                    >
-                      Edit property
-                    </Link>
+                    >{t('properties.editProperty')}</Link>
                     <Link
                       to={`/listing/${quickView._id}`}
                       target='_blank'
                       rel='noreferrer'
                       className='block px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold'
-                    >
-                      View public page
-                    </Link>
+                    >{t('properties.viewPublicPage')}</Link>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

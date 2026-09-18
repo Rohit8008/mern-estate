@@ -128,3 +128,19 @@ export function isEncrypted(text) {
     text.length > (LEGACY_SALT_LENGTH + LEGACY_IV_LENGTH + TAG_LENGTH) * 2;
 }
 
+
+/**
+ * Secrets the application stores on behalf of a workspace — currently the SMTP
+ * password, later any integration credential.
+ *
+ * Same algorithm and key as message encryption; named separately so a reader
+ * can see at the call site that this is a stored credential rather than a chat
+ * message, and so the two can diverge later without touching call sites.
+ */
+export function encryptSecret(plaintext) {
+  return encryptMessageWithKey(String(plaintext));
+}
+
+export function decryptSecret(ciphertext) {
+  return decryptMessageWithKey(ciphertext);
+}

@@ -1,59 +1,165 @@
-# name: CI
+# CI.
+#
+# This file was entirely commented out — 59 lines, 0 of them active — so nothing
+# ran tests or lint on any push or PR. Re-enabled 2026-09-14.
+#
+# Node 20 is required, not merely preferred: Node 25 removed `SlowBuffer`, which
+# `jsonwebtoken`'s dependency chain still uses, and the backend crashes on
+# require under it.
+name: CI
 
-# on:
-#   push:
-#     branches: ["main", "master"]
-#   pull_request:
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
 
-# concurrency:
-#   group: ci-${{ github.ref }}
-#   cancel-in-progress: true
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
-# jobs:
-#   backend:
-#     runs-on: ubuntu-latest
-#     defaults:
-#       run:
-#         shell: bash
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions/setup-node@v4
-#         with:
-#           node-version: 20
-#           cache: npm
-#           cache-dependency-path: |
-#             backend/package-lock.json
-#             backend/npm-shrinkwrap.json
-#       - name: Install backend deps
-#         run: npm ci
-#         working-directory: backend
-#       - name: Backend tests
-#         run: npm test
-#         working-directory: backend
-#       - name: Backend lint
-#         run: npm run lint
-#         working-directory: backend
+# Nothing here needs write access.
+permissions:
+  contents: read
 
-#   frontend:
-#     runs-on: ubuntu-latest
-#     defaults:
-#       run:
-#         shell: bash
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions/setup-node@v4
-#         with:
-#           node-version: 20
-#           cache: npm
-#           cache-dependency-path: |
-#             frontend/package-lock.json
-#             frontend/npm-shrinkwrap.json
-#       - name: Install frontend deps
-#         run: npm ci
-#         working-directory: frontend
-#       - name: Frontend lint
-#         run: npm run lint
-#         working-directory: frontend
-#       - name: Frontend tests
-#         run: npm run test -- --run
-#         working-directory: frontend
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend deps
+        run: npm ci
+        working-directory: backend
+      - name: Backend lint
+        run: npm run lint
+        working-directory: backend
+      # Uses mongodb-memory-server, so no service container is needed.
+      - name: Backend tests
+        run: npm test
+        working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # `xlsx` resolves to a tarball on cdn.sheetjs.com rather than the npm
+      # registry — the registry copy is abandoned at 0.18.5 and carries an
+      # unfixed prototype-pollution advisory. The runner needs egress to it.
+      - name: Install frontend deps
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Frontend lint
+        run: npm run lint
+        working-directory: frontend
+      # Fails on an empty suite: `--passWithNoTests` used to make this pass over
+      # zero test files.
+      - name: Frontend tests
+        run: npm test
+        working-directory: frontend
+
+  # End-to-end. These 15 specs existed from the start and were never wired into
+  # CI, so they only ever ran when someone remembered to run them locally — which
+  # is the same as not having them.
+  #
+  # The whole stack runs in the job: Mongo as a service container, the API, and
+  # the built frontend served by Vite preview. Seeded with the demo dataset so
+  # the specs have something to act on.
+  e2e:
+    runs-on: ubuntu-latest
+    # Advisory while the suite settles. Flip to blocking once it has proven
+    # stable across a few weeks of pushes — a red build nobody trusts gets
+    # ignored, which is worse than an advisory one.
+    continue-on-error: true
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MONGO_URI: mongodb://localhost:27017/mern-estate-e2e
+      JWT_SECRET: ci-jwt-secret-not-used-anywhere-else
+      REFRESH_SECRET: ci-refresh-secret-not-used-anywhere-else
+      MESSAGE_ENCRYPTION_KEY: ci-message-key-not-used-anywhere-else
+      FRONTEND_URL: http://localhost:4173
+      PLAYWRIGHT_BASE_URL: http://localhost:4173
+      NODE_ENV: test
+      # The scheduler takes leases and sends mail; neither belongs in a test run.
+      JOBS_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend deps
+        run: npm ci
+        working-directory: backend
+      - name: Install frontend deps
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Install Playwright
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Seed the demo workspace
+        run: node scripts/seedDemo.js
+        working-directory: backend
+
+      - name: Start the API
+        run: node index.js &
+        working-directory: backend
+
+      - name: Build and serve the frontend
+        run: |
+          npm run build
+          npx vite preview --port 4173 --host &
+        working-directory: frontend
+
+      - name: Wait for both to answer
+        run: |
+          npx wait-on http://localhost:3000/api/health/health http://localhost:4173 --timeout 90000
+
+      - name: Run end-to-end tests
+        run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  audit:
+    runs-on: ubuntu-latest
+    # Advisory: reports known vulnerabilities in production dependencies without
+    # blocking the merge, so a new advisory is visible the day it lands.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Backend audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: backend
+      - name: Frontend audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend

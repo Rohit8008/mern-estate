@@ -5,15 +5,15 @@ const categorySchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
+      maxlength: 100,
     },
     slug: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
       trim: true,
+      maxlength: 120,
     },
     isDeleted: {
       type: Boolean,
@@ -35,13 +35,13 @@ const categorySchema = new mongoose.Schema(
       type: [
         new mongoose.Schema(
           {
-            key: { type: String, required: true },
-            label: { type: String, required: true },
-            type: { type: String, enum: ['text', 'number', 'boolean', 'select', 'date', 'textarea'], default: 'text' },
+            key: { type: String, required: true, maxlength: 60 },
+            label: { type: String, required: true, maxlength: 100 },
+            type: { type: String, enum: ['text', 'number', 'boolean', 'select', 'date', 'textarea'], default: 'text', required: true },
             required: { type: Boolean, default: false },
             options: { type: [String], default: [] },
-            description: { type: String, default: '' },
-            placeholder: { type: String, default: '' },
+            description: { type: String, default: '', maxlength: 300 },
+            placeholder: { type: String, default: '', maxlength: 200 },
             defaultValue: { type: mongoose.Schema.Types.Mixed, default: undefined },
             min: { type: Number, default: undefined },
             max: { type: Number, default: undefined },
@@ -58,18 +58,39 @@ const categorySchema = new mongoose.Schema(
               default: null,
             },
             // Field grouping for UI organization
-            group: { type: String, default: '' }, // e.g., 'basic', 'area', 'amenities', 'pricing'
+            group: { type: String, default: '', maxlength: 60 }, // e.g., 'basic', 'area', 'amenities', 'pricing'
             // Unit suffix for display (e.g., 'sq ft', 'months')
-            unit: { type: String, default: '' },
+            unit: { type: String, default: '', maxlength: 30 },
           },
           { _id: false }
         ),
       ],
       default: [],
     },
+    // Default location for all listings in this category (e.g. a colony's pin),
+    // used as a fallback whenever a listing doesn't set its own location.
+    defaultLocation: {
+      lat: { type: Number, required: false, default: null },
+      lng: { type: Number, required: false, default: null },
+    },
   },
   { timestamps: true }
 );
+
+categorySchema.pre('save', function(next) {
+  if (!this.slug && this.name) {
+    this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+  next();
+});
+
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+// Uniqueness is per tenant, not global. Two agencies must each be able to have a category called "Plots".
+// A global `unique: true` would let whichever agency signed up first claim
+// the name for everyone else.
+categorySchema.index({ tenantId: 1, slug: 1 }, { unique: true });
+categorySchema.index({ tenantId: 1, name: 1 }, { unique: true });
 
 const Category = mongoose.model('Category', categorySchema);
 

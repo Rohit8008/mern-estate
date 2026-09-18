@@ -4,92 +4,80 @@
 //   • scores and highlights results
 //   • returns a uniform { entity, label, icon, items[] } shape
 
-import Listing           from '../models/listing.model.js';
 import Client            from '../models/client.model.js';
 import Owner             from '../models/owner.model.js';
 import BuyerRequirement  from '../models/buyerRequirement.model.js';
 import Task              from '../models/task.model.js';
 import User              from '../models/user.model.js';
-import { buildFuzzyRegex, scoreDocument } from '../utils/search.js';
+import { buildFuzzyRegex } from '../utils/search.js';
+import { searchListings as runListingSearch } from './listingSearch.js';
 import { fmtPrice } from './parser.js';
 
 const DEFAULT_LIMIT = 5;
+
+/**
+ * The caller's own id, as a string.
+ *
+ * `verifyToken` builds req.user as `{ id, email, username, ... }` — there is no
+ * `_id` on it. Reading `user._id` yields undefined, and Mongoose DROPS undefined
+ * values out of a query filter rather than matching on them, so an ABAC clause
+ * written as `assignedTo: user._id` disappears at runtime: the restriction reads
+ * as present in the source and is simply absent in the query. Resolve it here,
+ * once, and throw rather than silently widen if there is no identity at all.
+ */
+function actorId(user) {
+  const id = user?.id || user?._id;
+  if (!id) throw new Error('entitySearchers: no caller identity — refusing to run an unscoped search.');
+  return String(id);
+}
 
 // ─── Listings ────────────────────────────────────────────────────────────────
 
 export async function searchListings(parsed, user, limit = DEFAULT_LIMIT) {
   const { filters, remaining } = parsed;
 
-  const must = { isDeleted: { $ne: true } };
-
-  // ABAC: employees are scoped to their assigned categories
-  if (user.role === 'employee' && user.assignedCategories?.length) {
-    must.category = { $in: user.assignedCategories };
-  }
-
-  // Structured filters from NLP
-  if (filters.bedrooms)  must.bedrooms  = filters.bedrooms;
-  if (filters.bathrooms) must.bathrooms = { $gte: filters.bathrooms };
-  if (filters.status)    must.status    = filters.status;
-  if (filters.propertyType) {
-    must.propertyType = { $regex: filters.propertyType, $options: 'i' };
-  }
-  if (filters.minPrice || filters.maxPrice) {
-    must.regularPrice = {};
-    if (filters.minPrice) must.regularPrice.$gte = filters.minPrice;
-    if (filters.maxPrice) must.regularPrice.$lte = filters.maxPrice;
-  }
-
-  const query = { ...must };
-
-  if (remaining && remaining.length >= 2) {
-    const regex  = buildFuzzyRegex(remaining, { fuzzyLevel: 'medium' });
-    const orConds = [
-      { name: regex }, { address: regex }, { city: regex },
-      { locality: regex }, { areaName: regex }, { propertyNo: regex },
-    ];
-
-    // Location hint — boost city/locality/area matches
-    if (filters._locationHint) {
-      const locRe = new RegExp(filters._locationHint.split(/\s+/).join('|'), 'i');
-      orConds.push({ city: locRe }, { locality: locRe }, { areaName: locRe }, { address: locRe });
-    }
-    // Sector hint
-    if (filters._sectorHint) {
-      const secRe = new RegExp(filters._sectorHint, 'i');
-      orConds.push({ locality: secRe }, { address: secRe });
-    }
-
-    query.$or = orConds;
-  } else if (!filters.hasStructuredFilters && !remaining) {
+  if (!remaining && !filters.hasStructuredFilters) {
     return emptyGroup('listings', 'Properties', 'property');
   }
 
-  const raw = await Listing.find(query)
-    .select('name address city locality regularPrice bedrooms propertyType status _id createdAt')
-    .sort({ createdAt: -1 })
-    .limit(limit * 4) // oversample for relevance scoring
-    .lean();
-
-  // scoreDocument expects an array of terms, not a raw string
-  const terms = remaining ? remaining.split(/\s+/).filter(Boolean) : [];
-
-  const scored = raw
-    .map(d => ({ ...d, _score: terms.length ? scoreDocument(d, terms).normalizedScore : 1 }))
-    .sort((a, b) => b._score - a._score)
-    .slice(0, limit);
+  // Delegates to the one search service, so the palette, the board and the
+  // public search agree on what matches and on who may see it.
+  //
+  // This used to take the twenty NEWEST matches and only then score them for
+  // relevance, so an exact name match was invisible if twenty newer listings
+  // also matched loosely. Ranking now happens in the database, over the whole
+  // matching set.
+  const { listings } = await runListingSearch({
+    q: [remaining, filters._locationHint, filters._sectorHint].filter(Boolean).join(' '),
+    params: {
+      status: filters.status,
+      propertyType: filters.propertyType,
+      minPrice: filters.minPrice,
+      maxPrice: filters.maxPrice,
+      minBedrooms: filters.bedrooms,
+      minBathrooms: filters.bathrooms,
+    },
+    user,
+    limit,
+    skip: 0,
+    sort: 'relevance',
+    projection: 'name address city locality regularPrice bedrooms propertyType status createdAt',
+  });
 
   return {
     entity: 'listings',
-    label:  'Properties',
-    icon:   'property',
-    items:  scored.map(d => ({
-      _id:      d._id,
-      title:    d.name,
+    label: 'Properties',
+    icon: 'property',
+    items: listings.map((d) => ({
+      _id: d._id,
+      title: d.name,
       subtitle: [d.address, d.city].filter(Boolean).join(', '),
-      meta:     [d.bedrooms ? `${d.bedrooms} BHK` : null, d.regularPrice ? fmtPrice(d.regularPrice) : null].filter(Boolean).join(' · '),
-      url:      `/listing/${d._id}`,
-      score:    d._score,
+      meta: [
+        d.bedrooms ? `${d.bedrooms} BHK` : null,
+        d.regularPrice ? fmtPrice(d.regularPrice) : null,
+      ].filter(Boolean).join(' · '),
+      url: `/listing/${d._id}`,
+      score: d.score ?? 1,
     })),
   };
 }
@@ -100,7 +88,11 @@ export async function searchClients(parsed, user, limit = DEFAULT_LIMIT) {
   const { remaining, filters } = parsed;
   if (!remaining || remaining.length < 2) return emptyGroup('clients', 'Leads / Clients', 'client');
 
+  // Same rule the list endpoint enforces (client.controller.js): an admin sees
+  // the workspace, everyone else sees only what is assigned to them. The palette
+  // must not be a way around the controller.
   const must = { isDeleted: { $ne: true } };
+  if (user.role !== 'admin') must.assignedTo = actorId(user);
 
   const regex = buildFuzzyRegex(remaining, { fuzzyLevel: 'medium' });
   const docs = await Client.find({
@@ -172,7 +164,7 @@ export async function searchBuyers(parsed, user, limit = DEFAULT_LIMIT) {
   const regex = buildFuzzyRegex(remaining, { fuzzyLevel: 'medium' });
 
   const must = {};
-  if (user.role === 'employee') must.assignedAgent = user._id;
+  if (user.role === 'employee') must.assignedAgent = actorId(user);
 
   const docs = await BuyerRequirement.find({
     ...must,
@@ -204,7 +196,7 @@ export async function searchTasks(parsed, user, limit = DEFAULT_LIMIT) {
   if (!remaining || remaining.length < 2) return emptyGroup('tasks', 'Tasks', 'task');
 
   const regex = buildFuzzyRegex(remaining, { fuzzyLevel: 'medium' });
-  const must = { isDeleted: { $ne: true }, assignedTo: user._id };
+  const must = { isDeleted: { $ne: true }, assignedTo: actorId(user) };
   if (filters._dateRange) must.dueAt = filters._dateRange;
 
   const docs = await Task.find({

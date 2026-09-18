@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { apiClient, normalizeImageUrl } from '../utils/http';
+import { useTranslation } from 'react-i18next';
 
 export default function Contact({ listing }) {
+  const { t } = useTranslation();
   const landlord = listing.owner || null;
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -27,15 +29,15 @@ export default function Contact({ listing }) {
                 className='w-10 h-10 rounded-full object-cover'
               />
               <div>
-                <div className='text-sm text-slate-600'>Contact</div>
+                <div className='text-sm text-slate-600'>{t('contact.contact')}</div>
                 <div className='font-semibold text-slate-900'>{landlord.username}</div>
               </div>
             </div>
           )}
           {isBuyer && (
             <div className='text-center py-2'>
-              <div className='text-sm text-slate-600'>Contact Property Agent</div>
-              <div className='font-semibold text-slate-800'>Get in touch for more details</div>
+              <div className='text-sm text-slate-600'>{t('contact.contactPropertyAgent')}</div>
+              <div className='font-semibold text-slate-800'>{t('contact.getInTouchForMoreDetails')}</div>
             </div>
           )}
 
@@ -53,9 +55,7 @@ export default function Contact({ listing }) {
               type='button'
               className='text-indigo-600 hover:text-indigo-700 text-sm font-medium'
               onClick={() => navigator.clipboard.writeText(`${window.location.origin}/listing/${listing._id}`)}
-            >
-              Copy link
-            </button>
+            >{t('contact.copyLink')}</button>
           </div>
 
           <div className='flex flex-wrap gap-2'>
@@ -80,7 +80,7 @@ export default function Contact({ listing }) {
             rows='6'
             value={message}
             onChange={onChange}
-            placeholder='Enter your message here...'
+            placeholder={t('contact.enterYourMessageHere')}
             className='w-full border border-slate-200 rounded-xl p-3 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none'
           />
           <div className='text-xs text-slate-500 self-end'>{message.length}/{maxLen}</div>
@@ -89,9 +89,7 @@ export default function Contact({ listing }) {
             <a
               href={`/messages?user=${landlord._id}&text=${encodeURIComponent(message)}`}
               className='flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors text-center'
-            >
-              Open Chat
-            </a>
+            >{t('contact.openChat')}</a>
             <button
               onClick={async () => {
                 try {

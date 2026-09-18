@@ -3,24 +3,31 @@ import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient, normalizeImageUrl } from '../utils/http';
+import { formatDate, formatListingPrice, formatNumber, isPlaceholderPrice } from '../utils/currency';
+import { useNotification } from '../contexts/NotificationContext';
+import { toCsv, downloadTextFile } from '../utils/spreadsheet';
+import { KpiCard } from '../design-system';
 import {
   HiRefresh, HiTrendingUp, HiHome, HiCurrencyDollar,
   HiChartBar, HiLocationMarker, HiEye, HiFilter,
-  HiChevronDown, HiDownload, HiPrinter,
+  HiChevronDown, HiDownload, HiPrinter, HiOutlinePhotograph,
 } from 'react-icons/hi';
+import { useTranslation } from 'react-i18next';
 
 const STATUS_COLORS = {
   available: { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   under_negotiation: { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
-  sold: { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
+  sold: { bg: 'bg-indigo-100', text: 'text-indigo-700', dot: 'bg-indigo-500' },
   rented: { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500' },
 };
 
 const PROPERTY_TYPES = ['All', 'Residential', 'Commercial', 'Land', 'Industrial'];
 
 export default function PortfolioDashboard() {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
+  const { showError } = useNotification();
 
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,15 +63,16 @@ export default function PortfolioDashboard() {
     fetchData();
   }, [fetchData]);
 
-  const fmt = (n) => new Intl.NumberFormat('en-IN').format(n || 0);
-  const fmtCurrency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+  const fmt = formatNumber;
+  const fmtCurrency = formatListingPrice;
 
   // Calculate portfolio metrics
   const portfolioMetrics = useMemo(() => {
     if (!properties.length) return { totalValue: 0, avgPrice: 0, byStatus: {}, byType: {}, byCity: {} };
-    
-    const totalValue = properties.reduce((sum, p) => sum + (p.regularPrice || 0), 0);
-    const avgPrice = totalValue / properties.length;
+
+    const pricedProperties = properties.filter((p) => !isPlaceholderPrice(p.regularPrice));
+    const totalValue = pricedProperties.reduce((sum, p) => sum + (p.regularPrice || 0), 0);
+    const avgPrice = pricedProperties.length ? totalValue / pricedProperties.length : 0;
     
     const byStatus = properties.reduce((acc, p) => {
       const status = p.status || 'available';
@@ -102,41 +110,38 @@ export default function PortfolioDashboard() {
     return cityEntries.sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [portfolioMetrics.byCity]);
 
-  // Export to CSV
+  /**
+   * Export the portfolio as CSV.
+   *
+   * Goes through the shared toCsv/downloadTextFile helpers rather than
+   * hand-rolling quoting here: they carry the formula-injection guard (property
+   * names arrive from outside the agency) and the UTF-8 BOM that stops Excel
+   * turning the rupee sign and non-ASCII names into mojibake.
+   *
+   * Numbers are passed as numbers so they stay summable in the sheet.
+   */
   const handleExport = useCallback(() => {
     if (!properties.length) {
-      alert('No data to export');
+      showError('No data to export');
       return;
     }
 
-    const headers = ['Name', 'City', 'Type', 'Price', 'Status', 'Bedrooms', 'Bathrooms', 'Area (sqft)'];
-    const csvRows = [headers.join(',')];
-
-    properties.forEach((p) => {
-      const row = [
-        `"${(p.name || '').replace(/"/g, '""')}"`,
-        `"${(p.city || '').replace(/"/g, '""')}"`,
+    const grid = [
+      ['Name', 'City', 'Type', 'Price', 'Status', 'Bedrooms', 'Bathrooms', 'Area (sqft)'],
+      ...properties.map((p) => [
+        p.name || '',
+        p.city || '',
         p.type || '',
         p.regularPrice || 0,
         p.status || 'available',
         p.bedrooms || 0,
         p.bathrooms || 0,
         p.areaSqFt || 0,
-      ];
-      csvRows.push(row.join(','));
-    });
+      ]),
+    ];
 
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `portfolio_export_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [properties]);
+    downloadTextFile(`portfolio-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(grid));
+  }, [properties, showError]);
 
   // Print functionality
   const handlePrint = useCallback(() => {
@@ -144,7 +149,7 @@ export default function PortfolioDashboard() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Portfolio Dashboard Report</title>
+        <title>{t('portfolioDashboard.portfolioDashboardReport')}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
           h1 { color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
@@ -167,31 +172,31 @@ export default function PortfolioDashboard() {
         </style>
       </head>
       <body>
-        <h1>Portfolio Dashboard Report</h1>
-        <p style="color: #64748b;">Generated on ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+        <h1>{t('portfolioDashboard.portfolioDashboardReport')}</h1>
+        <p style="color: #64748b;">Generated on ${formatDate(new Date(), { day: 'numeric', month: 'long' })}</p>
         
         <div class="summary">
           <div class="stat-card">
-            <div class="stat-label">Total Properties</div>
+            <div class="stat-label">{t('portfolioDashboard.totalProperties')}</div>
             <div class="stat-value">${properties.length}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Portfolio Value</div>
+            <div class="stat-label">{t('portfolioDashboard.portfolioValue')}</div>
             <div class="stat-value">${fmtCurrency(portfolioMetrics.totalValue)}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Avg. Price</div>
+            <div class="stat-label">{t('portfolioDashboard.avgPrice')}</div>
             <div class="stat-value">${fmtCurrency(portfolioMetrics.avgPrice)}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Locations</div>
+            <div class="stat-label">{t('portfolioDashboard.locations')}</div>
             <div class="stat-value">${Object.keys(portfolioMetrics.byCity).length}</div>
           </div>
         </div>
 
-        <h2>Property Status Breakdown</h2>
+        <h2>{t('portfolioDashboard.propertyStatusBreakdown')}</h2>
         <table>
-          <tr><th>Status</th><th>Count</th><th>Percentage</th></tr>
+          <tr><th>{t('portfolioDashboard.status')}</th><th>{t('portfolioDashboard.count')}</th><th>{t('portfolioDashboard.percentage')}</th></tr>
           ${Object.entries(portfolioMetrics.byStatus).map(([status, count]) => `
             <tr>
               <td style="text-transform: capitalize;">${status.replace('_', ' ')}</td>
@@ -201,14 +206,14 @@ export default function PortfolioDashboard() {
           `).join('')}
         </table>
 
-        <h2>Properties List</h2>
+        <h2>{t('portfolioDashboard.propertiesList')}</h2>
         <table>
           <tr>
-            <th>Property</th>
-            <th>Location</th>
-            <th>Type</th>
-            <th>Price</th>
-            <th>Status</th>
+            <th>{t('portfolioDashboard.property')}</th>
+            <th>{t('portfolioDashboard.location')}</th>
+            <th>{t('portfolioDashboard.type')}</th>
+            <th>{t('portfolioDashboard.price')}</th>
+            <th>{t('portfolioDashboard.status')}</th>
           </tr>
           ${filteredProperties.map((p) => `
             <tr>
@@ -222,7 +227,7 @@ export default function PortfolioDashboard() {
         </table>
 
         <div class="footer">
-          <p>Real Estate CRM - Portfolio Report</p>
+          <p>{t('portfolioDashboard.realEstateCrmPortfolioReport')}</p>
         </div>
       </body>
       </html>
@@ -242,7 +247,7 @@ export default function PortfolioDashboard() {
   if (!canAccess) {
     return (
       <div className='min-h-screen flex items-center justify-center'>
-        <p className='text-slate-600'>Access denied</p>
+        <p className='text-slate-600'>{t('portfolioDashboard.accessDenied')}</p>
       </div>
     );
   }
@@ -253,34 +258,28 @@ export default function PortfolioDashboard() {
       <div className='relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm overflow-hidden'>
         <div className='absolute inset-0 crm-banner-dots pointer-events-none' aria-hidden='true' />
         <div>
-          <p className='text-slate-400 text-xs font-medium uppercase tracking-widest mb-1'>Portfolio</p>
-          <h1 className='text-xl font-bold text-white'>Portfolio Dashboard</h1>
-          <p className='text-slate-400 text-sm mt-0.5'>Overview of your property portfolio performance</p>
+          <p className='text-slate-400 text-xs font-medium uppercase tracking-widest mb-1'>{t('portfolioDashboard.portfolio')}</p>
+          <h1 className='text-xl font-bold text-white'>{t('portfolioDashboard.portfolioDashboard')}</h1>
+          <p className='text-slate-400 text-sm mt-0.5'>{t('portfolioDashboard.overviewOfYourPropertyPortfolioPerformance')}</p>
         </div>
         <div className='flex items-center gap-2 flex-shrink-0'>
           <button
             onClick={fetchData}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors'
           >
-            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />{t('portfolioDashboard.refresh')}</button>
           <button
             onClick={handleExport}
             disabled={loading || !properties.length}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
-            <HiDownload className='w-4 h-4' />
-            Export
-          </button>
+            <HiDownload className='w-4 h-4' />{t('portfolioDashboard.export')}</button>
           <button
             onClick={handlePrint}
             disabled={loading || !properties.length}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
-            <HiPrinter className='w-4 h-4' />
-            Print
-          </button>
+            <HiPrinter className='w-4 h-4' />{t('portfolioDashboard.print')}</button>
         </div>
       </div>
 
@@ -288,7 +287,7 @@ export default function PortfolioDashboard() {
       {error && (
         <div className='bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-center justify-between'>
           <p className='text-rose-700 text-sm'>{error}</p>
-          <button onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>Retry</button>
+          <button onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>{t('portfolioDashboard.retry')}</button>
         </div>
       )}
 
@@ -309,59 +308,48 @@ export default function PortfolioDashboard() {
         <>
           {/* KPI Cards */}
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
-            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-blue-500 crm-animate-in crm-delay-1'>
-              <div className='flex items-center justify-between mb-3'>
-                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Total Properties</span>
-                <div className='w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center ring-1 ring-blue-100'>
-                  <HiHome className='w-5 h-5 text-blue-600' />
-                </div>
-              </div>
-              <div className='text-3xl font-bold text-slate-900 mb-2'>{fmt(properties.length)}</div>
-              <div className='flex items-center gap-1 text-xs text-slate-500'>
-                <HiTrendingUp className='w-3.5 h-3.5 text-emerald-500' />
-                <span className='text-emerald-600 font-medium'>Active portfolio</span>
-              </div>
-            </div>
-
-            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-emerald-500 crm-animate-in crm-delay-2'>
-              <div className='flex items-center justify-between mb-3'>
-                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Portfolio Value</span>
-                <div className='w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center ring-1 ring-emerald-100'>
-                  <HiCurrencyDollar className='w-5 h-5 text-emerald-600' />
-                </div>
-              </div>
-              <div className='text-3xl font-bold text-slate-900 mb-2'>{fmtCurrency(portfolioMetrics.totalValue)}</div>
-              <div className='text-xs text-slate-500'>Total listed value</div>
-            </div>
-
-            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-amber-500 crm-animate-in crm-delay-3'>
-              <div className='flex items-center justify-between mb-3'>
-                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Avg. Price</span>
-                <div className='w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center ring-1 ring-amber-100'>
-                  <HiChartBar className='w-5 h-5 text-amber-600' />
-                </div>
-              </div>
-              <div className='text-3xl font-bold text-slate-900 mb-2'>{fmtCurrency(portfolioMetrics.avgPrice)}</div>
-              <div className='text-xs text-slate-500'>Per property average</div>
-            </div>
-
-            <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow border-t-2 border-t-purple-500 crm-animate-in crm-delay-4'>
-              <div className='flex items-center justify-between mb-3'>
-                <span className='text-xs font-semibold text-slate-500 uppercase tracking-wider'>Locations</span>
-                <div className='w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center ring-1 ring-purple-100'>
-                  <HiLocationMarker className='w-5 h-5 text-purple-600' />
-                </div>
-              </div>
-              <div className='text-3xl font-bold text-slate-900 mb-2'>{Object.keys(portfolioMetrics.byCity).length}</div>
-              <div className='text-xs text-slate-500'>Cities covered</div>
-            </div>
+            <KpiCard
+              className='crm-animate-in crm-delay-1'
+              title={t('portfolioDashboard.totalProperties')}
+              value={fmt(properties.length)}
+              icon={HiHome}
+              color='blue'
+              sub={
+                <span className='flex items-center gap-1 text-emerald-600 font-medium'>
+                  <HiTrendingUp className='w-3.5 h-3.5' />{t('portfolioDashboard.activePortfolio')}</span>
+              }
+            />
+            <KpiCard
+              className='crm-animate-in crm-delay-2'
+              title={t('portfolioDashboard.portfolioValue')}
+              value={fmtCurrency(portfolioMetrics.totalValue)}
+              icon={HiCurrencyDollar}
+              color='emerald'
+              sub='Total listed value'
+            />
+            <KpiCard
+              className='crm-animate-in crm-delay-3'
+              title={t('portfolioDashboard.avgPrice')}
+              value={fmtCurrency(portfolioMetrics.avgPrice)}
+              icon={HiChartBar}
+              color='amber'
+              sub='Per property average'
+            />
+            <KpiCard
+              className='crm-animate-in crm-delay-4'
+              title={t('portfolioDashboard.locations')}
+              value={Object.keys(portfolioMetrics.byCity).length}
+              icon={HiLocationMarker}
+              color='purple'
+              sub='Cities covered'
+            />
           </div>
 
           {/* Status Breakdown & Top Cities */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {/* Status Breakdown */}
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-              <h3 className='text-sm font-semibold text-slate-900 mb-4'>Property Status</h3>
+              <h3 className='text-sm font-semibold text-slate-900 mb-4'>{t('portfolioDashboard.propertyStatus')}</h3>
               <div className='space-y-3'>
                 {Object.entries(portfolioMetrics.byStatus).map(([status, count]) => {
                   const colors = STATUS_COLORS[status] || STATUS_COLORS.available;
@@ -383,7 +371,7 @@ export default function PortfolioDashboard() {
 
             {/* Top Cities */}
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-              <h3 className='text-sm font-semibold text-slate-900 mb-4'>Top Locations</h3>
+              <h3 className='text-sm font-semibold text-slate-900 mb-4'>{t('portfolioDashboard.topLocations')}</h3>
               <div className='space-y-3'>
                 {topCities.map(([city, count], index) => {
                   const maxCount = topCities[0]?.[1] || 1;
@@ -402,7 +390,7 @@ export default function PortfolioDashboard() {
                   );
                 })}
                 {topCities.length === 0 && (
-                  <p className='text-sm text-slate-500'>No location data available</p>
+                  <p className='text-sm text-slate-500'>{t('portfolioDashboard.noLocationDataAvailable')}</p>
                 )}
               </div>
             </div>
@@ -411,7 +399,7 @@ export default function PortfolioDashboard() {
           {/* Property Type Filter & List */}
           <div className='bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm'>
             <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
-              <h3 className='text-sm font-semibold text-slate-900'>Properties</h3>
+              <h3 className='text-sm font-semibold text-slate-900'>{t('portfolioDashboard.properties')}</h3>
               <div className='flex items-center gap-2'>
                 <div className='relative'>
                   <button
@@ -443,12 +431,12 @@ export default function PortfolioDashboard() {
               <table className='w-full'>
                 <thead className='bg-slate-50'>
                   <tr>
-                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Property</th>
-                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Location</th>
-                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Type</th>
-                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Price</th>
-                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Status</th>
-                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>Actions</th>
+                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>{t('portfolioDashboard.property')}</th>
+                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>{t('portfolioDashboard.location')}</th>
+                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>{t('portfolioDashboard.type')}</th>
+                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>{t('portfolioDashboard.price')}</th>
+                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>{t('portfolioDashboard.status')}</th>
+                    <th className='text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase'>{t('portfolioDashboard.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className='divide-y divide-slate-100'>
@@ -458,11 +446,19 @@ export default function PortfolioDashboard() {
                       <tr key={property._id} className='hover:bg-slate-50'>
                         <td className='px-4 py-3'>
                           <div className='flex items-center gap-3'>
-                            <img
-                              src={normalizeImageUrl(property.imageUrls?.[0]) || 'https://via.placeholder.com/40'}
-                              alt={property.name}
-                              className='w-10 h-10 rounded-lg object-cover'
-                            />
+                            {property.imageUrls?.[0] ? (
+                              <img
+                                src={normalizeImageUrl(property.imageUrls[0])}
+                                alt={property.name}
+                                className='w-10 h-10 rounded-lg object-cover flex-shrink-0'
+                                onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                              />
+                            ) : null}
+                            <div
+                              className={`w-10 h-10 rounded-lg bg-slate-100 items-center justify-center flex-shrink-0 ${property.imageUrls?.[0] ? 'hidden' : 'flex'}`}
+                            >
+                              <HiOutlinePhotograph className='w-5 h-5 text-slate-300' />
+                            </div>
                             <div>
                               <p className='text-sm font-medium text-slate-900 truncate max-w-[200px]'>{property.name}</p>
                               <p className='text-xs text-slate-500'>{property.bedrooms || 0} bed • {property.bathrooms || 0} bath</p>
@@ -496,9 +492,7 @@ export default function PortfolioDashboard() {
                   })}
                   {filteredProperties.length === 0 && (
                     <tr>
-                      <td colSpan={6} className='px-4 py-8 text-center text-sm text-slate-500'>
-                        No properties found
-                      </td>
+                      <td colSpan={6} className='px-4 py-8 text-center text-sm text-slate-500'>{t('portfolioDashboard.noPropertiesFound')}</td>
                     </tr>
                   )}
                 </tbody>

@@ -2,7 +2,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  HiX, HiCheck, HiEye, HiEyeOff, HiCog, HiLogout, HiCamera,
+  HiX, HiEye, HiEyeOff, HiCog, HiLogout, HiCamera,
 } from 'react-icons/hi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CameraCapture from '../components/CameraCapture';
@@ -12,18 +12,23 @@ import {
   signOutUserStart, signOutUserSuccess, signOutUserFailure,
 } from '../redux/user/userSlice';
 import { apiClient, normalizeImageUrl, setUserSignedOut } from '../utils/http';
+import { formatListingPrice } from '../utils/currency';
 import { uploadToCloudinary } from '../utils/cloudinary';
+import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useNotification } from '../contexts/NotificationContext';
 import {
   PageHeader, Button,
   Card, CardHeader, CardTitle,
   Input, Select, Textarea,
 } from '../design-system';
+import { useTranslation } from 'react-i18next';
 
 const INPUT_CLS =
   'w-full border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 bg-white pl-3 pr-9 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400';
 
 export default function Profile() {
+  const { t } = useTranslation();
   const fileRef = useRef(null);
   const { currentUser, loading, error } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
@@ -45,12 +50,7 @@ export default function Profile() {
   const [listingsLoaded, setListingsLoaded] = useState(false);
   const [listingsLoading, setListingsLoading] = useState(false);
 
-  // Toast
-  const [toast, setToast] = useState(null);
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
+  const { showSuccess, showError } = useNotification();
 
   const isAdmin = currentUser?.role === 'admin';
   const isEmployee = currentUser?.role === 'employee';
@@ -111,14 +111,14 @@ export default function Profile() {
       const data = await apiClient.post(`/user/update/${currentUser._id}`, formData);
       if (data.success === false) {
         dispatch(updateUserFailure(data.message));
-        showToast(data.message || 'Failed to update profile', 'error');
+        showError(data.message || 'Failed to update profile');
         return;
       }
       dispatch(updateUserSuccess(data));
-      showToast('Profile updated successfully!');
+      showSuccess('Profile updated successfully!');
     } catch (err) {
       dispatch(updateUserFailure(err.message));
-      showToast(err.message || 'Failed to update profile', 'error');
+      showError(err.message || 'Failed to update profile');
     }
   };
 
@@ -134,15 +134,15 @@ export default function Profile() {
       }, { silent: true });
       if (data.success === false) {
         setPasswordError(data.message || 'Password change failed');
-        showToast(data.message || 'Password change failed', 'error');
+        showError(data.message || 'Password change failed');
         return;
       }
       setPasswordSuccess(true);
       setPasswordData({ oldPassword: '', newPassword: '' });
-      showToast('Password changed successfully!');
+      showSuccess('Password changed successfully!');
     } catch {
       setPasswordError('Password change failed. Please try again.');
-      showToast('Password change failed. Please try again.', 'error');
+      showError('Password change failed. Please try again.');
     }
   };
 
@@ -200,37 +200,18 @@ export default function Profile() {
 
   return (
     <div className='space-y-6'>
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed top-5 right-5 z-[9999] flex items-start gap-3 bg-white border rounded-xl px-4 py-3.5 shadow-xl min-w-[300px] max-w-sm ${toast.type === 'success' ? 'border-l-4 border-l-emerald-500 border-slate-200' : 'border-l-4 border-l-rose-500 border-slate-200'}`}>
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${toast.type === 'success' ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-            {toast.type === 'success'
-              ? <HiCheck className='w-3.5 h-3.5 text-emerald-600' />
-              : <HiX className='w-3.5 h-3.5 text-rose-600' />}
-          </div>
-          <p className={`flex-1 text-sm font-medium ${toast.type === 'success' ? 'text-emerald-800' : 'text-rose-800'}`}>
-            {toast.message}
-          </p>
-          <button onClick={() => setToast(null)} className='text-slate-400 hover:text-slate-600 flex-shrink-0 p-0.5'>
-            <HiX className='w-4 h-4' />
-          </button>
-        </div>
-      )}
-
       {/* Header */}
       <PageHeader
-        title='My Profile'
-        description='Manage your personal information and account settings'
+        title={t('profile.myProfile')}
+        description={t('profile.manageYourPersonalInformationAndAccount')}
         actions={
           <div className='flex items-center gap-2'>
             <Link
               to='/settings'
               className='inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 rounded-lg text-slate-700 transition-colors'
             >
-              <HiCog className='w-4 h-4' />
-              Settings
-            </Link>
-            <Button icon={HiLogout} onClick={handleSignOut}>Sign Out</Button>
+              <HiCog className='w-4 h-4' />{t('profile.settings')}</Link>
+            <Button icon={HiLogout} onClick={handleSignOut}>{t('profile.signOut')}</Button>
           </div>
         }
       />
@@ -241,31 +222,27 @@ export default function Profile() {
         <div className='xl:col-span-1 space-y-5'>
           {/* Photo */}
           <Card>
-            <CardHeader><CardTitle>Profile Photo</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('profile.profilePhoto')}</CardTitle></CardHeader>
             <div className='flex flex-col items-center gap-3'>
               <div className='relative'>
                 <img
                   onClick={() => fileRef.current.click()}
-                  src={formData.avatar || currentUser.avatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}
+                  src={formData.avatar || currentUser.avatar || DEFAULT_AVATAR_URL}
                   alt='profile'
                   className='w-24 h-24 rounded-full object-cover cursor-pointer border-4 border-slate-200 hover:border-indigo-300 transition-colors'
-                  onError={(e) => { e.currentTarget.src = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'; }}
+                  onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR_URL; }}
                 />
                 <button
                   type='button'
-                  onClick={() => setFormData((prev) => ({ ...prev, avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png' }))}
+                  onClick={() => setFormData((prev) => ({ ...prev, avatar: '' }))}
                   className='absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-1 hover:bg-rose-600 transition-colors'
                 >
                   <HiX className='w-3 h-3' />
                 </button>
               </div>
               <input onChange={handleFileChange} type='file' ref={fileRef} hidden accept='image/*' />
-              <Button variant='secondary' className='w-full justify-center' onClick={() => fileRef.current.click()}>
-                Change Photo
-              </Button>
-              <Button variant='secondary' icon={HiCamera} className='w-full justify-center' onClick={() => setCameraOpen(true)}>
-                Take Photo
-              </Button>
+              <Button variant='secondary' className='w-full justify-center' onClick={() => fileRef.current.click()}>{t('profile.changePhoto')}</Button>
+              <Button variant='secondary' icon={HiCamera} className='w-full justify-center' onClick={() => setCameraOpen(true)}>{t('profile.takePhoto')}</Button>
               <CameraCapture
                 open={cameraOpen}
                 onClose={() => setCameraOpen(false)}
@@ -278,41 +255,35 @@ export default function Profile() {
                 <p className='text-indigo-600 text-xs text-center'>Uploading {filePerc}%</p>
               )}
               {filePerc === 100 && (
-                <p className='text-emerald-600 text-xs text-center'>Uploaded successfully!</p>
+                <p className='text-emerald-600 text-xs text-center'>{t('profile.uploadedSuccessfully')}</p>
               )}
             </div>
           </Card>
 
           {/* Quick Actions */}
           <Card>
-            <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('profile.quickActions')}</CardTitle></CardHeader>
             <div className='space-y-2'>
               {!isBuyerViewMode && (currentUser.role === 'admin' || currentUser.role === 'employee' || currentUser.role === 'seller') && (
-                <Link to='/create-listing' className='block'>
-                  <Button variant='primary' className='w-full justify-center'>
-                    Create New Listing
-                  </Button>
-                </Link>
+                <Button as={Link} to='/create-listing' variant='primary' className='w-full justify-center'>{t('profile.createNewListing')}</Button>
               )}
               <Button variant='secondary' className='w-full justify-center' onClick={handleShowListings} disabled={listingsLoading}>
                 {listingsLoading ? 'Loading...' : 'View My Listings'}
               </Button>
               {!isBuyerViewMode && (isAdmin || isEmployee) && (
-                <Link to='/admin' className='block'>
-                  <Button variant='secondary' className='w-full justify-center'>
-                    {isAdmin ? 'Admin Panel' : 'Employee Panel'}
-                  </Button>
-                </Link>
+                <Button as={Link} to='/admin' variant='secondary' className='w-full justify-center'>
+                  {isAdmin ? 'Admin Panel' : 'Employee Panel'}
+                </Button>
               )}
             </div>
           </Card>
 
           {/* Change Password */}
           <Card>
-            <CardHeader><CardTitle>Change Password</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('profile.changePassword')}</CardTitle></CardHeader>
             <form onSubmit={handlePasswordSubmit} className='space-y-4'>
               <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>Current Password</label>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>{t('profile.currentPassword')}</label>
                 <div className='relative'>
                   <input
                     type={showPassword.old ? 'text' : 'password'}
@@ -320,7 +291,7 @@ export default function Profile() {
                     value={passwordData.oldPassword}
                     onChange={(e) => { setPasswordData((p) => ({ ...p, oldPassword: e.target.value })); setPasswordError(''); }}
                     className={INPUT_CLS}
-                    placeholder='Enter current password'
+                    placeholder={t('profile.enterCurrentPassword')}
                   />
                   <button
                     type='button'
@@ -332,7 +303,7 @@ export default function Profile() {
                 </div>
               </div>
               <div>
-                <label className='block text-sm font-medium text-slate-700 mb-1'>New Password</label>
+                <label className='block text-sm font-medium text-slate-700 mb-1'>{t('profile.newPassword')}</label>
                 <div className='relative'>
                   <input
                     type={showPassword.new ? 'text' : 'password'}
@@ -340,7 +311,7 @@ export default function Profile() {
                     value={passwordData.newPassword}
                     onChange={(e) => { setPasswordData((p) => ({ ...p, newPassword: e.target.value })); setPasswordError(''); }}
                     className={INPUT_CLS}
-                    placeholder='Enter new password'
+                    placeholder={t('profile.enterNewPassword')}
                   />
                   <button
                     type='button'
@@ -352,31 +323,25 @@ export default function Profile() {
                 </div>
               </div>
               {passwordError && <p className='text-rose-600 text-xs'>{passwordError}</p>}
-              {passwordSuccess && <p className='text-emerald-600 text-xs'>Password changed successfully!</p>}
-              <Button type='submit' variant='primary' className='w-full justify-center'>
-                Update Password
-              </Button>
+              {passwordSuccess && <p className='text-emerald-600 text-xs'>{t('profile.passwordChangedSuccessfully')}</p>}
+              <Button type='submit' variant='primary' className='w-full justify-center'>{t('profile.updatePassword')}</Button>
             </form>
           </Card>
 
           {/* Danger Zone */}
           <Card className='border-rose-200'>
-            <CardHeader><CardTitle className='text-rose-600'>Danger Zone</CardTitle></CardHeader>
-            <p className='text-sm text-slate-500 mb-4'>
-              Deleting your account is permanent and cannot be undone.
-            </p>
+            <CardHeader><CardTitle className='text-rose-600'>{t('profile.dangerZone')}</CardTitle></CardHeader>
+            <p className='text-sm text-slate-500 mb-4'>{t('profile.deletingYourAccountIsPermanentAnd')}</p>
             <button
               type='button'
               onClick={() => setPendingDeleteAccount(true)}
               className='w-full py-2 px-4 text-sm font-medium text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 transition-colors'
-            >
-              Delete My Account
-            </button>
+            >{t('profile.deleteMyAccount')}</button>
             <ConfirmDialog
               open={pendingDeleteAccount}
-              title='Delete your account?'
-              description='This action cannot be undone. All your data will be permanently removed.'
-              confirmLabel='Delete Account'
+              title={t('profile.deleteYourAccount')}
+              description={t('profile.thisActionCannotBeUndoneAll')}
+              confirmLabel={t('profile.deleteAccount')}
               onConfirm={() => { handleDeleteUser(); setPendingDeleteAccount(false); }}
               onCancel={() => setPendingDeleteAccount(false)}
             />
@@ -388,39 +353,39 @@ export default function Profile() {
           <form onSubmit={handleSubmit} className='space-y-5'>
             {/* Basic Info */}
             <Card>
-              <CardHeader><CardTitle>Basic Information</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t('profile.basicInformation')}</CardTitle></CardHeader>
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                 <Input
-                  label='Username'
+                  label={t('profile.username')}
                   id='username'
                   defaultValue={currentUser.username}
                   onChange={handleChange}
-                  placeholder='Enter username'
+                  placeholder={t('profile.enterUsername')}
                   required
                 />
                 <Input
-                  label='Email'
+                  label={t('profile.email')}
                   id='email'
                   type='email'
                   defaultValue={currentUser.email}
                   disabled
                 />
                 <Input
-                  label='First Name'
+                  label={t('profile.firstName')}
                   id='firstName'
                   defaultValue={currentUser.firstName || ''}
                   onChange={handleChange}
-                  placeholder='Enter first name'
+                  placeholder={t('profile.enterFirstName')}
                 />
                 <Input
-                  label='Last Name'
+                  label={t('profile.lastName')}
                   id='lastName'
                   defaultValue={currentUser.lastName || ''}
                   onChange={handleChange}
-                  placeholder='Enter last name'
+                  placeholder={t('profile.enterLastName')}
                 />
                 <Input
-                  label='Phone Number'
+                  label={t('profile.phoneNumber')}
                   id='phone'
                   type='tel'
                   value={phoneInput}
@@ -428,90 +393,88 @@ export default function Profile() {
                   placeholder='+1 (555) 123-4567'
                 />
                 <Select
-                  label='Role'
+                  label={t('profile.role')}
                   id='role'
                   defaultValue={currentUser.role || 'user'}
                   onChange={handleChange}
                   disabled
                   hint={isAdmin ? 'Admins cannot change their own role' : 'Only admins can change roles'}
                 >
-                  <option value='user'>User</option>
-                  <option value='employee'>Employee</option>
-                  <option value='admin'>Admin</option>
+                  <option value='user'>{t('profile.user')}</option>
+                  <option value='employee'>{t('profile.employee')}</option>
+                  <option value='admin'>{t('profile.admin')}</option>
                 </Select>
               </div>
             </Card>
 
             {/* Address */}
             <Card>
-              <CardHeader><CardTitle>Address Information</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t('profile.addressInformation')}</CardTitle></CardHeader>
               <div className='space-y-4'>
                 <Input
-                  label='Address Line 1'
+                  label={t('profile.addressLine1')}
                   id='addressLine1'
                   defaultValue={currentUser.addressLine1 || ''}
                   onChange={handleChange}
-                  placeholder='Enter address line 1'
+                  placeholder={t('profile.enterAddressLine1')}
                 />
                 <Input
-                  label='Address Line 2'
+                  label={t('profile.addressLine2')}
                   id='addressLine2'
                   defaultValue={currentUser.addressLine2 || ''}
                   onChange={handleChange}
-                  placeholder='Enter address line 2'
+                  placeholder={t('profile.enterAddressLine2')}
                 />
                 <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
                   <Input
-                    label='City'
+                    label={t('profile.city')}
                     id='city'
                     defaultValue={currentUser.city || ''}
                     onChange={handleChange}
-                    placeholder='City'
+                    placeholder={t('profile.city')}
                   />
                   <Input
-                    label='State'
+                    label={t('profile.state')}
                     id='state'
                     defaultValue={currentUser.state || ''}
                     onChange={handleChange}
-                    placeholder='State'
+                    placeholder={t('profile.state')}
                   />
                   <Input
-                    label='Postal Code'
+                    label={t('profile.postalCode')}
                     id='postalCode'
                     defaultValue={currentUser.postalCode || ''}
                     onChange={handleChange}
-                    placeholder='Postal code'
+                    placeholder={t('profile.postalCode2')}
                   />
                 </div>
                 <Input
-                  label='Country'
+                  label={t('profile.country')}
                   id='country'
                   defaultValue={currentUser.country || ''}
                   onChange={handleChange}
-                  placeholder='Country'
+                  placeholder={t('profile.country')}
                 />
               </div>
             </Card>
 
             {/* Bio */}
             <Card>
-              <CardHeader><CardTitle>About You</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t('profile.aboutYou')}</CardTitle></CardHeader>
               <Textarea
-                label='Biography'
+                label={t('profile.biography')}
                 id='bio'
                 defaultValue={currentUser.bio || ''}
                 onChange={handleChange}
                 rows={4}
-                placeholder='Tell us about yourself...'
+                placeholder={t('profile.tellUsAboutYourself')}
                 maxLength={500}
                 hint={`${currentUser.bio?.length || 0}/500 characters`}
               />
             </Card>
 
             <div className='flex justify-end'>
-              <Button type='submit' loading={loading}>
-                Save Changes
-              </Button>
+              <Button type='submit' loading={loading}>{t('profile.saveChanges')}</Button>
             </div>
           </form>
         </div>
@@ -522,18 +485,18 @@ export default function Profile() {
         <Card>
           <CardHeader
             action={
-              <Button variant='ghost' size='sm' onClick={handleShowListings} disabled={listingsLoading}>Refresh</Button>
+              <Button variant='ghost' size='sm' onClick={handleShowListings} disabled={listingsLoading}>{t('profile.refresh')}</Button>
             }
           >
-            <CardTitle>Your Listings</CardTitle>
+            <CardTitle>{t('profile.yourListings')}</CardTitle>
           </CardHeader>
 
           {showListingsError && (
-            <p className='text-rose-600 text-sm mb-4'>Error loading listings. Please try again.</p>
+            <p className='text-rose-600 text-sm mb-4'>{t('profile.errorLoadingListingsPleaseTryAgain')}</p>
           )}
 
           {!showListingsError && userListings.length === 0 && (
-            <p className='text-slate-500 text-sm'>No listings found. Create one to get started.</p>
+            <p className='text-slate-500 text-sm'>{t('profile.noListingsFoundCreateOneTo')}</p>
           )}
 
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
@@ -545,7 +508,7 @@ export default function Profile() {
                 <Link to={`/listing/${listing._id}`}>
                   <img
                     src={normalizeImageUrl(listing.imageUrls[0])}
-                    alt='listing cover'
+                    alt={t('profile.listingCover')}
                     className='w-full h-44 object-cover'
                   />
                 </Link>
@@ -558,7 +521,7 @@ export default function Profile() {
                   </Link>
                   <div className='flex justify-between items-center mt-3'>
                     <span className='text-base font-bold text-indigo-600'>
-                      ${listing.regularPrice?.toLocaleString()}
+                      {formatListingPrice(listing.regularPrice)}
                     </span>
                     {!isBuyerViewMode && (
                       currentUser.role === 'admin' ||
@@ -566,17 +529,13 @@ export default function Profile() {
                       (currentUser.role === 'seller' && listing.userRef === currentUser._id)
                     ) && (
                       <div className='flex gap-2'>
-                        <Link to={`/update-listing/${listing._id}`}>
-                          <Button variant='ghost' size='xs'>Edit</Button>
-                        </Link>
+                        <Button as={Link} to={`/update-listing/${listing._id}`} variant='ghost' size='xs'>{t('profile.edit')}</Button>
                         <Button
                           variant='ghost'
                           size='xs'
                           className='text-rose-600 hover:text-rose-700 hover:bg-rose-50'
                           onClick={() => handleListingDelete(listing._id)}
-                        >
-                          Delete
-                        </Button>
+                        >{t('profile.delete')}</Button>
                       </div>
                     )}
                   </div>

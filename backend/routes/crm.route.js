@@ -13,11 +13,15 @@ import {
   updateDealStage,
   updateCommission,
   getPipeline,
+  exportDeals,
+  getPipelineBottlenecks,
   addFollowUp,
   completeFollowUp,
   getFollowUpsRange,
   getUpcomingFollowUps,
   addCommunication,
+  updateCommunication,
+  deleteCommunication,
   getCommunications,
   getClientSummary,
 } from '../controllers/crm.controller.js';
@@ -32,6 +36,12 @@ router.use(requireRole('admin', 'employee'));
 
 // Get deal pipeline overview
 router.get('/pipeline', getPipeline);
+
+// Where deals are getting stuck, from stageHistory.
+router.get('/pipeline/bottlenecks', getPipelineBottlenecks);
+
+// One row per deal, as a CSV.
+router.get('/pipeline/export', exportDeals);
 
 // Add a deal to a client
 router.post('/:id/deals', validateBody(crmValidation.addDeal), addDeal);
@@ -63,6 +73,11 @@ router.get('/:id/communications', getCommunications);
 
 // Log a communication
 router.post('/:id/communications', validateBody(crmValidation.addCommunication), addCommunication);
+
+// Amend or remove one. Ownership is checked in the controller: a communication
+// belongs to whoever logged it, and only they or an admin may change it.
+router.patch('/:id/communications/:communicationId', validateBody(crmValidation.updateCommunication), updateCommunication);
+router.delete('/:id/communications/:communicationId', deleteCommunication);
 
 // ============= CLIENT SUMMARY =============
 

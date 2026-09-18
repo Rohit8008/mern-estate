@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../utils/http';
+import { useTranslation } from 'react-i18next';
 
 export default function UserProfile() {
+  const { t } = useTranslation();
   const { userId } = useParams();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,7 @@ export default function UserProfile() {
 
   return (
     <main className='max-w-4xl mx-auto px-4 py-8'>
-      {loading && <p>Loading...</p>}
+      {loading && <p>{t('userProfile.loading')}</p>}
       {error && <p className='text-red-600'>{error}</p>}
       {user && (
         <div className='bg-white rounded-xl shadow p-6'>
@@ -41,7 +43,7 @@ export default function UserProfile() {
           </div>
           {user.phone && (
             <div className='mt-4'>
-              <p className='text-slate-700'><span className='font-semibold'>Phone:</span> {user.phone}</p>
+              <p className='text-slate-700'><span className='font-semibold'>{t('userProfile.phone')}</span> {user.phone}</p>
             </div>
           )}
           <div className='mt-6'>

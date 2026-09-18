@@ -4,8 +4,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
-  HiOutlineBell, HiOutlinePlus, HiOutlineTrash, HiX,
+  HiOutlineBell, HiOutlinePlus, HiOutlineTrash, HiOutlineCalendar,
 } from 'react-icons/hi';
+import { Modal, PageLoader, EmptyState } from '../design-system';
+import { useTranslation } from 'react-i18next';
 
 /* ─── date helpers ─── */
 function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
@@ -37,6 +39,7 @@ function loadEvents() {
 }
 
 export default function Calendar() {
+  const { t } = useTranslation();
   const navigate    = useNavigate();
   const { currentUser }    = useSelector((s) => s.user);
   const { isBuyerViewMode } = useBuyerView();
@@ -272,50 +275,42 @@ export default function Calendar() {
       {/* Header */}
       <div className='flex flex-col md:flex-row md:items-end md:justify-between gap-3'>
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>Calendar</h1>
-          <p className='text-slate-500 mt-0.5'>Tasks, follow-ups and your events in one view</p>
+          <h1 className='text-xl font-bold text-slate-900'>{t('calendar.calendar')}</h1>
+          <p className='text-slate-500 mt-0.5'>{t('calendar.tasksFollowUpsAndYourEvents')}</p>
         </div>
 
         <div className='flex items-center gap-2 flex-wrap'>
           {/* Notification permission badge */}
           {typeof Notification !== 'undefined' && Notification.permission === 'denied' && (
-            <span className='text-xs text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg'>
-              Notifications blocked — enable in browser settings
-            </span>
+            <span className='text-xs text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg'>{t('calendar.notificationsBlockedEnableInBrowserSettings')}</span>
           )}
 
           {typeof Notification !== 'undefined' && Notification.permission !== 'denied' && (
             <button
               onClick={testNotification}
               className='flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium'
-              title='Send a test notification to verify reminders work'
+              title='Send a test desktop notification to confirm event reminders can reach you (separate from the notification bell above)'
             >
-              <HiOutlineBell className='w-4 h-4' /> Test
-            </button>
+              <HiOutlineBell className='w-4 h-4' />{t('calendar.testReminderAlerts')}</button>
           )}
 
           <Link
             to='/clients'
             className='px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'
-          >
-            Open Clients
-          </Link>
+          >{t('calendar.openClients')}</Link>
 
           <button
             onClick={openModal}
             className='flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'
           >
-            <HiOutlinePlus className='w-4 h-4' /> Add Event
-          </button>
+            <HiOutlinePlus className='w-4 h-4' />{t('calendar.addEvent')}</button>
 
-          <button onClick={() => setCursor(startOfMonth(addDays(monthStart, -1)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>Prev</button>
-          <button onClick={() => setCursor(startOfMonth(addDays(monthStart, 32)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>Next</button>
+          <button onClick={() => setCursor(startOfMonth(addDays(monthStart, -1)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.prev')}</button>
+          <button onClick={() => setCursor(startOfMonth(addDays(monthStart, 32)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.next')}</button>
           <button
             onClick={() => { const now = new Date(); setCursor(startOfMonth(now)); setSelected(startOfDay(now)); }}
             className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'
-          >
-            Today
-          </button>
+          >{t('calendar.today')}</button>
         </div>
       </div>
 
@@ -333,6 +328,9 @@ export default function Calendar() {
           </div>
         )}
 
+        {loading && tasks.length === 0 && followUps.length === 0 ? (
+          <PageLoader message='Loading calendar…' />
+        ) : (
         <div className='grid grid-cols-12 gap-4'>
           {/* ── Calendar grid ── */}
           <div className='col-span-12 xl:col-span-8'>
@@ -409,23 +407,30 @@ export default function Calendar() {
             <div className='bg-white rounded-2xl border border-slate-200 overflow-hidden'>
               <div className='px-4 py-3 border-b border-slate-200 flex items-center justify-between'>
                 <div>
-                  <div className='font-semibold text-slate-900'>Agenda</div>
+                  <div className='font-semibold text-slate-900'>{t('calendar.agenda')}</div>
                   <div className='text-sm text-slate-600 mt-0.5'>{selected.toLocaleDateString()}</div>
                 </div>
                 <button
                   onClick={openModal}
                   className='flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors'
                 >
-                  <HiOutlinePlus className='w-3.5 h-3.5' /> Event
-                </button>
+                  <HiOutlinePlus className='w-3.5 h-3.5' />{t('calendar.event')}</button>
               </div>
 
               <div className='p-4 space-y-5'>
 
+                {agenda.dayTasks.length === 0 && agenda.dayFollowUps.length === 0 && agenda.dayEvents.length === 0 ? (
+                  <EmptyState
+                    icon={HiOutlineCalendar}
+                    title={t('calendar.noEvents')}
+                    body={t('calendar.nothingScheduledForThisDay')}
+                  />
+                ) : (
+                <>
                 {/* Custom events */}
                 {agenda.dayEvents.length > 0 && (
                   <div>
-                    <div className='text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2'>Your Events</div>
+                    <div className='text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2'>{t('calendar.yourEvents')}</div>
                     <div className='space-y-2'>
                       {agenda.dayEvents.map((ev) => {
                         const reminderLabel = REMINDER_OPTIONS.find((o) => o.value === ev.reminderMinutes)?.label || '';
@@ -448,7 +453,7 @@ export default function Calendar() {
                               <button
                                 onClick={() => deleteEvent(ev.id)}
                                 className='flex-shrink-0 p-1 rounded-lg text-emerald-500 hover:bg-emerald-100 hover:text-rose-600 transition-colors'
-                                title='Delete event'
+                                title={t('calendar.deleteEvent')}
                               >
                                 <HiOutlineTrash className='w-3.5 h-3.5' />
                               </button>
@@ -462,9 +467,9 @@ export default function Calendar() {
 
                 {/* Tasks */}
                 <div>
-                  <div className='text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2'>Tasks</div>
+                  <div className='text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2'>{t('calendar.tasks')}</div>
                   {agenda.dayTasks.length === 0 ? (
-                    <div className='text-sm text-slate-500'>No tasks</div>
+                    <div className='text-sm text-slate-500'>{t('calendar.noTasks')}</div>
                   ) : (
                     <div className='space-y-2'>
                       {agenda.dayTasks.map((t) => (
@@ -483,9 +488,9 @@ export default function Calendar() {
 
                 {/* Follow-ups */}
                 <div>
-                  <div className='text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2'>Follow-ups</div>
+                  <div className='text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2'>{t('calendar.followUps')}</div>
                   {agenda.dayFollowUps.length === 0 ? (
-                    <div className='text-sm text-slate-500'>No follow-ups</div>
+                    <div className='text-sm text-slate-500'>{t('calendar.noFollowUps')}</div>
                   ) : (
                     <div className='space-y-2'>
                       {agenda.dayFollowUps.map((f) => (
@@ -505,100 +510,92 @@ export default function Calendar() {
                     </div>
                   )}
                 </div>
+                </>
+                )}
 
               </div>
             </div>
           </div>
         </div>
+        )}
 
       {/* ── Add Event Modal ── */}
-      {showModal && (
-        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4'>
-          <div className='bg-white rounded-2xl shadow-xl w-full max-w-sm'>
-            <div className='flex items-center justify-between px-6 py-4 border-b border-slate-100'>
-              <h2 className='text-base font-semibold text-slate-900'>Add Event</h2>
-              <button onClick={() => setShowModal(false)} className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400'>
-                <HiX className='w-4 h-4' />
-              </button>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={t('calendar.addEvent')}
+        size='sm'
+        footer={
+          <>
+            <button
+              onClick={() => setShowModal(false)}
+              className='px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50'
+            >{t('calendar.cancel')}</button>
+            <button
+              onClick={saveEvent}
+              disabled={!newEvent.title.trim()}
+              className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50'
+            >{t('calendar.saveEvent')}</button>
+          </>
+        }
+      >
+        <div className='space-y-4'>
+          {!notifGranted && typeof Notification !== 'undefined' && Notification.permission !== 'denied' && (
+            <div className='flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2'>
+              <HiOutlineBell className='w-4 h-4 flex-shrink-0 mt-0.5' />
+              <span>{t('calendar.allowNotificationsWhenPromptedToReceive')}</span>
             </div>
+          )}
 
-            <div className='px-6 py-5 space-y-4'>
+          <div>
+            <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.title')}</label>
+            <input
+              autoFocus
+              type='text'
+              placeholder={t('calendar.eGClientMeetingSiteVisit')}
+              value={newEvent.title}
+              onChange={(e) => setNewEvent((p) => ({ ...p, title: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && saveEvent()}
+              className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent'
+            />
+          </div>
 
-              {!notifGranted && typeof Notification !== 'undefined' && Notification.permission !== 'denied' && (
-                <div className='flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2'>
-                  <HiOutlineBell className='w-4 h-4 flex-shrink-0 mt-0.5' />
-                  <span>Allow notifications when prompted to receive reminders.</span>
-                </div>
-              )}
-
-              <div>
-                <label className='block text-xs font-semibold text-slate-600 mb-1'>Title</label>
-                <input
-                  autoFocus
-                  type='text'
-                  placeholder='e.g. Client meeting, Site visit…'
-                  value={newEvent.title}
-                  onChange={(e) => setNewEvent((p) => ({ ...p, title: e.target.value }))}
-                  onKeyDown={(e) => e.key === 'Enter' && saveEvent()}
-                  className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent'
-                />
-              </div>
-
-              <div className='grid grid-cols-2 gap-3'>
-                <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Date</label>
-                  <input
-                    type='date'
-                    value={newEvent.date}
-                    onChange={(e) => setNewEvent((p) => ({ ...p, date: e.target.value }))}
-                    className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
-                  />
-                </div>
-                <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>Time</label>
-                  <input
-                    type='time'
-                    value={newEvent.time}
-                    onChange={(e) => setNewEvent((p) => ({ ...p, time: e.target.value }))}
-                    className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className='block text-xs font-semibold text-slate-600 mb-1'>
-                  <HiOutlineBell className='inline w-3.5 h-3.5 mr-1' />Remind me
-                </label>
-                <select
-                  value={newEvent.reminderMinutes}
-                  onChange={(e) => setNewEvent((p) => ({ ...p, reminderMinutes: Number(e.target.value) }))}
-                  className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
-                >
-                  {REMINDER_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
+          <div className='grid grid-cols-2 gap-3'>
+            <div>
+              <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.date')}</label>
+              <input
+                type='date'
+                value={newEvent.date}
+                onChange={(e) => setNewEvent((p) => ({ ...p, date: e.target.value }))}
+                className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+              />
             </div>
-
-            <div className='px-6 pb-5 flex justify-end gap-2'>
-              <button
-                onClick={() => setShowModal(false)}
-                className='px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50'
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveEvent}
-                disabled={!newEvent.title.trim()}
-                className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50'
-              >
-                Save Event
-              </button>
+            <div>
+              <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.time')}</label>
+              <input
+                type='time'
+                value={newEvent.time}
+                onChange={(e) => setNewEvent((p) => ({ ...p, time: e.target.value }))}
+                className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+              />
             </div>
           </div>
+
+          <div>
+            <label className='block text-xs font-semibold text-slate-600 mb-1'>
+              <HiOutlineBell className='inline w-3.5 h-3.5 mr-1' />{t('calendar.remindMe')}</label>
+            <select
+              value={newEvent.reminderMinutes}
+              onChange={(e) => setNewEvent((p) => ({ ...p, reminderMinutes: Number(e.target.value) }))}
+              className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+            >
+              {REMINDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

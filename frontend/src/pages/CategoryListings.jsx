@@ -4,8 +4,10 @@ import { useSelector } from 'react-redux';
 import ListingItem from '../components/ListingItem';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useTranslation } from 'react-i18next';
 
 export default function CategoryListings() {
+  const { t } = useTranslation();
   const { slug } = useParams();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
@@ -47,9 +49,7 @@ export default function CategoryListings() {
               <Link
                 to={`/create-listing?category=${encodeURIComponent(slug)}`}
                 className='px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl'
-              >
-                + Create Listing
-              </Link>
+              >{t('categoryListings.createListing')}</Link>
             )}
           </div>
           
@@ -59,20 +59,20 @@ export default function CategoryListings() {
               <div className='flex items-center gap-6'>
                 <div className='text-center'>
                   <div className='text-2xl font-bold text-indigo-600'>{listings.length}</div>
-                  <div className='text-sm text-slate-600'>Properties</div>
+                  <div className='text-sm text-slate-600'>{t('categoryListings.properties')}</div>
                 </div>
                 <div className='w-px h-12 bg-gray-200'></div>
                 <div className='text-center'>
                   <div className='text-2xl font-bold text-green-600'>
                     {listings.filter(l => l.type === 'sale').length}
                   </div>
-                  <div className='text-sm text-slate-600'>For Sale</div>
+                  <div className='text-sm text-slate-600'>{t('categoryListings.forSale')}</div>
                 </div>
                 <div className='text-center'>
                   <div className='text-2xl font-bold text-purple-600'>
                     {listings.filter(l => l.type === 'rent').length}
                   </div>
-                  <div className='text-sm text-slate-600'>For Rent</div>
+                  <div className='text-sm text-slate-600'>{t('categoryListings.forRent')}</div>
                 </div>
               </div>
             </div>
@@ -84,7 +84,7 @@ export default function CategoryListings() {
           <div className='flex items-center justify-center py-12'>
             <div className='flex items-center gap-3'>
               <div className='w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin'></div>
-              <span className='text-slate-600'>Loading properties...</span>
+              <span className='text-slate-600'>{t('categoryListings.loadingProperties')}</span>
             </div>
           </div>
         )}
@@ -92,7 +92,7 @@ export default function CategoryListings() {
         {/* Error State */}
         {error && (
           <div className='bg-red-50 border border-red-200 rounded-lg p-6 text-center'>
-            <div className='text-red-600 font-medium mb-2'>Failed to load listings</div>
+            <div className='text-red-600 font-medium mb-2'>{t('categoryListings.failedToLoadListings')}</div>
             <div className='text-red-500 text-sm'>{error}</div>
           </div>
         )}
@@ -114,7 +114,7 @@ export default function CategoryListings() {
                 <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' />
               </svg>
             </div>
-            <h3 className='text-xl font-semibold text-slate-900 mb-2'>No properties found</h3>
+            <h3 className='text-xl font-semibold text-slate-900 mb-2'>{t('categoryListings.noPropertiesFound')}</h3>
             <p className='text-slate-600 mb-6'>
               There are no listings in the {slug} category yet.
             </p>
@@ -125,9 +125,7 @@ export default function CategoryListings() {
               >
                 <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                   <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 6v6m0 0v6m0-6h6m-6 0H6' />
-                </svg>
-                Create First Listing
-              </Link>
+                </svg>{t('categoryListings.createFirstListing')}</Link>
             )}
           </div>
         )}

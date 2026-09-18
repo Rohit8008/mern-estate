@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
+import { formatListingPrice } from '../utils/currency';
+import { NATIVE_FIELD_ALIASES } from '../utils/nativeFieldAliases';
 import * as XLSX from 'xlsx';
 
 const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
@@ -93,9 +95,14 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
     return allFields.filter(field => visibleColumns.has(field.key));
   }, [allFields, visibleColumns]);
 
-  // Read a field value from a listing — category fields live in listing.attributes
+  // Read a field value from a listing — category fields live in listing.attributes,
+  // unless they alias a native column (see NATIVE_FIELD_ALIASES above).
   const getFieldValue = (listing, field) => {
-    if (field.isCategory) return listing.attributes?.[field.key] ?? '';
+    if (field.isCategory) {
+      const nativeKey = NATIVE_FIELD_ALIASES[field.key];
+      if (nativeKey) return listing[nativeKey] ?? '';
+      return listing.attributes?.[field.key] ?? '';
+    }
     return listing[field.key] ?? '';
   };
 
@@ -155,8 +162,11 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
     try {
       const updateData = {};
       const field = allFields.find(f => f.key === fieldKey);
+      const nativeKey = field?.isCategory ? NATIVE_FIELD_ALIASES[fieldKey] : null;
 
-      if (field?.isCategory) {
+      if (nativeKey) {
+        updateData[nativeKey] = field.type === 'number' ? (Number(editValue) || 0) : editValue;
+      } else if (field?.isCategory) {
         updateData.attributes = { ...listing.attributes, [fieldKey]: editValue };
       } else {
         updateData[fieldKey] = editValue;
@@ -222,7 +232,9 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
       visibleFields.forEach(field => {
         let value = getFieldValue(listing, field);
 
-        if (field.type === 'boolean') {
+        if (field.key === 'regularPrice' || field.key === 'totalValue') {
+          value = formatListingPrice(value);
+        } else if (field.type === 'boolean') {
           value = value ? 'Yes' : 'No';
         } else if (field.type === 'number' && typeof value === 'number') {
           value = value.toLocaleString();
@@ -441,7 +453,11 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                           onClick={() => handleCellEdit(listing._id, fieldKey, value)}
                           className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                         >
-                          {field.type === 'boolean' ? (value ? 'Yes' : 'No') : (value || '-')}
+                          {field.type === 'boolean'
+                            ? (value ? 'Yes' : 'No')
+                            : (fieldKey === 'regularPrice' || fieldKey === 'totalValue')
+                              ? formatListingPrice(value)
+                              : (value || '-')}
                         </div>
                       )}
                     </td>

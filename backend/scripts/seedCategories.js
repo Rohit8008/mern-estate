@@ -1,15 +1,7 @@
-import mongoose from 'mongoose';
-import Category from '../models/category.model.js';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-dotenv.config({ path: join(__dirname, '..', '.env') });
-
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ytreal';
+// Models come from _bootstrap so they compile AFTER the tenancy plugin is
+// registered; a hoisted static model import would produce categories with no
+// tenantId, invisible to the application.
+import { bootstrapScript } from './_bootstrap.js';
 
 const categories = [
   // ============================================
@@ -553,11 +545,13 @@ const categories = [
 ];
 
 async function seedCategories() {
+  let close = async () => {};
   try {
-    await mongoose.connect(MONGO_URI);
-    console.log('Connected to MongoDB');
-    console.log('');
+    const boot = await bootstrapScript();
+    close = boot.close;
+    const { Category } = boot.models;
 
+    await boot.inWorkspace(async () => {
     for (const categoryData of categories) {
       const existing = await Category.findOne({ slug: categoryData.slug });
 
@@ -584,12 +578,12 @@ async function seedCategories() {
       console.log(`   Total Fields: ${cat.fields.length} (${conditionalFields} conditional)`);
       console.log('');
     });
-
+    });
   } catch (error) {
-    console.error('Error seeding categories:', error);
+    console.error('Error seeding categories:', error.message);
+    process.exitCode = 1;
   } finally {
-    await mongoose.disconnect();
-    console.log('Disconnected from MongoDB');
+    await close();
   }
 }
 

@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { HiFilter, HiX, HiChevronDown, HiChevronUp, HiHome, HiOfficeBuilding, HiCurrencyRupee } from 'react-icons/hi';
 import { apiClient } from '../../utils/http';
+import { currencySymbol } from '../../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 export default function SearchFilters({ filters, onChange, onClear, className = '' }) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(true);
   const [popularCities, setPopularCities] = useState([]);
   const [propertyTypes, setPropertyTypes] = useState([]);
@@ -62,7 +65,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
               <HiFilter className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="font-semibold text-slate-800">Filters</span>
+              <span className="font-semibold text-slate-800">{t('searchFilters.filters')}</span>
               {activeFiltersCount > 0 && (
                 <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-blue-600 text-white rounded-full">
                   {activeFiltersCount} active
@@ -78,9 +81,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                   onClear();
                 }}
                 className="text-sm text-red-600 hover:text-red-700 font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                Clear All
-              </button>
+              >{t('searchFilters.clearAll')}</button>
             )}
             {isExpanded ? (
               <HiChevronUp className="w-5 h-5 text-slate-400" />
@@ -95,9 +96,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
       <div className="p-4 space-y-4 border-b border-slate-100">
         {/* Listing Type */}
         <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Listing Type
-          </label>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('searchFilters.listingType')}</label>
           <div className="flex gap-2">
             {[
               { value: 'all', label: 'All', icon: null },
@@ -122,9 +121,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
         {/* Property Category */}
         <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Category
-          </label>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('searchFilters.category')}</label>
           <div className="grid grid-cols-2 gap-2">
             {[
               { value: 'all', label: 'All Types', icon: null },
@@ -154,9 +151,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
         <div className="p-4 space-y-5">
           {/* Price Range */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Price Range
-            </label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.priceRange')}</label>
             <div className="grid grid-cols-2 gap-2">
               {priceRanges.map((range, index) => (
                 <button
@@ -179,9 +174,9 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
             {/* Custom Price Range */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="block text-xs text-slate-500 mb-1.5">Min Price</label>
+                <label className="block text-xs text-slate-500 mb-1.5">{t('searchFilters.minPrice')}</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">{currencySymbol()}</span>
                   <input
                     type="number"
                     placeholder="0"
@@ -192,12 +187,12 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1.5">Max Price</label>
+                <label className="block text-xs text-slate-500 mb-1.5">{t('searchFilters.maxPrice')}</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">{currencySymbol()}</span>
                   <input
                     type="number"
-                    placeholder="Any"
+                    placeholder={t('searchFilters.any')}
                     value={filters.maxPrice || ''}
                     onChange={(e) => handleChange('maxPrice', e.target.value)}
                     className="w-full pl-7 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -209,9 +204,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Bedrooms */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Bedrooms
-            </label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.bedrooms')}</label>
             <div className="flex gap-2">
               {['any', '1', '2', '3', '4', '5+'].map((bed) => (
                 <button
@@ -231,9 +224,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Bathrooms */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Bathrooms
-            </label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.bathrooms')}</label>
             <div className="flex gap-2">
               {['any', '1', '2', '3', '4+'].map((bath) => (
                 <button
@@ -254,15 +245,13 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
           {/* City Selection */}
           {popularCities.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                City
-              </label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.city')}</label>
               <select
                 value={filters.city || ''}
                 onChange={(e) => handleChange('city', e.target.value)}
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer"
               >
-                <option value="">All Cities</option>
+                <option value="">{t('searchFilters.allCities')}</option>
                 {popularCities.map((city, index) => (
                   <option key={index} value={city.name}>
                     {city.name} ({city.count})
@@ -275,9 +264,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
           {/* Property Type */}
           {propertyTypes.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                Property Type
-              </label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.propertyType')}</label>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => handleChange('propertyType', '')}
@@ -286,9 +273,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                       ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
-                >
-                  All
-                </button>
+                >{t('searchFilters.all')}</button>
                 {propertyTypes.map((type, index) => (
                   <button
                     key={index}
@@ -308,9 +293,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Additional Features */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Features
-            </label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.features')}</label>
             <div className="space-y-2">
               {[
                 { key: 'offer', label: 'Special Offers', description: 'Properties with discounts' },
@@ -342,9 +325,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Sort Options */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Sort By
-            </label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.sortBy')}</label>
             <select
               value={`${filters.sort || 'relevance'}-${filters.order || 'desc'}`}
               onChange={(e) => {
@@ -354,11 +335,11 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
               }}
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer"
             >
-              <option value="relevance-desc">Most Relevant</option>
-              <option value="createdAt-desc">Newest First</option>
-              <option value="createdAt-asc">Oldest First</option>
-              <option value="regularPrice-asc">Price: Low to High</option>
-              <option value="regularPrice-desc">Price: High to Low</option>
+              <option value="relevance-desc">{t('searchFilters.mostRelevant')}</option>
+              <option value="createdAt-desc">{t('searchFilters.newestFirst')}</option>
+              <option value="createdAt-asc">{t('searchFilters.oldestFirst')}</option>
+              <option value="regularPrice-asc">{t('searchFilters.priceLowToHigh')}</option>
+              <option value="regularPrice-desc">{t('searchFilters.priceHighToLow')}</option>
             </select>
           </div>
 
@@ -366,9 +347,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
           <button
             onClick={() => {}}
             className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all lg:hidden"
-          >
-            Apply Filters
-          </button>
+          >{t('searchFilters.applyFilters')}</button>
         </div>
       )}
     </div>

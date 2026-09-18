@@ -3,8 +3,10 @@ import PropTypes from 'prop-types';
 import { useSelector } from 'react-redux';
 
 import { loadSavedViews, saveSavedViews } from '../utils/savedViews';
+import { useTranslation } from 'react-i18next';
 
 export default function SavedViewsBar({ namespace, getCurrentQueryString, onApplyQueryString }) {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const userId = currentUser?._id || currentUser?.id || '';
 
@@ -63,7 +65,7 @@ export default function SavedViewsBar({ namespace, getCurrentQueryString, onAppl
           value={selectedId}
           onChange={(e) => handleApply(e.target.value)}
         >
-          <option value=''>Views</option>
+          <option value=''>{t('savedViewsBar.views')}</option>
           {views.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}
@@ -76,24 +78,20 @@ export default function SavedViewsBar({ namespace, getCurrentQueryString, onAppl
           onClick={handleDeleteSelected}
           disabled={!selected}
           className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold disabled:opacity-50'
-        >
-          Delete
-        </button>
+        >{t('savedViewsBar.delete')}</button>
 
         <button
           type='button'
           onClick={() => onApplyQueryString('')}
           className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold'
-        >
-          Reset
-        </button>
+        >{t('savedViewsBar.reset')}</button>
       </div>
 
       <div className='flex items-center gap-2'>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder='Save current as…'
+          placeholder={t('savedViewsBar.saveCurrentAs')}
           className='w-full lg:w-[220px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white'
         />
         <button

@@ -19,6 +19,7 @@ import {
   Modal, Input, Textarea,
   EmptyState, PageLoader, Badge,
 } from '../design-system';
+import { useTranslation } from 'react-i18next';
 
 const emptyForm = {
   name: '', email: '', phone: '', companyName: '',
@@ -27,6 +28,7 @@ const emptyForm = {
 };
 
 export default function OwnersBoard() {
+  const { t } = useTranslation();
   const { canAccess } = useCrmAccess();
 
   const [owners, setOwners]         = useState([]);
@@ -142,17 +144,17 @@ export default function OwnersBoard() {
 
   if (!canAccess) {
     return (
-      <EmptyState icon={HiUser} title='Access denied' body='You do not have permission to view property owners.' />
+      <EmptyState icon={HiUser} title={t('owners.accessDenied')} body='You do not have permission to view property owners.' />
     );
   }
 
   return (
     <div className='space-y-5'>
       <PageHeader
-        title='Property Owners'
-        description='Manage the owners of listed properties'
+        title={t('owners.propertyOwners')}
+        description={t('owners.manageTheOwnersOfListedProperties')}
         actions={
-          <Button icon={HiPlus} onClick={openCreate}>Add Owner</Button>
+          <Button icon={HiPlus} onClick={openCreate}>{t('owners.addOwner')}</Button>
         }
       />
 
@@ -162,7 +164,7 @@ export default function OwnersBoard() {
             <SearchBar
               value={search}
               onChange={setSearch}
-              placeholder='Search by name, email, phone, city…'
+              placeholder={t('owners.searchByNameEmailPhoneCity')}
               className='w-72'
             />
             <ToolbarDivider />
@@ -170,9 +172,7 @@ export default function OwnersBoard() {
           </>
         }
         right={
-          <Button variant='secondary' size='sm' icon={HiRefresh} onClick={fetchOwners}>
-            Refresh
-          </Button>
+          <Button variant='secondary' size='sm' icon={HiRefresh} onClick={fetchOwners}>{t('owners.refresh')}</Button>
         }
       />
 
@@ -190,18 +190,18 @@ export default function OwnersBoard() {
           icon={HiOfficeBuilding}
           title={search ? 'No owners match your search' : 'No property owners yet'}
           body={search ? 'Try a different search term.' : 'Add your first property owner to get started.'}
-          action={!search && <Button icon={HiPlus} onClick={openCreate}>Add First Owner</Button>}
+          action={!search && <Button icon={HiPlus} onClick={openCreate}>{t('owners.addFirstOwner')}</Button>}
         />
       ) : (
         <Table>
           <Thead>
             <tr>
-              <Th>Name</Th>
-              <Th>Company</Th>
-              <Th>Contact</Th>
-              <Th>City</Th>
-              <Th>Status</Th>
-              <Th right>Actions</Th>
+              <Th>{t('owners.name')}</Th>
+              <Th>{t('owners.company')}</Th>
+              <Th>{t('owners.contact')}</Th>
+              <Th>{t('owners.city')}</Th>
+              <Th>{t('owners.status')}</Th>
+              <Th right>{t('owners.actions')}</Th>
             </tr>
           </Thead>
           <Tbody>
@@ -240,8 +240,8 @@ export default function OwnersBoard() {
                 </Td>
                 <Td right>
                   <div className='flex items-center justify-end gap-1'>
-                    <Button variant='ghost' size='xs' icon={HiPencil} title='Edit' aria-label='Edit' onClick={() => openEdit(owner)} />
-                    <Button variant='ghost' size='xs' icon={HiTrash} title='Delete' aria-label='Delete' onClick={() => setDel(owner)}
+                    <Button variant='ghost' size='xs' icon={HiPencil} title={t('owners.edit')} aria-label={t('owners.edit')} onClick={() => openEdit(owner)} />
+                    <Button variant='ghost' size='xs' icon={HiTrash} title={t('owners.delete')} aria-label={t('owners.delete')} onClick={() => setDel(owner)}
                       className='hover:text-rose-600 hover:bg-rose-50' />
                   </div>
                 </Td>
@@ -259,7 +259,7 @@ export default function OwnersBoard() {
         size='lg'
         footer={
           <>
-            <Button variant='secondary' onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant='secondary' onClick={() => setShowModal(false)}>{t('owners.cancel')}</Button>
             <Button loading={saving} onClick={handleSave}>
               {editingOwner ? 'Save Changes' : 'Add Owner'}
             </Button>
@@ -273,27 +273,27 @@ export default function OwnersBoard() {
 
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
             <Input
-              label='Full Name'
+              label={t('owners.fullName')}
               required
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder='John Smith'
+              placeholder={t('owners.johnSmith')}
             />
             <Input
-              label='Company Name'
+              label={t('owners.companyName')}
               value={form.companyName}
               onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
-              placeholder='Acme Realty Ltd.'
+              placeholder={t('owners.acmeRealtyLtd')}
             />
             <Input
-              label='Email'
+              label={t('owners.email')}
               type='email'
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              placeholder='owner@example.com'
+              placeholder={t('owners.ownerExampleCom')}
             />
             <Input
-              label='Phone'
+              label={t('owners.phone')}
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               placeholder='+91 98765 43210'
@@ -302,20 +302,20 @@ export default function OwnersBoard() {
 
           <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
             <Input
-              label='City'
+              label={t('owners.city')}
               value={form.city}
               onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-              placeholder='Mumbai'
+              placeholder={t('owners.mumbai')}
               className='sm:col-span-1'
             />
             <Input
-              label='State'
+              label={t('owners.state')}
               value={form.state}
               onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
-              placeholder='Maharashtra'
+              placeholder={t('owners.maharashtra')}
             />
             <Input
-              label='PIN / Postal'
+              label={t('owners.pinPostal')}
               value={form.postal}
               onChange={(e) => setForm((f) => ({ ...f, postal: e.target.value }))}
               placeholder='400001'
@@ -323,11 +323,11 @@ export default function OwnersBoard() {
           </div>
 
           <Textarea
-            label='Notes'
+            label={t('owners.notes')}
             rows={3}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder='Any additional notes about this owner…'
+            placeholder={t('owners.anyAdditionalNotesAboutThisOwner')}
           />
         </div>
       </Modal>
@@ -335,10 +335,9 @@ export default function OwnersBoard() {
       {/* Delete Confirmation */}
       <ConfirmDialog
         open={!!pendingDelete}
-        title='Delete Owner'
-        message={`Are you sure you want to delete "${pendingDelete?.name}"? This cannot be undone.`}
-        confirmLabel='Delete'
-        destructive
+        title={t('owners.deleteOwner')}
+        description={`Are you sure you want to delete "${pendingDelete?.name}"? This cannot be undone.`}
+        confirmLabel={t('owners.delete')}
         onConfirm={() => handleDelete(pendingDelete)}
         onCancel={() => setDel(null)}
       />

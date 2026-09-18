@@ -10,8 +10,13 @@ import Client from '../models/client.model.js';
 import Transaction from '../models/transaction.model.js';
 import Listing from '../models/listing.model.js';
 import { errorHandler, AppError, NotFoundError } from '../utils/error.js';
+import { notify } from '../utils/notify.js';
 import { logger } from '../utils/logger.js';
-import { logActivity } from '../utils/activity.js';
+import { logActivity, diffFields } from '../utils/activity.js';
+import { streamCsv } from '../utils/csvExport.js';
+import { emitEvent } from '../utils/webhooks.js';
+import { runHook } from '../plugins/registry.js';
+import { stopSequencesForClient } from '../jobs/sequences.js';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -187,6 +192,20 @@ export const updateDealStage = async (req, res, next) => {
 
     const prevStage = deal.stage;
 
+    /*
+     * Workspace rules may veto the move before anything is written — which is
+     * where "ask for a reason before marking a deal lost" lives, as config
+     * rather than a branch here.
+     */
+    await runHook('deal.beforeStageChange', {
+      client: { id: String(client._id), name: client.name },
+      dealId: String(dealId),
+      fromStage: prevStage,
+      toStage: stage,
+      notes,
+      user: req.user,
+    });
+
     // Add to stage history
     deal.stageHistory.push({
       stage,
@@ -197,12 +216,20 @@ export const updateDealStage = async (req, res, next) => {
 
     deal.stage = stage;
 
+    // A deal moving changes where this lead stands, so the score follows it.
+    client.calculateScore();
+
     // Update client status based on deal stage
     let newTxId = null;
     let prevListingStatus = 'available';
     if (stage === 'closed_won') {
       client.status = 'won';
       client.convertedAt = new Date();
+
+      // Stop any running sequence now rather than at the next tick — the gap
+      // between "marked won" and "sent another chase email" is exactly the gap
+      // a customer notices.
+      stopSequencesForClient(client._id, 'deal won').catch(() => {});
 
       // Auto-create a transaction if not already linked
       if (!deal.transactionRef) {
@@ -244,6 +271,10 @@ export const updateDealStage = async (req, res, next) => {
       client.status = 'lost';
       client.lostAt = new Date();
       client.lostReason = notes || 'Deal lost';
+
+      // Chasing someone who has already said no is the worst thing an
+      // automation like this can do.
+      stopSequencesForClient(client._id, 'deal lost').catch(() => {});
     }
 
     // Persist all deal/client changes; roll back auto-created transaction and listing on failure
@@ -272,7 +303,40 @@ export const updateDealStage = async (req, res, next) => {
         meta: { dealId, from: prevStage, to: stage, notes: notes || '' },
         createdBy: req.user.id,
       });
+
+      // Also against the deal itself, so the deal has a readable history of its
+      // own rather than only a line buried in the client's timeline.
+      await logActivity({
+        entityType: 'deal',
+        entityId: deal._id,
+        action: 'deal.stage_changed',
+        message: `Moved from ${prevStage} to ${stage}`,
+        meta: { clientId: String(client._id), notes: notes || '' },
+        changes: { stage: { from: prevStage, to: stage } },
+        createdBy: req.user.id,
+      });
     } catch (_) {}
+
+    // Tell the deal's owner it moved. Nothing did this before, so an agent
+    // learned their deal had changed stage only by looking at the board.
+    notify({
+      to: client.assignedTo,
+      actorId: req.user.id,
+      type: 'deal.stage_changed',
+      title: `Deal moved to ${String(stage).replace(/_/g, ' ')}`,
+      body: `${client.name || 'Client'} — was ${String(prevStage).replace(/_/g, ' ')}.${notes ? ` ${notes}` : ''}`,
+      link: '/pipeline',
+      entity: { type: 'client', id: client._id },
+    });
+
+    emitEvent('deal.stage_changed', {
+      clientId: String(client._id),
+      clientName: client.name,
+      dealId: String(dealId),
+      from: prevStage,
+      to: stage,
+      value: deal.value || 0,
+    });
 
     logger.info('Deal stage updated', { clientId: id, dealId, newStage: stage });
 
@@ -345,6 +409,155 @@ export const updateCommission = async (req, res, next) => {
  * Get deal pipeline summary
  * GET /api/crm/pipeline
  */
+/**
+ * Export every deal in the pipeline, one row per deal.
+ *
+ * Deals are sub-documents of Client, so this unwinds them: a client with three
+ * deals produces three rows, which is what anyone opening a pipeline export
+ * expects to see.
+ */
+export const exportDeals = async (req, res, next) => {
+  try {
+    const match = { isDeleted: { $ne: true }, 'deals.0': { $exists: true } };
+    if (req.user.role !== 'admin') {
+      match.assignedTo = new mongoose.Types.ObjectId(req.user.id);
+    }
+
+    const cursor = Client.aggregate([
+      { $match: match },
+      { $unwind: '$deals' },
+      { $lookup: { from: 'users', localField: 'assignedTo', foreignField: '_id', as: 'agent' } },
+      { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+      { $sort: { 'deals.expectedCloseDate': 1 } },
+      { $limit: 50000 },
+    ]).cursor();
+
+    await streamCsv(res, {
+      filename: 'pipeline',
+      headers: [
+        'Client', 'Client email', 'Client phone', 'Deal stage', 'Deal type', 'Value',
+        'Commission %', 'Commission amount', 'Commission status',
+        'Expected close', 'Agent', 'Stage changes', 'Created',
+      ],
+      cursor,
+      toRow: (row) => [
+        row.name || '',
+        row.email || '',
+        row.phone || '',
+        row.deals?.stage || '',
+        row.deals?.type || '',
+        row.deals?.value ?? 0,
+        row.deals?.commission?.percentage ?? 0,
+        row.deals?.commission?.amount ?? 0,
+        row.deals?.commission?.status || '',
+        row.deals?.expectedCloseDate,
+        row.agent?.username || '',
+        (row.deals?.stageHistory || []).length,
+        row.deals?.createdAt || row.createdAt,
+      ],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Where deals are getting stuck.
+ *
+ * `stageHistory` has been written on every stage change since the pipeline
+ * shipped and was never read back, so nobody could answer "which stage is
+ * slowing us down?" — the one question a pipeline report exists to answer.
+ *
+ * Time in a stage is the gap between consecutive history entries; the current
+ * stage is measured from its last entry to now, which is what surfaces a deal
+ * that has sat untouched.
+ */
+export const getPipelineBottlenecks = async (req, res, next) => {
+  try {
+    const match = { isDeleted: { $ne: true }, 'deals.0': { $exists: true } };
+    if (req.user.role !== 'admin') {
+      match.assignedTo = new mongoose.Types.ObjectId(req.user.id);
+    }
+
+    const clients = await Client.find(match).select('name deals assignedTo').lean();
+    const now = Date.now();
+
+    /** stage -> { totalMs, samples, openDeals, stalled } */
+    const byStage = new Map();
+    const stalledDeals = [];
+
+    const record = (stage, ms, { open = false } = {}) => {
+      if (!stage) return;
+      const entry = byStage.get(stage) || { totalMs: 0, samples: 0, openDeals: 0, stalled: 0 };
+      entry.totalMs += ms;
+      entry.samples += 1;
+      if (open) entry.openDeals += 1;
+      byStage.set(stage, entry);
+    };
+
+    for (const client of clients) {
+      for (const deal of client.deals || []) {
+        const history = [...(deal.stageHistory || [])]
+          .filter((h) => h?.changedAt)
+          .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt));
+
+        // Completed spells: each entry until the next one.
+        for (let i = 0; i < history.length - 1; i += 1) {
+          const ms = new Date(history[i + 1].changedAt) - new Date(history[i].changedAt);
+          if (ms >= 0) record(history[i].stage, ms);
+        }
+
+        const closed = deal.stage === 'closed_won' || deal.stage === 'closed_lost';
+        if (closed) continue;
+
+        // The current spell, still running.
+        const since = history.length
+          ? new Date(history[history.length - 1].changedAt)
+          : new Date(deal.createdAt || client.createdAt || now);
+
+        const ms = now - since.getTime();
+        record(deal.stage, ms, { open: true });
+
+        const days = Math.floor(ms / 86_400_000);
+        if (days >= 14) {
+          stalledDeals.push({
+            clientId: String(client._id),
+            clientName: client.name,
+            dealId: String(deal._id),
+            stage: deal.stage,
+            value: deal.value || 0,
+            daysInStage: days,
+          });
+        }
+      }
+    }
+
+    const stages = [...byStage.entries()]
+      .map(([stage, e]) => ({
+        stage,
+        avgDays: Math.round((e.totalMs / e.samples / 86_400_000) * 10) / 10,
+        samples: e.samples,
+        openDeals: e.openDeals,
+      }))
+      .sort((a, b) => b.avgDays - a.avgDays);
+
+    stalledDeals.sort((a, b) => b.daysInStage - a.daysInStage);
+
+    res.json({
+      success: true,
+      data: {
+        stages,
+        // The slowest stage with enough data to mean something.
+        bottleneck: stages.find((s) => s.samples >= 3) || stages[0] || null,
+        stalledDeals: stalledDeals.slice(0, 50),
+        stalledCount: stalledDeals.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getPipeline = async (req, res, next) => {
   try {
     const matchStage = { isDeleted: { $ne: true } };
@@ -703,6 +916,105 @@ export const addCommunication = async (req, res, next) => {
       message: 'Communication logged',
       data: client,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Correct a logged communication
+ * PATCH /api/crm/:id/communications/:communicationId
+ *
+ * There was no way to change or remove one of these, so a call logged against
+ * the wrong client, or with a typo in the summary, was permanent — and the lead
+ * score is computed from them, so a mistake skewed the number for good.
+ *
+ * Only the person who logged it, or an admin, may amend it: a communication is
+ * somebody's account of a conversation they had.
+ */
+export const updateCommunication = async (req, res, next) => {
+  try {
+    const { id, communicationId } = req.params;
+    const client = await findActiveClient(id);
+    if (!client) return next(new NotFoundError('Client not found'));
+
+    assertCanAccessClient(client, req.user);
+
+    const communication = client.communications.id(communicationId);
+    if (!communication) return next(new NotFoundError('Communication not found'));
+
+    if (req.user.role !== 'admin' && String(communication.createdBy) !== req.user.id) {
+      return next(new AppError('You can only edit a communication you logged', 403));
+    }
+
+    const before = communication.toObject();
+    for (const field of ['type', 'direction', 'summary', 'details', 'duration', 'outcome']) {
+      if (field in req.body) communication[field] = req.body[field];
+    }
+
+    // The score is derived from these, so it has to be recomputed on an edit.
+    client.calculateScore();
+    await client.save();
+
+    logActivity({
+      entityType: 'client',
+      entityId: client._id,
+      action: 'communication_updated',
+      message: `Communication amended: ${communication.type}`,
+      meta: { communicationId },
+      changes: diffFields(before, communication.toObject(), Object.keys(req.body || {})),
+      createdBy: req.user.id,
+    }).catch(() => {});
+
+    res.json({ success: true, message: 'Communication updated', data: client });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Remove a logged communication
+ * DELETE /api/crm/:id/communications/:communicationId
+ */
+export const deleteCommunication = async (req, res, next) => {
+  try {
+    const { id, communicationId } = req.params;
+    const client = await findActiveClient(id);
+    if (!client) return next(new NotFoundError('Client not found'));
+
+    assertCanAccessClient(client, req.user);
+
+    const communication = client.communications.id(communicationId);
+    if (!communication) return next(new NotFoundError('Communication not found'));
+
+    if (req.user.role !== 'admin' && String(communication.createdBy) !== req.user.id) {
+      return next(new AppError('You can only delete a communication you logged', 403));
+    }
+
+    const removed = communication.toObject();
+    communication.deleteOne();
+
+    // lastContactAt was derived from the most recent entry, so it has to follow
+    // the deletion rather than keep pointing at a conversation that is gone.
+    const remaining = (client.communications || [])
+      .map((c) => c.createdAt)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b) - new Date(a));
+    client.lastContactAt = remaining[0] || null;
+
+    client.calculateScore();
+    await client.save();
+
+    logActivity({
+      entityType: 'client',
+      entityId: client._id,
+      action: 'communication_deleted',
+      message: `Communication removed: ${removed.type}`,
+      meta: { communicationId, summary: removed.summary },
+      createdBy: req.user.id,
+    }).catch(() => {});
+
+    res.json({ success: true, message: 'Communication deleted', data: client });
   } catch (error) {
     next(error);
   }

@@ -55,14 +55,30 @@ export default function PushNotificationsListener() {
       }
     };
 
+    const LISTING_ACTION_VERBS = {
+      created: 'was created',
+      deleted: 'was deleted',
+      soft_deleted: 'was deleted',
+      restored: 'was restored',
+      assigned: 'was assigned to an agent',
+      unassigned: 'was unassigned',
+    };
+
     const onListingUpdate = (payload) => {
       try {
         if (!prefs.pushListingUpdates) return;
         if (!payload) return;
         if (location.pathname.startsWith('/search') || location.pathname.startsWith('/listing')) return;
 
+        if (payload.action === 'bulk_import') {
+          const count = payload.count ?? 0;
+          showInfo(`${count} listing${count === 1 ? '' : 's'} imported`, { duration: 5000 });
+          return;
+        }
+
         const title = payload?.title || payload?.name || 'A listing';
-        showInfo(`${title} was updated`, { duration: 5000 });
+        const verb = LISTING_ACTION_VERBS[payload.action] || 'was updated';
+        showInfo(`${title} ${verb}`, { duration: 5000 });
       } catch (error) {
         console.error(error);
       }

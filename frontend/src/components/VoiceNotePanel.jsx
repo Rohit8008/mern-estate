@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { HiOutlinePlay, HiOutlinePause, HiOutlineTrash, HiOutlineMicrophone } from 'react-icons/hi';
 import { apiClient } from '../utils/http';
 import VoiceNoteRecorder from './VoiceNoteRecorder';
+import { useTranslation } from 'react-i18next';
 
 function formatDuration(seconds) {
   if (!seconds) return '0:00';
@@ -54,7 +55,7 @@ function VoiceNoteItem({ note, onDelete, deleting }) {
         onClick={() => onDelete(note._id)}
         disabled={deleting === note._id}
         className='p-1.5 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50'
-        title='Delete'
+        title={t('voiceNote.delete')}
       >
         <HiOutlineTrash className='w-4 h-4' />
       </button>
@@ -63,6 +64,7 @@ function VoiceNoteItem({ note, onDelete, deleting }) {
 }
 
 export default function VoiceNotePanel({ listingId, initialNotes = [] }) {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState(initialNotes);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
@@ -93,7 +95,7 @@ export default function VoiceNotePanel({ listingId, initialNotes = [] }) {
     <div className='space-y-3'>
       <div className='flex items-center gap-2'>
         <HiOutlineMicrophone className='w-4 h-4 text-slate-500' />
-        <h3 className='text-sm font-semibold text-slate-700'>Voice Notes</h3>
+        <h3 className='text-sm font-semibold text-slate-700'>{t('voiceNote.voiceNotes')}</h3>
         {notes.length > 0 && (
           <span className='text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full'>{notes.length}</span>
         )}
@@ -108,7 +110,7 @@ export default function VoiceNotePanel({ listingId, initialNotes = [] }) {
       )}
 
       {notes.length === 0 && (
-        <p className='text-xs text-slate-400 py-2'>No voice notes yet.</p>
+        <p className='text-xs text-slate-400 py-2'>{t('voiceNote.noVoiceNotesYet')}</p>
       )}
 
       <VoiceNoteRecorder onSave={handleSave} />

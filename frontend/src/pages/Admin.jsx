@@ -3,22 +3,28 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/socket';
 import { apiClient } from '../utils/http';
+import { toCsv, downloadTextFile } from '../utils/spreadsheet';
+import { formatListingPrice, isPlaceholderPrice } from '../utils/currency';
 import { HiOutlineViewGrid, HiOutlineCollection, HiOutlineTag, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineShieldCheck, HiOutlinePlus, HiOutlineSearch, HiOutlineDownload, HiOutlineUpload, HiOutlineKey, HiX } from 'react-icons/hi';
-import { PageHeader, Button } from '../design-system';
+import { PageHeader, Button, Badge } from '../design-system';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useSelector } from 'react-redux';
 import { usePermissions } from '../contexts/PermissionsContext';
 import RoleManagement from '../components/RoleManagement';
 import PropertyTypeManagement from './PropertyTypeManagement';
+import { useNotification } from '../contexts/NotificationContext';
+import { useTranslation } from 'react-i18next';
 
 export default function Admin() {
+  const { t } = useTranslation();
   const { currentUser } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
+  const { showSuccess, showError } = useNotification();
   const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', email: '', password: '', phone: '', assignedCategories: [] });
+  const [newUser, setNewUser] = useState({ username: '', email: '', phone: '', assignedCategories: [] });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
@@ -209,7 +215,7 @@ export default function Admin() {
   const saveManagedUser = async () => {
     if (!managingUser) return;
     if (managingUser.role === 'admin' && managingUser._id !== currentUser._id) {
-      window.alert('Cannot modify another admin.');
+      showError('Cannot modify another admin.');
       return;
     }
     const roleToSave = managingUser.role === 'admin' ? 'admin' : manageRole;
@@ -222,18 +228,18 @@ export default function Admin() {
     if (!managingUser || managingUser.role !== 'employee') return;
     if (!managePassword) return;
     if (managePassword !== managePasswordConfirm) {
-      window.alert('Passwords do not match');
+      showError('Passwords do not match');
       return;
     }
     try {
       setSaving(true);
       await apiClient.post(`/user/admin/set-employee-password/${managingUser._id}`, { newPassword: managePassword });
-      window.alert('Password updated successfully');
+      showSuccess('Password updated successfully');
       setManagePassword('');
       setManagePasswordConfirm('');
     } catch (error) {
       console.error(error);
-      window.alert('Failed to update password');
+      showError('Failed to update password');
     } finally {
       setSaving(false);
     }
@@ -280,87 +286,66 @@ export default function Admin() {
       if (data && data.success) {
         setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, status: newStatus } : u));
       } else {
-        alert(data.message || 'Failed to update user status');
+        showError(data.message || 'Failed to update user status');
       }
     } catch (_) {
-      alert('Failed to update user status');
+      showError('Failed to update user status');
     }
   };
 
+  /**
+   * Export the listings the admin is currently looking at.
+   *
+   * Was hand-rolling its own quoting, which wrapped four columns in quotes and
+   * left the rest bare, so a city containing a comma split the row. It also
+   * predated the formula-injection guard. Both live in toCsv now.
+   */
   const exportListingsToCSV = () => {
     if (!listings || listings.length === 0) {
-      alert('No listings to export');
+      showError('No listings to export');
       return;
     }
 
-    // Filter listings based on current search
-    const filteredListings = listings.filter((l) => {
-      if (!listSearch.trim()) return true;
-      const q = listSearch.toLowerCase();
-      return (
-        String(l.name || '').toLowerCase().includes(q) ||
-        String(l.address || '').toLowerCase().includes(q)
-      );
-    });
+    const q = listSearch.trim().toLowerCase();
+    const filteredListings = listings.filter((l) =>
+      !q ||
+      String(l.name || '').toLowerCase().includes(q) ||
+      String(l.address || '').toLowerCase().includes(q)
+    );
 
-    // Define CSV headers
-    const headers = [
-      'ID',
-      'Name',
-      'Address',
-      'City',
-      'State',
-      'Pincode',
-      'Category',
-      'Property Type',
-      'Type',
-      'Price',
-      'Discount Price',
-      'Offer',
-      'Bedrooms',
-      'Bathrooms',
-      'Parking',
-      'Furnished',
-      'Created At',
+    if (!filteredListings.length) {
+      showError('No listings match the current search.');
+      return;
+    }
+
+    const grid = [
+      [
+        'ID', 'Name', 'Address', 'City', 'State', 'Pincode', 'Category',
+        'Property Type', 'Type', 'Price', 'Discount Price', 'Offer',
+        'Bedrooms', 'Bathrooms', 'Parking', 'Furnished', 'Created At',
+      ],
+      ...filteredListings.map((l) => [
+        l._id,
+        l.name || '',
+        l.address || '',
+        l.city || '',
+        l.state || '',
+        l.pincode || '',
+        l.category || '',
+        l.propertyType || '',
+        l.type || '',
+        l.regularPrice || 0,
+        l.discountPrice || 0,
+        l.offer ? 'Yes' : 'No',
+        l.bedrooms || 0,
+        l.bathrooms || 0,
+        l.parking ? 'Yes' : 'No',
+        l.furnished ? 'Yes' : 'No',
+        l.createdAt ? new Date(l.createdAt).toISOString().slice(0, 10) : '',
+      ]),
     ];
 
-    // Convert listings to CSV rows
-    const rows = filteredListings.map((l) => [
-      l._id,
-      `"${(l.name || '').replace(/"/g, '""')}"`,
-      `"${(l.address || '').replace(/"/g, '""')}"`,
-      `"${(l.city || '').replace(/"/g, '""')}"`,
-      `"${(l.state || '').replace(/"/g, '""')}"`,
-      l.pincode || '',
-      l.category || '',
-      l.propertyType || '',
-      l.type || '',
-      l.regularPrice || 0,
-      l.discountPrice || 0,
-      l.offer ? 'Yes' : 'No',
-      l.bedrooms || 0,
-      l.bathrooms || 0,
-      l.parking ? 'Yes' : 'No',
-      l.furnished ? 'Yes' : 'No',
-      l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '',
-    ]);
-
-    // Build CSV content
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `listings_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadTextFile(`listings-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(grid));
   };
 
   const parseCSV = (text) => {
@@ -464,7 +449,7 @@ export default function Admin() {
 
   const handleImportFile = async () => {
     if (!importFile) {
-      alert('Please select a file');
+      showError('Please select a file');
       return;
     }
 
@@ -476,7 +461,7 @@ export default function Admin() {
       const listings = parseCSV(text);
 
       if (listings.length === 0) {
-        alert('No valid data found in the file');
+        showError('No valid data found in the file');
         setImporting(false);
         return;
       }
@@ -489,11 +474,11 @@ export default function Admin() {
         const listData = await apiClient.get('/listing/get?limit=200');
         setListings(Array.isArray(listData?.data?.listings) ? listData.data.listings : []);
       } else {
-        alert(data.message || 'Import failed');
+        showError(data.message || 'Import failed');
       }
     } catch (error) {
       console.error('Import error:', error);
-      alert('Failed to import listings: ' + error.message);
+      showError('Failed to import listings: ' + error.message);
     } finally {
       setImporting(false);
     }
@@ -504,13 +489,9 @@ export default function Admin() {
 "Sample House","123 Main Street","Mumbai","Maharashtra","400001","sale","house","residential","5000000","3","2","Yes","Yes","19.0760","72.8777"
 "Sample Flat","456 Park Avenue","Delhi","Delhi","110001","rent","flat","residential","25000","2","1","No","Yes","28.6139","77.2090"`;
 
-    const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'listings_import_template.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Same helper as the real exports: adds the BOM and revokes the object URL,
+    // which this function used to allocate and never release.
+    downloadTextFile('listings-import-template.csv', sampleData);
   };
 
 
@@ -518,9 +499,9 @@ export default function Admin() {
     <div className='space-y-5'>
       {isBuyerViewRestricted && (
         <div className='bg-white border border-slate-200 rounded-xl p-10 text-center shadow-sm'>
-          <h1 className='text-xl font-bold text-slate-900 mb-2'>Access Restricted</h1>
-          <p className='text-sm text-slate-500 mb-1'>Admin features are not available in buyer view mode.</p>
-          <p className='text-xs text-slate-400'>Exit buyer view mode to access admin features.</p>
+          <h1 className='text-xl font-bold text-slate-900 mb-2'>{t('admin.accessRestricted')}</h1>
+          <p className='text-sm text-slate-500 mb-1'>{t('admin.adminFeaturesAreNotAvailableIn')}</p>
+          <p className='text-xs text-slate-400'>{t('admin.exitBuyerViewModeToAccess')}</p>
         </div>
       )}
 
@@ -528,51 +509,41 @@ export default function Admin() {
         <>
           <PageHeader
             title={`${isAdmin ? 'Admin' : 'Employee'} Control Center`}
-            description='Manage listings, users, and system settings'
+            description={t('admin.manageListingsUsersAndSystemSettings')}
             actions={
-              <Button variant='primary' size='sm' icon={HiOutlinePlus} onClick={() => window.location.href = '/create-listing'}>
-                New Listing
-              </Button>
+              <Button variant='primary' size='sm' icon={HiOutlinePlus} onClick={() => window.location.href = '/create-listing'}>{t('admin.newListing')}</Button>
             }
           />
 
           {/* Horizontal tab bar */}
           <div className='bg-white border border-slate-200 rounded-xl flex gap-1 overflow-x-auto p-1'>
             <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'dashboard' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-              <HiOutlineViewGrid className='w-4 h-4' /> Dashboard
-            </button>
+              <HiOutlineViewGrid className='w-4 h-4' />{t('admin.dashboard')}</button>
             <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'listings' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-              <HiOutlineCollection className='w-4 h-4' /> Listings
-            </button>
+              <HiOutlineCollection className='w-4 h-4' />{t('admin.listings')}</button>
             {(hasPerm('createCategory') || hasPerm('deleteCategory') || hasPerm('updateCategory')) && (
               <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'categories' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineTag className='w-4 h-4' /> Categories
-              </button>
+                <HiOutlineTag className='w-4 h-4' />{t('admin.categories')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('property-types')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'property-types' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineTag className='w-4 h-4' /> Property Types
-              </button>
+                <HiOutlineTag className='w-4 h-4' />{t('admin.propertyTypes')}</button>
             )}
             {hasPerm('viewOwners') && (
               <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'owners' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineUserGroup className='w-4 h-4' /> Owners
-              </button>
+                <HiOutlineUserGroup className='w-4 h-4' />{t('admin.owners')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('users')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'users' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineClipboardList className='w-4 h-4' /> Users
-              </button>
+                <HiOutlineClipboardList className='w-4 h-4' />{t('admin.users')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('roles')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'roles' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineKey className='w-4 h-4' /> Roles & Permissions
-              </button>
+                <HiOutlineKey className='w-4 h-4' />{t('admin.rolesPermissions')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('logs')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'logs' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineShieldCheck className='w-4 h-4' /> Security Logs
-              </button>
+                <HiOutlineShieldCheck className='w-4 h-4' />{t('admin.securityLogs')}</button>
             )}
           </div>
 
@@ -583,9 +554,9 @@ export default function Admin() {
                 <div className='bg-white border border-slate-200 border-t-2 border-t-blue-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
                   <div className='flex items-start justify-between'>
                     <div>
-                      <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>Listings</div>
+                      <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>{t('admin.listings')}</div>
                       <div className='text-2xl font-bold text-slate-900 mt-1'>{totalListings}</div>
-                      <div className='text-xs text-slate-400 mt-0.5'>Active items</div>
+                      <div className='text-xs text-slate-400 mt-0.5'>{t('admin.activeItems')}</div>
                     </div>
                     <div className='w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center'>
                       <HiOutlineCollection className='w-5 h-5 text-blue-500' />
@@ -596,9 +567,9 @@ export default function Admin() {
                   <div className='bg-white border border-slate-200 border-t-2 border-t-emerald-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
                     <div className='flex items-start justify-between'>
                       <div>
-                        <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>Owners</div>
+                        <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>{t('admin.owners')}</div>
                         <div className='text-2xl font-bold text-slate-900 mt-1'>{totalOwners}</div>
-                        <div className='text-xs text-slate-400 mt-0.5'>Registered partners</div>
+                        <div className='text-xs text-slate-400 mt-0.5'>{t('admin.registeredPartners')}</div>
                       </div>
                       <div className='w-9 h-9 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center'>
                         <HiOutlineUserGroup className='w-5 h-5 text-emerald-500' />
@@ -610,9 +581,9 @@ export default function Admin() {
                   <div className='bg-white border border-slate-200 border-t-2 border-t-purple-500 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow'>
                     <div className='flex items-start justify-between'>
                       <div>
-                        <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>Users</div>
+                        <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>{t('admin.users')}</div>
                         <div className='text-2xl font-bold text-slate-900 mt-1'>{totalUsers}</div>
-                        <div className='text-xs text-slate-400 mt-0.5'>Accounts</div>
+                        <div className='text-xs text-slate-400 mt-0.5'>{t('admin.accounts')}</div>
                       </div>
                       <div className='w-9 h-9 rounded-xl bg-purple-50 ring-1 ring-purple-100 flex items-center justify-center'>
                         <HiOutlineClipboardList className='w-5 h-5 text-purple-500' />
@@ -625,49 +596,64 @@ export default function Admin() {
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Portfolio Overview</h2>
-                    <div className='text-xs text-slate-500 mt-0.5'>Listings value & distribution</div>
+                    <h2 className='text-base font-semibold text-slate-900'>{t('admin.portfolioOverview')}</h2>
+                    <div className='text-xs text-slate-500 mt-0.5'>{t('admin.listingsValueDistribution')}</div>
                   </div>
                   <div className='flex gap-4'>
-                    <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-purple-500'></span><span className='text-xs text-slate-600'>For Sale</span></div>
-                    <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-blue-500'></span><span className='text-xs text-slate-600'>For Rent</span></div>
+                    <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-purple-500'></span><span className='text-xs text-slate-600'>{t('admin.forSale')}</span></div>
+                    <div className='flex items-center gap-2'><span className='inline-block w-3 h-3 rounded-full bg-blue-500'></span><span className='text-xs text-slate-600'>{t('admin.forRent')}</span></div>
                   </div>
                 </div>
 
                 {/* Stats Row */}
+                {(() => {
+                  const effectivePrice = (l) => {
+                    if (isPlaceholderPrice(l.regularPrice)) return 0;
+                    return (l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0);
+                  };
+                  const saleListings = listings.filter(l => l.type === 'sale');
+                  const rentListings = listings.filter(l => l.type === 'rent');
+                  return (
                 <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6'>
                   <div className='p-3 bg-purple-50 rounded-lg border border-purple-100'>
-                    <div className='text-xs text-purple-600 font-medium'>Total Sale Value</div>
-                    <div className='text-lg font-bold text-purple-800'>₹{listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}</div>
-                    <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'sale').length} properties</div>
+                    <div className='text-xs text-purple-600 font-medium'>{t('admin.totalSaleValue')}</div>
+                    <div className='text-lg font-bold text-purple-800'>{formatListingPrice(saleListings.reduce((sum, l) => sum + effectivePrice(l), 0))}</div>
+                    <div className='text-xs text-slate-500'>{saleListings.length} properties</div>
                   </div>
                   <div className='p-3 bg-blue-50 rounded-lg border border-blue-100'>
-                    <div className='text-xs text-blue-600 font-medium'>Monthly Rent Value</div>
-                    <div className='text-lg font-bold text-blue-800'>₹{listings.filter(l => l.type === 'rent').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0).toLocaleString('en-IN')}</div>
-                    <div className='text-xs text-slate-500'>{listings.filter(l => l.type === 'rent').length} properties</div>
+                    <div className='text-xs text-blue-600 font-medium'>{t('admin.monthlyRentValue')}</div>
+                    <div className='text-lg font-bold text-blue-800'>{formatListingPrice(rentListings.reduce((sum, l) => sum + effectivePrice(l), 0))}</div>
+                    <div className='text-xs text-slate-500'>{rentListings.length} properties</div>
                   </div>
                   <div className='p-3 bg-green-50 rounded-lg border border-green-100'>
-                    <div className='text-xs text-green-600 font-medium'>With Offers</div>
+                    <div className='text-xs text-green-600 font-medium'>{t('admin.withOffers')}</div>
                     <div className='text-lg font-bold text-green-800'>{listings.filter(l => l.offer).length}</div>
-                    <div className='text-xs text-slate-500'>₹{listings.filter(l => l.offer).reduce((sum, l) => sum + ((l.regularPrice || 0) - (l.discountPrice || 0)), 0).toLocaleString('en-IN')} discount</div>
+                    <div className='text-xs text-slate-500'>{formatListingPrice(listings.filter(l => l.offer && !isPlaceholderPrice(l.regularPrice)).reduce((sum, l) => sum + ((l.regularPrice || 0) - (l.discountPrice || 0)), 0))} discount</div>
                   </div>
                   <div className='p-3 bg-amber-50 rounded-lg border border-amber-100'>
-                    <div className='text-xs text-amber-600 font-medium'>Avg. Sale Price</div>
-                    <div className='text-lg font-bold text-amber-800'>₹{listings.filter(l => l.type === 'sale').length > 0 ? Math.round(listings.filter(l => l.type === 'sale').reduce((sum, l) => sum + ((l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0)), 0) / listings.filter(l => l.type === 'sale').length).toLocaleString('en-IN') : 0}</div>
-                    <div className='text-xs text-slate-500'>per property</div>
+                    <div className='text-xs text-amber-600 font-medium'>{t('admin.avgSalePrice')}</div>
+                    <div className='text-lg font-bold text-amber-800'>{(() => {
+                      const priced = saleListings.filter(l => !isPlaceholderPrice(l.regularPrice));
+                      return priced.length > 0 ? formatListingPrice(Math.round(priced.reduce((sum, l) => sum + effectivePrice(l), 0) / priced.length)) : formatListingPrice(0);
+                    })()}</div>
+                    <div className='text-xs text-slate-500'>{t('admin.perProperty')}</div>
                   </div>
                 </div>
+                  );
+                })()}
 
                 {/* Category Distribution */}
                 <div className='mb-4'>
-                  <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Category</div>
+                  <div className='text-sm font-medium text-slate-700 mb-2'>{t('admin.listingsByCategory')}</div>
                   <div className='space-y-2'>
                     {(() => {
                       const categoryData = listings.reduce((acc, l) => {
                         const cat = l.category || 'uncategorized';
                         if (!acc[cat]) acc[cat] = { count: 0, value: 0 };
                         acc[cat].count++;
-                        acc[cat].value += (l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0);
+                        if (!isPlaceholderPrice(l.regularPrice)) {
+                          acc[cat].value += (l.offer && l.discountPrice) ? l.discountPrice : (l.regularPrice || 0);
+                        }
                         return acc;
                       }, {});
                       const maxCount = Math.max(...Object.values(categoryData).map(c => c.count), 1);
@@ -675,30 +661,30 @@ export default function Admin() {
                         <div key={cat} className='flex items-center gap-3'>
                           <div className='w-24 text-xs text-slate-600 truncate capitalize'>{cat}</div>
                           <div className='flex-1 h-6 bg-slate-100 rounded-full overflow-hidden'>
-                            <div className='h-full bg-gradient-to-r from-sky-500 to-blue-600 rounded-full flex items-center justify-end pr-2' style={{ width: `${(data.count / maxCount) * 100}%`, minWidth: '40px' }}>
+                            <div className='h-full bg-gradient-to-r from-indigo-500 to-violet-600 rounded-full flex items-center justify-end pr-2' style={{ width: `${(data.count / maxCount) * 100}%`, minWidth: '40px' }}>
                               <span className='text-xs text-white font-medium'>{data.count}</span>
                             </div>
                           </div>
-                          <div className='w-28 text-xs text-slate-500 text-right'>₹{data.value.toLocaleString('en-IN')}</div>
+                          <div className='w-28 text-xs text-slate-500 text-right'>{formatListingPrice(data.value)}</div>
                         </div>
                       ));
                     })()}
-                    {listings.length === 0 && <div className='text-sm text-slate-400 text-center py-4'>No listings data available</div>}
+                    {listings.length === 0 && <div className='text-sm text-slate-400 text-center py-4'>{t('admin.noListingsDataAvailable')}</div>}
                   </div>
                 </div>
 
                 {/* Property Type Distribution */}
                 <div>
-                  <div className='text-sm font-medium text-slate-700 mb-2'>Listings by Property Type</div>
+                  <div className='text-sm font-medium text-slate-700 mb-2'>{t('admin.listingsByPropertyType')}</div>
                   <div className='flex flex-wrap gap-2'>
                     {(() => {
                       const typeData = listings.reduce((acc, l) => { const type = l.propertyType || 'other'; if (!acc[type]) acc[type] = 0; acc[type]++; return acc; }, {});
-                      const colors = ['bg-purple-100 text-purple-800', 'bg-blue-100 text-blue-800', 'bg-green-100 text-green-800', 'bg-amber-100 text-amber-800', 'bg-red-100 text-red-800', 'bg-pink-100 text-pink-800'];
+                      const variants = ['purple', 'info', 'success', 'warning', 'error', 'brand'];
                       return Object.entries(typeData).map(([type, count], idx) => (
-                        <span key={type} className={`px-3 py-1.5 rounded-full text-xs font-medium ${colors[idx % colors.length]}`}>{type}: {count}</span>
+                        <Badge key={type} variant={variants[idx % variants.length]} size='md'>{type}: {count}</Badge>
                       ));
                     })()}
-                    {listings.length === 0 && <span className='text-sm text-slate-400'>No data</span>}
+                    {listings.length === 0 && <span className='text-sm text-slate-400'>{t('admin.noData')}</span>}
                   </div>
                 </div>
               </div>
@@ -709,28 +695,28 @@ export default function Admin() {
           {activeTab === 'listings' && (
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <div className='flex items-center justify-between mb-4'>
-                <h2 className='text-base font-semibold text-slate-900'>All Listings</h2>
+                <h2 className='text-base font-semibold text-slate-900'>{t('admin.allListings')}</h2>
                 <div className='flex gap-2 items-center'>
                   <div className='relative'>
                     <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' />
-                    <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Search by name or address' value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
+                    <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.searchByNameOrAddress')} value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
                   </div>
-                  <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineDownload className='w-4 h-4' /> Export</button>
-                  <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineUpload className='w-4 h-4' /> Import</button>
-                  <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm inline-flex items-center gap-2 font-medium'><HiOutlinePlus className='w-4 h-4' /> Add New</a>
+                  <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineDownload className='w-4 h-4' />{t('admin.export')}</button>
+                  <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineUpload className='w-4 h-4' />{t('admin.import')}</button>
+                  <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm inline-flex items-center gap-2 font-medium'><HiOutlinePlus className='w-4 h-4' />{t('admin.addNew')}</a>
                 </div>
               </div>
               <div className='overflow-auto'>
                 <table className='min-w-full text-sm'>
                   <thead>
                     <tr className='border-b border-slate-200 bg-slate-50'>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>ID</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Listing</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Category</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Type</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Price</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Offer</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Created</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.id')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.listing')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.category')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.type')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.price')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.offer')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.created')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -745,14 +731,14 @@ export default function Admin() {
                             <div className='text-xs text-slate-500 truncate max-w-[360px]'>{l.address}</div>
                           </td>
                           <td className='px-3 py-2.5 text-xs text-slate-600'>{l.category || '-'}</td>
-                          <td className='px-3 py-2.5'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${l.type === 'rent' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{l.type || '-'}</span></td>
-                          <td className='px-3 py-2.5 text-sm text-slate-800'>${Number(price || 0).toLocaleString('en-US')}{l.type === 'rent' ? <span className='text-xs text-slate-500'> / month</span> : null}</td>
-                          <td className='px-3 py-2.5'>{l.offer ? <span className='px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800'>Offer</span> : <span className='px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700'>—</span>}</td>
+                          <td className='px-3 py-2.5'><Badge variant={l.type === 'rent' ? 'info' : 'purple'}>{l.type || '-'}</Badge></td>
+                          <td className='px-3 py-2.5 text-sm text-slate-800'>{formatListingPrice(price)}{l.type === 'rent' && !isPlaceholderPrice(price) ? <span className='text-xs text-slate-500'> / month</span> : null}</td>
+                          <td className='px-3 py-2.5'>{l.offer ? <Badge variant='success'>{t('admin.offer')}</Badge> : <Badge variant='slate'>—</Badge>}</td>
                           <td className='px-3 py-2.5 text-xs text-slate-500'>{l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '-'}</td>
                         </tr>
                       );
                     })}
-                    {!listingsLoading && listings.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={7}>No listings.</td></tr>}
+                    {!listingsLoading && listings.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={7}>{t('admin.noListings')}</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -762,7 +748,7 @@ export default function Admin() {
           {activeTab === 'categories' && (
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <div className='flex items-center justify-between mb-4'>
-                <h2 className='text-base font-semibold text-slate-900'>Categories</h2>
+                <h2 className='text-base font-semibold text-slate-900'>{t('admin.categories')}</h2>
                 <div className='text-sm text-slate-500'>Total: {categories.length}</div>
               </div>
               {hasPerm('createCategory') && (
@@ -771,13 +757,13 @@ export default function Admin() {
                   <button
                     disabled={creating || !newCategoryName.trim()}
                     onClick={async () => {
-                      if (!newCategoryName.trim()) { alert('Please enter a category name'); return; }
+                      if (!newCategoryName.trim()) { showError('Please enter a category name'); return; }
                       try {
                         setCreating(true);
                         const data = await apiClient.post('/category/create', { name: newCategoryName.trim() });
                         if (data && data.slug) { setCategories((prev) => [...prev, data]); setNewCategoryName(''); }
-                        else { alert(data?.message || 'Failed to create category'); }
-                      } catch { alert('Error creating category. Please try again.'); }
+                        else { showError(data?.message || 'Failed to create category'); }
+                      } catch { showError('Error creating category. Please try again.'); }
                       finally { setCreating(false); }
                     }}
                     className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'
@@ -792,12 +778,12 @@ export default function Admin() {
                     <div className='flex items-center justify-between'>
                       <span className='text-xs text-slate-400'>{category.fields?.length || 0} fields</span>
                       {hasPerm('deleteCategory') && (
-                        <button onClick={() => setPendingDeleteCategory(category)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>Delete</button>
+                        <button onClick={() => setPendingDeleteCategory(category)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>{t('admin.delete')}</button>
                       )}
                     </div>
                   </div>
                 ))}
-                {categories.length === 0 && <div className='col-span-full text-center py-8 text-slate-500 text-sm'>No categories found. Create your first category above.</div>}
+                {categories.length === 0 && <div className='col-span-full text-center py-8 text-slate-500 text-sm'>{t('admin.noCategoriesFoundCreateYourFirst')}</div>}
               </div>
             </div>
           )}
@@ -811,22 +797,22 @@ export default function Admin() {
           {activeTab === 'logs' && (
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <div className='flex items-center justify-between mb-4'>
-                <h2 className='text-base font-semibold text-slate-900'>Security Logs</h2>
+                <h2 className='text-base font-semibold text-slate-900'>{t('admin.securityLogs')}</h2>
                 <div className='text-sm text-slate-500'>Total: {logsTotal}</div>
               </div>
               <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-3'>
-                <input value={logFilters.email} onChange={(e) => setLogFilters({ ...logFilters, email: e.target.value })} placeholder='Filter email' className='border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' />
+                <input value={logFilters.email} onChange={(e) => setLogFilters({ ...logFilters, email: e.target.value })} placeholder={t('admin.filterEmail')} className='border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' />
                 <select value={logFilters.method} onChange={(e) => setLogFilters({ ...logFilters, method: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
-                  <option value='all'>All methods</option>
-                  <option value='password'>Password</option>
-                  <option value='signup'>Signup</option>
-                  <option value='other'>Other</option>
+                  <option value='all'>{t('admin.allMethods')}</option>
+                  <option value='password'>{t('admin.password')}</option>
+                  <option value='signup'>{t('admin.signup')}</option>
+                  <option value='other'>{t('admin.other')}</option>
                 </select>
                 <select value={logFilters.status} onChange={(e) => setLogFilters({ ...logFilters, status: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
-                  <option value='all'>All status</option>
-                  <option value='blocked'>Blocked</option>
-                  <option value='invalid'>Invalid</option>
-                  <option value='success'>Success</option>
+                  <option value='all'>{t('admin.allStatus')}</option>
+                  <option value='blocked'>{t('admin.blocked')}</option>
+                  <option value='invalid'>{t('admin.invalid')}</option>
+                  <option value='success'>{t('admin.success')}</option>
                 </select>
                 <input type='date' value={logFilters.since} onChange={(e) => setLogFilters({ ...logFilters, since: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
                 <input type='date' value={logFilters.until} onChange={(e) => setLogFilters({ ...logFilters, until: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
@@ -844,47 +830,45 @@ export default function Admin() {
                     const data = await apiClient.get(`/user/security/logs?${params.toString()}`);
                     setLogs(Array.isArray(data?.logs) ? data.logs : []); setLogsTotal(Number(data?.total) || 0);
                   } catch (error) { console.error(error); }
-                }}>Apply Filters</button>
+                }}>{t('admin.applyFilters')}</button>
                 <button className='px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm transition-colors' onClick={async () => {
                   try {
                     setLogFilters({ method: 'all', status: 'all', email: '', since: '', until: '' }); setLogPage(0);
                     const data = await apiClient.get(`/user/security/logs?limit=${pageSize}`);
                     setLogs(Array.isArray(data?.logs) ? data.logs : []); setLogsTotal(Number(data?.total) || 0);
                   } catch (error) { console.error(error); }
-                }}>Reset</button>
+                }}>{t('admin.reset')}</button>
                 <label className='flex items-center gap-2 text-sm text-slate-600 ml-2'>
-                  <input type='checkbox' checked={onlyPhoneChanges} onChange={(e) => setOnlyPhoneChanges(e.target.checked)} />
-                  Only phone changes
-                </label>
+                  <input type='checkbox' checked={onlyPhoneChanges} onChange={(e) => setOnlyPhoneChanges(e.target.checked)} />{t('admin.onlyPhoneChanges')}</label>
                 <div className='ml-auto flex items-center gap-2'>
-                  <button disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p-1))} className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm disabled:opacity-50 hover:bg-slate-50'>Prev</button>
+                  <button disabled={logPage === 0} onClick={() => setLogPage((p) => Math.max(0, p-1))} className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm disabled:opacity-50 hover:bg-slate-50'>{t('admin.prev')}</button>
                   <span className='text-sm text-slate-600'>Page {logPage + 1} of {Math.max(1, Math.ceil(logsTotal / pageSize))}</span>
-                  <button disabled={(logPage+1) * pageSize >= logsTotal} onClick={() => setLogPage((p) => p+1)} className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm disabled:opacity-50 hover:bg-slate-50'>Next</button>
+                  <button disabled={(logPage+1) * pageSize >= logsTotal} onClick={() => setLogPage((p) => p+1)} className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm disabled:opacity-50 hover:bg-slate-50'>{t('admin.next')}</button>
                 </div>
               </div>
               <div className='overflow-auto max-h-96'>
                 <table className='min-w-full text-sm'>
                   <thead>
                     <tr className='border-b border-slate-200 bg-slate-50'>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Time</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Email</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Method</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Status</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Reason</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>IP</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>User Agent</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Path</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.time')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.email')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.method')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.status')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.reason')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.ip')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.userAgent')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.path')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(onlyPhoneChanges ? logs.filter((l) => String(l.reason || '').startsWith('phone_changed:')) : logs).map((log) => {
-                      const badge = log.status === 'blocked' ? 'bg-red-100 text-red-800' : log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                      const badgeVariant = log.status === 'blocked' ? 'error' : log.status === 'success' ? 'success' : 'warning';
                       return (
                         <tr key={log._id} className='border-b border-slate-100 hover:bg-slate-50'>
                           <td className='px-3 py-2 whitespace-nowrap text-xs text-slate-600'>{new Date(log.createdAt).toLocaleString()}</td>
                           <td className='px-3 py-2 break-all text-xs'>{log.email}</td>
                           <td className='px-3 py-2 capitalize text-xs'>{log.method}</td>
-                          <td className='px-3 py-2'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge}`}>{log.status}</span></td>
+                          <td className='px-3 py-2'><Badge variant={badgeVariant}>{log.status}</Badge></td>
                           <td className='px-3 py-2 text-xs'>{log.reason}</td>
                           <td className='px-3 py-2 text-xs'>{log.ip}</td>
                           <td className='px-3 py-2 text-xs max-w-[280px] truncate' title={log.userAgent}>{log.userAgent}</td>
@@ -901,35 +885,35 @@ export default function Admin() {
           {activeTab === 'owners' && (
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <div className='flex items-center justify-between mb-4'>
-                <h2 className='text-base font-semibold text-slate-900'>Owners</h2>
-                {ownersLoading && <span className='text-sm text-slate-400'>Loading…</span>}
+                <h2 className='text-base font-semibold text-slate-900'>{t('admin.owners')}</h2>
+                {ownersLoading && <span className='text-sm text-slate-400'>{t('admin.loading')}</span>}
               </div>
               {hasPerm('createOwner') && (
                 <>
                   <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3'>
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Owner name*' value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} />
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Email' value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} />
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Phone' value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} />
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Company' value={newOwner.companyName} onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.ownerName')} value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.email')} value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.phone')} value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.company')} value={newOwner.companyName} onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })} />
                   </div>
                   <div className='mb-4'>
-                    <button onClick={createOwner} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors'>Create Owner</button>
+                    <button onClick={createOwner} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors'>{t('admin.createOwner')}</button>
                   </div>
                 </>
               )}
               <div className='mb-4 flex justify-end'>
-                <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Search owners' value={ownersQuery} onChange={(e) => setOwnersQuery(e.target.value)} />
+                <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.searchOwners')} value={ownersQuery} onChange={(e) => setOwnersQuery(e.target.value)} />
               </div>
               <div className='overflow-auto'>
                 <table className='min-w-full text-sm'>
                   <thead>
                     <tr className='border-b border-slate-200 bg-slate-50'>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Name</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Company</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Email</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Phone</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Active</th>
-                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Actions</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.name')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.company')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.email')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.phone')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.active')}</th>
+                      <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -939,16 +923,16 @@ export default function Admin() {
                         <td className='px-3 py-2.5 text-sm text-slate-600'>{o.companyName || '-'}</td>
                         <td className='px-3 py-2.5 text-sm text-slate-600'>{o.email || '-'}</td>
                         <td className='px-3 py-2.5 text-sm text-slate-600'>{o.phone || '-'}</td>
-                        <td className='px-3 py-2.5'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.active ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'}`}>{o.active ? 'Active' : 'Inactive'}</span></td>
+                        <td className='px-3 py-2.5'><Badge variant={o.active ? 'success' : 'slate'}>{o.active ? 'Active' : 'Inactive'}</Badge></td>
                         <td className='px-3 py-2.5'>
                           <div className='flex items-center gap-2'>
                             {hasPerm('updateOwner') && <button onClick={() => toggleOwnerActive(o)} className='px-2 py-1 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors'>{o.active ? 'Deactivate' : 'Activate'}</button>}
-                            {hasPerm('deleteOwner') && <button onClick={() => deleteOwnerById(o._id)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>Delete</button>}
+                            {hasPerm('deleteOwner') && <button onClick={() => deleteOwnerById(o._id)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>{t('admin.delete')}</button>}
                           </div>
                         </td>
                       </tr>
                     ))}
-                    {owners.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={6}>No owners yet.</td></tr>}
+                    {owners.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={6}>{t('admin.noOwnersYet')}</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -958,12 +942,14 @@ export default function Admin() {
           {activeTab === 'users' && (
             <div className='space-y-5'>
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
-                <h2 className='text-base font-semibold text-slate-900 mb-4'>Create Employee</h2>
+                <h2 className='text-base font-semibold text-slate-900 mb-4'>{t('admin.createEmployee')}</h2>
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Username' autoComplete='off' value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Email' type='email' autoComplete='off' value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Password' type='password' autoComplete='new-password' value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Phone/Mobile Number' type='tel' autoComplete='off' value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.username')} autoComplete='off' value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.email')} type='email' autoComplete='off' value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                  {/* No password field: the new employee receives a single-use
+                      invite link and chooses their own. An admin typing a
+                      password meant the product had to transmit it to them. */}
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.phoneMobileNumber')} type='tel' autoComplete='off' value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
                   <div className='flex flex-wrap gap-2 items-center col-span-full'>
                     {categories.map((c) => (
                       <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
@@ -974,7 +960,7 @@ export default function Admin() {
                   </div>
                 </div>
                 <div className='mt-4'>
-                  <button disabled={creating} onClick={async () => { try { setCreating(true); const data = await apiClient.post('/user/employee', newUser); if (data && data._id) { setUsers((prev) => [data, ...prev]); setNewUser({ username: '', email: '', password: '', phone: '', assignedCategories: [] }); } } catch (error) { console.error(error); } finally { setCreating(false); } }} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>
+                  <button disabled={creating} onClick={async () => { try { setCreating(true); const data = await apiClient.post('/user/employee', newUser); if (data && data._id) { setUsers((prev) => [data, ...prev]); setNewUser({ username: '', email: '', phone: '', assignedCategories: [] }); } } catch (error) { console.error(error); } finally { setCreating(false); } }} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>
                     {creating ? 'Creating...' : 'Create Employee'}
                   </button>
                 </div>
@@ -982,11 +968,11 @@ export default function Admin() {
 
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
-                  <h2 className='text-base font-semibold text-slate-900'>All Users</h2>
+                  <h2 className='text-base font-semibold text-slate-900'>{t('admin.allUsers')}</h2>
                   <div className='flex items-center gap-4'>
                     <div className='relative'>
                       <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' />
-                      <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder='Search users by name or email' value={usersQuery} onChange={(e) => setUsersQuery(e.target.value)} />
+                      <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.searchUsersByNameOrEmail')} value={usersQuery} onChange={(e) => setUsersQuery(e.target.value)} />
                     </div>
                     <div className='text-sm text-slate-500'>Total: {users.length} users</div>
                   </div>
@@ -995,13 +981,13 @@ export default function Admin() {
                   <table className='min-w-full text-sm'>
                     <thead>
                       <tr className='border-b border-slate-200 bg-slate-50'>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>User</th>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Email</th>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Role</th>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Categories</th>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Status</th>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Created</th>
-                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>Actions</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.user')}</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.email')}</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.role')}</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.categories')}</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.status')}</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.created')}</th>
+                        <th className='text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('admin.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1009,8 +995,8 @@ export default function Admin() {
                         <tr key={user._id} className='border-b border-slate-100 hover:bg-slate-50'>
                           <td className='px-3 py-3'>
                             <div className='flex items-center gap-3'>
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${user.role === 'admin' ? 'bg-red-100' : user.role === 'employee' ? 'bg-blue-100' : user.role === 'seller' ? 'bg-green-100' : 'bg-slate-200'}`}>
-                                <span className={`text-sm font-medium ${user.role === 'admin' ? 'text-red-600' : user.role === 'employee' ? 'text-blue-600' : user.role === 'seller' ? 'text-green-600' : 'text-slate-600'}`}>{user.username ? user.username.charAt(0).toUpperCase() : 'U'}</span>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${user.role === 'admin' ? 'bg-rose-100' : user.role === 'employee' ? 'bg-indigo-100' : user.role === 'seller' ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                                <span className={`text-sm font-medium ${user.role === 'admin' ? 'text-rose-600' : user.role === 'employee' ? 'text-indigo-600' : user.role === 'seller' ? 'text-emerald-600' : 'text-slate-600'}`}>{user.username ? user.username.charAt(0).toUpperCase() : 'U'}</span>
                               </div>
                               <div>
                                 <div className='font-medium text-slate-900 text-sm'>{user.username || 'N/A'}</div>
@@ -1022,18 +1008,18 @@ export default function Admin() {
                             <div className='text-sm text-slate-900'>{user.email}</div>
                             {user.phone && <div className='text-xs text-slate-500'>{user.phone}</div>}
                           </td>
-                          <td className='px-3 py-3'><span className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-red-100 text-red-800' : user.role === 'employee' ? 'bg-blue-100 text-blue-800' : user.role === 'seller' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>{user.role || 'buyer'}</span></td>
+                          <td className='px-3 py-3'><Badge variant={user.role === 'admin' ? 'error' : user.role === 'employee' ? 'brand' : user.role === 'seller' ? 'success' : 'default'}>{user.role || 'buyer'}</Badge></td>
                           <td className='px-3 py-3'>
                             <div className='flex flex-wrap gap-1'>
-                              {(user.assignedCategories || []).map((cat) => <span key={cat} className='px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full'>{cat}</span>)}
-                              {(!user.assignedCategories || user.assignedCategories.length === 0) && <span className='text-xs text-slate-400'>None</span>}
+                              {(user.assignedCategories || []).map((cat) => <Badge key={cat} variant='brand'>{cat}</Badge>)}
+                              {(!user.assignedCategories || user.assignedCategories.length === 0) && <span className='text-xs text-slate-400'>{t('admin.none')}</span>}
                             </div>
                           </td>
-                          <td className='px-3 py-3'><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-800' : user.status === 'suspended' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{user.status || 'active'}</span></td>
+                          <td className='px-3 py-3'><Badge variant={user.status === 'active' ? 'success' : user.status === 'suspended' ? 'warning' : 'error'}>{user.status || 'active'}</Badge></td>
                           <td className='px-3 py-3 text-xs text-slate-500'>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
                           <td className='px-3 py-3'>
                             <div className='flex items-center gap-2'>
-                              <button onClick={() => openUserManageModal(user)} className='px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'>Manage</button>
+                              <button onClick={() => openUserManageModal(user)} className='px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'>{t('admin.manage')}</button>
                               {user.role !== 'admin' && (
                                 <button onClick={() => toggleUserStatus(user._id, user.status || 'active')} className={`px-2 py-1 text-xs rounded-lg border transition-colors ${(user.status || 'active') === 'active' ? 'border-orange-200 text-orange-600 hover:bg-orange-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>
                                   {(user.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
@@ -1043,7 +1029,7 @@ export default function Admin() {
                           </td>
                         </tr>
                       ))}
-                      {users.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={7}>No users found.</td></tr>}
+                      {users.length === 0 && <tr><td className='px-3 py-4 text-slate-500 text-center text-sm' colSpan={7}>{t('admin.noUsersFound')}</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -1064,25 +1050,23 @@ export default function Admin() {
           <div className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden'>
             <div className='p-6 border-b flex items-start justify-between gap-4'>
               <div>
-                <div className='text-xs uppercase tracking-wide text-slate-500'>User Details</div>
+                <div className='text-xs uppercase tracking-wide text-slate-500'>{t('admin.userDetails')}</div>
                 <div className='text-xl font-semibold text-slate-900'>{managingUser.username || 'N/A'}</div>
                 <div className='text-sm text-slate-500'>{managingUser.email}</div>
               </div>
-              <button onClick={closeUserManageModal} disabled={saving} className='px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>
-                Close
-              </button>
+              <button onClick={closeUserManageModal} disabled={saving} className='px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>{t('admin.close')}</button>
             </div>
 
             <div className='p-6 overflow-auto'>
               <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                 <div className='rounded-xl border border-slate-200 p-4'>
-                  <div className='text-sm font-semibold text-slate-800 mb-3'>Overview</div>
+                  <div className='text-sm font-semibold text-slate-800 mb-3'>{t('admin.overview')}</div>
                   <div className='space-y-2 text-sm'>
-                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>User ID</div><div className='font-mono text-xs text-slate-800'>{managingUser._id}</div></div>
-                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Phone</div><div className='text-slate-800'>{managingUser.phone || '-'}</div></div>
-                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Status</div><div className='text-slate-800'>{managingUser.status || 'active'}</div></div>
-                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Created</div><div className='text-xs text-slate-800'>{managingUser.createdAt ? new Date(managingUser.createdAt).toLocaleString() : 'N/A'}</div></div>
-                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>Role</div><div className='text-slate-800'>{managingUser.role || 'buyer'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>{t('admin.userId')}</div><div className='font-mono text-xs text-slate-800'>{managingUser._id}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>{t('admin.phone')}</div><div className='text-slate-800'>{managingUser.phone || '-'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>{t('admin.status')}</div><div className='text-slate-800'>{managingUser.status || 'active'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>{t('admin.created')}</div><div className='text-xs text-slate-800'>{managingUser.createdAt ? new Date(managingUser.createdAt).toLocaleString() : 'N/A'}</div></div>
+                    <div className='flex items-center justify-between gap-3'><div className='text-slate-500'>{t('admin.role')}</div><div className='text-slate-800'>{managingUser.role || 'buyer'}</div></div>
                   </div>
                   <div className='mt-4'>
                     {managingUser.role !== 'admin' && (
@@ -1094,26 +1078,26 @@ export default function Admin() {
                 </div>
 
                 <div className='rounded-xl border border-slate-200 p-4'>
-                  <div className='text-sm font-semibold text-slate-800 mb-3'>Update Properties</div>
+                  <div className='text-sm font-semibold text-slate-800 mb-3'>{t('admin.updateProperties')}</div>
                   <div className='space-y-4'>
                     <div>
-                      <div className='text-xs font-medium text-slate-600 mb-1'>Role</div>
+                      <div className='text-xs font-medium text-slate-600 mb-1'>{t('admin.role')}</div>
                       {managingUser.role === 'admin' ? (
                         <div>
-                          <div className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-100 text-slate-500 cursor-not-allowed'>Admin</div>
-                          <p className='text-xs text-amber-600 mt-1'>Admin roles cannot be changed.</p>
+                          <div className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-100 text-slate-500 cursor-not-allowed'>{t('admin.admin')}</div>
+                          <p className='text-xs text-amber-600 mt-1'>{t('admin.adminRolesCannotBeChanged')}</p>
                         </div>
                       ) : (
                         <select value={manageRole} onChange={(e) => setManageRole(e.target.value)} disabled={saving} className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300'>
 
-                          <option value='buyer'>Buyer</option>
-                          <option value='seller'>Seller</option>
-                          <option value='employee'>Employee</option>
+                          <option value='buyer'>{t('admin.buyer')}</option>
+                          <option value='seller'>{t('admin.seller')}</option>
+                          <option value='employee'>{t('admin.employee')}</option>
                         </select>
                       )}
                     </div>
                     <div>
-                      <div className='text-xs font-medium text-slate-600 mb-2'>Assigned Categories</div>
+                      <div className='text-xs font-medium text-slate-600 mb-2'>{t('admin.assignedCategories')}</div>
                       <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
                         {categories.map((c) => (
                           <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
@@ -1124,7 +1108,7 @@ export default function Admin() {
                       </div>
                     </div>
                     <div className='flex justify-end gap-3'>
-                      <button onClick={closeUserManageModal} disabled={saving} className='px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>Cancel</button>
+                      <button onClick={closeUserManageModal} disabled={saving} className='px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>{t('admin.cancel')}</button>
                       <button onClick={saveManagedUser} disabled={saving} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>{saving ? 'Saving…' : 'Save Changes'}</button>
                     </div>
                   </div>
@@ -1133,10 +1117,10 @@ export default function Admin() {
 
               {isAdmin && managingUser.role === 'employee' && (
                 <div className='mt-6 rounded-xl border border-slate-200 p-4'>
-                  <div className='text-sm font-semibold text-slate-800 mb-3'>Reset Password</div>
+                  <div className='text-sm font-semibold text-slate-800 mb-3'>{t('admin.resetPassword')}</div>
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
-                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder='New password' value={managePassword} onChange={(e) => setManagePassword(e.target.value)} disabled={saving} />
-                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder='Confirm new password' value={managePasswordConfirm} onChange={(e) => setManagePasswordConfirm(e.target.value)} disabled={saving} />
+                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder={t('admin.newPassword')} value={managePassword} onChange={(e) => setManagePassword(e.target.value)} disabled={saving} />
+                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder={t('admin.confirmNewPassword')} value={managePasswordConfirm} onChange={(e) => setManagePasswordConfirm(e.target.value)} disabled={saving} />
                   </div>
                   <div className='mt-3 flex justify-end'>
                     <button onClick={saveManagedPassword} disabled={saving || !managePassword} className='px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700 transition-colors'>{saving ? 'Updating…' : 'Update Password'}</button>
@@ -1155,8 +1139,8 @@ export default function Admin() {
             <div className='p-6 border-b'>
               <div className='flex items-start justify-between gap-4'>
                 <div>
-                  <h3 className='text-base font-semibold text-slate-900'>Import Listings from CSV</h3>
-                  <p className='text-sm text-slate-500 mt-0.5'>Upload a CSV file to bulk import listings</p>
+                  <h3 className='text-base font-semibold text-slate-900'>{t('admin.importListingsFromCsv')}</h3>
+                  <p className='text-sm text-slate-500 mt-0.5'>{t('admin.uploadACsvFileToBulk')}</p>
                 </div>
                 <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportResults(null); }} className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors'>
                   <HiX className='w-5 h-5' />
@@ -1166,35 +1150,33 @@ export default function Admin() {
 
             <div className='p-6'>
               <div className='mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200'>
-                <p className='text-sm text-slate-600 mb-2'>Download a sample CSV template to see the expected format:</p>
+                <p className='text-sm text-slate-600 mb-2'>{t('admin.downloadASampleCsvTemplateTo')}</p>
                 <button onClick={downloadSampleCSV} className='text-sm text-slate-700 hover:text-slate-900 font-medium flex items-center gap-1.5 transition-colors'>
-                  <HiOutlineDownload className='w-4 h-4' />
-                  Download Sample Template
-                </button>
+                  <HiOutlineDownload className='w-4 h-4' />{t('admin.downloadSampleTemplate')}</button>
               </div>
 
               <div className='mb-4'>
-                <label className='block text-sm font-medium text-slate-700 mb-2'>Select CSV File</label>
+                <label className='block text-sm font-medium text-slate-700 mb-2'>{t('admin.selectCsvFile')}</label>
                 <input type='file' accept='.csv' onChange={(e) => setImportFile(e.target.files[0])} className='block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200' />
                 {importFile && <p className='mt-2 text-sm text-slate-500'>Selected: {importFile.name}</p>}
               </div>
 
               {importResults && (
                 <div className='mt-4 p-4 rounded-lg border border-slate-200'>
-                  <h4 className='font-medium text-slate-800 mb-2 text-sm'>Import Results</h4>
+                  <h4 className='font-medium text-slate-800 mb-2 text-sm'>{t('admin.importResults')}</h4>
                   <div className='grid grid-cols-2 gap-4'>
                     <div className='p-3 bg-green-50 rounded-lg border border-green-100'>
                       <div className='text-green-800 font-medium'>{importResults.success?.length || 0}</div>
-                      <div className='text-green-600 text-xs'>Successfully imported</div>
+                      <div className='text-green-600 text-xs'>{t('admin.successfullyImported')}</div>
                     </div>
                     <div className='p-3 bg-red-50 rounded-lg border border-red-100'>
                       <div className='text-red-800 font-medium'>{importResults.failed?.length || 0}</div>
-                      <div className='text-red-600 text-xs'>Failed to import</div>
+                      <div className='text-red-600 text-xs'>{t('admin.failedToImport')}</div>
                     </div>
                   </div>
                   {importResults.failed && importResults.failed.length > 0 && (
                     <div className='mt-3'>
-                      <p className='text-sm font-medium text-slate-700 mb-1'>Errors:</p>
+                      <p className='text-sm font-medium text-slate-700 mb-1'>{t('admin.errors')}</p>
                       <div className='max-h-32 overflow-y-auto text-xs text-red-600 bg-red-50 rounded p-2'>
                         {importResults.failed.map((err, idx) => <div key={idx} className='mb-1'>Row {err.row}: {err.error}</div>)}
                       </div>
@@ -1215,11 +1197,9 @@ export default function Admin() {
                       <svg className='animate-spin w-4 h-4' fill='none' viewBox='0 0 24 24'>
                         <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
                         <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
-                      </svg>
-                      Importing...
-                    </>
+                      </svg>{t('admin.importing')}</>
                   ) : (
-                    <><HiOutlineUpload className='w-4 h-4' /> Import Listings</>
+                    <><HiOutlineUpload className='w-4 h-4' />{t('admin.importListings')}</>
                   )}
                 </button>
               )}
@@ -1230,9 +1210,9 @@ export default function Admin() {
 
       <ConfirmDialog
         open={!!pendingDeleteCategory}
-        title='Delete this category?'
-        description='This cannot be undone.'
-        confirmLabel='Delete'
+        title={t('admin.deleteThisCategory')}
+        description={t('admin.thisCannotBeUndone')}
+        confirmLabel={t('admin.delete')}
         onConfirm={async () => {
           if (!pendingDeleteCategory) return;
           const cat = pendingDeleteCategory;

@@ -2,10 +2,10 @@ import mongoose from 'mongoose';
 
 const messageSchema = new mongoose.Schema(
   {
-    senderId: { type: String, required: true, index: true },
-    receiverId: { type: String, required: true, index: true },
-    listingId: { type: String, required: false, default: '' },
-    content: { type: String, required: true },
+    senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    receiverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    listingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', default: null },
+    content: { type: String, required: true, maxlength: 50000 },
     isEncrypted: { type: Boolean, default: false },
     read: { type: Boolean, default: false },
   },

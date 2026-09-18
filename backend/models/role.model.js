@@ -1,84 +1,29 @@
 import mongoose from 'mongoose';
+import { permissionSchemaFields } from '../utils/permissionCatalogue.js';
 
 const roleSchema = new mongoose.Schema(
   {
-    name: { 
-      type: String, 
-      required: true, 
-      unique: true, 
-      trim: true,
-      index: true 
+    name: {
+      type: String,
+      required: true,
+      trim: true
     },
     description: { 
       type: String, 
       default: '',
       maxlength: 500 
     },
-    permissions: {
-      // User management
-      createUser: { type: Boolean, default: false },
-      updateUser: { type: Boolean, default: false },
-      deleteUser: { type: Boolean, default: false },
-      viewUsers: { type: Boolean, default: false },
-      
-      // Client management
-      createClient: { type: Boolean, default: false },
-      updateClient: { type: Boolean, default: false },
-      deleteClient: { type: Boolean, default: false },
-      viewClients: { type: Boolean, default: false },
-      
-      // Owner management
-      createOwner: { type: Boolean, default: false },
-      updateOwner: { type: Boolean, default: false },
-      deleteOwner: { type: Boolean, default: false },
-      viewOwners: { type: Boolean, default: false },
-      toggleOwnerActive: { type: Boolean, default: false },
-      
-      // Listing management
-      createListing: { type: Boolean, default: false },
-      updateListing: { type: Boolean, default: false },
-      deleteListing: { type: Boolean, default: false },
-      viewListings: { type: Boolean, default: false },
-      publishListing: { type: Boolean, default: false },
-      
-      // Category management
-      createCategory: { type: Boolean, default: false },
-      updateCategory: { type: Boolean, default: false },
-      deleteCategory: { type: Boolean, default: false },
-      viewCategories: { type: Boolean, default: false },
-      
-      // Message management
-      viewMessages: { type: Boolean, default: false },
-      sendMessages: { type: Boolean, default: false },
-      deleteMessages: { type: Boolean, default: false },
-      
-      // Buyer requirements
-      createBuyerRequirement: { type: Boolean, default: false },
-      updateBuyerRequirement: { type: Boolean, default: false },
-      deleteBuyerRequirement: { type: Boolean, default: false },
-      viewBuyerRequirements: { type: Boolean, default: false },
-      
-      // File uploads
-      uploadFiles: { type: Boolean, default: false },
-      
-      // Analytics and reports
-      viewAnalytics: { type: Boolean, default: false },
-      exportData: { type: Boolean, default: false },
-      
-      // System administration
-      manageRoles: { type: Boolean, default: false },
-      systemSettings: { type: Boolean, default: false },
-      viewLogs: { type: Boolean, default: false }
-    },
+    // Generated from utils/permissionCatalogue.js so the schema, the admin
+    // UI catalogue and requirePermission() can never drift apart again.
+    permissions: permissionSchemaFields(),
     isActive: { type: Boolean, default: true },
     isSystem: { type: Boolean, default: false }, // System roles cannot be deleted
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    createdBy: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'User',
-      required: true 
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
     },
     updatedBy: { 
       type: mongoose.Schema.Types.ObjectId, 
@@ -197,6 +142,13 @@ roleSchema.statics.getDefaultRoles = function() {
     }
   ];
 };
+
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+// Uniqueness is per tenant, not global. Two agencies must each be able to have a "Sales Manager" role.
+// A global `unique: true` would let whichever agency signed up first claim
+// the name for everyone else.
+roleSchema.index({ tenantId: 1, name: 1 }, { unique: true });
 
 const Role = mongoose.model('Role', roleSchema);
 

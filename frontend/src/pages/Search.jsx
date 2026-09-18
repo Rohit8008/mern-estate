@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import ListingItem from '../components/ListingItem';
-import { fetchWithRefresh, handleApiResponse } from '../utils/http';
+import { EmptyState } from '../design-system';
+import { apiClient } from '../utils/http';
 import usePageTitle from '../hooks/usePageTitle';
 import SearchBar from '../components/search/SearchBar';
 import SearchFilters from '../components/search/SearchFilters';
@@ -20,8 +21,11 @@ import {
   HiSearch,
   HiRefresh
 } from 'react-icons/hi';
+import { formatCompactCurrency, formatCurrency } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 
 export default function Search() {
+  const { t } = useTranslation();
   usePageTitle('Search Properties');
   const location = useLocation();
   const navigate = useNavigate();
@@ -102,6 +106,8 @@ export default function Search() {
 
   // Fetch listings when filters change
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchListings = async () => {
       setLoading(true);
       setError('');
@@ -115,7 +121,7 @@ export default function Search() {
         if (filters.searchTerm) params.set('q', filters.searchTerm);
         if (filters.type && filters.type !== 'all') params.set('type', filters.type);
         if (filters.propertyCategory && filters.propertyCategory !== 'all') {
-          params.set('category', filters.propertyCategory);
+          params.set('propertyCategory', filters.propertyCategory);
         }
         if (filters.propertyType) params.set('propertyType', filters.propertyType);
         if (filters.city) params.set('city', filters.city);
@@ -130,31 +136,32 @@ export default function Search() {
         if (filters.order) params.set('order', filters.order);
         params.set('limit', '12');
 
-        const res = await fetchWithRefresh(`/api/listing/search?${params.toString()}`);
-        const data = await handleApiResponse(res);
+        const data = await apiClient.get(`/listing/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
 
-        const endTime = Date.now();
-        setSearchTime(endTime - startTime);
+        // A slower earlier request must not overwrite a newer one's results —
+        // the classic "the list doesn't match what I typed". The abort above
+        // cancels in flight; this guards the case where it already resolved.
+        if (controller.signal.aborted) return;
 
-        if (data.success) {
-          setListings(data.data?.listings || []);
-          setTotalResults(data.data?.pagination?.total || 0);
-          setShowMore(data.data?.pagination?.hasMore || false);
-        } else {
-          setListings([]);
-          setTotalResults(0);
-        }
+        setSearchTime(Date.now() - startTime);
+        setListings(data.data?.listings || []);
+        setTotalResults(data.data?.pagination?.total || 0);
+        setShowMore(data.data?.pagination?.hasMore || false);
       } catch (e) {
+        if (e?.name === 'AbortError' || controller.signal.aborted) return;
         setListings([]);
         setShowMore(false);
         setTotalResults(0);
         setError(e.message || 'Failed to load listings');
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
     fetchListings();
+    return () => controller.abort();
   }, [filters, refreshKey]);
 
   // Update URL when filters change
@@ -235,7 +242,7 @@ export default function Search() {
       if (filters.searchTerm) params.set('q', filters.searchTerm);
       if (filters.type && filters.type !== 'all') params.set('type', filters.type);
       if (filters.propertyCategory && filters.propertyCategory !== 'all') {
-        params.set('category', filters.propertyCategory);
+        params.set('propertyCategory', filters.propertyCategory);
       }
       if (filters.propertyType) params.set('propertyType', filters.propertyType);
       if (filters.city) params.set('city', filters.city);
@@ -251,13 +258,12 @@ export default function Search() {
       params.set('startIndex', listings.length);
       params.set('limit', '12');
 
-      const res = await fetchWithRefresh(`/api/listing/search?${params.toString()}`);
-      const data = await handleApiResponse(res);
+      const data = await apiClient.get(`/listing/search?${params.toString()}`);
 
-      if (data.success) {
-        setListings([...listings, ...(data.data?.listings || [])]);
-        setShowMore(data.data?.pagination?.hasMore || false);
-      }
+      // Functional update: two quick clicks would otherwise both append to the
+      // same captured array and the first page's extra rows would vanish.
+      setListings((prev) => [...prev, ...(data.data?.listings || [])]);
+      setShowMore(data.data?.pagination?.hasMore || false);
     } catch (e) {
       setError(e.message || 'Failed to load more listings');
       setShowMore(false);
@@ -275,10 +281,10 @@ export default function Search() {
     if (filters.city) active.push({ key: 'city', label: filters.city, icon: HiLocationMarker });
     if (filters.minPrice || filters.maxPrice) {
       const priceLabel = filters.minPrice && filters.maxPrice
-        ? `₹${Number(filters.minPrice).toLocaleString()} - ₹${Number(filters.maxPrice).toLocaleString()}`
+        ? `${formatCurrency(filters.minPrice)} - ${formatCurrency(filters.maxPrice)}`
         : filters.minPrice
-          ? `Min ₹${Number(filters.minPrice).toLocaleString()}`
-          : `Max ₹${Number(filters.maxPrice).toLocaleString()}`;
+          ? `Min ${formatCurrency(filters.minPrice)}`
+          : `Max ${formatCurrency(filters.maxPrice)}`;
       active.push({ key: 'price', label: priceLabel, icon: HiCurrencyRupee });
     }
     if (filters.bedrooms) active.push({ key: 'bedrooms', label: `${filters.bedrooms}+ Beds` });
@@ -293,9 +299,7 @@ export default function Search() {
 
   // Format price for display
   const formatPrice = (price) => {
-    if (price >= 10000000) return `₹${(price / 10000000).toFixed(1)}Cr`;
-    if (price >= 100000) return `₹${(price / 100000).toFixed(1)}L`;
-    return `₹${price.toLocaleString()}`;
+    return formatCompactCurrency(price);
   };
 
   return (
@@ -303,31 +307,27 @@ export default function Search() {
       {/* Hero Search Section */}
       <div className='relative overflow-hidden'>
         {/* Background Pattern */}
-        <div className='absolute inset-0 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950'>
-          <div className='absolute top-0 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none' />
+        <div className='absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950'>
+          <div className='absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none' />
           <div className='absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none' />
         </div>
 
         <div className='relative py-12 md:py-16 px-4'>
           <div className='max-w-5xl mx-auto text-center'>
             {/* Breadcrumb */}
-            <nav className='flex items-center justify-center gap-2 text-sm text-blue-200 mb-6'>
-              <Link to='/' className='hover:text-white transition-colors'>Home</Link>
+            <nav className='flex items-center justify-center gap-2 text-sm text-indigo-200 mb-6'>
+              <Link to='/' className='hover:text-white transition-colors'>{t('search.home')}</Link>
               <span>/</span>
-              <span className='text-white'>Search Properties</span>
+              <span className='text-white'>{t('search.searchProperties')}</span>
             </nav>
 
-            <h1 className='text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight'>
-              Find Your Dream Property
-            </h1>
-            <p className='text-lg text-blue-100 mb-8 max-w-2xl mx-auto'>
-              Discover the perfect home from our extensive collection of premium properties
-            </p>
+            <h1 className='text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight'>{t('search.findYourDreamProperty')}</h1>
+            <p className='text-lg text-indigo-100 mb-8 max-w-2xl mx-auto'>{t('search.discoverThePerfectHomeFromOur')}</p>
 
             {/* Search Bar */}
             <div className='max-w-3xl mx-auto'>
               <SearchBar
-                placeholder="Search by location, property name, or type..."
+                placeholder={t('search.searchByLocationPropertyNameOr')}
                 onSearch={handleSearch}
                 className="shadow-2xl"
               />
@@ -335,17 +335,17 @@ export default function Search() {
 
             {/* Quick Stats */}
             <div className='flex items-center justify-center gap-8 mt-8 text-sm'>
-              <div className='flex items-center gap-2 text-blue-100'>
+              <div className='flex items-center gap-2 text-indigo-100'>
                 <HiTrendingUp className='w-5 h-5' />
                 <span>{totalResults.toLocaleString()}+ Properties</span>
               </div>
-              <div className='hidden sm:flex items-center gap-2 text-blue-100'>
+              <div className='hidden sm:flex items-center gap-2 text-indigo-100'>
                 <HiLocationMarker className='w-5 h-5' />
-                <span>Multiple Cities</span>
+                <span>{t('search.multipleCities')}</span>
               </div>
-              <div className='hidden md:flex items-center gap-2 text-blue-100'>
+              <div className='hidden md:flex items-center gap-2 text-indigo-100'>
                 <HiSparkles className='w-5 h-5' />
-                <span>Verified Listings</span>
+                <span>{t('search.verifiedListings')}</span>
               </div>
             </div>
           </div>
@@ -358,12 +358,12 @@ export default function Search() {
         {activeFilters.length > 0 && (
           <div className='mb-6 bg-white rounded-xl border border-slate-200 p-4 shadow-sm'>
             <div className='flex flex-wrap items-center gap-3'>
-              <span className='text-sm font-medium text-slate-600'>Active Filters:</span>
+              <span className='text-sm font-medium text-slate-600'>{t('search.activeFilters')}</span>
               <div className='flex flex-wrap gap-2'>
                 {activeFilters.map((filter) => (
                   <span
                     key={filter.key}
-                    className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm font-medium'
+                    className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium'
                   >
                     {filter.icon && <filter.icon className='w-4 h-4' />}
                     {filter.label}
@@ -376,7 +376,7 @@ export default function Search() {
                           removeFilter(filter.key);
                         }
                       }}
-                      className='ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors'
+                      className='ml-1 hover:bg-indigo-200 rounded-full p-0.5 transition-colors'
                     >
                       <HiX className='w-3.5 h-3.5' />
                     </button>
@@ -385,22 +385,20 @@ export default function Search() {
               </div>
               <button
                 onClick={handleClearFilters}
-                className='text-sm text-red-600 hover:text-red-700 font-medium ml-auto'
-              >
-                Clear All
-              </button>
+                className='text-sm text-rose-600 hover:text-rose-700 font-medium ml-auto'
+              >{t('search.clearAll')}</button>
             </div>
           </div>
         )}
 
         {/* Error Message */}
         {error && (
-          <div className='mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-center gap-3'>
+          <div className='mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-3'>
             <svg className='w-5 h-5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
             </svg>
             <span>{error}</span>
-            <button onClick={() => setRefreshKey(prev => prev + 1)} className='ml-auto text-red-600 hover:text-red-800'>
+            <button onClick={() => setRefreshKey(prev => prev + 1)} className='ml-auto text-rose-600 hover:text-rose-800' aria-label={t('search.retrySearch')}>
               <HiRefresh className='w-5 h-5' />
             </button>
           </div>
@@ -415,7 +413,7 @@ export default function Search() {
             <HiAdjustments className='w-5 h-5' />
             Filters
             {activeFilters.length > 0 && (
-              <span className='px-2 py-0.5 bg-blue-600 text-white text-xs rounded-full'>
+              <span className='px-2 py-0.5 bg-indigo-600 text-white text-xs rounded-full'>
                 {activeFilters.length}
               </span>
             )}
@@ -427,7 +425,7 @@ export default function Search() {
               <div className='absolute inset-0 bg-black/50' onClick={() => setShowMobileFilters(false)} />
               <div className='absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl overflow-y-auto'>
                 <div className='sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between'>
-                  <h3 className='font-semibold text-slate-800'>Filters</h3>
+                  <h3 className='font-semibold text-slate-800'>{t('search.filters')}</h3>
                   <button onClick={() => setShowMobileFilters(false)} className='p-2 hover:bg-slate-100 rounded-lg'>
                     <HiX className='w-5 h-5' />
                   </button>
@@ -471,25 +469,22 @@ export default function Search() {
                       <h2 className='text-xl font-bold text-slate-800'>
                         {loading ? (
                           <span className='flex items-center gap-2'>
-                            <span className='w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin' />
-                            Searching...
-                          </span>
+                            <span className='w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin' />{t('search.searching')}</span>
                         ) : (
                           <>
                             {totalResults.toLocaleString()}
-                            <span className='font-normal text-slate-500'> Properties</span>
+                            <span className='font-normal text-slate-500'>{t('search.properties')}</span>
                           </>
                         )}
                       </h2>
                       {searchTime && !loading && (
-                        <span className='px-2 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full'>
+                        <span className='px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full'>
                           {searchTime}ms
                         </span>
                       )}
                     </div>
                     {filters.searchTerm && !loading && (
-                      <p className='text-sm text-slate-500 mt-1'>
-                        Showing results for "<span className='font-medium text-slate-700'>{filters.searchTerm}</span>"
+                      <p className='text-sm text-slate-500 mt-1'>{t('search.showingResultsFor')}<span className='font-medium text-slate-700'>{filters.searchTerm}</span>"
                       </p>
                     )}
                   </div>
@@ -500,20 +495,20 @@ export default function Search() {
                       <button
                         onClick={() => setViewAndSyncUrl('grid')}
                         className={`p-2 rounded-md transition-all ${view === 'grid'
-                            ? 'bg-white text-blue-600 shadow-sm'
+                            ? 'bg-white text-indigo-600 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                           }`}
-                        title="Grid view"
+                        title={t('search.gridView')}
                       >
                         <HiViewGrid className='w-5 h-5' />
                       </button>
                       <button
                         onClick={() => setViewAndSyncUrl('list')}
                         className={`p-2 rounded-md transition-all ${view === 'list'
-                            ? 'bg-white text-blue-600 shadow-sm'
+                            ? 'bg-white text-indigo-600 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                           }`}
-                        title="List view"
+                        title={t('search.listView')}
                       >
                         <HiViewList className='w-5 h-5' />
                       </button>
@@ -527,13 +522,14 @@ export default function Search() {
                           const [sort, order] = e.target.value.split('-');
                           handleFilterChange({ ...filters, sort, order });
                         }}
-                        className='appearance-none bg-white border border-slate-200 rounded-lg pl-4 pr-10 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer hover:border-slate-300 transition-colors'
+                        aria-label={t('search.sortResults')}
+                        className='appearance-none bg-white border border-slate-200 rounded-lg pl-4 pr-10 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer hover:border-slate-300 transition-colors'
                       >
-                        <option value="relevance-desc">Most Relevant</option>
-                        <option value="createdAt-desc">Newest First</option>
-                        <option value="createdAt-asc">Oldest First</option>
-                        <option value="regularPrice-asc">Price: Low to High</option>
-                        <option value="regularPrice-desc">Price: High to Low</option>
+                        <option value="relevance-desc">{t('search.mostRelevant')}</option>
+                        <option value="createdAt-desc">{t('search.newestFirst')}</option>
+                        <option value="createdAt-asc">{t('search.oldestFirst')}</option>
+                        <option value="regularPrice-asc">{t('search.priceLowToHigh')}</option>
+                        <option value="regularPrice-desc">{t('search.priceHighToLow')}</option>
                       </select>
                       <HiChevronDown className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none' />
                     </div>
@@ -572,31 +568,27 @@ export default function Search() {
 
                 {/* Empty State */}
                 {!loading && listings.length === 0 && (
-                  <div className='text-center py-16'>
-                    <div className='w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6'>
-                      <HiSearch className='w-12 h-12 text-slate-400' />
-                    </div>
-                    <h3 className='text-xl font-semibold text-slate-800 mb-2'>No properties found</h3>
-                    <p className='text-slate-500 mb-6 max-w-md mx-auto'>
-                      {filters.searchTerm
+                  <EmptyState
+                    icon={HiSearch}
+                    title={t('search.noPropertiesFound')}
+                    body={
+                      filters.searchTerm
                         ? `We couldn't find any properties matching "${filters.searchTerm}". Try adjusting your search or filters.`
-                        : 'Try adjusting your filters or search for a different location to find properties.'}
-                    </p>
-                    <div className='flex flex-col sm:flex-row items-center justify-center gap-3'>
-                      <button
-                        onClick={handleClearFilters}
-                        className='px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors'
-                      >
-                        Clear All Filters
-                      </button>
-                      <Link
-                        to='/'
-                        className='px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors'
-                      >
-                        Browse Homepage
-                      </Link>
-                    </div>
-                  </div>
+                        : 'Try adjusting your filters or search for a different location to find properties.'
+                    }
+                    action={
+                      <div className='flex flex-col sm:flex-row items-center justify-center gap-3'>
+                        <button
+                          onClick={handleClearFilters}
+                          className='px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-500 transition-colors'
+                        >{t('search.clearAllFilters')}</button>
+                        <Link
+                          to='/'
+                          className='px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors'
+                        >{t('search.browseHomepage')}</Link>
+                      </div>
+                    }
+                  />
                 )}
 
                 {/* Results Grid/List */}
@@ -606,8 +598,8 @@ export default function Search() {
                       {listings.map((listing, index) => (
                         <div
                           key={listing._id}
-                          className='transform transition-all duration-300 hover:-translate-y-1'
-                          style={{ animationDelay: `${index * 50}ms` }}
+                          className='crm-animate-in transform transition-all duration-300 hover:-translate-y-1'
+                          style={{ animationDelay: `${Math.min(index, 10) * 50}ms` }}
                         >
                           <ListingItem listing={listing} layout={view} />
                         </div>
@@ -627,17 +619,13 @@ export default function Search() {
                     <button
                       onClick={onShowMoreClick}
                       disabled={loadingMore}
-                      className='px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2'
+                      className='px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl font-semibold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2'
                     >
                       {loadingMore ? (
                         <>
-                          <span className='w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' />
-                          Loading...
-                        </>
+                          <span className='w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' />{t('search.loading')}</>
                       ) : (
-                        <>
-                          Load More Properties
-                          <HiChevronDown className='w-5 h-5' />
+                        <>{t('search.loadMoreProperties')}<HiChevronDown className='w-5 h-5' />
                         </>
                       )}
                     </button>
@@ -648,28 +636,18 @@ export default function Search() {
 
             {/* Search Tips */}
             {!loading && listings.length === 0 && (
-              <div className='mt-6 bg-blue-50 rounded-xl p-6 border border-blue-100'>
-                <h4 className='font-semibold text-blue-800 mb-3 flex items-center gap-2'>
-                  <HiSparkles className='w-5 h-5' />
-                  Search Tips
-                </h4>
-                <ul className='text-sm text-blue-700 space-y-2'>
+              <div className='mt-6 bg-indigo-50 rounded-xl p-6 border border-indigo-100'>
+                <h4 className='font-semibold text-indigo-800 mb-3 flex items-center gap-2'>
+                  <HiSparkles className='w-5 h-5' />{t('search.searchTips')}</h4>
+                <ul className='text-sm text-indigo-700 space-y-2'>
                   <li className='flex items-start gap-2'>
-                    <span className='w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0' />
-                    Try broader search terms like "apartment" instead of specific addresses
-                  </li>
+                    <span className='w-1.5 h-1.5 bg-indigo-500 rounded-full mt-2 flex-shrink-0' />{t('search.tryBroaderSearchTermsLikeApartment')}</li>
                   <li className='flex items-start gap-2'>
-                    <span className='w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0' />
-                    Expand your price range to see more options
-                  </li>
+                    <span className='w-1.5 h-1.5 bg-indigo-500 rounded-full mt-2 flex-shrink-0' />{t('search.expandYourPriceRangeToSee')}</li>
                   <li className='flex items-start gap-2'>
-                    <span className='w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0' />
-                    Search by city name for location-based results
-                  </li>
+                    <span className='w-1.5 h-1.5 bg-indigo-500 rounded-full mt-2 flex-shrink-0' />{t('search.searchByCityNameForLocation')}</li>
                   <li className='flex items-start gap-2'>
-                    <span className='w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0' />
-                    Our fuzzy search handles typos - "appartment" will still find "apartment"
-                  </li>
+                    <span className='w-1.5 h-1.5 bg-indigo-500 rounded-full mt-2 flex-shrink-0' />{t('search.ourFuzzySearchHandlesTyposAppartment')}</li>
                 </ul>
               </div>
             )}

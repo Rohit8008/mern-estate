@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { HiOutlineLockClosed, HiOutlineExclamationCircle, HiOutlineCheckCircle } from 'react-icons/hi';
 import { apiClient } from '../utils/http';
+import { Input, Button } from '../design-system';
+import { useTranslation } from 'react-i18next';
 
 export default function PasswordReset() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
@@ -130,84 +134,121 @@ export default function PasswordReset() {
   };
 
   return (
-    <main className='max-w-md mx-auto p-6'>
-      <div className='bg-white rounded-xl shadow p-5'>
-        <div className='flex items-center gap-2 text-xs text-slate-600 mb-3'>
-          <span className={`px-2 py-1 rounded ${step >= 1 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>1</span>
-          <span>Identify</span>
-          <span className='mx-1'>→</span>
-          <span className={`px-2 py-1 rounded ${step >= 2 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>2</span>
-          <span>Verify</span>
-          <span className='mx-1'>→</span>
-          <span className={`px-2 py-1 rounded ${step >= 3 ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>3</span>
-          <span>Done</span>
-        </div>
-        <h1 className='text-2xl font-semibold mb-2'>Password Reset</h1>
-        <p className='text-sm text-slate-600 mb-4'>Use the email on file to receive a one-time code, then set a new password.</p>
-        {step === 1 && (
-          <div className='space-y-3'>
-            <label className='block text-sm'>Email</label>
-            {emailLocked ? (
-              <input className='border p-3 rounded w-full bg-slate-50 text-slate-500 cursor-not-allowed' value={email} disabled />
-            ) : (
-              <input className='border p-3 rounded w-full' type='email' value={email} onChange={(e) => setEmail(e.target.value)} placeholder='you@example.com' />
-            )}
-            <button disabled={loading || !email} onClick={requestOtp} className='bg-slate-800 text-white rounded px-4 py-2 disabled:opacity-60'>
-              {loading ? 'Sending…' : 'Send OTP'}
-            </button>
+    <div className='min-h-[calc(100vh-3.5rem)] bg-slate-50 flex items-center justify-center p-4'>
+      <div className='max-w-md w-full space-y-8'>
+        {/* Header */}
+        <div className='text-center'>
+          <div className='flex justify-center mb-8'>
+            <div className='w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20'>
+              <HiOutlineLockClosed className='w-8 h-8 text-white' />
+            </div>
           </div>
-        )}
-        {step === 2 && (
-          <div className='space-y-4'>
-            <div className='text-sm text-slate-600'>We sent a 6-digit OTP to your email {emailLocked ? `(${email})` : ''}.</div>
-            <div>
-              <label className='block text-sm mb-2'>OTP</label>
-              <div className='flex gap-2 justify-between'>
-                {otpDigits.map((d, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (otpRefs.current[i] = el)}
-                    className='border rounded w-10 h-12 text-center text-lg'
-                    maxLength={1}
-                    value={d}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 1);
-                      setOtpDigits((prev) => prev.map((x, idx) => (idx === i ? val : x)));
-                      if (val && i < 5) otpRefs.current[i + 1]?.focus();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Backspace' && !otpDigits[i] && i > 0) otpRefs.current[i - 1]?.focus();
-                    }}
-                    onPaste={(e) => {
-                      const clip = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-                      if (!clip) return;
-                      e.preventDefault();
-                      const next = clip.padEnd(6, ' ').split('').slice(0, 6);
-                      setOtpDigits(next);
-                      otpRefs.current[5]?.focus();
-                    }}
-                  />
-                ))}
+          <h1 className='text-3xl font-bold text-slate-900 mb-2'>{t('passwordReset.passwordReset')}</h1>
+          <p className='text-base text-slate-600'>{t('passwordReset.useTheEmailOnFileTo')}</p>
+        </div>
+
+        {/* Form */}
+        <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
+          <div className='flex items-center justify-center gap-2 mb-6'>
+            {[1, 2, 3].map((s) => (
+              <div key={s} className={`w-2 h-2 rounded-full ${step >= s ? 'bg-indigo-600' : 'bg-slate-200'}`} />
+            ))}
+          </div>
+
+          {step === 1 && (
+            <div className='space-y-5'>
+              <Input
+                label={t('passwordReset.email')}
+                type='email'
+                value={email}
+                disabled={emailLocked}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t('passwordReset.youExampleCom')}
+              />
+              <Button
+                disabled={loading || !email}
+                loading={loading}
+                onClick={requestOtp}
+                size='lg'
+                className='w-full justify-center'
+              >{t('passwordReset.sendOtp')}</Button>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className='space-y-5'>
+              <p className='text-sm text-slate-600'>We sent a 6-digit OTP to your email {emailLocked ? <span className='font-medium text-slate-800'>({email})</span> : ''}.</p>
+              <div>
+                <label className='block text-sm font-medium text-slate-700 mb-2'>{t('passwordReset.otp')}</label>
+                <div className='flex gap-2 justify-between'>
+                  {otpDigits.map((d, i) => (
+                    <input
+                      key={i}
+                      ref={(el) => (otpRefs.current[i] = el)}
+                      aria-label={`OTP digit ${i + 1} of 6`}
+                      inputMode='numeric'
+                      className='border border-slate-300 rounded-lg w-11 h-12 text-center text-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors'
+                      maxLength={1}
+                      value={d}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 1);
+                        setOtpDigits((prev) => prev.map((x, idx) => (idx === i ? val : x)));
+                        if (val && i < 5) otpRefs.current[i + 1]?.focus();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Backspace' && !otpDigits[i] && i > 0) otpRefs.current[i - 1]?.focus();
+                      }}
+                      onPaste={(e) => {
+                        const clip = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                        if (!clip) return;
+                        e.preventDefault();
+                        const next = clip.padEnd(6, ' ').split('').slice(0, 6);
+                        setOtpDigits(next);
+                        otpRefs.current[5]?.focus();
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <Input
+                label={t('passwordReset.newPassword')}
+                type='password'
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t('passwordReset.enterNewPassword')}
+              />
+              <div className='flex items-center justify-between gap-3'>
+                <Button
+                  disabled={loading || otp.length !== 6 || !password}
+                  loading={loading}
+                  onClick={resetPassword}
+                >{t('passwordReset.updatePassword')}</Button>
+                <button
+                  disabled={secondsLeft > 0 || loading}
+                  onClick={requestOtp}
+                  className='text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:text-slate-400'
+                >
+                  {secondsLeft > 0 ? `Resend in ${secondsLeft}s` : 'Resend OTP'}
+                </button>
               </div>
             </div>
-            <div>
-              <label className='block text-sm mb-2'>New Password</label>
-              <input className='border p-3 rounded w-full' type='password' value={password} onChange={(e) => setPassword(e.target.value)} placeholder='Enter new password' />
+          )}
+
+          {message && (
+            <div className='mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3'>
+              <HiOutlineCheckCircle className='w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0' />
+              <p className='text-sm font-medium text-emerald-800'>{message}</p>
             </div>
-            <div className='flex items-center justify-between'>
-              <button disabled={loading || otp.length !== 6 || !password} onClick={resetPassword} className='bg-slate-800 text-white rounded px-4 py-2 disabled:opacity-60'>
-                {loading ? 'Updating…' : 'Update Password'}
-              </button>
-              <button disabled={secondsLeft > 0 || loading} onClick={requestOtp} className='text-sm text-slate-700 underline disabled:opacity-60'>
-                {secondsLeft > 0 ? `Resend in ${secondsLeft}s` : 'Resend OTP'}
-              </button>
+          )}
+          {error && (
+            <div className='mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3'>
+              <HiOutlineExclamationCircle className='w-5 h-5 text-rose-500 mt-0.5 flex-shrink-0' />
+              <p className='text-sm font-medium text-rose-800'>{error}</p>
             </div>
-          </div>
-        )}
-        {message && <p className='text-green-700 mt-4'>{message}</p>}
-        {error && <p className='text-red-700 mt-4'>{error}</p>}
+          )}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
 

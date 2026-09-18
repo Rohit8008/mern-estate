@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * DynamicCategoryFields - Renders category-specific form fields with conditional visibility
@@ -9,6 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
  * @param {Object} errors - Validation errors object
  */
 export default function DynamicCategoryFields({ fields = [], values = {}, onChange, errors = {} }) {
+  const { t } = useTranslation();
   // Group fields by their group property
   const groupedFields = useMemo(() => {
     const groups = {};
@@ -179,7 +181,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
                 onChange={() => handleFieldChange(field.key, true)}
                 className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
               />
-              <span className="ml-2 text-gray-700">Yes</span>
+              <span className="ml-2 text-gray-700">{t('dynamicCategoryFields.yes')}</span>
             </label>
             <label className="inline-flex items-center">
               <input
@@ -189,7 +191,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
                 onChange={() => handleFieldChange(field.key, false)}
                 className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
               />
-              <span className="ml-2 text-gray-700">No</span>
+              <span className="ml-2 text-gray-700">{t('dynamicCategoryFields.no')}</span>
             </label>
           </div>
         );
@@ -309,7 +311,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
         <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
-        <p>No additional fields for this category</p>
+        <p>{t('dynamicCategoryFields.noAdditionalFieldsForThisCategory')}</p>
       </div>
     );
   }

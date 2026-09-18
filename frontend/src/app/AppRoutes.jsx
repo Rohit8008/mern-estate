@@ -6,6 +6,7 @@ import AdminRoute from '../components/AdminRoute';
 import SellerRoute from '../components/SellerRoute';
 import PermissionRoute from '../components/PermissionRoute';
 import CrmShell from './CrmShell';
+import ActingAwareLayout from './ActingAwareLayout';
 
 // ── Lazy page imports ─────────────────────────────────────────────────────────
 // Public
@@ -16,15 +17,21 @@ const ForgotPassword  = lazy(() => import('../pages/ForgotPassword'));
 const PasswordReset   = lazy(() => import('../pages/PasswordReset'));
 const Unauthorized    = lazy(() => import('../pages/Unauthorized'));
 const NotFound        = lazy(() => import('../pages/NotFound'));
+const Privacy         = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Privacy })));
+const Terms           = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Terms })));
 const Listing         = lazy(() => import('../pages/Listing'));
 const UserProfile     = lazy(() => import('../pages/UserProfile'));
 const Search          = lazy(() => import('../pages/Search'));
+const SharedProperties = lazy(() => import('../pages/SharedProperties'));
+const AcceptInvite = lazy(() => import('../pages/AcceptInvite'));
 
 // CRM — overview
 const AgencyDashboard    = lazy(() => import('../pages/AgencyDashboard'));
 const Analytics          = lazy(() => import('../pages/Analytics'));
 const PortfolioDashboard = lazy(() => import('../pages/PortfolioDashboard'));
 const Transactions       = lazy(() => import('../pages/Transactions'));
+const Notifications      = lazy(() => import('../pages/Notifications'));
+const AuditLog           = lazy(() => import('../pages/AuditLog'));
 
 // CRM — properties
 const PropertiesBoard      = lazy(() => import('../pages/PropertiesBoard'));
@@ -53,6 +60,7 @@ const Messages             = lazy(() => import('../pages/Messages'));
 const Admin                   = lazy(() => import('../pages/Admin'));
 const AdminCategoryFields     = lazy(() => import('../pages/AdminCategoryFields'));
 const AdminImport             = lazy(() => import('../pages/AdminImport'));
+const PlatformConsole         = lazy(() => import('../pages/PlatformConsole'));
 const PropertyTypeManagement  = lazy(() => import('../pages/PropertyTypeManagement'));
 
 // ── Fallback ──────────────────────────────────────────────────────────────────
@@ -73,14 +81,37 @@ export default function AppRoutes() {
         <Route path='/sign-in' element={<SignIn />} />
         <Route path='/sign-up' element={<SignUp />} />
         <Route path='/forgot-password' element={<ForgotPassword />} />
-        <Route path='/listing/:listingId' element={<Listing />} />
+        <Route path='/privacy' element={<Privacy />} />
+        <Route path='/terms' element={<Terms />} />
+        {/* Formerly public. The property book is not browsable without a
+            session; sharing specific properties goes through /s/:token. */}
+        {/* The one page a stranger can reach. Outside AppShell on purpose: a
+            recipient gets the properties they were sent and no way into the
+            rest of the product. */}
+        <Route path='/s/:token' element={<SharedProperties />} />
+
+        {/* The other page a stranger can reach. The token carries the
+            workspace, which is the only reason someone with no account and no
+            idea which agency they belong to can get in at all. */}
+        <Route path='/invite/:token' element={<AcceptInvite />} />
+
         <Route path='/unauthorized' element={<Unauthorized />} />
-        <Route path='/user/:userId' element={<UserProfile />} />
 
         {/* ── Authenticated ── */}
         <Route element={<PrivateRoute />}>
-          <Route path='/search' element={<Search />} />
-          <Route path='/password-reset' element={<PasswordReset />} />
+          {/* Shows a colleague's email and phone, so it belongs in here. It sat
+              in the anonymous block above, next to the two routes that are
+              deliberately reachable by a stranger. */}
+          <Route path='/user/:userId' element={<UserProfile />} />
+          {/* Search and the property page moved behind sign-in with the rest of
+              the book. They sit outside CrmShell, so they carry the acting
+              banner themselves — a platform operator must never see a
+              customer's properties with nothing saying whose they are. */}
+          <Route element={<ActingAwareLayout />}>
+            <Route path='/search' element={<Search />} />
+            <Route path='/listing/:listingId' element={<Listing />} />
+            <Route path='/password-reset' element={<PasswordReset />} />
+          </Route>
 
           {/* ── CRM Shell (sidebar layout, admin/employee only) ── */}
           <Route element={<CrmShell />}>
@@ -91,6 +122,7 @@ export default function AppRoutes() {
             <Route path='/messages' element={<Messages />} />
             <Route path='/tasks'    element={<TasksBoard />} />
             <Route path='/calendar' element={<Calendar />} />
+            <Route path='/notifications' element={<Notifications />} />
 
             {/* Overview */}
             <Route element={<PermissionRoute requires='viewAnalytics' />}>
@@ -146,6 +178,11 @@ export default function AppRoutes() {
               <Route path='/admin/categories/:slug/fields' element={<AdminCategoryFields />} />
               <Route path='/admin/property-types' element={<PropertyTypeManagement />} />
               <Route path='/admin/import' element={<AdminImport />} />
+              <Route path='/admin/audit-log' element={<AuditLog />} />
+              {/* The vendor's own console. Not in the tenant screen catalogue —
+                  it is not something a workspace has, so it is gated on the
+                  platform flag rather than on a feature. The API enforces it. */}
+              <Route path='/platform' element={<PlatformConsole />} />
             </Route>
           </Route>
         </Route>

@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { BuyerViewProvider } from './contexts/BuyerViewContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { NotificationFeedProvider } from './contexts/NotificationFeedProvider';
 import { AppearanceProvider } from './contexts/AppearanceProvider';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { SearchProvider }      from './contexts/SearchContext';
@@ -23,6 +24,7 @@ export default function App() {
             <BuyerViewProvider>
               <BrowserRouter>
                 <PermissionsProvider>
+                  <NotificationFeedProvider>
                   <SearchProvider>
                     <AuthBootstrap />
                     <ApiErrorToastListener />
@@ -33,6 +35,7 @@ export default function App() {
                       <AppRoutes />
                     </AppShell>
                   </SearchProvider>
+                  </NotificationFeedProvider>
                 </PermissionsProvider>
               </BrowserRouter>
             </BuyerViewProvider>

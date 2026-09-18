@@ -4,14 +4,26 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { signOutUserSuccess } from '../redux/user/userSlice';
 import { apiClient, setUserSignedOut } from '../utils/http';
+import { invalidateNotificationPreferences } from '../hooks/useNotificationPreferences';
+import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAppearance } from '../contexts/useAppearance';
+import WorkspaceScreensPanel from '../components/WorkspaceScreensPanel';
+import WorkspaceBrandingPanel from '../components/WorkspaceBrandingPanel';
+import WorkspacePipelinePanel from '../components/WorkspacePipelinePanel';
+import WorkspaceMailPanel from '../components/WorkspaceMailPanel';
+import EmailTemplatesPanel from '../components/EmailTemplatesPanel';
+import WebhooksPanel from '../components/WebhooksPanel';
+import LeadSourcesPanel from '../components/LeadSourcesPanel';
+import SystemStatusPanel from '../components/SystemStatusPanel';
+import LanguagePanel from '../components/LanguagePanel';
+import SequencesPanel from '../components/SequencesPanel';
 import PropTypes from 'prop-types';
+import { useTranslation } from 'react-i18next';
 import {
   HiBell,
   HiShieldCheck,
   HiEye,
-  HiMail,
   HiUser,
   HiLockClosed,
   HiLogout,
@@ -21,6 +33,15 @@ import {
   HiDeviceMobile,
   HiGlobe,
   HiColorSwatch,
+  HiViewGrid,
+  HiOfficeBuilding,
+  HiViewBoards,
+  HiTag,
+  HiTemplate,
+  HiLink,
+  HiServer,
+  HiMail,
+  HiLightningBolt,
 } from 'react-icons/hi';
 import { HiOutlineSun, HiOutlineMoon, HiOutlineComputerDesktop } from 'react-icons/hi2';
 
@@ -28,71 +49,83 @@ export default function Settings() {
   const { currentUser } = useSelector((state) => state.user);
   const dispatch = useDispatch();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const { themePreference, setTheme, compactMode, setCompactMode } = useAppearance();
 
-  const [settings, setSettings] = useState({
-    notifications: {
-      emailMessages: true,
-      emailListingUpdates: true,
-      emailNewsletter: false,
-      pushMessages: true,
-      pushListingUpdates: true,
-    },
-    privacy: {
-      showEmail: false,
-      showPhone: false,
-      showOnlineStatus: true,
-      allowMessages: true,
-    },
+  /**
+   * Preferences live on the account, not in this browser.
+   *
+   * They used to be written to localStorage behind a fake 500ms delay, so
+   * "saved" meant "saved on this device" and the server — which is what
+   * actually decides whether to send you an email — never saw them.
+   *
+   * `catalogue` comes from the server too, so a new notification type appears
+   * here without a second hard-coded list to keep in step.
+   */
+  const [catalogue, setCatalogue] = useState({});
+  const [notificationPrefs, setNotificationPrefs] = useState({});
+  const [privacy, setPrivacy] = useState({
+    showEmail: false,
+    showPhone: false,
+    showOnlineStatus: true,
+    allowMessages: true,
   });
+  const [loadingPrefs, setLoadingPrefs] = useState(true);
 
   const [activeSection, setActiveSection] = useState('notifications');
   const [saving, setSaving] = useState(false);
   const [pendingSignOutAll, setPendingSignOutAll] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(`settings_${currentUser?._id}`);
-    if (saved) {
-      try {
-        setSettings(JSON.parse(saved));
-      } catch (error) {
-        console.error(error);
-      }
-    }
-  }, [currentUser?._id]);
+    if (!currentUser?._id) return;
+
+    let cancelled = false;
+    setLoadingPrefs(true);
+
+    apiClient
+      .get('/notifications/preferences')
+      .then((res) => {
+        if (cancelled) return;
+        const data = res?.data || {};
+        setCatalogue(data.catalogue || {});
+        setNotificationPrefs(data.notifications || {});
+        if (data.privacy) setPrivacy(data.privacy);
+      })
+      .catch(() => {
+        if (!cancelled) showError('Could not load your preferences');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPrefs(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [currentUser?._id, showError]);
 
   const saveSettings = async () => {
     setSaving(true);
     try {
-      localStorage.setItem(`settings_${currentUser?._id}`, JSON.stringify(settings));
-      await new Promise((r) => setTimeout(r, 500));
-      showSuccess('Settings saved successfully');
+      await apiClient.patch('/notifications/preferences', {
+        notifications: notificationPrefs,
+        privacy,
+      });
+      // Other open screens (the push listener, the bell) re-read on this.
+      invalidateNotificationPreferences();
+      showSuccess('Settings saved');
     } catch (error) {
       showError('Failed to save settings');
     }
     setSaving(false);
   };
 
-  const handleToggle = (category, key) => {
-    setSettings((prev) => {
-      const next = {
-        ...prev,
-        [category]: {
-          ...prev[category],
-          [key]: !prev[category][key],
-        },
-      };
-      try {
-        if (currentUser?._id) {
-          localStorage.setItem(`settings_${currentUser._id}`, JSON.stringify(next));
-          window.dispatchEvent(new CustomEvent('settings:update', { detail: { userId: currentUser._id } }));
-        }
-      } catch (error) {
-        console.error(error);
-      }
-      return next;
+  /** Flip one channel of one notification type. Saved by the Save button. */
+  const toggleNotification = (type, channel) => {
+    setNotificationPrefs((prev) => {
+      const current = prev[type] || { inApp: true, email: false };
+      return { ...prev, [type]: { ...current, [channel]: !current[channel] } };
     });
   };
+
+  const togglePrivacy = (key) => setPrivacy((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const handleCompactModeToggle = () => setCompactMode(!compactMode);
 
@@ -115,6 +148,22 @@ export default function Settings() {
     { id: 'privacy', label: 'Privacy', icon: HiEye, description: 'Control your privacy settings' },
     { id: 'security', label: 'Security', icon: HiShieldCheck, description: 'Protect your account' },
     { id: 'appearance', label: 'Appearance', icon: HiColorSwatch, description: 'Customize your experience' },
+    { id: 'language', label: t('settings.tabs.language'), icon: HiGlobe, description: t('settings.language.description') },
+    // Workspace-wide rather than personal, so only an admin sees it — everyone
+    // else's settings here affect only their own account.
+    ...(currentUser?.role === 'admin'
+      ? [
+          { id: 'branding', label: 'Workspace', icon: HiOfficeBuilding, description: 'Your name, logo, colours and units' },
+          { id: 'workspace', label: 'Menu & screens', icon: HiViewGrid, description: 'Choose which screens your team uses' },
+          { id: 'pipeline', label: 'Sales pipeline', icon: HiViewBoards, description: 'The stages your deals move through' },
+          { id: 'leadSources', label: 'Lead sources', icon: HiTag, description: 'Your channels, and what each costs per month' },
+          { id: 'sequences', label: 'Follow-up sequences', icon: HiLightningBolt, description: 'Multi-step follow-ups that run on their own' },
+          { id: 'email', label: 'Email', icon: HiMail, description: 'Send mail from your own address' },
+          { id: 'templates', label: 'Email templates', icon: HiTemplate, description: 'Your wording for what the CRM sends' },
+          { id: 'webhooks', label: 'Webhooks', icon: HiLink, description: 'Forward events to another system' },
+          { id: 'system', label: 'System', icon: HiServer, description: 'Version, database, scheduled jobs' },
+        ]
+      : []),
   ];
 
   function ToggleSwitch({ enabled, onToggle, label, description }) {
@@ -145,6 +194,36 @@ export default function Settings() {
     onToggle: PropTypes.func.isRequired,
     label: PropTypes.string.isRequired,
     description: PropTypes.string,
+  };
+
+  /**
+   * A compact tick for the notification matrix, where a full toggle per cell
+   * would make the table unreadable. `label` is for screen readers only — the
+   * visible meaning comes from the row and column headings.
+   */
+  function Checkbox({ checked, onChange, label }) {
+    return (
+      <button
+        type='button'
+        role='checkbox'
+        aria-checked={checked}
+        aria-label={label}
+        onClick={onChange}
+        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors mx-auto ${
+          checked
+            ? 'bg-indigo-600 border-indigo-600 text-white'
+            : 'bg-white border-slate-300 hover:border-slate-400'
+        }`}
+      >
+        {checked && <HiCheck className='w-3.5 h-3.5' />}
+      </button>
+    );
+  }
+
+  Checkbox.propTypes = {
+    checked: PropTypes.bool.isRequired,
+    onChange: PropTypes.func.isRequired,
+    label: PropTypes.string.isRequired,
   };
 
   return (
@@ -216,7 +295,7 @@ export default function Settings() {
           <div className='bg-white rounded-xl border border-slate-200 p-4'>
             <div className='flex items-center gap-3'>
               <img
-                src={currentUser?.avatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}
+                src={currentUser?.avatar || DEFAULT_AVATAR_URL}
                 alt='avatar'
                 className='w-10 h-10 rounded-full object-cover ring-2 ring-slate-100'
               />
@@ -245,60 +324,67 @@ export default function Settings() {
             <div className='space-y-4'>
               <div className='bg-white rounded-xl border border-slate-200 p-5'>
                 <div className='flex items-center gap-3 mb-5'>
-                  <div className='w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center flex-shrink-0'>
-                    <HiMail className='w-5 h-5 text-blue-600' />
+                  <div className='w-9 h-9 rounded-xl bg-indigo-50 ring-1 ring-indigo-100 flex items-center justify-center flex-shrink-0'>
+                    <HiBell className='w-5 h-5 text-indigo-600' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Email Notifications</h2>
-                    <p className='text-xs text-slate-500'>Choose what emails you want to receive</p>
+                    <h2 className='text-base font-semibold text-slate-900'>Notifications</h2>
+                    <p className='text-xs text-slate-500'>
+                      Choose what reaches you in the app and by email
+                    </p>
                   </div>
                 </div>
-                <div>
-                  <ToggleSwitch
-                    enabled={settings.notifications.emailMessages}
-                    onToggle={() => handleToggle('notifications', 'emailMessages')}
-                    label='New Messages'
-                    description='Get notified when you receive a new message'
-                  />
-                  <ToggleSwitch
-                    enabled={settings.notifications.emailListingUpdates}
-                    onToggle={() => handleToggle('notifications', 'emailListingUpdates')}
-                    label='Listing Updates'
-                    description='Updates about your listed properties'
-                  />
-                  <ToggleSwitch
-                    enabled={settings.notifications.emailNewsletter}
-                    onToggle={() => handleToggle('notifications', 'emailNewsletter')}
-                    label='Newsletter'
-                    description='Weekly digest of new properties and market trends'
-                  />
-                </div>
-              </div>
 
-              <div className='bg-white rounded-xl border border-slate-200 p-5'>
-                <div className='flex items-center gap-3 mb-5'>
-                  <div className='w-9 h-9 rounded-xl bg-violet-50 ring-1 ring-violet-100 flex items-center justify-center flex-shrink-0'>
-                    <HiBell className='w-5 h-5 text-violet-600' />
+                {loadingPrefs ? (
+                  <p className='text-sm text-slate-400 py-4'>Loading your preferences&hellip;</p>
+                ) : Object.keys(catalogue).length === 0 ? (
+                  <p className='text-sm text-slate-400 py-4'>No notification types available.</p>
+                ) : (
+                  <div className='overflow-x-auto -mx-5 px-5'>
+                    <table className='w-full min-w-[26rem]'>
+                      <thead>
+                        <tr className='border-b border-slate-100'>
+                          <th className='text-left text-xs font-medium text-slate-400 uppercase tracking-wide pb-2'>
+                            Event
+                          </th>
+                          <th className='text-center text-xs font-medium text-slate-400 uppercase tracking-wide pb-2 w-20'>
+                            In app
+                          </th>
+                          <th className='text-center text-xs font-medium text-slate-400 uppercase tracking-wide pb-2 w-20'>
+                            Email
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className='divide-y divide-slate-50'>
+                        {Object.entries(catalogue).map(([type, meta]) => {
+                          const pref = notificationPrefs[type] || { inApp: true, email: false };
+                          return (
+                            <tr key={type}>
+                              <td className='py-3 pr-4'>
+                                <div className='text-sm font-medium text-slate-800'>{meta.label}</div>
+                                <div className='text-xs text-slate-500'>{meta.description}</div>
+                              </td>
+                              <td className='py-3 text-center'>
+                                <Checkbox
+                                  checked={pref.inApp !== false}
+                                  onChange={() => toggleNotification(type, 'inApp')}
+                                  label={`${meta.label} in app`}
+                                />
+                              </td>
+                              <td className='py-3 text-center'>
+                                <Checkbox
+                                  checked={pref.email === true}
+                                  onChange={() => toggleNotification(type, 'email')}
+                                  label={`${meta.label} by email`}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <div>
-                    <h2 className='text-base font-semibold text-slate-900'>Push Notifications</h2>
-                    <p className='text-xs text-slate-500'>Manage in-app notifications</p>
-                  </div>
-                </div>
-                <div>
-                  <ToggleSwitch
-                    enabled={settings.notifications.pushMessages}
-                    onToggle={() => handleToggle('notifications', 'pushMessages')}
-                    label='Message Alerts'
-                    description='Show notifications for new messages'
-                  />
-                  <ToggleSwitch
-                    enabled={settings.notifications.pushListingUpdates}
-                    onToggle={() => handleToggle('notifications', 'pushListingUpdates')}
-                    label='Listing Alerts'
-                    description='Get notified about listing status changes'
-                  />
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -318,20 +404,20 @@ export default function Settings() {
                 </div>
                 <div>
                   <ToggleSwitch
-                    enabled={settings.privacy.showEmail}
-                    onToggle={() => handleToggle('privacy', 'showEmail')}
+                    enabled={privacy.showEmail}
+                    onToggle={() => togglePrivacy('showEmail')}
                     label='Show Email Address'
                     description='Allow other users to see your email'
                   />
                   <ToggleSwitch
-                    enabled={settings.privacy.showPhone}
-                    onToggle={() => handleToggle('privacy', 'showPhone')}
+                    enabled={privacy.showPhone}
+                    onToggle={() => togglePrivacy('showPhone')}
                     label='Show Phone Number'
                     description='Display your phone number on your profile'
                   />
                   <ToggleSwitch
-                    enabled={settings.privacy.showOnlineStatus}
-                    onToggle={() => handleToggle('privacy', 'showOnlineStatus')}
+                    enabled={privacy.showOnlineStatus}
+                    onToggle={() => togglePrivacy('showOnlineStatus')}
                     label='Show Online Status'
                     description='Let others see when you are online'
                   />
@@ -350,8 +436,8 @@ export default function Settings() {
                 </div>
                 <div>
                   <ToggleSwitch
-                    enabled={settings.privacy.allowMessages}
-                    onToggle={() => handleToggle('privacy', 'allowMessages')}
+                    enabled={privacy.allowMessages}
+                    onToggle={() => togglePrivacy('allowMessages')}
                     label='Allow Direct Messages'
                     description='Let other users send you messages'
                   />
@@ -432,7 +518,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <h2 className='text-base font-semibold text-rose-600'>Danger Zone</h2>
-                    <p className='text-xs text-slate-500'>Irreversible actions</p>
+                    <p className='text-xs text-slate-500'>Account closure and data requests</p>
                   </div>
                 </div>
                 <Link
@@ -440,8 +526,8 @@ export default function Settings() {
                   className='flex items-center justify-between p-4 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors group'
                 >
                   <div>
-                    <div className='text-sm font-medium text-rose-600'>Delete Account</div>
-                    <div className='text-xs text-slate-500'>Permanently delete your account and all data</div>
+                    <div className='text-sm font-medium text-rose-600'>Close Account</div>
+                    <div className='text-xs text-slate-500'>Signs you out everywhere and disables access. Records you created stay with the workspace for its audit trail &mdash; ask an admin to erase your personal data.</div>
                   </div>
                   <HiChevronRight className='w-4 h-4 text-rose-400 group-hover:text-rose-600' />
                 </Link>
@@ -450,6 +536,46 @@ export default function Settings() {
           )}
 
           {/* Appearance */}
+          {activeSection === 'pipeline' && currentUser?.role === 'admin' && (
+            <WorkspacePipelinePanel />
+          )}
+
+          {activeSection === 'branding' && currentUser?.role === 'admin' && (
+            <WorkspaceBrandingPanel />
+          )}
+
+          {activeSection === 'workspace' && currentUser?.role === 'admin' && (
+            <WorkspaceScreensPanel />
+          )}
+
+          {activeSection === 'language' && (
+            <LanguagePanel isAdmin={currentUser?.role === 'admin'} />
+          )}
+
+          {activeSection === 'leadSources' && currentUser?.role === 'admin' && (
+            <LeadSourcesPanel />
+          )}
+
+          {activeSection === 'sequences' && currentUser?.role === 'admin' && (
+            <SequencesPanel />
+          )}
+
+          {activeSection === 'email' && currentUser?.role === 'admin' && (
+            <WorkspaceMailPanel />
+          )}
+
+          {activeSection === 'templates' && currentUser?.role === 'admin' && (
+            <EmailTemplatesPanel />
+          )}
+
+          {activeSection === 'webhooks' && currentUser?.role === 'admin' && (
+            <WebhooksPanel />
+          )}
+
+          {activeSection === 'system' && currentUser?.role === 'admin' && (
+            <SystemStatusPanel />
+          )}
+
           {activeSection === 'appearance' && (
             <div className='space-y-4'>
               <div className='bg-white rounded-xl border border-slate-200 p-5'>
