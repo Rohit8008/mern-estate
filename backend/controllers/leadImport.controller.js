@@ -25,6 +25,9 @@ import { emitEvent } from '../utils/webhooks.js';
 /** Enough to be useful, small enough that one request cannot exhaust memory. */
 const MAX_ROWS = 5000;
 
+/** A file with more distinct sources than this is noise, not attribution. */
+const MAX_NEW_SOURCES = 25;
+
 /**
  * Which of this file's phone numbers are already on file.
  *
@@ -176,15 +179,34 @@ export const commitLeadImport = asyncHandler(async (req, res) => {
     created.push(doc);
   }
 
-  // Record any source names the file introduced, so the ROI report can see them.
-  const sources = [...new Set(created.map((c) => c.source).filter(Boolean))];
-  for (const name of sources) {
-    const slug = String(name).trim().toLowerCase();
-    await LeadSource.updateOne(
-      { slug },
-      { $setOnInsert: { name: String(name).trim(), slug, createdBy: req.user.id } },
-      { upsert: true }
-    ).catch(() => {});
+  /*
+   * Record any source names the file introduced, so the ROI report can see
+   * them. Capped: a tidy file has a handful of distinct sources, but a messy
+   * one can have a different string on every row, and the source catalogue is
+   * a vocabulary rather than a dumping ground for whatever a column held.
+   */
+  const sources = [...new Set(created.map((c) => c.source).filter(Boolean))].slice(0, MAX_NEW_SOURCES);
+
+  if (sources.length) {
+    await LeadSource.bulkWrite(
+      sources.map((name) => ({
+        updateOne: {
+          filter: { slug: String(name).trim().toLowerCase() },
+          update: {
+            $setOnInsert: {
+              name: String(name).trim(),
+              slug: String(name).trim().toLowerCase(),
+              createdBy: req.user.id,
+            },
+          },
+          upsert: true,
+        },
+      })),
+      { ordered: false }
+    ).catch(() => {
+      // The leads are already written; a missing catalogue row costs the ROI
+      // report a label, not the import.
+    });
   }
 
   logFromRequest(req, {

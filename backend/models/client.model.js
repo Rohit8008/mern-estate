@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { phoneKeyOf } from '../utils/phoneKey.js';
 
 // Deal Pipeline Schema - tracks property deals with clients
 const dealSchema = new mongoose.Schema({
@@ -249,11 +250,9 @@ clientSchema.index({ tenantId: 1, phoneKey: 1 });
 clientSchema.index({ tenantId: 1, createdAt: -1 });
 clientSchema.index({ tenantId: 1, assignedTo: 1, createdAt: -1 }); // the non-admin list shape
 
-/** The digits a phone number is matched on, wherever it came from. */
-export function phoneKeyOf(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
+// Re-exported so `import Client, { phoneKeyOf }` keeps working; the rule itself
+// lives in utils/phoneKey.js so the importer can share it without importing a model.
+export { phoneKeyOf };
 
 // Derived, never set by hand — a stored value that can disagree with the field
 // it came from is worse than no stored value.

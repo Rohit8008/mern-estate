@@ -1,4 +1,5 @@
 import { toPrice, toText, toDate, normalizeHeader } from './importMapping.js';
+import { phoneKeyOf } from './phoneKey.js';
 
 /**
  * Bringing portal enquiries in from a spreadsheet.
@@ -167,8 +168,14 @@ export function buildLeadRow({ row, mapping, rowNumber }) {
   return { values, errors };
 }
 
-/** The phone shape the dedupe index matches on: last ten digits. */
+/**
+ * The phone shape the dedupe index matches on.
+ *
+ * Delegates to the shared `phoneKeyOf` rather than repeating the rule. These
+ * were two copies of the same normalisation, and the moment they disagreed the
+ * importer would have stopped matching what is actually stored — silently, and
+ * only visible as duplicate leads appearing after an import.
+ */
 export function leadDedupeKey(values) {
-  const digits = String(values?.phone || '').replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
+  return phoneKeyOf(values?.phone);
 }

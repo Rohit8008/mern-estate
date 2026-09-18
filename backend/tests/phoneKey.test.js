@@ -15,7 +15,7 @@ import mongoose from 'mongoose';
 import { registerTenancy } from '../tenancy/tenantPlugin.js';
 import { runWithTenant } from '../tenancy/tenantContext.js';
 
-let Client, phoneKeyOf;
+let Client, phoneKeyOf, leadDedupeKey;
 
 const TENANT = new mongoose.Types.ObjectId().toString();
 const inTenant = (fn) => runWithTenant({ tenantId: TENANT }, fn);
@@ -23,6 +23,7 @@ const inTenant = (fn) => runWithTenant({ tenantId: TENANT }, fn);
 beforeAll(async () => {
   registerTenancy(mongoose);
   ({ default: Client, phoneKeyOf } = await import('../models/client.model.js'));
+  ({ leadDedupeKey } = await import('../utils/leadImportMapping.js'));
 });
 
 beforeEach(async () => {
@@ -119,5 +120,32 @@ describe('the duplicate lookup it exists for', () => {
     );
 
     expect(found).toBeNull();
+  });
+});
+
+describe('one rule, not three', () => {
+  /*
+   * The importer, the single-create path and the model each had their own copy
+   * of this normalisation. They agreed on the day they were written, which is
+   * the only day duplicated rules ever agree — and the failure mode here is
+   * silent: the importer stops matching what is stored, and duplicates just
+   * start appearing.
+   */
+  it.each([
+    '+91 98765 43210',
+    '098765 43210',
+    '98765-43210',
+    '(98765) 43210',
+    '919876543210',
+    '00919876543210',
+    '',
+    'n/a',
+  ])('the importer derives the same key as the model for %s', (phone) => {
+    expect(leadDedupeKey({ phone })).toBe(phoneKeyOf(phone));
+  });
+
+  it('agrees on a value that is actually stored, end to end', async () => {
+    const client = await makeClient('+91 98765 43210');
+    expect(leadDedupeKey({ phone: '098765 43210' })).toBe(client.phoneKey);
   });
 });

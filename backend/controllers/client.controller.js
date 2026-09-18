@@ -1,4 +1,5 @@
 import Client from '../models/client.model.js';
+import { phoneKeyOf } from '../utils/phoneKey.js';
 import { errorHandler } from '../utils/error.js';
 import { logFromRequest, diffFields } from '../utils/activity.js';
 import { notify } from '../utils/notify.js';
@@ -16,13 +17,11 @@ import mongoose from 'mongoose';
  * same lead gets entered three times by three agents and then gets called three
  * times.
  *
- * Keeps the last 10 digits, which is the subscriber number in every format an
- * Indian agency will type, with or without country code or trunk prefix.
+ * The rule lives in utils/phoneKey.js, shared with the Client pre-save hook
+ * that writes the stored `phoneKey` this is compared against. A second copy
+ * here would be free to drift from the values in the database.
  */
-function phoneKey(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
+const phoneKey = phoneKeyOf;
 
 /**
  * Anyone already on file with this phone or email.
