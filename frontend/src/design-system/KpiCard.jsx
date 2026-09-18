@@ -32,8 +32,8 @@ export default function KpiCard({ title, value, icon: Icon, color = 'blue', sub,
       className={cx(
         'bg-white border border-slate-200 rounded-xl p-5 shadow-sm',
         'border-t-2', c.bar,
-        'hover:shadow-md transition-shadow',
-        onClick && 'cursor-pointer text-left w-full',
+        'transition-[box-shadow,transform] duration-200 hover:shadow-md',
+        onClick && 'cursor-pointer text-left w-full hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
         className
       )}
     >

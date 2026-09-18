@@ -6,11 +6,25 @@
  * Run with coverage: npm run test:coverage
  */
 
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react-swc';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
+
+  // Mirrors vite.config.js. Without it `@/utils/http` — the import style used
+  // throughout the codebase — does not resolve under vitest, so any test that
+  // touched the API client failed to load at all. That is part of why this
+  // suite was empty.
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
 
   test: {
     // Enable global APIs (describe, it, expect)
@@ -20,7 +34,11 @@ export default defineConfig({
     environment: 'jsdom',
 
     // Setup file for test configuration
-    setupFiles: './src/tests/setup.js',
+    // .jsx, not .js: this file builds a Provider/BrowserRouter wrapper in JSX,
+    // and vite will not parse JSX out of a .js file. It failed to load on
+    // every run, which meant no test could start — masked by the
+    // --passWithNoTests flag that used to be on the test script.
+    setupFiles: './src/tests/setup.jsx',
 
     // Test file patterns
     include: [

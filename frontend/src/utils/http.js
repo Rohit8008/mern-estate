@@ -65,7 +65,10 @@ export function toUserMessage(statusCode, rawMessage) {
   switch (statusCode) {
     case 400: return safe || 'Invalid request. Please check your input.';
     case 401: return safe || 'Your session has expired. Please sign in again.';
-    case 403: return "You don't have permission to do this.";
+    // Was unconditional, which discarded every deliberately-worded 403: the
+    // acting-as read-only explanation, the CSRF "sign in again" instruction,
+    // and the platform-operator notice all became the same generic line.
+    case 403: return safe || "You don't have permission to do this.";
     case 404: return safe || 'The requested item was not found.';
     case 409: return safe || 'A conflict occurred. This item may already exist.';
     case 422: return safe || 'Please check your input and try again.';
@@ -87,6 +90,8 @@ export function handleApiError(error, data, httpStatus) {
       type: error.type || 'error',
       field: error.field || null,
       statusCode: error.statusCode,
+      code: error.code || null,
+      details: error.details || null,
     };
   }
 
@@ -97,6 +102,11 @@ export function handleApiError(error, data, httpStatus) {
       type: data.type || 'error',
       field: data.field || null,
       statusCode,
+      // The discriminators callers actually branch on: `details` carries the
+      // count behind a 409 (which the UI turns into the ?force=true choice),
+      // `code` distinguishes CSRF_COOKIE_MISSING from a real permission denial.
+      code: data.code || null,
+      details: data.details || null,
     };
   }
 
@@ -207,10 +217,34 @@ export async function refreshAccessToken(shouldRedirect = true) {
   return refreshPromise;
 }
 
+// ── CSRF ──────────────────────────────────────────────────────────────────────
+// The backend sets a readable `csrf_token` cookie when it issues a session and
+// requires it echoed back as a header on every state-changing /api call. Script
+// on another origin cannot read our cookies, and cannot set a custom header
+// without a preflight CORS refuses — which is what makes the pair meaningful.
+const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function readCookie(name) {
+  if (typeof document === 'undefined') return null;
+  const m = document.cookie.match(
+    new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]*)`)
+  );
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// Read at call time, never cached: refresh and act-as both rotate the token.
+function withCsrf(options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  if (CSRF_SAFE_METHODS.has(method)) return options;
+  const token = readCookie('csrf_token');
+  if (!token) return options;
+  return { ...options, headers: { ...(options.headers || {}), 'X-CSRF-Token': token } };
+}
+
 // Enhanced fetch with automatic token refresh
 export async function fetchWithRefresh(url, options = {}, silent = false) {
   const response = await fetch(url, {
-    ...options,
+    ...withCsrf(options),
     credentials: 'include',
   });
 
@@ -219,8 +253,9 @@ export async function fetchWithRefresh(url, options = {}, silent = false) {
     const refreshData = await refreshAccessToken(!silent);
     if (refreshData) {
       // Retry the original request with new token
+      // withCsrf again, not the earlier value: the refresh just minted a new token.
       return fetch(url, {
-        ...options,
+        ...withCsrf(options),
         credentials: 'include',
       });
     } else if (!silent) {
@@ -262,7 +297,12 @@ export class ApiClient {
       }, silent);
       return await handleApiResponse(response, silent);
     } catch (error) {
-      console.error('API request failed:', error);
+      // An aborted request is the caller superseding itself — a search box
+      // cancelling the previous keystroke. Logging it would fill the console
+      // with noise that looks like failures.
+      if (error?.name !== 'AbortError') {
+        console.error('API request failed:', error);
+      }
       throw error;
     }
   }
