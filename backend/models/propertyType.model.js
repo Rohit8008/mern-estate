@@ -4,10 +4,12 @@ const fieldSchema = new mongoose.Schema({
   key: {
     type: String,
     required: true,
+    maxlength: 60,
   },
   label: {
     type: String,
     required: true,
+    maxlength: 100,
   },
   type: {
     type: String,
@@ -21,6 +23,7 @@ const fieldSchema = new mongoose.Schema({
   placeholder: {
     type: String,
     default: '',
+    maxlength: 200,
   },
   options: {
     type: [String],
@@ -37,6 +40,7 @@ const fieldSchema = new mongoose.Schema({
   unit: {
     type: String,
     default: '',
+    maxlength: 30,
   },
   defaultValue: {
     type: mongoose.Schema.Types.Mixed,
@@ -49,10 +53,12 @@ const fieldSchema = new mongoose.Schema({
   group: {
     type: String,
     default: 'general',
+    maxlength: 60,
   },
   helpText: {
     type: String,
     default: '',
+    maxlength: 300,
   },
 }, { _id: false });
 
@@ -61,15 +67,15 @@ const propertyTypeSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
+      maxlength: 100,
     },
     slug: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
       trim: true,
+      maxlength: 120,
     },
     description: {
       type: String,
@@ -133,6 +139,14 @@ propertyTypeSchema.pre('save', function(next) {
   }
   next();
 });
+
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+// Uniqueness is per tenant, not global. Two agencies must each be able to define the same property type.
+// A global `unique: true` would let whichever agency signed up first claim
+// the name for everyone else.
+propertyTypeSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
+propertyTypeSchema.index({ tenantId: 1, name: 1 }, { unique: true });
 
 const PropertyType = mongoose.model('PropertyType', propertyTypeSchema);
 
