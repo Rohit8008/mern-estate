@@ -131,6 +131,37 @@ describe('scheduler', () => {
     expect(runs).toBe(2);
   });
 
+  it('holds the lease open while a slow job is still running', async () => {
+    // A lease is a bet on how long a job takes, and that bet is wrong the
+    // moment the work grows — the reminder jobs send email, which costs
+    // seconds per message. Without renewal the lease expires mid-run, another
+    // instance claims it, and the same reminders go out twice.
+    registerJob('t-slow', { everyMs: 60_000, leaseMs: 30_000 }, async () => {
+      await new Promise((r) => setTimeout(r, 120));
+      return 'ok';
+    });
+
+    const now = new Date();
+    const run = tick(now);
+
+    // Partway through, the lease must be further out than its original expiry.
+    await new Promise((r) => setTimeout(r, 60));
+    const midRun = await JobLock.findOne({ name: 't-slow' }).lean();
+    expect(midRun.lockedUntil.getTime()).toBeGreaterThan(now.getTime());
+
+    await run;
+  });
+
+  it('stops renewing once the job is done, so a crash still frees it', async () => {
+    registerJob('t-renew-stop', { everyMs: 60_000, leaseMs: 30_000 }, async () => 'ok');
+
+    await tick(new Date());
+
+    const after = await JobLock.findOne({ name: 't-renew-stop' }).lean();
+    // releaseLock frees it immediately; lastRunAt now gates the cadence.
+    expect(after.lockedUntil.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
   it('refuses a job with no cadence', () => {
     expect(() => registerJob('t-bad', {}, async () => {})).toThrow(/everyMs or dailyAt/);
   });

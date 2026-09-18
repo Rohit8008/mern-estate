@@ -132,6 +132,34 @@ function nextDueFilter(job, now) {
  * reasoned about the time it was given, so the two disagreed and the job never
  * became due again.
  */
+/**
+ * Hold the lease open while the handler is still working.
+ *
+ * A lease is a bet on how long a job takes, and that bet is wrong the moment
+ * the work grows: the reminder jobs send email, sendMail costs seconds per
+ * message, and enough recipients will outrun any fixed number. When the lease
+ * expires mid-run another instance claims it and the same reminders go out
+ * twice.
+ *
+ * Renewing on a heartbeat removes the guess. The lease stays short — so a
+ * process that dies still frees the job within one interval — while a job that
+ * is genuinely still running keeps it.
+ */
+function startLeaseRenewal(job) {
+  const every = Math.max(10_000, Math.floor(job.leaseMs / 3));
+
+  const timer = setInterval(() => {
+    JobLock.updateOne(
+      { name: job.name, owner: INSTANCE },
+      { $set: { lockedUntil: new Date(Date.now() + job.leaseMs) } }
+    ).catch((err) => logger.warn('Could not renew job lease', { job: job.name, message: err.message }));
+  }, every);
+
+  // Never let the heartbeat hold the process open at shutdown.
+  if (typeof timer.unref === 'function') timer.unref();
+  return timer;
+}
+
 async function releaseLock(job, result, now) {
   await JobLock.updateOne(
     { name: job.name, owner: INSTANCE },
@@ -160,6 +188,7 @@ export async function tick(now = new Date()) {
     if (!lock || lock.owner !== INSTANCE) continue;
 
     const started = Date.now();
+    const renewal = startLeaseRenewal(job);
     try {
       const result = await job.handler();
       await releaseLock(job, result, now);
@@ -168,6 +197,8 @@ export async function tick(now = new Date()) {
     } catch (err) {
       await releaseLock(job, `failed: ${err.message}`, now);
       logger.error('Job failed', { job: job.name, message: err.message, stack: err.stack });
+    } finally {
+      clearInterval(renewal);
     }
   }
 
