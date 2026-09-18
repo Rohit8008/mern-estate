@@ -30,20 +30,21 @@ const userSchema = new mongoose.Schema(
     username: {
       type: String,
       required: true,
-      unique: true,
+      maxlength: 50,
     },
     firstName: {
       type: String,
       default: '',
+      maxlength: 60,
     },
     lastName: {
       type: String,
       default: '',
+      maxlength: 60,
     },
     email: {
       type: String,
       required: [true, 'Email is required'],
-      unique: true,
       lowercase: true,
       trim: true,
       validate: {
@@ -59,11 +60,13 @@ const userSchema = new mongoose.Schema(
     },
     avatar:{
       type: String,
-      default: "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
+      default: "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png",
+      maxlength: 500,
     },
     phone: {
       type: String,
       default: null,
+      maxlength: 20,
       // unique index is defined below with partialFilterExpression so null values are never indexed
       validate: {
         validator: function(v) {
@@ -75,34 +78,42 @@ const userSchema = new mongoose.Schema(
     addressLine1: {
       type: String,
       default: '',
+      maxlength: 200,
     },
     addressLine2: {
       type: String,
       default: '',
+      maxlength: 200,
     },
     city: {
       type: String,
       default: '',
+      maxlength: 100,
     },
     state: {
       type: String,
       default: '',
+      maxlength: 100,
     },
     postalCode: {
       type: String,
       default: '',
+      maxlength: 20,
     },
     country: {
       type: String,
       default: '',
+      maxlength: 80,
     },
     company: {
       type: String,
       default: '',
+      maxlength: 120,
     },
     website: {
       type: String,
       default: '',
+      maxlength: 200,
     },
     bio: {
       type: String,
@@ -131,6 +142,37 @@ const userSchema = new mongoose.Schema(
       type: [String], // category slugs the employee can manage
       default: [],
     },
+    /**
+     * Invitation to set up this account.
+     *
+     * Stored hashed for the same reason the password is: the raw token is a
+     * credential that grants account setup, and a database dump should not
+     * hand out working invite links. Single-use — cleared the moment it is
+     * accepted — and it carries no tenant of its own, because the user record
+     * it lives on already belongs to exactly one workspace. That is what lets
+     * an invited person land in the right agency without knowing it exists.
+     */
+    inviteTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    inviteExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    invitedAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    invitedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      select: false,
+    },
     passwordResetOtpHash: {
       type: String,
       default: null,
@@ -139,10 +181,24 @@ const userSchema = new mongoose.Schema(
     passwordResetOtpExpires: {
       type: Date,
       default: null,
+      select: false,
+    },
+    /**
+     * Wrong guesses against the current code.
+     *
+     * A 6-digit OTP is a million possibilities and lives for ten minutes, which
+     * is only safe if guessing is capped. Without this the code is the weakest
+     * credential in the product — weaker than the passwords it resets.
+     */
+    passwordResetOtpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
     },
     refreshTokens: {
       type: [refreshTokenSchema],
       default: [],
+      select: false,
       set: (tokens) => {
         if (!Array.isArray(tokens)) return tokens;
         return tokens
@@ -154,6 +210,38 @@ const userSchema = new mongoose.Schema(
           });
       },
     },
+    /**
+     * Per-person settings, saved on the account rather than in the browser.
+     *
+     * The Settings screen used to write these to localStorage behind a fake
+     * 500ms delay, so "saved" meant "saved on this device, in this browser,
+     * until someone clears site data" — and the notification toggles governed
+     * nothing at all.
+     *
+     * `notifications` is keyed by the notification type ids in
+     * utils/notificationTypes.js; anything absent falls back to that
+     * catalogue's default, so adding a type does not require a migration.
+     */
+    preferences: {
+      notifications: {
+        type: Map,
+        of: new mongoose.Schema(
+          {
+            inApp: { type: Boolean, default: true },
+            email: { type: Boolean, default: false },
+          },
+          { _id: false }
+        ),
+        default: () => new Map(),
+      },
+      privacy: {
+        showEmail: { type: Boolean, default: false },
+        showPhone: { type: Boolean, default: false },
+        showOnlineStatus: { type: Boolean, default: true },
+        allowMessages: { type: Boolean, default: true },
+      },
+    },
+
     lastLogin: {
       type: Date,
       default: null,
@@ -170,12 +258,34 @@ const userSchema = new mongoose.Schema(
     loginAttempts: {
       type: Number,
       default: 0,
+      select: false,
     },
     lockedUntil: {
       type: Date,
       default: null,
       index: true,
+      select: false,
     },
+    /**
+     * Platform operator — the vendor's own staff, who provision and administer
+     * workspaces. Distinct from `role: 'admin'`, which is an admin *of one
+     * agency*: a workspace admin runs their agency, a platform admin runs the
+     * product.
+     *
+     * `select: false` keeps it off every ordinary user read, and no
+     * tenant-facing controller includes it in an update whitelist — it is set
+     * only by scripts/provisionTenant.js and by another platform admin. Left
+     * settable through the normal user API, it would be a one-request
+     * escalation from "admin of one agency" to "administers every agency".
+     */
+    isPlatformAdmin: {
+      type: Boolean,
+      default: false,
+      select: false,
+    },
+    /** Set when a data-subject erasure removed this record's personal details. */
+    erasedAt: { type: Date, default: null },
+    erasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -234,15 +344,23 @@ userSchema.methods.toJSON = function() {
   const userObject = this.toObject();
   delete userObject.password;
   delete userObject.passwordResetOtpHash;
+  delete userObject.inviteTokenHash;
   delete userObject.refreshTokens;
   return userObject;
 };
 
 // Indexes for better performance
 // Only index non-null phone values — allows unlimited users with phone: null
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+// A person can hold an account at two agencies with the same email address, and
+// two agencies will both want a user called "admin" — so identity is unique per
+// tenant, never globally. Sign-in therefore has to resolve the tenant before it
+// can resolve the user; see resolveTenant.js.
+userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+userSchema.index({ tenantId: 1, username: 1 }, { unique: true });
 userSchema.index(
-  { phone: 1 },
-  { unique: true, partialFilterExpression: { phone: { $type: 'string' } }, name: 'phone_unique_string' }
+  { tenantId: 1, phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $type: 'string' } }, name: 'tenant_phone_unique_string' }
 );
 userSchema.index({ role: 1, status: 1 });
 userSchema.index({ createdAt: -1 });

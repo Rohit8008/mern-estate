@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { runWithTenant } from './tenancy/tenantContext.js';
 import User from './models/user.model.js';
 import { config } from './config/environment.js';
 
@@ -47,12 +48,22 @@ export function initSocket(httpServer) {
         audience: config.jwt.audience,
       });
 
-      const user = await User.findById(payload.id).select('status').lean();
+      // The user lookup has to happen before we know the tenant from the
+      // database, so it reads the tenant from the signed token instead — the
+      // same claim resolveTenant trusts for HTTP.
+      if (!payload.tid) {
+        return next(new Error('Session predates workspaces. Please sign in again.'));
+      }
+
+      const user = await runWithTenant({ tenantId: String(payload.tid) }, () =>
+        User.findById(payload.id).select('status').lean()
+      );
       if (!user || user.status === 'inactive' || user.status === 'suspended') {
         return next(new Error('Account is disabled'));
       }
 
       socket.userId = String(payload.id);
+      socket.tenantId = String(payload.tid);
       return next();
     } catch {
       return next(new Error('Invalid or expired token'));
@@ -60,4 +71,42 @@ export function initSocket(httpServer) {
   });
 
   return io;
+}
+
+
+/**
+ * Emit to one workspace.
+ *
+ * `io.emit()` reaches every socket on the deployment. In a shared-database
+ * multi-tenant product that is every other agency, so a bare emit is always a
+ * bug — the payloads carried import counts and category slugs between
+ * customers. Every connection joins `tenant:<id>` at handshake (server.js), so
+ * this is the only broadcast a controller should ever need.
+ *
+ * Greppable on purpose: `io.emit(` should return nothing outside this file.
+ */
+export function emitToTenant(tenantId, event, payload) {
+  if (!io || !tenantId) return;
+  try {
+    io.to(`tenant:${String(tenantId)}`).emit(event, payload);
+  } catch (_) {
+    // A broadcast failure must never fail the request that triggered it.
+  }
+}
+
+/**
+ * Send to one person, wherever they are connected.
+ *
+ * Every connection joins `user:<id>` at handshake (server.js), so this reaches
+ * all of that person's open tabs and devices and nobody else's. The room name
+ * is derived from the user id alone, but a socket only ever joins its own, and
+ * ids are unguessable — so this does not need a tenant prefix to stay private.
+ */
+export function emitToUser(userId, event, payload) {
+  if (!io || !userId) return;
+  try {
+    io.to(`user:${String(userId)}`).emit(event, payload);
+  } catch (_) {
+    // A push failure must never fail the request that triggered it.
+  }
 }
