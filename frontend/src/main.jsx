@@ -5,7 +5,11 @@ import './index.css';
 import { persistor, store } from './redux/store.js';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
+import { TenantProvider } from './contexts/TenantProvider.jsx';
 import { initSentry } from './utils/sentry.js';
+// Side-effect import: initialises i18next before the first render, so no
+// screen paints in English and then swaps.
+import './i18n/index.js';
 
 // Initialize error tracking before rendering
 initSentry();
@@ -25,7 +29,11 @@ if (API_BASE_URL) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <Provider store={store}>
     <PersistGate loading={null} persistor={persistor}>
-      <App />
+      {/* Outside the router: the workspace's branding applies to the login
+          screen and error pages too, not just to signed-in views. */}
+      <TenantProvider>
+        <App />
+      </TenantProvider>
     </PersistGate>
   </Provider>
 );
