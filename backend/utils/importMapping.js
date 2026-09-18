@@ -229,7 +229,9 @@ export const REQUIRED_CORE_KEYS = CORE_IMPORT_FIELDS.filter((f) => f.required).m
 
 // ─── Auto-mapping ─────────────────────────────────────────────────────────────
 
-function normalizeHeader(header) {
+// Exported so the lead importer matches spreadsheet headings the same way
+// the listing importer does — two normalisers would drift.
+export function normalizeHeader(header) {
   return String(header || '')
     .toLowerCase()
     .replace(/[._\-/\\]+/g, ' ')

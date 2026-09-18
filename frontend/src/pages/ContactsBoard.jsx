@@ -14,6 +14,7 @@ import { currencySymbol, getLocaleConfig } from '../utils/currency';
 import BulkActionBar, { BulkSelect, BulkButton } from '../components/BulkActionBar';
 import { TagChip } from '../components/TagPicker';
 import { TemperatureChip } from '../components/TemperatureControl';
+import WhatsAppButton from '../components/WhatsAppButton';
 import { fetchWithRefresh } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTranslation } from 'react-i18next';
@@ -673,15 +674,19 @@ export default function ContactsBoard() {
                               <span className='text-slate-400 text-[13px]'>—</span>
                             )}
                           </td>
-                          <td className='px-3 py-3'>
+                          <td className='px-3 py-3' onClick={(e) => e.stopPropagation()}>
                             {contact.phone ? (
-                              <a
-                                href={`tel:${contact.phone}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className='text-slate-700 hover:text-indigo-600 text-[13px]'
-                              >
-                                {contact.phone}
-                              </a>
+                              <span className='flex items-center gap-1.5'>
+                                <a
+                                  href={`tel:${contact.phone}`}
+                                  className='text-slate-700 hover:text-indigo-600 text-[13px]'
+                                >
+                                  {contact.phone}
+                                </a>
+                                {/* Compact: the row is dense, and an agent
+                                    scanning the list wants one tap to chat. */}
+                                <WhatsAppButton compact phone={contact.phone} />
+                              </span>
                             ) : (
                               <span className='text-slate-400 text-[13px]'>—</span>
                             )}

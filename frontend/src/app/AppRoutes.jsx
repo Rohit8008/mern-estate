@@ -32,6 +32,7 @@ const PortfolioDashboard = lazy(() => import('../pages/PortfolioDashboard'));
 const Transactions       = lazy(() => import('../pages/Transactions'));
 const Notifications      = lazy(() => import('../pages/Notifications'));
 const AuditLog           = lazy(() => import('../pages/AuditLog'));
+const LeadImport         = lazy(() => import('../pages/LeadImport'));
 
 // CRM — properties
 const PropertiesBoard      = lazy(() => import('../pages/PropertiesBoard'));
@@ -179,6 +180,7 @@ export default function AppRoutes() {
               <Route path='/admin/property-types' element={<PropertyTypeManagement />} />
               <Route path='/admin/import' element={<AdminImport />} />
               <Route path='/admin/audit-log' element={<AuditLog />} />
+              <Route path='/admin/import-leads' element={<LeadImport />} />
               {/* The vendor's own console. Not in the tenant screen catalogue —
                   it is not something a workspace has, so it is gated on the
                   platform flag rather than on a feature. The API enforces it. */}

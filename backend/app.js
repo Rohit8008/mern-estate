@@ -37,6 +37,7 @@ import webhookRouter from './routes/webhook.route.js';
 import emailTemplateRouter from './routes/emailTemplate.route.js';
 import rulesRouter from './routes/rules.route.js';
 import sequenceRouter from './routes/sequence.route.js';
+import leadImportRouter from './routes/leadImport.route.js';
 import geocodeRouter from './routes/geocode.route.js';
 import reportTemplateRouter from './routes/reportTemplate.route.js';
 import generatedReportRouter from './routes/generatedReport.route.js';
@@ -154,6 +155,7 @@ export function createApp() {
   app.use('/api/email-templates', emailTemplateRouter);
   app.use('/api/rules', rulesRouter);
   app.use('/api/sequences', sequenceRouter);
+  app.use('/api/lead-import', leadImportRouter);
   app.use('/api/newsletter', subscriberRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/report-templates', reportTemplateRouter);

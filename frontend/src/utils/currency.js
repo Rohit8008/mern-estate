@@ -27,6 +27,9 @@ const DEFAULTS = {
   areaUnit: 'sqyard',
   dateFormat: 'dd/MM/yyyy',
   timezone: 'Asia/Kolkata',
+  // Country dialling code without the plus. Used to turn the local numbers
+  // agencies type into the international form WhatsApp requires.
+  dialCode: '91',
 };
 
 let current = { ...DEFAULTS };
@@ -87,6 +90,7 @@ export function setLocaleConfig(locale) {
     areaUnit: locale.areaUnit || DEFAULTS.areaUnit,
     dateFormat: locale.dateFormat || DEFAULTS.dateFormat,
     timezone: locale.timezone || DEFAULTS.timezone,
+    dialCode: locale.dialCode || DEFAULTS.dialCode,
   };
 
   const changed = Object.keys(next).some((k) => next[k] !== current[k]);

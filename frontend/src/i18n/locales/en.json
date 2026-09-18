@@ -2096,5 +2096,45 @@
     "smtpYourProviderCom": "smtp.your-provider.com",
     "username": "Username",
     "youAgencyCom": "you@agency.com"
+  },
+  "whatsapp": {
+    "whatsapp": "WhatsApp",
+    "openChat": "Open WhatsApp chat",
+    "chooseMessage": "Choose a message",
+    "opensInWhatsApp": "Opens in WhatsApp — review before sending",
+    "noNumber": "No usable phone number",
+    "logged": "Logged as a WhatsApp conversation"
+  },
+  "leadImport": {
+    "title": "Import leads",
+    "subtitle": "Bring portal enquiries in from a spreadsheet",
+    "chooseFile": "Choose a file",
+    "fileHint": ".csv, .xlsx or .xls · up to 15 MB",
+    "portalHint": "Export your enquiries from 99acres, MagicBricks or Housing and drop the file here. The columns are matched for you, duplicates are detected against your existing leads, and each one is assigned using your workspace rule.",
+    "checkColumns": "Where should each column go?",
+    "checkColumnsHint": "We have matched what we recognised. Change anything that looks wrong — the first row of your file is shown under each heading.",
+    "dontImport": "Don't import this column",
+    "stillNeed": "Still needed:",
+    "checkFile": "Check my file",
+    "startOver": "Start over",
+    "total": "Rows",
+    "new": "New",
+    "duplicates": "Already on file",
+    "errors": "Cannot import",
+    "skipHint": "Duplicates and unreadable rows are skipped, not merged.",
+    "import": "Import",
+    "leadsImported": "leads imported",
+    "alreadyOnFile": "already on file",
+    "couldNotRead": "could not be read",
+    "importAnother": "Import another file",
+    "viewLeads": "View leads",
+    "status": {
+      "new": "Will import",
+      "duplicate": "Already on file",
+      "error": "Cannot import"
+    },
+    "whereFrom": "Where did these leads come from?",
+    "whereFromHint": "Recorded on every imported lead, so the ROI report can divide your spend by channel.",
+    "sourceFromFile": "Use the source column in my file"
   }
 }

@@ -44,6 +44,16 @@ const localeSchema = new mongoose.Schema(
     timezone: { type: String, default: 'Asia/Kolkata', maxlength: 64 },
     dateFormat: { type: String, default: 'dd/MM/yyyy', maxlength: 20 },
     language: { type: String, default: 'en', maxlength: 8 },
+    /**
+     * Country dialling code, without the plus.
+     *
+     * WhatsApp's click-to-chat needs a full international number and silently
+     * opens an empty chat when given a local one, so a number stored as
+     * "98765 43210" has to be prefixed before it is usable. Agencies type local
+     * numbers; this is what turns them into something WhatsApp accepts.
+     */
+    dialCode: { type: String, default: '91', maxlength: 4 },
+
     // Land area unit an agency actually trades in — sq. yard in Punjab/Haryana,
     // sq. ft in metros, cent/guntha further south.
     areaUnit: {

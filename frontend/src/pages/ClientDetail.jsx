@@ -6,9 +6,12 @@ import { Card, Badge, Input, Select, Textarea, Button } from '../design-system';
 import { currencySymbol, formatCurrency, getLocaleConfig } from '../utils/currency';
 import TagPicker from '../components/TagPicker';
 import { useNotification } from '../contexts/NotificationContext';
+import { useTenant } from '../contexts/TenantProvider';
+import { useSelector } from 'react-redux';
 import TemperatureControl from '../components/TemperatureControl';
 import SequenceEnrollments from '../components/SequenceEnrollments';
 import ClientPhotos from '../components/ClientPhotos';
+import WhatsAppButton from '../components/WhatsAppButton';
 import { useTranslation } from 'react-i18next';
 
 const DEAL_STAGES = [
@@ -43,6 +46,8 @@ export default function ClientDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
   const { showError } = useNotification();
+  const { tenant } = useTenant();
+  const { currentUser } = useSelector((state) => state.user);
   const [client, setClient] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);   // initial page load only
@@ -304,6 +309,26 @@ export default function ClientDetail() {
    * Choosing a temperature pins it: the server sets temperatureManual, so the
    * nightly rescore stops overwriting what a person decided.
    */
+  /**
+   * Record that a WhatsApp conversation was opened.
+   *
+   * Best-effort: the agent is already in WhatsApp by the time this runs, so a
+   * failed log must not interrupt them — it is refetched on the next load.
+   */
+  const logWhatsApp = async ({ text }) => {
+    try {
+      await apiClient.post(`/crm/${id}/communications`, {
+        type: 'whatsapp',
+        direction: 'outbound',
+        summary: text ? text.split('\n')[0].slice(0, 120) : 'Opened WhatsApp chat',
+        details: text || '',
+      });
+      await loadClient();
+    } catch {
+      // Silent on purpose — see above.
+    }
+  };
+
   const setTemperature = async (temperature) => {
     const previous = client.temperature;
     setClient((c) => ({ ...c, temperature, temperatureManual: true }));
@@ -354,6 +379,23 @@ export default function ClientDetail() {
         </div>
         <div className="flex items-center gap-3">
           {saving && <span className="text-xs text-slate-400 animate-pulse">{t('clientDetail.saving')}</span>}
+
+          {/*
+            * Opening WhatsApp is the outreach, so it is logged as one. Without
+            * that the CRM would show a lead nobody had contacted while the
+            * agent was mid-conversation on their phone.
+            */}
+          <WhatsAppButton
+            phone={client.phone}
+            values={{
+              name: (client.name || '').split(' ')[0],
+              agent: currentUser?.username || '',
+              workspace: tenant?.branding?.productName || tenant?.name || '',
+              link: '',
+            }}
+            onSent={logWhatsApp}
+          />
+
           <Link to="/clients" className="text-sm text-slate-600 hover:text-slate-900 hover:underline">{t('clientDetail.clients')}</Link>
         </div>
       </div>
