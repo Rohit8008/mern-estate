@@ -28,7 +28,18 @@ services:
           type: web
           property: host
       # Optional - Set these in Render dashboard
-      - key: SENTRY_DSN
+      #
+      # Observability goes to OpenObserve; utils/sentry.js is a no-op stub kept
+      # only so old imports resolve, so SENTRY_DSN is deliberately not here.
+      - key: OPENOBSERVE_URL
+        sync: false
+      - key: OPENOBSERVE_USERNAME
+        sync: false
+      - key: OPENOBSERVE_PASSWORD
+        sync: false
+      # Optional. Without it the response cache and rate limits are per-instance,
+      # which is only correct on a single instance.
+      - key: REDIS_URL
         sync: false
       - key: SMTP_HOST
         sync: false
@@ -80,17 +91,13 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_FIREBASE_API_KEY
+      # Uploads go to Cloudinary from the browser. Firebase was removed from
+      # the product and there is no `firebase` dependency in either package.json.
+      - key: VITE_CLOUDINARY_CLOUD_NAME
         sync: false
-      - key: VITE_FIREBASE_AUTH_DOMAIN
+      - key: VITE_CLOUDINARY_UPLOAD_PRESET
         sync: false
-      - key: VITE_FIREBASE_PROJECT_ID
+      - key: VITE_API_RESPONSE_SECRET
         sync: false
-      - key: VITE_FIREBASE_STORAGE_BUCKET
-        sync: false
-      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
-        sync: false
-      - key: VITE_FIREBASE_APP_ID
-        sync: false
-      - key: VITE_SENTRY_DSN
+      - key: VITE_SOCKET_URL
         sync: false

@@ -1,5 +1,14 @@
 # Production-Ready Real Estate Platform - Feature Documentation
 
+> **Historical snapshot.** This describes an earlier phase of the project and
+> parts of it no longer match the code. Specifically, `frontend/src/pages/Dashboard.jsx`
+> and `frontend/src/components/ui/StatsCard.jsx` were removed in the June 2026
+> redesign — the dashboard is now `pages/AgencyDashboard.jsx` and the shared
+> components live in `frontend/src/design-system/`.
+>
+> For what the product does today, read `README.md`, the per-feature notes in
+> `docs/`, and `CLAUDE.md` for the architectural rules.
+
 ## 🎯 Overview
 This document outlines all production-ready features implemented for the Real Estate Management & Listing Platform.
 
@@ -138,14 +147,14 @@ This document outlines all production-ready features implemented for the Real Es
 
 ### 3. UI Components
 
-#### StatsCard Component (`frontend/src/components/ui/StatsCard.jsx`)
+#### StatsCard Component (superseded — now `KpiCard` in `frontend/src/design-system/`)
 **Features:**
 - Modern card design with icons
 - Trend indicators (up/down)
 - Loading skeleton state
 - Customizable colors and styling
 
-### 4. Dashboard Page (`frontend/src/pages/Dashboard.jsx`)
+### 4. Dashboard Page (superseded — now `frontend/src/pages/AgencyDashboard.jsx`)
 
 **Features:**
 - Real-time analytics display

@@ -13,10 +13,12 @@
     "e2e:codegen": "playwright codegen http://localhost:5173",
     "seed:demo": "cd backend && node scripts/seedDemo.js",
     "demo:video": "playwright test --config=playwright.demo.config.js",
-    "demo:video:report": "playwright show-report e2e/demo/demo-report"
+    "demo:video:report": "playwright show-report e2e/demo/demo-report",
+    "db:restore": "cd backend && node scripts/restore.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "wait-on": "^9.1.0"
   }
 }

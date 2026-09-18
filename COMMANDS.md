@@ -140,8 +140,14 @@ npm run db:seed-categories   # Seed 9 property categories with dynamic fields
 npm run db:seed-roles        # Seed default roles (Admin, Sales Manager, etc.)
 npm run db:seed-demo         # Seed full demo data for client presentations
 npm run db:backup            # Create a timestamped MongoDB backup (needs mongodump)
+npm run db:restore -- --list # List the backups on disk
+npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm
+                             # DESTRUCTIVE. Replaces the database. Also prompts for the
+                             # database name, and refuses in production unless
+                             # ALLOW_PRODUCTION_RESTORE=true is set as well.
 npm run db:migrate           # Run pending migrations
-npm run db:migrate-phone     # One-time migration — fixes phone unique index
+npm run db:migrate-tenancy   # One-time: single-tenant -> multi-tenant. Supports --dry-run.
+npm run db:migrate-fields    # One-time: propertyTypeFields -> attributes/native columns
 ```
 
 ### From the repo root
