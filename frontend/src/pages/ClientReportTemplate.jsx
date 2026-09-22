@@ -13,6 +13,7 @@ import {
   HiClock, HiExclamationCircle,
 } from 'react-icons/hi';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 
 const REPORT_TYPES = [
   { id: 'property_summary',   label: 'Property Summary',    Component: HiHome,          color: 'text-blue-600 bg-blue-50',    border: 'border-blue-200',    accent: '#2563eb', description: 'Overview of property details and status' },
@@ -64,6 +65,10 @@ const DEFAULT_TEMPLATES = [
 ];
 
 function buildReportHtml({ template, clientName, propertyName, notes, agentName, reportDate, listing }) {
+  // Plain HTML, built outside React, so it takes the translator from the i18n
+  // instance. The strings used to be JSX-style {t('…')} inside template
+  // literals, which printed the code itself into reports sent to clients.
+  const t = i18n.t.bind(i18n);
   const typeInfo  = REPORT_TYPES.find(t => t.id === template.type) || REPORT_TYPES[0];
   const accent    = typeInfo.accent || '#2563eb';
   const fmtCurrency = formatListingPrice;
@@ -100,7 +105,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
 
   // ── Section builders ───────────────────────────────────────────────────────
   function buildPropertyDetails() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.propertyDetailsFor')}<strong style="color:#0f172a;">${propertyName}</strong>{t('clientReport.willBeProvidedSeparatelyUponRequest')}</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">${t('clientReport.propertyDetailsFor')}<strong style="color:#0f172a;">${propertyName}</strong>${t('clientReport.willBeProvidedSeparatelyUponRequest')}</div>`;
     const l = listing;
     const statusMap = { available: 'Available', sold: 'Sold', rented: 'Rented', under_negotiation: 'Under Negotiation' };
     const statusColor = { available: '#16a34a', sold: '#dc2626', rented: '#7c3aed', under_negotiation: '#d97706' };
@@ -130,7 +135,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   }
 
   function buildPricing() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.pricingInformationWillBeSharedUpon')}</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">${t('clientReport.pricingInformationWillBeSharedUpon')}</div>`;
     const l = listing;
     const saving      = l.offer && l.discountPrice ? l.regularPrice - l.discountPrice : 0;
     const savingPct   = saving > 0 ? Math.round((saving / l.regularPrice) * 100) : 0;
@@ -139,19 +144,19 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
     return `
       <div style="display:grid;grid-template-columns:1fr 1fr${l.offer && l.discountPrice ? ' 1fr' : ''};gap:12px;margin-bottom:20px;">
         <div style="background:linear-gradient(135deg,${accent}08,${accent}15);border:1px solid ${accent}25;border-radius:12px;padding:18px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${accent};margin-bottom:6px;">{t('clientReport.listedPrice')}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${accent};margin-bottom:6px;">${t('clientReport.listedPrice')}</div>
           <div style="font-size:24px;font-weight:900;color:#0f172a;">${fmtCurrency(l.regularPrice)}</div>
           ${pricePerSqFt ? `<div style="font-size:12px;color:#64748b;margin-top:4px;">${fmtCurrency(pricePerSqFt)} / sq.ft</div>` : ''}
         </div>
         ${l.offer && l.discountPrice ? `
         <div style="background:linear-gradient(135deg,#f0fdf415,#dcfce7);border:1px solid #bbf7d0;border-radius:12px;padding:18px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#16a34a;margin-bottom:6px;">{t('clientReport.negotiatedPrice')}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#16a34a;margin-bottom:6px;">${t('clientReport.negotiatedPrice')}</div>
           <div style="font-size:24px;font-weight:900;color:#15803d;">${fmtCurrency(l.discountPrice)}</div>
           ${saving > 0 ? `<div style="font-size:12px;color:#16a34a;margin-top:4px;font-weight:600;">Saving ${fmtCurrency(saving)} (${savingPct}% off)</div>` : ''}
         </div>` : ''}
         ${pricePerSqFt ? `
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:6px;">{t('clientReport.rateSqFt')}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:6px;">${t('clientReport.rateSqFt')}</div>
           <div style="font-size:24px;font-weight:900;color:#0f172a;">${fmtCurrency(pricePerSqFt)}</div>
           ${l.areaSqFt ? `<div style="font-size:12px;color:#64748b;margin-top:4px;">${fmt(l.areaSqFt)} sq.ft total</div>` : ''}
         </div>` : ''}
@@ -161,17 +166,17 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
         ${l.sqYardRate  ? row('Rate per sq.yd', fmtCurrency(l.sqYardRate), false) : ''}
         ${l.totalValue  ? row('Total Value',    `<strong>${fmtCurrency(l.totalValue)}</strong>`, true) : ''}
       </table>` : ''}
-      ${l.offer ? `<div style="margin-top:14px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">{t('clientReport.specialOfferPricingAppliesToThis')}</div>` : ''}`;
+      ${l.offer ? `<div style="margin-top:14px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">${t('clientReport.specialOfferPricingAppliesToThis')}</div>` : ''}`;
   }
 
   function buildMarketComparison() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.comparativeMarketAnalysisBasedOnSimilar')}</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">${t('clientReport.comparativeMarketAnalysisBasedOnSimilar')}</div>`;
     const l = listing;
     const pricePerSqFt = l.areaSqFt ? Math.round(l.regularPrice / l.areaSqFt) : 0;
     const location = [l.locality, l.city].filter(Boolean).join(', ') || 'the subject area';
     return `
       <div style="padding:16px 20px;background:linear-gradient(to right,${accent}08,transparent);border-left:3px solid ${accent};border-radius:0 8px 8px 0;margin-bottom:20px;">
-        <p style="color:#334155;font-size:13.5px;line-height:1.8;margin:0;">{t('clientReport.this')}<strong>${l.type || 'property'}</strong> in <strong>${location}</strong> is${pricePerSqFt ? ` priced at <strong>${fmtCurrency(pricePerSqFt)} per sq.ft</strong>,` : ''} positioned competitively within the micro-market. ${l.furnished ? 'The property is fully furnished, adding value beyond the base price.' : ''} ${l.parking ? 'Dedicated parking is available.' : ''}
+        <p style="color:#334155;font-size:13.5px;line-height:1.8;margin:0;">${t('clientReport.this')}<strong>${l.type || 'property'}</strong> in <strong>${location}</strong> is${pricePerSqFt ? ` priced at <strong>${fmtCurrency(pricePerSqFt)} per sq.ft</strong>,` : ''} positioned competitively within the micro-market. ${l.furnished ? 'The property is fully furnished, adding value beyond the base price.' : ''} ${l.parking ? 'Dedicated parking is available.' : ''}
         </p>
       </div>
       <table style="width:100%;border-collapse:collapse;border:1px solid #f1f5f9;border-radius:10px;overflow:hidden;">
@@ -183,11 +188,11 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
         ${row('Furnishing', l.furnished ? badge('Furnished', '#16a34a') : badge('Unfurnished', '#64748b'), true)}
         ${l.areaSqFt ? row('Built-up Area', `${fmt(l.areaSqFt)} sq.ft`, false) : ''}
       </table>
-      <p style="margin-top:12px;font-size:12px;color:#94a3b8;font-style:italic;">{t('clientReport.aDetailedCmaWith35')}</p>`;
+      <p style="margin-top:12px;font-size:12px;color:#94a3b8;font-style:italic;">${t('clientReport.aDetailedCmaWith35')}</p>`;
   }
 
   function buildLocation() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.locationDetailsAndConnectivityAnalysisWill')}</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">${t('clientReport.locationDetailsAndConnectivityAnalysisWill')}</div>`;
     const l = listing;
     const parts = [l.address, l.areaName, l.locality, l.city, l.state, l.pincode].filter(Boolean);
     const fullAddress = parts.join(', ');
@@ -205,13 +210,13 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
     return `
       ${fullAddress ? `<div style="padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;">
         <div style="width:32px;height:32px;border-radius:8px;background:${accent};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">📍</div>
-        <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:4px;">{t('clientReport.fullAddress')}</div><div style="font-size:13px;color:#0f172a;font-weight:600;line-height:1.6;">${fullAddress}</div></div>
+        <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:4px;">${t('clientReport.fullAddress')}</div><div style="font-size:13px;color:#0f172a;font-weight:600;line-height:1.6;">${fullAddress}</div></div>
       </div>` : ''}
       ${rows ? `<table style="width:100%;border-collapse:collapse;border:1px solid #f1f5f9;border-radius:10px;overflow:hidden;">${rows}</table>` : ''}`;
   }
 
   function buildInvestmentMetrics() {
-    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">{t('clientReport.investmentMetricsAndYieldAnalysisWill')}</div>`;
+    if (!listing) return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;color:#64748b;font-size:13px;font-style:italic;">${t('clientReport.investmentMetricsAndYieldAnalysisWill')}</div>`;
     const l = listing;
     const acqPrice     = l.offer && l.discountPrice ? l.discountPrice : l.regularPrice;
     const saving       = l.offer && l.discountPrice ? l.regularPrice - l.discountPrice : 0;
@@ -227,20 +232,20 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
         ${annualRent ? metricCard('Gross Rental Yield', `${grossYield}%`, `${fmtCurrency(annualRent)} / year est.`, '#d97706') : ''}
       </div>
       <div style="padding:12px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;line-height:1.6;">
-        <strong>{t('clientReport.note')}</strong> Rental yield estimates are indicative and based on prevailing market averages (~3% gross annual yield). Actual rental income, appreciation, and total returns depend on location, demand, property condition, and market cycles. This is not financial advice.
+        <strong>${t('clientReport.note')}</strong> Rental yield estimates are indicative and based on prevailing market averages (~3% gross annual yield). Actual rental income, appreciation, and total returns depend on location, demand, property condition, and market cycles. This is not financial advice.
       </div>`;
   }
 
   function buildPhotos() {
-    if (!listing?.imageUrls?.length) return `<div style="padding:32px;text-align:center;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:10px;color:#94a3b8;font-size:13px;">{t('clientReport.propertyPhotosAreAvailableUponRequest')}</div>`;
+    if (!listing?.imageUrls?.length) return `<div style="padding:32px;text-align:center;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:10px;color:#94a3b8;font-size:13px;">${t('clientReport.propertyPhotosAreAvailableUponRequest')}</div>`;
     const imgs = listing.imageUrls.slice(0, 6);
     const hero = imgs[0];
     const rest = imgs.slice(1, 5);
     const heroSrc = normalizeImageUrl(hero) || hero;
-    const heroHtml = `<img src="${heroSrc}" alt={t('clientReport.property')} style="width:100%;height:280px;object-fit:cover;border-radius:10px;display:block;margin-bottom:10px;" />`;
+    const heroHtml = `<img src="${heroSrc}" alt="${t('clientReport.property')}" style="width:100%;height:280px;object-fit:cover;border-radius:10px;display:block;margin-bottom:10px;" />`;
     const gridHtml = rest.length
       ? `<div style="display:grid;grid-template-columns:repeat(${Math.min(rest.length, 4)},1fr);gap:10px;">
-          ${rest.map(url => { const src = normalizeImageUrl(url) || url; return `<img src="${src}" alt={t('clientReport.property')} style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />`; }).join('')}
+          ${rest.map(url => { const src = normalizeImageUrl(url) || url; return `<img src="${src}" alt="${t('clientReport.property')}" style="width:100%;height:120px;object-fit:cover;border-radius:8px;display:block;" />`; }).join('')}
         </div>`
       : '';
     return heroHtml + gridHtml + (imgs.length > 5 ? `<p style="margin-top:10px;font-size:12px;color:#94a3b8;text-align:right;">+${listing.imageUrls.length - 5} more photos available on request</p>` : '');
@@ -271,7 +276,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   const notesHtml = notes
     ? `<div style="padding:32px 44px;border-bottom:1px solid #f1f5f9;">
         <div style="padding:18px 20px;background:#fefce8;border:1px solid #fde047;border-left:4px solid #eab308;border-radius:0 10px 10px 0;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#a16207;margin-bottom:8px;">{t('clientReport.agentNotes')}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#a16207;margin-bottom:8px;">${t('clientReport.agentNotes')}</div>
           <p style="color:#713f12;margin:0;font-size:13.5px;line-height:1.8;">${notes}</p>
         </div>
       </div>`
@@ -313,7 +318,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
 
     <!-- Top bar -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;">
-      <div style="font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.5);">{t('clientReport.realVista')}</div>
+      <div style="font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.5);">${t('clientReport.realVista')}</div>
       <div style="background:${accent};padding:4px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;">${typeInfo.label}</div>
     </div>
 
@@ -330,15 +335,15 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
     <!-- Meta cards -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">{t('clientReport.preparedFor')}</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">${t('clientReport.preparedFor')}</div>
         <div style="font-size:14px;font-weight:700;color:#fff;">${clientName}</div>
       </div>
       <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">{t('clientReport.preparedBy')}</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">${t('clientReport.preparedBy')}</div>
         <div style="font-size:14px;font-weight:700;color:#fff;">${agentName}</div>
       </div>
       <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">{t('clientReport.reportDate')}</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:5px;">${t('clientReport.reportDate')}</div>
         <div style="font-size:14px;font-weight:700;color:#fff;">${reportDate}</div>
       </div>
     </div>
@@ -348,7 +353,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   <div style="height:4px;background:linear-gradient(to right,${accent},${accent}80,transparent);"></div>
 
   <!-- ══ SECTIONS ══ -->
-  ${sectionsHtml || `<div style="padding:48px;text-align:center;color:#94a3b8;font-style:italic;">{t('clientReport.noSectionsSelectedForThisTemplate')}</div>`}
+  ${sectionsHtml || `<div style="padding:48px;text-align:center;color:#94a3b8;font-style:italic;">${t('clientReport.noSectionsSelectedForThisTemplate')}</div>`}
 
   <!-- ══ NOTES ══ -->
   ${notesHtml}
@@ -356,13 +361,13 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
   <!-- ══ DISCLAIMER ══ -->
   <div style="padding:24px 44px;">
     <div style="padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11.5px;color:#94a3b8;line-height:1.7;">
-      <strong style="color:#64748b;">{t('clientReport.disclaimer')}</strong> This report is prepared for informational purposes only and is intended solely for the named recipient. Information is based on sources deemed reliable but is not guaranteed. All figures are indicative and subject to change without notice. This document does not constitute a legal offer, binding agreement, or financial advice.
+      <strong style="color:#64748b;">${t('clientReport.disclaimer')}</strong> This report is prepared for informational purposes only and is intended solely for the named recipient. Information is based on sources deemed reliable but is not guaranteed. All figures are indicative and subject to change without notice. This document does not constitute a legal offer, binding agreement, or financial advice.
     </div>
   </div>
 
   <!-- ══ FOOTER ══ -->
   <div style="background:#0f172a;padding:20px 44px;display:flex;justify-content:space-between;align-items:center;">
-    <div style="font-size:12px;color:rgba(255,255,255,.5);">{t('clientReport.preparedBy2')}<strong style="color:rgba(255,255,255,.8);">${agentName}</strong>{t('clientReport.realVista2')}</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);">${t('clientReport.preparedBy2')}<strong style="color:rgba(255,255,255,.8);">${agentName}</strong>${t('clientReport.realVista2')}</div>
     <div style="font-size:11px;color:rgba(255,255,255,.35);">Generated ${reportDate} · Confidential</div>
   </div>
 
@@ -408,7 +413,7 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
   if (!isOpen || !report) return null;
 
   return (
-    <div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
+    <div className='fixed inset-0 !mt-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
       <div className='flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0'>
         <div>
           <h2 className='text-sm font-semibold text-slate-900'>{t('clientReport.reportPreview')}</h2>
@@ -467,7 +472,7 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
   if (!isOpen) return null;
 
   return (
-    <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
+    <div className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
       <div className='flex items-start justify-center min-h-full p-4'>
       <div className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto'>
         <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
@@ -632,7 +637,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
   const fmtCurrency = formatListingPrice;
 
   return (
-    <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
+    <div className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
       <div className='flex items-start justify-center min-h-full p-4'>
       <div className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto'>
         <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
@@ -880,7 +885,7 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
   );
 
   return (
-    <div className='fixed inset-0 z-50 flex flex-col bg-slate-100'>
+    <div className='fixed inset-0 !mt-0 z-50 flex flex-col bg-slate-100'>
       {/* ── Top bar ── */}
       <div className='shrink-0 bg-white border-b border-slate-200 shadow-sm'>
         <div className='flex items-center justify-between px-4 py-2.5 border-b border-slate-100'>
@@ -1067,7 +1072,7 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
   const typeInfo = REPORT_TYPES.find(t => t.id === template.type) || REPORT_TYPES[0];
 
   return (
-    <div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
+    <div className='fixed inset-0 !mt-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
       {/* Header */}
       <div className='bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shrink-0'>
         <div className={`w-8 h-8 rounded-lg ${typeInfo.color} flex items-center justify-center shrink-0`}>

@@ -13,6 +13,7 @@ import {
   HiChevronDown, HiDownload, HiPrinter, HiOutlinePhotograph,
 } from 'react-icons/hi';
 import { useTranslation } from 'react-i18next';
+import { localDateString } from '../utils/localDate';
 
 const STATUS_COLORS = {
   available: { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
@@ -140,7 +141,7 @@ export default function PortfolioDashboard() {
       ]),
     ];
 
-    downloadTextFile(`portfolio-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(grid));
+    downloadTextFile(`portfolio-${localDateString()}.csv`, toCsv(grid));
   }, [properties, showError]);
 
   // Print functionality
@@ -149,7 +150,7 @@ export default function PortfolioDashboard() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>{t('portfolioDashboard.portfolioDashboardReport')}</title>
+        <title>${t('portfolioDashboard.portfolioDashboardReport')}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
           h1 { color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
@@ -172,31 +173,31 @@ export default function PortfolioDashboard() {
         </style>
       </head>
       <body>
-        <h1>{t('portfolioDashboard.portfolioDashboardReport')}</h1>
+        <h1>${t('portfolioDashboard.portfolioDashboardReport')}</h1>
         <p style="color: #64748b;">Generated on ${formatDate(new Date(), { day: 'numeric', month: 'long' })}</p>
         
         <div class="summary">
           <div class="stat-card">
-            <div class="stat-label">{t('portfolioDashboard.totalProperties')}</div>
+            <div class="stat-label">${t('portfolioDashboard.totalProperties')}</div>
             <div class="stat-value">${properties.length}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">{t('portfolioDashboard.portfolioValue')}</div>
+            <div class="stat-label">${t('portfolioDashboard.portfolioValue')}</div>
             <div class="stat-value">${fmtCurrency(portfolioMetrics.totalValue)}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">{t('portfolioDashboard.avgPrice')}</div>
+            <div class="stat-label">${t('portfolioDashboard.avgPrice')}</div>
             <div class="stat-value">${fmtCurrency(portfolioMetrics.avgPrice)}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">{t('portfolioDashboard.locations')}</div>
+            <div class="stat-label">${t('portfolioDashboard.locations')}</div>
             <div class="stat-value">${Object.keys(portfolioMetrics.byCity).length}</div>
           </div>
         </div>
 
-        <h2>{t('portfolioDashboard.propertyStatusBreakdown')}</h2>
+        <h2>${t('portfolioDashboard.propertyStatusBreakdown')}</h2>
         <table>
-          <tr><th>{t('portfolioDashboard.status')}</th><th>{t('portfolioDashboard.count')}</th><th>{t('portfolioDashboard.percentage')}</th></tr>
+          <tr><th>${t('portfolioDashboard.status')}</th><th>${t('portfolioDashboard.count')}</th><th>${t('portfolioDashboard.percentage')}</th></tr>
           ${Object.entries(portfolioMetrics.byStatus).map(([status, count]) => `
             <tr>
               <td style="text-transform: capitalize;">${status.replace('_', ' ')}</td>
@@ -206,14 +207,14 @@ export default function PortfolioDashboard() {
           `).join('')}
         </table>
 
-        <h2>{t('portfolioDashboard.propertiesList')}</h2>
+        <h2>${t('portfolioDashboard.propertiesList')}</h2>
         <table>
           <tr>
-            <th>{t('portfolioDashboard.property')}</th>
-            <th>{t('portfolioDashboard.location')}</th>
-            <th>{t('portfolioDashboard.type')}</th>
-            <th>{t('portfolioDashboard.price')}</th>
-            <th>{t('portfolioDashboard.status')}</th>
+            <th>${t('portfolioDashboard.property')}</th>
+            <th>${t('portfolioDashboard.location')}</th>
+            <th>${t('portfolioDashboard.type')}</th>
+            <th>${t('portfolioDashboard.price')}</th>
+            <th>${t('portfolioDashboard.status')}</th>
           </tr>
           ${filteredProperties.map((p) => `
             <tr>
@@ -227,7 +228,7 @@ export default function PortfolioDashboard() {
         </table>
 
         <div class="footer">
-          <p>{t('portfolioDashboard.realEstateCrmPortfolioReport')}</p>
+          <p>${t('portfolioDashboard.realEstateCrmPortfolioReport')}</p>
         </div>
       </body>
       </html>
