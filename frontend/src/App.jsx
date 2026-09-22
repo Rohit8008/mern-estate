@@ -13,7 +13,6 @@ import ApiErrorToastListener from './app/ApiErrorToastListener';
 import AppRoutes from './app/AppRoutes';
 import AppShell from './app/AppShell';
 import AuthBootstrap from './app/AuthBootstrap';
-import PushNotificationsListener from './app/PushNotificationsListener';
 import CmdKListener from './app/CmdKListener';
 
 export default function App() {
@@ -28,7 +27,6 @@ export default function App() {
                   <SearchProvider>
                     <AuthBootstrap />
                     <ApiErrorToastListener />
-                    <PushNotificationsListener />
                     <CmdKListener />
                     <GlobalSearch />
                     <AppShell>

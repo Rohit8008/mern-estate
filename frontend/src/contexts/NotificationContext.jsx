@@ -4,6 +4,8 @@ import Notification from '../components/Notification';
 
 const NotificationContext = createContext();
 
+const MAX_VISIBLE = 3;
+
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -20,24 +22,29 @@ export const NotificationProvider = ({ children }) => {
   }, []);
 
   const addNotification = useCallback((notification) => {
-    const id = Date.now() + Math.random();
     const newNotification = {
-      id,
       type: 'info',
       duration: 5000,
       onClick: undefined,
       ...notification,
     };
+    // Same type + text already on screen: keep one. A failed request used to
+    // stack two identical toasts — the global api-error listener and the
+    // page's own catch both reported it.
+    const dedupeKey = `${newNotification.type}:${newNotification.message}`;
+    const id = Date.now() + Math.random();
+    const entry = { ...newNotification, id, dedupeKey };
+    // Newest last; never more than MAX_VISIBLE on screen.
+    // Checked inside the updater, so two identical calls in the same tick —
+    // the double-report case — still collapse to one.
+    setNotifications((prev) =>
+      prev.some((n) => n.dedupeKey === dedupeKey) ? prev : [...prev, entry].slice(-MAX_VISIBLE)
+    );
 
-    setNotifications(prev => [...prev, newNotification]);
-
-    // Auto remove after duration
-    if (newNotification.duration > 0) {
-      setTimeout(() => {
-        removeNotification(id);
-      }, newNotification.duration);
+    // One timer, owned here. The toast component no longer runs its own.
+    if (entry.duration > 0) {
+      setTimeout(() => removeNotification(id), entry.duration);
     }
-
     return id;
   }, [removeNotification]);
 
@@ -75,7 +82,13 @@ export const NotificationProvider = ({ children }) => {
   return (
     <NotificationContext.Provider value={value}>
       {children}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      {/* Fixed width: the tray used to shrink to fit, and the toast's
+          `w-0 flex-1` message column collapsed to a word per line. Above
+          modals (z-[1000]) so feedback from a modal form is visible. */}
+      <div
+        className="fixed top-4 right-4 z-[1100] w-[min(24rem,calc(100vw-2rem))] space-y-2 pointer-events-none"
+        aria-live="polite"
+      >
         {notifications.map((notification) => (
           <Notification
             key={notification.id}

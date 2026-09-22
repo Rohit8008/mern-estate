@@ -12,6 +12,7 @@ import { initSocket, io } from './socket.js';
 import { encryptMessageWithKey, decryptMessageWithKey } from './utils/encryption.js';
 import { runWithTenant } from './tenancy/tenantContext.js';
 import { forEachTenant } from './tenancy/resolveTenant.js';
+import { notify } from './utils/notify.js';
 
 export const app = createApp();
 export const server = http.createServer(app);
@@ -222,6 +223,16 @@ export function setupSocket() {
         io.to(`user:${receiverId}`).emit('message:new', decrypted);
         io.to(`user:${receiverId}`).emit('conversations:update');
         io.to(`user:${userId}`).emit('conversations:update');
+        // The bell keeps it: the live toast used to be the only trace, and it
+        // was gone in five seconds if you were on another screen.
+        notify({
+          to: receiverId,
+          type: 'message.received',
+          title: `New message from ${decrypted.senderName || decrypted.senderUsername || 'a colleague'}`,
+          body: finalContent.length > 120 ? `${finalContent.slice(0, 120)}…` : finalContent,
+          link: '/messages',
+          actorId: userId,
+        }).catch(() => {});
         cb({ success: true, message: decrypted });
       } catch (_) {
         cb({ error: 'Failed to send message' });

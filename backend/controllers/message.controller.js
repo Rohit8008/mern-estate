@@ -6,6 +6,7 @@ import User from '../models/user.model.js';
 import Listing from '../models/listing.model.js';
 import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../utils/encryption.js';
 import { inHomeTenant } from '../tenancy/tenantContext.js';
+import { notify } from '../utils/notify.js';
 
 /**
  * Helper function to decrypt message content if it's encrypted
@@ -83,6 +84,16 @@ export const sendMessage = async (req, res, next) => {
     io.to(`user:${req.user.id}`).emit('conversations:update');
     // Confirm to sender that message is persisted (delivery)
     io.to(`user:${req.user.id}`).emit('message:sent', decrypted);
+    // The bell keeps it: the live toast used to be the only trace, and it
+    // was gone in five seconds if you were on another screen.
+    notify({
+      to: receiverId,
+      type: 'message.received',
+      title: `New message from ${senderName || sender?.username || 'a colleague'}`,
+      body: finalContent.length > 120 ? `${finalContent.slice(0, 120)}…` : finalContent,
+      link: '/messages',
+      actorId: req.user.id,
+    }).catch(() => {});
     res.status(201).json(decrypted);
   } catch (error) {
     next(error);

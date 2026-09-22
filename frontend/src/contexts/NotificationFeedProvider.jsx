@@ -127,8 +127,8 @@ export const NotificationFeedProvider = ({ children }) => {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [userId, refreshCount]);
 
-  // Live push. Its own connection rather than sharing PushNotificationsListener's,
-  // so neither has to know about the other's lifecycle.
+  // Live push. Messages and listing changes arrive here as bell rows (they used
+  // to be toasts that vanished).
   useEffect(() => {
     if (!userId) return undefined;
 

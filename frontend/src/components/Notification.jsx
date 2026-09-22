@@ -1,41 +1,24 @@
-import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
 const Notification = ({ 
   type = 'info', 
   message, 
-  duration = 5000, 
   onClose,
   onClick,
   show = true 
 }) => {
-  const [isVisible, setIsVisible] = useState(show);
-
-  useEffect(() => {
-    setIsVisible(show);
-  }, [show]);
-
-  useEffect(() => {
-    if (duration > 0) {
-      const timer = setTimeout(() => {
-        setIsVisible(false);
-        if (onClose) onClose();
-      }, duration);
-
-      return () => clearTimeout(timer);
-    }
-  }, [duration, onClose]);
+  // Visibility and expiry belong to NotificationProvider. This component used
+  // to run a second timer that restarted on every parent render, because
+  // `onClose` is a fresh function each time.
+  if (!show) return null;
 
   const handleClose = () => {
-    setIsVisible(false);
     if (onClose) onClose();
   };
 
   const handleClick = () => {
     if (onClick) onClick();
   };
-
-  if (!isVisible) return null;
 
   const typeStyles = {
     success: 'bg-emerald-50 border-emerald-200 text-emerald-800',

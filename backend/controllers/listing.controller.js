@@ -15,6 +15,7 @@ import {
   sendSuccessResponse,
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
+import { notify } from '../utils/notify.js';
 import { canAccessListing, listingScope } from '../middleware/permissions.js';
 import { assertWithinLimit } from '../tenancy/limits.js';
 import { runHook } from '../plugins/registry.js';
@@ -192,7 +193,17 @@ async function inferPropertyCategory(propertyTypeSlug) {
   return pt?.category ? (PT_CATEGORY_MAP[pt.category] || 'unknown') : null;
 }
 
-async function emitListingUpdate(action, listing, categoryOverride) {
+const LISTING_UPDATE_VERBS = {
+  created: 'was created',
+  updated: 'was updated',
+  deleted: 'was deleted',
+  soft_deleted: 'was deleted',
+  restored: 'was restored',
+  assigned: 'was assigned to an agent',
+  unassigned: 'was unassigned',
+};
+
+async function emitListingUpdate(action, listing, categoryOverride, actorId = null) {
   try {
     if (!io) return;
 
@@ -211,6 +222,19 @@ async function emitListingUpdate(action, listing, categoryOverride) {
     const unique = Array.from(new Set(recipients));
     unique.forEach((userId) => {
       io.to(`user:${userId}`).emit('listing:update', payload);
+    });
+
+    // The bell, not a toast: a change someone else made is something to find
+    // later, and toasts vanish. notify() honours each person's preference for
+    // 'listing.updated' and never tells the actor about their own change.
+    const verb = LISTING_UPDATE_VERBS[action] || 'was updated';
+    await notify({
+      to: unique,
+      type: 'listing.updated',
+      title: `${listing?.name || 'A listing'} ${verb}`,
+      link: listing?._id && !['deleted', 'soft_deleted'].includes(action) ? `/listing/${listing._id}` : '',
+      entity: listing?._id ? { type: 'listing', id: listing._id } : null,
+      actorId,
     });
   } catch (_) {}
 }
@@ -274,7 +298,7 @@ export const createListing = asyncHandler(async (req, res, next) => {
     price: listing.regularPrice,
   });
 
-  await emitListingUpdate('created', listing, listing?.category);
+  await emitListingUpdate('created', listing, listing?.category, req.user?.id);
   clearSearchCache(); // Clear search cache on listing creation
 
   // Log successful listing creation
@@ -296,7 +320,7 @@ export const deleteListing = asyncHandler(async (req, res, next) => {
   if (!canAccessListing(req.user, listing)) throw new AuthorizationError('You can only delete your own listings!');
 
   await Listing.findByIdAndUpdate(req.params.id, { isDeleted: true, deletedAt: new Date() });
-  await emitListingUpdate('deleted', listing, listing?.category);
+  await emitListingUpdate('deleted', listing, listing?.category, req.user?.id);
   clearSearchCache();
 
   res.status(200).json('Listing has been deleted!');
@@ -353,7 +377,7 @@ export const updateListing = asyncHandler(async (req, res, next) => {
   const updatedListing = await Listing.findByIdAndUpdate(req.params.id, updates, { new: true, lean: true });
   const category = updatedListing?.category || listing?.category;
 
-  await emitListingUpdate('updated', updatedListing, category);
+  await emitListingUpdate('updated', updatedListing, category, req.user?.id);
   clearSearchCache();
 
   res.status(200).json(updatedListing);
@@ -411,7 +435,7 @@ export const assignListingToAgent = asyncHandler(async (req, res, next) => {
   listing.assignedAgent = agentId;
   await listing.save();
 
-  await emitListingUpdate('assigned', listing, listing?.category);
+  await emitListingUpdate('assigned', listing, listing?.category, req.user?.id);
 
   logger.info('Listing assigned to agent', {
     listingId: listing._id,
@@ -442,7 +466,7 @@ export const unassignListingFromAgent = asyncHandler(async (req, res, next) => {
   listing.assignedAgent = null;
   await listing.save();
 
-  await emitListingUpdate('unassigned', listing, listing?.category);
+  await emitListingUpdate('unassigned', listing, listing?.category, req.user?.id);
 
   logger.info('Listing unassigned from agent', {
     listingId: listing._id,
@@ -586,7 +610,7 @@ export const softDeleteListing = asyncHandler(async (req, res, next) => {
   listing.deletedAt = new Date();
   await listing.save();
 
-  await emitListingUpdate('soft_deleted', listing, listing?.category);
+  await emitListingUpdate('soft_deleted', listing, listing?.category, req.user?.id);
   clearSearchCache(); // Clear search cache on soft delete
 
   logger.info('Listing soft deleted', {
@@ -612,7 +636,7 @@ export const restoreListing = asyncHandler(async (req, res, next) => {
   listing.deletedAt = null;
   await listing.save();
 
-  await emitListingUpdate('restored', listing, listing?.category);
+  await emitListingUpdate('restored', listing, listing?.category, req.user?.id);
   clearSearchCache(); // Clear search cache on restore
 
   logger.info('Listing restored', {
