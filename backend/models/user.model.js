@@ -223,16 +223,27 @@ const userSchema = new mongoose.Schema(
      * catalogue's default, so adding a type does not require a migration.
      */
     preferences: {
+      /*
+       * A plain object, NOT a Map.
+       *
+       * Every key in the catalogue is dotted — 'lead.assigned',
+       * 'deal.stage_changed', 'task.due' — and Mongoose refuses dotted keys in
+       * a Map ("Mongoose maps do not support keys that contain ..."). That made
+       * every single save of this field a 500, so notification preferences
+       * could never be changed by anyone, on web or mobile; the read path kept
+       * answering with catalogue defaults, which made it look like the toggles
+       * simply did not stick.
+       *
+       * Nothing is lost by dropping the Map: both readers (utils/notify.js and
+       * notification.controller.js) use .lean(), which hands back a plain
+       * object either way. The shape is not enforced by the schema but by
+       * updatePreferences, which rejects any key not in the catalogue and
+       * coerces both flags to booleans before writing — the right place for it,
+       * since the valid keys ARE the catalogue.
+       */
       notifications: {
-        type: Map,
-        of: new mongoose.Schema(
-          {
-            inApp: { type: Boolean, default: true },
-            email: { type: Boolean, default: false },
-          },
-          { _id: false }
-        ),
-        default: () => new Map(),
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({}),
       },
       privacy: {
         showEmail: { type: Boolean, default: false },
