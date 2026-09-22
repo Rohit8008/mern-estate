@@ -11,6 +11,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        // Landing page headlines only. Devanagari falls back to the system face.
+        display: ['"Bricolage Grotesque"', 'Outfit', '"Noto Sans Devanagari"', 'sans-serif'],
+      },
       colors: {
         /**
          * Brand accent — a deep petrol blue, generated on a perceptually even
@@ -40,6 +44,13 @@ export default {
           800: '#17456d',
           900: '#143755',
           950: '#081f32',
+        },
+        marigold: {
+          100: '#fdf0d8',
+          300: '#f6c56f',
+          400: '#eeaa3e',
+          500: '#e0921f',
+          700: '#9c5f0d',
         },
         brand: {
           50: '#f3f8fe',

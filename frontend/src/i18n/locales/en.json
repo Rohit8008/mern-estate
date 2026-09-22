@@ -2136,5 +2136,88 @@
     "whereFrom": "Where did these leads come from?",
     "whereFromHint": "Recorded on every imported lead, so the ROI report can divide your spend by channel.",
     "sourceFromFile": "Use the source column in my file"
+  },
+  "landing": {
+    "heroTitle": "From first enquiry to registry, nothing slips.",
+    "heroBody": "Real Vista is the CRM for property agencies. Leads, listings, site visits, paperwork and follow-ups live in one book your whole team works from.",
+    "signIn": "Sign in",
+    "inviteNote": "Built for agencies. Accounts are by invitation while we onboard our first teams.",
+    "journey": {
+      "exampleLabel": "Example lead",
+      "leadName": "Harpreet Kaur",
+      "leadNeed": "3BHK flat in Model Town, Bathinda",
+      "leadBudget": "Budget ₹80–90 lakh",
+      "stages": {
+        "enquiry": "Enquiry",
+        "visit": "Site visit",
+        "negotiation": "Negotiation",
+        "token": "Token",
+        "registry": "Registry"
+      },
+      "events": {
+        "enquiry": "Enquiry imported from a property portal and assigned to Simran",
+        "visit": "Site visit booked for Saturday at 11:00, three flats shortlisted",
+        "negotiation": "Shortlist shared on WhatsApp as a link that expires in 7 days",
+        "token": "Token of ₹2,00,000 recorded and the RERA certificate sent",
+        "registry": "Registry done, commission booked against the deal"
+      },
+      "times": {
+        "enquiry": "Mon, 10:12",
+        "visit": "Mon, 10:40",
+        "negotiation": "Sat, 16:05",
+        "token": "Wed, 12:30",
+        "registry": "22 Oct"
+      },
+      "showStage": "Show the deal at {{stage}}",
+      "replay": "Play again"
+    },
+    "book": {
+      "title": "One book for the whole agency",
+      "body": "Everything an agent needs between the first call and the registry office, kept where the rest of the team can see it.",
+      "items": {
+        "enquiries": {
+          "title": "Every enquiry in one list",
+          "body": "Leads from property portals, your website and walk-ins land in the same list. Duplicates are matched on phone number, so one buyer is not called by three agents."
+        },
+        "followUps": {
+          "title": "Site visits and follow-ups that come back to you",
+          "body": "Book a visit or set a follow-up and the reminder reaches the agent in the app and by email. Lead scores cool when nobody has called, so a quiet lead stands out."
+        },
+        "paperwork": {
+          "title": "Paperwork buyers ask for by name",
+          "body": "RERA certificates, sanctioned layouts, approval letters and brochures are stored as typed documents, so \"is this project RERA registered?\" is a field, not a hunt through attachments."
+        },
+        "sharing": {
+          "title": "Share a shortlist, not your book",
+          "body": "A share link shows only the fields you choose, expires on a date you set, can take a passcode, counts its views, and can be revoked at any time."
+        },
+        "isolation": {
+          "title": "Your listings stay yours",
+          "body": "Every record carries your workspace, enforced in the data layer. A request without one fails instead of returning another agency's listings."
+        },
+        "yourWay": {
+          "title": "Your stages, your screens",
+          "body": "Deal stages, the screens in the sidebar, the fields on a property and your brand colours are settings for your agency, not a custom build."
+        }
+      }
+    },
+    "faq": {
+      "howMany": {
+        "q": "How many agencies use this?",
+        "a": "Not many yet, and we would rather say so than invent a number. You would be early, which means the roadmap is still open to you and support comes from the people who wrote the code."
+      },
+      "otherAgency": {
+        "q": "Can another agency see our listings?",
+        "a": "No. Workspace separation is enforced in the data layer, so a query that arrives without a workspace context fails instead of returning someone else's records. Support access is read-only and logged."
+      },
+      "spreadsheets": {
+        "q": "We already have years of data in spreadsheets.",
+        "a": "Bring the CSV or Excel file you have. The importer maps your column headings onto property fields, so the sheet does not have to match a template first."
+      },
+      "leaving": {
+        "q": "What happens if we leave?",
+        "a": "Your listings and portfolio export to CSV from the screens that hold them, so the records open in any spreadsheet. Ask us for a full workspace export and you will get one."
+      }
+    }
   }
 }

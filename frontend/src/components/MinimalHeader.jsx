@@ -37,13 +37,6 @@ export default function MinimalHeader() {
 
   const isCrmUser = currentUser?.role === 'admin' || currentUser?.role === 'employee';
 
-  /**
-   * The landing page is theme-locked dark. A white header bar on top of its
-   * dark hero breaks that lock in the first 56 pixels, so on "/" the header
-   * renders transparent over the hero instead. Every other public page is
-   * light and keeps the original white bar.
-   */
-  const onDarkPage = location.pathname === '/';
   const username = currentUser?.username || currentUser?.name || 'User';
   const initials = username.slice(0, 2).toUpperCase();
 
@@ -51,9 +44,7 @@ export default function MinimalHeader() {
     <header
       className={classNames(
         'fixed top-0 left-0 right-0 z-40 transition-colors',
-        onDarkPage
-          ? 'bg-slate-950/70 backdrop-blur-md border-b border-white/10'
-          : 'bg-white border-b border-slate-200'
+        'bg-white border-b border-slate-200'
       )}
     >
       <div className='max-w-7xl mx-auto px-4 sm:px-6'>
@@ -70,7 +61,7 @@ export default function MinimalHeader() {
             )}
             <span className={classNames(
               'text-base font-bold transition-colors',
-              onDarkPage ? 'text-white' : 'text-slate-900 group-hover:text-brand-700'
+              'text-slate-900 group-hover:text-brand-700'
             )}>
               {productName}
             </span>
@@ -83,8 +74,8 @@ export default function MinimalHeader() {
               className={classNames(
                 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                 isActive('/')
-                  ? (onDarkPage ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-900')
-                  : (onDarkPage ? 'text-slate-300 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50')
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               )}
             >
               <HiHome className='w-4 h-4' />{t('minimalHeader.home')}</Link>
@@ -95,8 +86,8 @@ export default function MinimalHeader() {
                 className={classNames(
                   'flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                   isActive('/search')
-                    ? (onDarkPage ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-900')
-                    : (onDarkPage ? 'text-slate-300 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50')
+                    ? 'bg-slate-100 text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 )}
               >
                 <HiSearch className='w-4 h-4' />{t('minimalHeader.search')}</Link>
@@ -109,8 +100,8 @@ export default function MinimalHeader() {
                 className={classNames(
                   'flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                   isActive('/dashboard')
-                    ? (onDarkPage ? 'bg-brand-500/20 text-brand-200' : 'bg-brand-50 text-brand-700')
-                    : (onDarkPage ? 'text-slate-300 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50')
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 )}
               >
                 <HiViewGrid className='w-4 h-4' />{t('minimalHeader.dashboard')}</Link>
@@ -124,7 +115,7 @@ export default function MinimalHeader() {
                 to={isCrmUser ? '/dashboard' : '/profile'}
                 className={classNames(
                   'flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-colors group',
-                  onDarkPage ? 'border-white/15 hover:bg-white/10' : 'border-slate-200 hover:bg-slate-50'
+                  'border-slate-200 hover:bg-slate-50'
                 )}
               >
                 <div className='w-6 h-6 rounded-full overflow-hidden bg-brand-100 flex items-center justify-center flex-shrink-0'>
@@ -141,7 +132,7 @@ export default function MinimalHeader() {
                 </div>
                 <span className={classNames(
                   'text-sm font-medium hidden sm:block',
-                  onDarkPage ? 'text-slate-200' : 'text-slate-700'
+                  'text-slate-700'
                 )}>{username.split(' ')[0]}</span>
                 {isCrmUser && (
                   <span className='hidden sm:flex items-center gap-1 text-xs font-semibold text-brand-600'>{t('minimalHeader.crm')}<HiChevronRight className='w-3 h-3' />
