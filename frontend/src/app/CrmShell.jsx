@@ -67,6 +67,9 @@ const ROLE_COLORS = {
 const EXTRA_PAGE_TITLES = {
   '/profile': 'My Profile',
   '/chat': 'Messages',
+  '/messages': 'Messages',
+  '/notifications': 'Notifications',
+  '/listing/': 'Property',
   // Not a catalogue screen on purpose — it belongs to the vendor, not to any
   // workspace — so it needs a title here or the header falls back to the
   // product name and reads as if you were on the dashboard.
@@ -164,7 +167,7 @@ export default function CrmShell() {
         <button
           type='button'
           onClick={closeSidebar}
-          className='fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden'
+          className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden'
           aria-label={t('crmShell.closeSidebar')}
         />
       )}
@@ -270,7 +273,7 @@ export default function CrmShell() {
 
             {profileOpen && (
               <>
-                <button className='fixed inset-0 z-10' onClick={() => setProfileOpen(false)} />
+                <button className='fixed inset-0 !mt-0 z-10' onClick={() => setProfileOpen(false)} />
                 <div className='absolute bottom-full left-0 right-0 mb-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-20 overflow-hidden'>
                   <Link
                     to='/profile'
@@ -370,7 +373,7 @@ export default function CrmShell() {
 
               {notifOpen && (
                 <>
-                  <button className='fixed inset-0 z-10' onClick={() => setNotifOpen(false)} aria-hidden='true' />
+                  <button className='fixed inset-0 !mt-0 z-10' onClick={() => setNotifOpen(false)} aria-hidden='true' />
                   <div className='absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden'>
                     <div className='flex items-center justify-between px-4 py-3 border-b border-slate-100'>
                       <span className='text-sm font-semibold text-slate-800'>{t('nav.notifications')}</span>

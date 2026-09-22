@@ -10,6 +10,7 @@ import { currencySymbol, formatCurrency } from '../utils/currency';
 import DealActivityFeed from '../components/DealActivityFeed';
 import PrintButton from '../components/PrintButton';
 import { useTranslation } from 'react-i18next';
+import { localDateString } from '../utils/localDate';
 
 /**
  * Column colours by the catalogue's colour name. The pipeline itself — which
@@ -192,7 +193,7 @@ export default function DealsBoard() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `pipeline-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `pipeline-${localDateString()}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();

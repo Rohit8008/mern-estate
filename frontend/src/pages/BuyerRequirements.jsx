@@ -10,8 +10,26 @@ import {
 import { parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { Modal, Input, Select, Textarea, Spinner, Button, EmptyState } from '../design-system';
-import { formatListingPrice } from '../utils/currency';
+import { formatListingPrice, formatCompactCurrency } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
+import { localDateString } from '../utils/localDate';
+
+function intentLabel(value, translate) {
+  if (value === 'sale') return translate('buyerRequirements.buy');
+  if (value === 'rent') return translate('buyerRequirements.rent');
+  return value || '-';
+}
+
+// The form saves minPrice/maxPrice; the card only read the free-text `budget`,
+// so every requirement with a range said "Not specified".
+function budgetLabel(r, translate) {
+  const min = Number(r.minPrice) || 0;
+  const max = Number(r.maxPrice) || 0;
+  if (min && max) return `${formatCompactCurrency(min)} – ${formatCompactCurrency(max)}`;
+  if (min) return translate('buyerRequirements.budgetFrom', { amount: formatCompactCurrency(min) });
+  if (max) return translate('buyerRequirements.budgetUpTo', { amount: formatCompactCurrency(max) });
+  return r.budget || translate('buyerRequirements.notSpecified');
+}
 
 export default function BuyerRequirements() {
   const { t } = useTranslation();
@@ -174,7 +192,7 @@ export default function BuyerRequirements() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `buyers-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `buyers-${localDateString()}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -396,7 +414,7 @@ export default function BuyerRequirements() {
               </div>
               <div>
                 <div className='text-slate-500'>{t('buyerRequirements.type')}</div>
-                <div className='font-medium text-slate-900'>{viewingRequirement.propertyType || '-'}</div>
+                <div className='font-medium text-slate-900'>{intentLabel(viewingRequirement.propertyType, t)}</div>
               </div>
               <div>
                 <div className='text-slate-500'>{t('buyerRequirements.budget')}</div>
@@ -484,14 +502,16 @@ export default function BuyerRequirements() {
                   <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
                     <HiHome className='w-5 h-5 text-slate-900' />{t('buyerRequirements.propertyRequirements')}</h3>
 
+                  {/* The field is named propertyType but holds buy vs rent, so it is
+                      labelled for what the buyer wants, not as a property type. */}
                   <Select
-                    label={t('buyerRequirements.propertyType')}
+                    label={t('buyerRequirements.lookingTo')}
                     required
                     value={formData.propertyType}
                     onChange={(e) => setFormData({...formData, propertyType: e.target.value})}
                   >
-                    <option value='sale'>{t('buyerRequirements.forSale')}</option>
-                    <option value='rent'>{t('buyerRequirements.forRent')}</option>
+                    <option value='sale'>{t('buyerRequirements.buy')}</option>
+                    <option value='rent'>{t('buyerRequirements.rent')}</option>
                   </Select>
 
                   <Input
@@ -648,12 +668,12 @@ export default function BuyerRequirements() {
                     <div className='flex items-center gap-2 text-sm'>
                       <HiHome className='w-4 h-4 text-slate-400' />
                       <span className='text-slate-600'>{t('buyerRequirements.type2')}</span>
-                      <span className='font-medium capitalize'>{requirement.propertyType}</span>
+                      <span className='font-medium'>{intentLabel(requirement.propertyType, t)}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
                       <HiCurrencyDollar className='w-4 h-4 text-slate-400' />
                       <span className='text-slate-600'>{t('buyerRequirements.budget2')}</span>
-                      <span className='font-medium'>{requirement.budget || 'Not specified'}</span>
+                      <span className='font-medium'>{budgetLabel(requirement, t)}</span>
                     </div>
                     <div className='flex items-center gap-2 text-sm'>
                       <span className='text-slate-600'>{t('buyerRequirements.bedrooms')}</span>

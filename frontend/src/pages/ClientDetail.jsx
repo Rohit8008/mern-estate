@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiClient } from '../utils/http';
-import { HiPhone, HiMail, HiChat, HiCalendar, HiPlusSm, HiCheck } from 'react-icons/hi';
-import { Card, Badge, Input, Select, Textarea, Button } from '../design-system';
+import { HiPhone, HiMail, HiChat, HiCalendar, HiPlusSm, HiCheck, HiUserRemove, HiExclamationCircle } from 'react-icons/hi';
+import { Card, Badge, Input, Select, Textarea, Button, EmptyState } from '../design-system';
 import { currencySymbol, formatCurrency, getLocaleConfig } from '../utils/currency';
 import TagPicker from '../components/TagPicker';
 import { useNotification } from '../contexts/NotificationContext';
@@ -14,23 +14,31 @@ import ClientPhotos from '../components/ClientPhotos';
 import WhatsAppButton from '../components/WhatsAppButton';
 import { useTranslation } from 'react-i18next';
 
-const DEAL_STAGES = [
-  // Professional stages
-  { id: 'new_lead', label: 'New Lead', color: 'bg-slate-100' },
-  { id: 'contacted', label: 'Contacted', color: 'bg-blue-100' },
-  { id: 'qualified', label: 'Qualified', color: 'bg-indigo-100' },
-  { id: 'site_visit_scheduled', label: 'Site Visit Scheduled', color: 'bg-purple-100' },
-  { id: 'negotiation', label: 'Negotiation', color: 'bg-amber-100' },
-  { id: 'booking_token', label: 'Booking / Token', color: 'bg-orange-100' },
-  { id: 'documentation', label: 'Documentation', color: 'bg-yellow-100' },
-  { id: 'closed_won', label: 'Closed (Won)', color: 'bg-green-100' },
-  { id: 'closed_lost', label: 'Closed (Lost)', color: 'bg-red-100' },
-
-  // Legacy stages (keep selectable for existing data)
-  { id: 'initial_contact', label: 'Initial Contact (Legacy)', color: 'bg-slate-100' },
-  { id: 'site_visit_done', label: 'Site Visit Done (Legacy)', color: 'bg-indigo-100' },
-  { id: 'payment_pending', label: 'Payment Pending (Legacy)', color: 'bg-orange-100' },
+// The workspace's own pipeline (tenant.dealStages) drives these, so the
+// names match the pipeline board. This list only backs a workspace config that
+// has not loaded, and names stages a deal may still carry from before.
+const FALLBACK_STAGES = [
+  { id: 'new_lead', label: 'New Lead', color: 'slate' },
+  { id: 'contacted', label: 'Contacted', color: 'blue' },
+  { id: 'qualified', label: 'Qualified', color: 'indigo' },
+  { id: 'site_visit_scheduled', label: 'Site Visit', color: 'purple' },
+  { id: 'negotiation', label: 'Negotiation', color: 'amber' },
+  { id: 'booking_token', label: 'Booking / Token', color: 'orange' },
+  { id: 'documentation', label: 'Documentation', color: 'yellow' },
+  { id: 'closed_won', label: 'Won', color: 'emerald' },
+  { id: 'closed_lost', label: 'Lost', color: 'rose' },
 ];
+const RETIRED_STAGE_LABELS = {
+  initial_contact: 'Initial Contact',
+  site_visit_done: 'Site Visit Done',
+  payment_pending: 'Payment Pending',
+};
+// Literal classes: Tailwind cannot see interpolated ones.
+const STAGE_BG = {
+  slate: 'bg-slate-100', blue: 'bg-blue-100', indigo: 'bg-indigo-100', purple: 'bg-purple-100',
+  amber: 'bg-amber-100', orange: 'bg-orange-100', yellow: 'bg-yellow-100',
+  emerald: 'bg-green-100', green: 'bg-green-100', rose: 'bg-red-100', red: 'bg-red-100',
+};
 
 const FOLLOW_UP_TYPES = [
   { id: 'call', label: 'Call', icon: HiPhone },
@@ -47,6 +55,17 @@ export default function ClientDetail() {
   const { id } = useParams();
   const { showError } = useNotification();
   const { tenant } = useTenant();
+  const dealStages = useMemo(
+    () => (tenant?.dealStages?.length ? tenant.dealStages : FALLBACK_STAGES)
+      .map((st) => ({ id: st.id, label: st.label, bg: STAGE_BG[st.color] || 'bg-white' })),
+    [tenant]
+  );
+  // A deal already in a stage this workspace has since switched off keeps that
+  // value selectable, rather than the select silently showing another stage.
+  const stageOptionsFor = (current) =>
+    !current || dealStages.some((st) => st.id === current)
+      ? dealStages
+      : [...dealStages, { id: current, label: RETIRED_STAGE_LABELS[current] || current, bg: 'bg-white' }];
   const { currentUser } = useSelector((state) => state.user);
   const [client, setClient] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -80,13 +99,16 @@ export default function ClientDetail() {
     if (isInitial) setLoading(true); else setSaving(true);
     try {
       const [clientRes, summaryRes] = await Promise.all([
-        apiClient.get(`/clients/${id}`),
-        apiClient.get(`/crm/${id}/summary`),
+        // silent: the page shows its own state; two failing requests used to
+        // raise two identical toasts on top of it.
+        apiClient.get(`/clients/${id}`, { silent: true }),
+        apiClient.get(`/crm/${id}/summary`, { silent: true }),
       ]);
       setClient(clientRes?.data || clientRes);
       setSummary(summaryRes?.data || null);
+      setError('');
     } catch (e) {
-      setError(e?.message || 'Failed to load client');
+      setError([400, 404].includes(e?.statusCode) ? 'notFound' : (e?.message || t('clientDetail.loadFailed')));
     } finally {
       if (isInitial) setLoading(false); else setSaving(false);
     }
@@ -341,8 +363,26 @@ export default function ClientDetail() {
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500 text-sm">{t('clientDetail.loading')}</div>;
-  if (error) return <div className="p-4 text-rose-600 text-sm">{error}</div>;
-  if (!client) return <div className="p-4 text-slate-500 text-sm">{t('clientDetail.notFound')}</div>;
+  if (error === 'notFound' || (!error && !client)) {
+    return (
+      <EmptyState
+        icon={HiUserRemove}
+        title={t('clientDetail.notFoundTitle')}
+        body={t('clientDetail.notFoundBody')}
+        action={<Button as={Link} to='/clients'>{t('clientDetail.backToClients')}</Button>}
+      />
+    );
+  }
+  if (error) {
+    return (
+      <EmptyState
+        icon={HiExclamationCircle}
+        title={t('clientDetail.loadFailedTitle')}
+        body={error}
+        action={<Button onClick={() => loadClient(true)}>{t('clientDetail.tryAgain')}</Button>}
+      />
+    );
+  }
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -625,7 +665,7 @@ export default function ClientDetail() {
               <h3 className="font-semibold mb-3">{t('clientDetail.addNewDeal')}</h3>
               <form onSubmit={handleAddDeal} className="grid md:grid-cols-4 gap-3 items-end">
                 <Select name="stage" className='mb-0'>
-                  {DEAL_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  {dealStages.map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
                 </Select>
                 <Input name="value" type="number" placeholder={t('clientDetail.dealValue')} className='mb-0' />
                 <Input name="commission" type="number" placeholder={t('clientDetail.commission')} max="100" className='mb-0' />
@@ -637,7 +677,7 @@ export default function ClientDetail() {
             {/* Deal List */}
             <div className="space-y-3">
               {(client.deals || []).map(deal => (
-                <div key={deal._id} className={`rounded-lg border border-slate-200 p-4 ${DEAL_STAGES.find(s => s.id === deal.stage)?.color || 'bg-white'}`}>
+                <div key={deal._id} className={`rounded-lg border border-slate-200 p-4 ${dealStages.find(st => st.id === deal.stage)?.bg || 'bg-white'}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-semibold text-lg">{formatCurrency(deal.value)}</div>
                     <select
@@ -645,7 +685,7 @@ export default function ClientDetail() {
                       onChange={(e) => updateDealStage(deal._id, e.target.value)}
                       className="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     >
-                      {DEAL_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      {stageOptionsFor(deal.stage).map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
                     </select>
                   </div>
                   <div className="text-sm text-slate-600">

@@ -544,7 +544,7 @@ export default function AdminCategoryFields() {
           renders them, so this is a decision worth naming rather than a save
           that quietly succeeds. */}
       {pendingDataLoss && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center p-4">
           <button
             type="button"
             aria-label={t('adminCategoryFields.cancel')}

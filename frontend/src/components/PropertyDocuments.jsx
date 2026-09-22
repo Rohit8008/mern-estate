@@ -148,7 +148,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
           <p className='text-sm text-slate-500'>
             {uploading
               ? <span className='font-medium text-slate-700'>{t('propertyDocuments.uploading')}</span>
-              : <><span className='font-medium text-slate-700'>{t('propertyDocuments.dropFilesHere')}</span>{t('propertyDocuments.orClickToBrowse')}</>
+              : <><span className='font-medium text-slate-700'>{t('propertyDocuments.dropFilesHere')}</span>{' '}{t('propertyDocuments.orClickToBrowse')}</>
             }
           </p>
           <p className='text-xs text-slate-400 mt-1'>{t('propertyDocuments.pdfWordExcelImagesUpTo')}</p>

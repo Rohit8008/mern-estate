@@ -776,7 +776,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
   };
 
   return (
-    <div className='fixed inset-0 bg-black/30 backdrop-blur-[2px] flex items-start justify-end z-50'>
+    <div className='fixed inset-0 !mt-0 bg-black/30 backdrop-blur-[2px] flex items-start justify-end z-50'>
       <div className='w-full max-w-xl h-full bg-white shadow-2xl overflow-hidden flex flex-col'>
         {/* Header */}
         <div className='bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0'>

@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import MinimalHeader from '../components/MinimalHeader';
 import Footer from '../components/Footer';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +14,7 @@ const CRM_PREFIXES = [
   '/buyer-requirements', '/buyers',
   '/transactions',
   '/client-reports', '/reports',
-  '/profile', '/settings', '/messages', '/admin',
+  '/profile', '/settings', '/messages', '/notifications', '/admin',
   // The platform console lives inside CrmShell like the rest, and was missing
   // here — so it rendered MinimalHeader and the Footer on top of the shell,
   // two stacked headers with the sidebar underneath the outer one.
@@ -36,6 +37,10 @@ const CRM_PREFIXES = [
  * stranger a way into the rest of the product, which is exactly what these
  * pages are documented as not doing.
  */
+// Pages that sit in the CRM layout for agency staff only; everyone else sees
+// them with the public header and footer.
+const STAFF_PREFIXES = ['/listing/'];
+
 const BARE_PREFIXES = ['/s/', '/invite/'];
 
 export default function AppShell({ children }) {
@@ -44,9 +49,12 @@ export default function AppShell({ children }) {
 
   const isBareRoute = BARE_PREFIXES.some((p) => location.pathname.startsWith(p));
 
-  const isCrmRoute = CRM_PREFIXES.some(
-    (p) => location.pathname === p || location.pathname.startsWith(p)
-  );
+  const { currentUser } = useSelector((state) => state.user);
+  const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'employee';
+
+  const isCrmRoute =
+    CRM_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(p)) ||
+    (isStaff && STAFF_PREFIXES.some((p) => location.pathname.startsWith(p)));
 
   /**
    * The landing page is theme-locked dark and its header floats transparently

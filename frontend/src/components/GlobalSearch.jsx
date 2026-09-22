@@ -307,7 +307,7 @@ export default function GlobalSearch() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4 sm:px-0"
+      className="fixed inset-0 !mt-0 z-50 flex items-start justify-center pt-[12vh] px-4 sm:px-0"
       role="dialog"
       aria-modal="true"
       aria-label={t('globalSearch.globalSearch')}

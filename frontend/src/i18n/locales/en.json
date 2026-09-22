@@ -683,7 +683,8 @@
     "trackYourRealEstatePerformanceMetrics": "Track your real estate performance metrics",
     "tryAgain": "Try Again",
     "value": "Value",
-    "won": "Won"
+    "won": "Won",
+    "noPropertiesInRange": "No properties in this date range yet."
   },
   "appShell": {
     "skipToContent": "Skip to content"
@@ -747,7 +748,13 @@
     "timeline2": "Timeline:",
     "type": "Type",
     "type2": "Type:",
-    "viewRequirement": "View requirement"
+    "viewRequirement": "View requirement",
+    "budgetFrom": "From {{amount}}",
+    "budgetUpTo": "Up to {{amount}}",
+    "notSpecified": "Not specified",
+    "lookingTo": "Looking to",
+    "buy": "Buy",
+    "rent": "Rent"
   },
   "calendar": {
     "addEvent": "Add Event",
@@ -927,7 +934,13 @@
     "urgent": "Urgent",
     "villa": "Villa",
     "warehouse": "Warehouse",
-    "wonValue": "Won Value"
+    "wonValue": "Won Value",
+    "notFoundTitle": "This client isn't available",
+    "notFoundBody": "It may have been deleted or merged into another record.",
+    "backToClients": "Back to clients",
+    "loadFailed": "The client could not be loaded.",
+    "loadFailedTitle": "The client could not be loaded",
+    "tryAgain": "Try again"
   },
   "clientReport": {
     "aDetailedCmaWith35": "* A detailed CMA with 3–5 comparable sales is available on request.",
@@ -1148,7 +1161,7 @@
     "thisActionCannotBeUndone": "This action cannot be undone.",
     "timeline": "Timeline",
     "urgent": "Urgent",
-    "viewDeals": "View & Deals",
+    "viewDeals": "Open client",
     "villa": "Villa",
     "warehouse": "Warehouse",
     "warm": "Warm"
@@ -1309,7 +1322,11 @@
     "thisCannotBeUndone": "This cannot be undone.",
     "totalValue": "Total Value",
     "tryAgain": "Try again",
-    "viewDocument": "View Document"
+    "viewDocument": "View Document",
+    "notFoundTitle": "This property isn't available",
+    "notFoundBody": "It may have been deleted, or the link is for another workspace.",
+    "backToProperties": "Back to properties",
+    "loadFailedBody": "The property could not be loaded. Check your connection and try again."
   },
   "listingForm": {
     "30x50": "30x50",
@@ -1705,7 +1722,7 @@
     "browseHomepage": "Browse Homepage",
     "clearAll": "Clear All",
     "clearAllFilters": "Clear All Filters",
-    "discoverThePerfectHomeFromOur": "Discover the perfect home from our extensive collection of premium properties",
+    "discoverThePerfectHomeFromOur": "Search your agency's properties by location, name or type.",
     "expandYourPriceRangeToSee": "Expand your price range to see more options",
     "filters": "Filters",
     "findYourDreamProperty": "Find Your Dream Property",
@@ -1732,7 +1749,9 @@
     "showingResultsFor": "Showing results for \"",
     "sortResults": "Sort results",
     "tryBroaderSearchTermsLikeApartment": "Try broader search terms like \"apartment\" instead of specific addresses",
-    "verifiedListings": "Verified Listings"
+    "verifiedListings": "Verified Listings",
+    "propertyCount_one": "{{formatted}} property",
+    "propertyCount_other": "{{formatted}} properties"
   },
   "searchBar": {
     "popularCities": "Popular Cities",

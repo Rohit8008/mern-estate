@@ -260,7 +260,7 @@ export default function Home() {
       {/* ── DEMO DIALOG ──────────────────────────────────────────────────────── */}
       {showDemo && (
         <div
-          className='fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto'
+          className='fixed inset-0 !mt-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto'
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
           <div

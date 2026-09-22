@@ -333,20 +333,12 @@ export default function Search() {
               />
             </div>
 
-            {/* Quick Stats */}
-            <div className='flex items-center justify-center gap-8 mt-8 text-sm'>
-              <div className='flex items-center gap-2 text-indigo-100'>
-                <HiTrendingUp className='w-5 h-5' />
-                <span>{totalResults.toLocaleString()}+ Properties</span>
-              </div>
-              <div className='hidden sm:flex items-center gap-2 text-indigo-100'>
-                <HiLocationMarker className='w-5 h-5' />
-                <span>{t('search.multipleCities')}</span>
-              </div>
-              <div className='hidden md:flex items-center gap-2 text-indigo-100'>
-                <HiSparkles className='w-5 h-5' />
-                <span>{t('search.verifiedListings')}</span>
-              </div>
+            {/* A count, stated plainly. The row used to add "Multiple Cities" and
+                "Verified Listings" and a "+" to the figure, none of which the data
+                supports; see the claims policy in CLAUDE.md. */}
+            <div className='flex items-center justify-center gap-2 mt-8 text-sm text-indigo-100'>
+              <HiTrendingUp className='w-5 h-5' aria-hidden='true' />
+              <span>{t('search.propertyCount', { count: totalResults, formatted: totalResults.toLocaleString() })}</span>
             </div>
           </div>
         </div>
@@ -421,7 +413,7 @@ export default function Search() {
 
           {/* Mobile Filter Overlay */}
           {showMobileFilters && (
-            <div className='fixed inset-0 z-50 lg:hidden'>
+            <div className='fixed inset-0 !mt-0 z-50 lg:hidden'>
               <div className='absolute inset-0 bg-black/50' onClick={() => setShowMobileFilters(false)} />
               <div className='absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl overflow-y-auto'>
                 <div className='sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between'>
@@ -472,8 +464,7 @@ export default function Search() {
                             <span className='w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin' />{t('search.searching')}</span>
                         ) : (
                           <>
-                            {totalResults.toLocaleString()}
-                            <span className='font-normal text-slate-500'>{t('search.properties')}</span>
+                            {t('search.propertyCount', { count: totalResults, formatted: totalResults.toLocaleString() })}
                           </>
                         )}
                       </h2>

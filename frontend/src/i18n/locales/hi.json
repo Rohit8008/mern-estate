@@ -683,7 +683,8 @@
     "trackYourRealEstatePerformanceMetrics": "अपने रियल एस्टेट प्रदर्शन मेट्रिक्स ट्रैक करें",
     "tryAgain": "पुनः प्रयास करें",
     "value": "मान",
-    "won": "जीता"
+    "won": "जीता",
+    "noPropertiesInRange": "इस अवधि में अभी कोई प्रॉपर्टी नहीं है।"
   },
   "appShell": {
     "skipToContent": "सामग्री पर जाएँ"
@@ -747,7 +748,13 @@
     "timeline2": "टाइमलाइन:",
     "type": "प्रकार",
     "type2": "प्रकार:",
-    "viewRequirement": "आवश्यकता देखें"
+    "viewRequirement": "आवश्यकता देखें",
+    "budgetFrom": "{{amount}} से",
+    "budgetUpTo": "{{amount}} तक",
+    "notSpecified": "निर्दिष्ट नहीं",
+    "lookingTo": "ज़रूरत",
+    "buy": "ख़रीदना",
+    "rent": "किराये पर लेना"
   },
   "calendar": {
     "addEvent": "इवेंट जोड़ें",
@@ -927,7 +934,13 @@
     "urgent": "अत्यावश्यक",
     "villa": "विला",
     "warehouse": "गोदाम",
-    "wonValue": "जीता गया मूल्य"
+    "wonValue": "जीता गया मूल्य",
+    "notFoundTitle": "यह क्लाइंट उपलब्ध नहीं है",
+    "notFoundBody": "शायद इसे हटा दिया गया है या किसी दूसरे रिकॉर्ड में मिला दिया गया है।",
+    "backToClients": "क्लाइंट पर वापस जाएँ",
+    "loadFailed": "क्लाइंट लोड नहीं हो सका।",
+    "loadFailedTitle": "क्लाइंट लोड नहीं हो सका",
+    "tryAgain": "फिर कोशिश करें"
   },
   "clientReport": {
     "aDetailedCmaWith35": "* अनुरोध पर 3–5 तुलनीय बिक्री के साथ विस्तृत CMA उपलब्ध है।",
@@ -1148,7 +1161,7 @@
     "thisActionCannotBeUndone": "इस कार्रवाई को पूर्ववत नहीं किया जा सकता।",
     "timeline": "टाइमलाइन",
     "urgent": "अत्यावश्यक",
-    "viewDeals": "दृश्य और डील",
+    "viewDeals": "क्लाइंट खोलें",
     "villa": "विला",
     "warehouse": "गोदाम",
     "warm": "गुनगुना"
@@ -1309,7 +1322,11 @@
     "thisCannotBeUndone": "इसे पूर्ववत नहीं किया जा सकता।",
     "totalValue": "कुल मूल्य",
     "tryAgain": "पुनः प्रयास करें",
-    "viewDocument": "दस्तावेज़ देखें"
+    "viewDocument": "दस्तावेज़ देखें",
+    "notFoundTitle": "यह प्रॉपर्टी उपलब्ध नहीं है",
+    "notFoundBody": "शायद इसे हटा दिया गया है, या लिंक किसी दूसरे वर्कस्पेस का है।",
+    "backToProperties": "प्रॉपर्टी पर वापस जाएँ",
+    "loadFailedBody": "प्रॉपर्टी लोड नहीं हो सकी। कनेक्शन जाँचें और फिर कोशिश करें।"
   },
   "listingForm": {
     "30x50": "30x50",
@@ -1705,7 +1722,7 @@
     "browseHomepage": "होमपेज देखें",
     "clearAll": "सब साफ़ करें",
     "clearAllFilters": "सभी फ़िल्टर साफ़ करें",
-    "discoverThePerfectHomeFromOur": "हमारे प्रीमियम संपत्तियों के व्यापक संग्रह से अपना उपयुक्त घर खोजें",
+    "discoverThePerfectHomeFromOur": "अपनी एजेंसी की प्रॉपर्टी स्थान, नाम या प्रकार से खोजें।",
     "expandYourPriceRangeToSee": "अधिक विकल्प देखने के लिए अपनी मूल्य सीमा बढ़ाएँ",
     "filters": "फ़िल्टर",
     "findYourDreamProperty": "अपनी मनचाही संपत्ति खोजें",
@@ -1732,7 +1749,9 @@
     "showingResultsFor": "इसके परिणाम दिखा रहे हैं \"",
     "sortResults": "परिणाम क्रमबद्ध करें",
     "tryBroaderSearchTermsLikeApartment": "विशिष्ट पतों के बजाय \"apartment\" जैसे व्यापक शब्द आज़माएँ",
-    "verifiedListings": "सत्यापित लिस्टिंग"
+    "verifiedListings": "सत्यापित लिस्टिंग",
+    "propertyCount_one": "{{formatted}} प्रॉपर्टी",
+    "propertyCount_other": "{{formatted}} प्रॉपर्टी"
   },
   "searchBar": {
     "popularCities": "लोकप्रिय शहर",

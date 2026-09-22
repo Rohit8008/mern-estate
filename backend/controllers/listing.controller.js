@@ -432,6 +432,12 @@ export const assignListingToAgent = asyncHandler(async (req, res, next) => {
     throw new ValidationError('Invalid agent ID or user is not an employee/admin');
   }
 
+  // Re-picking the agent a listing already has is not a new assignment:
+  // saving and announcing it again put a duplicate in everyone's bell.
+  if (String(listing.assignedAgent || '') === String(agentId)) {
+    return sendSuccessResponse(res, listing, 'Listing is already assigned to this agent');
+  }
+
   listing.assignedAgent = agentId;
   await listing.save();
 

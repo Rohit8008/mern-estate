@@ -107,9 +107,11 @@ export default function Listing() {
     const fetchListing = async () => {
       try {
         setLoading(true);
-        const data = await apiClient.get(`/listing/get/${params.listingId}`);
+        // silent: this page explains the failure itself; the global toast
+        // repeated it.
+        const data = await apiClient.get(`/listing/get/${params.listingId}`, { silent: true });
         if (data.success === false) {
-          setError(true);
+          setError('failed');
           setLoading(false);
           return;
         }
@@ -117,7 +119,9 @@ export default function Listing() {
         setLoading(false);
         setError(false);
       } catch (error) {
-        setError(true);
+        // A deleted listing, or an id from another workspace, is a 404 or a
+        // malformed-id 400: say it is not available rather than "went wrong".
+        setError([400, 404].includes(error?.statusCode) ? 'notFound' : 'failed');
         setLoading(false);
       }
     };
@@ -150,6 +154,18 @@ export default function Listing() {
     fetchPropertyType();
   }, [listing?.propertyType]);
 
+  // Street address plus the separate locality/city/state columns, skipping
+  // blanks and a city the address already names.
+  const locationLine = listing
+    ? [listing.address, listing.locality, listing.city, listing.state]
+        .map((part) => String(part || '').trim())
+        .filter((part, i, all) => part && !all.slice(0, i).some((prev) => prev.toLowerCase().includes(part.toLowerCase())))
+        .join(', ')
+    : '';
+  const listerId = listing ? String(listing.userRef?._id || listing.userRef || '') : '';
+  const isOwnListing = Boolean(currentUser && listerId && listerId === String(currentUser._id));
+  const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'employee';
+
   return (
     <main>
       {loading && <PageLoader message='Loading listing…' />}
@@ -158,12 +174,24 @@ export default function Listing() {
           <div className='mx-auto mb-4 w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 ring-1 ring-rose-100 flex items-center justify-center'>
             <HiOutlineExclamationCircle className='w-7 h-7' />
           </div>
-          <h2 className='text-lg font-semibold text-slate-900 mb-1'>{t('listing.somethingWentWrong')}</h2>
-          <p className='text-sm text-slate-500 mb-5'>We couldn&apos;t load this listing. It may have been removed or is temporarily unavailable.</p>
-          <div className='flex items-center justify-center gap-3'>
-            <Button variant='secondary' onClick={() => navigate(-1)}>{t('listing.goBack')}</Button>
-            <Button onClick={() => window.location.reload()}>{t('listing.tryAgain')}</Button>
-          </div>
+          {error === 'notFound' ? (
+            <>
+              <h2 className='text-lg font-semibold text-slate-900 mb-1'>{t('listing.notFoundTitle')}</h2>
+              <p className='text-sm text-slate-500 mb-5'>{t('listing.notFoundBody')}</p>
+              <div className='flex items-center justify-center gap-3'>
+                <Button onClick={() => navigate(isStaff ? '/properties' : '/search')}>{t('listing.backToProperties')}</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className='text-lg font-semibold text-slate-900 mb-1'>{t('listing.somethingWentWrong')}</h2>
+              <p className='text-sm text-slate-500 mb-5'>{t('listing.loadFailedBody')}</p>
+              <div className='flex items-center justify-center gap-3'>
+                <Button variant='secondary' onClick={() => navigate(-1)}>{t('listing.goBack')}</Button>
+                <Button onClick={() => window.location.reload()}>{t('listing.tryAgain')}</Button>
+              </div>
+            </>
+          )}
         </div>
       )}
       {listing && !loading && !error && (
@@ -205,10 +233,14 @@ export default function Listing() {
               <div className='bg-white rounded-xl shadow p-4 sm:p-6'>
                 <div className='flex flex-col gap-2'>
                   <h1 className='text-2xl font-semibold text-slate-800'>{listing.name}</h1>
-                  <p className='flex items-center gap-2 text-slate-600 text-sm'>
-                    <HiOutlineLocationMarker className='text-slate-400 w-4 h-4' />
-                    {listing.address}
-                  </p>
+                  {/* The address line alone was often blank: a city typed into the
+                      form lives in its own column. */}
+                  {locationLine && (
+                    <p className='flex items-center gap-2 text-slate-600 text-sm'>
+                      <HiOutlineLocationMarker className='text-slate-400 w-4 h-4' />
+                      {locationLine}
+                    </p>
+                  )}
                   <div className='flex items-center gap-3 text-xs text-slate-500'>
                     {(!currentUser?.role || currentUser?.role === 'buyer') ? (
                       // Hide owner details for buyers
@@ -250,10 +282,12 @@ export default function Listing() {
                     )}
                   </div>
                 </div>
-                <div className='mt-4 text-slate-800'>
-                  <p className='font-semibold text-black mb-1'>{t('listing.description')}</p>
-                  <p className='leading-relaxed'>{listing.description}</p>
-                </div>
+                {listing.description?.trim() && (
+                  <div className='mt-4 text-slate-800'>
+                    <p className='font-semibold text-black mb-1'>{t('listing.description')}</p>
+                    <p className='leading-relaxed'>{listing.description}</p>
+                  </div>
+                )}
 
                 {/* Property Owners Section - Hidden in buyer view mode */}
                 {!isBuyerViewMode && listing.owners && listing.owners.length > 0 && (
@@ -449,7 +483,7 @@ export default function Listing() {
                         <Popup>
                           {listing.name}
                           <br />
-                          {listing.address}
+                          {locationLine}
                         </Popup>
                       </Marker>
                     </MapContainer>
@@ -501,7 +535,9 @@ export default function Listing() {
                     </div>
                   )
                 )}
-                {currentUser && listing.userRef !== currentUser._id && !contact && (
+                {/* A buyer's button. Agency staff reach owners through Property Owners,
+                    and the lister has no one to contact about their own listing. */}
+                {currentUser && !isOwnListing && !isStaff && !contact && (
                   <Button onClick={() => setContact(true)} size='lg' className='mt-5 w-full justify-center uppercase'>{t('listing.contactLandlord')}</Button>
                 )}
                 {contact && (

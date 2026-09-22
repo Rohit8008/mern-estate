@@ -25,7 +25,7 @@ export default function Modal({ open, onClose, title, description, children, foo
   // Portalled to <body>: rendered in place, the modal sat inside the page's
   // stacking context, so the CRM top bar painted over its backdrop and header.
   return createPortal(
-    <div className='fixed inset-0 z-[1000] flex items-center justify-center p-4'>
+    <div className='fixed inset-0 !mt-0 z-[1000] flex items-center justify-center p-4'>
       {/* Backdrop */}
       <button
         type='button'

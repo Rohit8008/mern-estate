@@ -14,6 +14,7 @@ import RoleManagement from '../components/RoleManagement';
 import PropertyTypeManagement from './PropertyTypeManagement';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTranslation } from 'react-i18next';
+import { localDateString } from '../utils/localDate';
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -345,7 +346,7 @@ export default function Admin() {
       ]),
     ];
 
-    downloadTextFile(`listings-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(grid));
+    downloadTextFile(`listings-${localDateString()}.csv`, toCsv(grid));
   };
 
   const parseCSV = (text) => {
@@ -1046,7 +1047,7 @@ export default function Admin() {
 
       {/* User Manage Modal */}
       {showUserManageModal && managingUser && (
-        <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
+        <div className='fixed inset-0 !mt-0 bg-black/50 flex items-center justify-center z-50'>
           <div className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden'>
             <div className='p-6 border-b flex items-start justify-between gap-4'>
               <div>
@@ -1134,7 +1135,7 @@ export default function Admin() {
 
       {/* Import Listings Modal */}
       {showImportModal && (
-        <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
+        <div className='fixed inset-0 !mt-0 bg-black/50 flex items-center justify-center z-50'>
           <div className='bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden'>
             <div className='p-6 border-b'>
               <div className='flex items-start justify-between gap-4'>

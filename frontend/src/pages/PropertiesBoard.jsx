@@ -637,7 +637,8 @@ export default function PropertiesBoard() {
           
           <div className='h-6 w-px bg-slate-200 hidden lg:block' />
 
-          <div className='flex flex-col md:flex-row md:items-center gap-2 flex-1'>
+          {/* Wraps: at 1440px the last filter was cut off at the card edge. */}
+          <div className='flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 flex-1 min-w-0'>
             <div className='relative w-full md:w-[280px]'>
               <svg className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /></svg>
               <input

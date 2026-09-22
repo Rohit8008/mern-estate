@@ -12,6 +12,7 @@ import {
 } from 'react-icons/hi';
 import { currencySymbol, formatCurrency, formatDate } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
+import { localDateString } from '../utils/localDate';
 
 // ─── constants ─────────────────────────────────────────────────────────────────
 const TYPE_OPTS   = ['All', 'Sale', 'Rent', 'Lease'];
@@ -135,7 +136,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
     commissionPercent: '',
     commission: '',
     status: 'pending',
-    date: new Date().toISOString().split('T')[0],
+    date: localDateString(),
     notes: '',
     coAgent: null,
     coAgentCommissionPercent: '',
@@ -161,7 +162,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
         status: transaction.status || 'pending',
         date: transaction.date
           ? new Date(transaction.date).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          : localDateString(),
         notes: transaction.notes || '',
         coAgent: transaction.coAgent ? { _id: transaction.coAgent, name: transaction.coAgentName } : null,
         coAgentCommissionPercent: transaction.coAgentCommissionPercent ?? '',
@@ -283,7 +284,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 !mt-0 bg-black/40 z-40 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
       {/* Slide-in panel */}
@@ -618,7 +619,7 @@ export default function Transactions() {
       ]),
     ];
 
-    downloadTextFile(`transactions-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(grid));
+    downloadTextFile(`transactions-${localDateString()}.csv`, toCsv(grid));
   }, [transactions, showError]);
 
   const loadStats = useCallback(() => {

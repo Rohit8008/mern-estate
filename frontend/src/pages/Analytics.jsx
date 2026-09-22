@@ -20,12 +20,13 @@ import {
 } from 'react-icons/hi';
 import { formatCompactCurrency, formatCurrency as formatCurrencyLocale, formatDate, formatNumber as formatNumberLocale } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
+import { localDateDaysAgo, localDateString } from '../utils/localDate';
 
 export default function Analytics() {
   const { t } = useTranslation();
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    startDate: localDateDaysAgo(30),
+    endDate: localDateString(),
   });
   const [activeTab, setActiveTab] = useState('overview');
   const [data, setData] = useState({});
@@ -176,8 +177,8 @@ export default function Analytics() {
 
   const setQuickRange = (days) => {
     setDateRange({
-      startDate: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: localDateDaysAgo(days),
+      endDate: localDateString(),
     });
   };
 
@@ -398,6 +399,9 @@ export default function Analytics() {
                             </div>
                           );
                         })}
+                        {!data.properties.byCategory?.length && (
+                          <p className='text-sm text-slate-500 py-6 text-center'>{t('analytics.noPropertiesInRange')}</p>
+                        )}
                       </div>
                     </div>
 
@@ -417,6 +421,9 @@ export default function Analytics() {
                             </div>
                           </div>
                         ))}
+                        {!data.properties.byType?.length && (
+                          <p className='text-sm text-slate-500 py-6 text-center'>{t('analytics.noPropertiesInRange')}</p>
+                        )}
                       </div>
                     </div>
                   </div>

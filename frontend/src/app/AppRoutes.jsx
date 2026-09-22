@@ -110,7 +110,6 @@ export default function AppRoutes() {
               customer's properties with nothing saying whose they are. */}
           <Route element={<ActingAwareLayout />}>
             <Route path='/search' element={<Search />} />
-            <Route path='/listing/:listingId' element={<Listing />} />
             <Route path='/password-reset' element={<PasswordReset />} />
           </Route>
 
@@ -118,6 +117,11 @@ export default function AppRoutes() {
           <Route element={<CrmShell />}>
 
             {/* Always visible to authenticated CRM users */}
+            {/* The property page: inside the sidebar layout for staff, who open
+                it from the CRM and lost their navigation on the way in. CrmShell
+                renders it bare for anyone else, and AppShell gives them the
+                public header (STAFF_PREFIXES). */}
+            <Route path='/listing/:listingId' element={<Listing />} />
             <Route path='/profile'  element={<Profile />} />
             <Route path='/settings' element={<Settings />} />
             <Route path='/messages' element={<Messages />} />

@@ -409,7 +409,8 @@ export default function ListingForm({ mode = 'create' }) {
         </>
       )}
 
-      <div className="sticky bottom-4 bg-white border border-slate-200 rounded-xl shadow-lg px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      {/* z-[900]: above Leaflet's panes and controls (400–800), below modals (1000). */}
+      <div className="sticky bottom-4 z-[900] bg-white border border-slate-200 rounded-xl shadow-lg px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-slate-500">
           {isEdit ? 'Editing an existing property.' : 'Only a name is required to save.'}
         </span>

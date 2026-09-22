@@ -6,6 +6,7 @@ import { apiClient, fetchWithRefresh } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import usePageTitle from '../hooks/usePageTitle';
 import { formatDate } from '../utils/currency';
+import { localDateString } from '../utils/localDate';
 
 /**
  * The workspace audit trail.
@@ -78,7 +79,7 @@ export default function AuditLog() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `audit-log-${localDateString()}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();

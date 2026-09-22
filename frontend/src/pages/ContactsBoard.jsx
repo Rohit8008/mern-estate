@@ -18,6 +18,7 @@ import WhatsAppButton from '../components/WhatsAppButton';
 import { fetchWithRefresh } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTranslation } from 'react-i18next';
+import { localDateString } from '../utils/localDate';
 
 const STATUS_CONFIG = {
   lead: { label: 'Lead', color: 'bg-purple-500', textColor: 'text-purple-700', bgLight: 'bg-purple-50', border: 'border-purple-200' },
@@ -191,7 +192,7 @@ export default function ContactsBoard() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `leads-${localDateString()}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1146,32 +1147,34 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
   };
 
   return (
-    <div className='fixed inset-0 bg-black/30 backdrop-blur-[2px] flex items-start justify-end z-50'>
+    <div className='fixed inset-0 !mt-0 bg-black/30 backdrop-blur-[2px] flex items-start justify-end z-50'>
       <div
         className='w-full max-w-2xl h-full bg-white shadow-2xl overflow-hidden flex flex-col animate-slide-in-right'
         style={{ animation: 'slideInRight 0.2s ease-out' }}
       >
         {/* Header */}
         <div className='bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0'>
-          <div className='flex items-start justify-between'>
-            <div className='flex items-center gap-4'>
-              <div className={`w-14 h-14 rounded-full ${config.color} flex items-center justify-center text-white text-xl font-bold`}>
+          {/* Wraps on a phone: the name, three actions and close shared one row
+              and squeezed the name to a word per line. */}
+          <div className='flex flex-wrap items-start justify-between gap-3'>
+            <div className='flex items-center gap-4 min-w-0 flex-1'>
+              <div className={`w-14 h-14 flex-shrink-0 rounded-full ${config.color} flex items-center justify-center text-white text-xl font-bold`}>
                 {(c.name?.[0] || '?').toUpperCase()}
               </div>
-              <div>
-                <h2 className='text-xl font-bold text-slate-900'>{c.name}</h2>
+              <div className='min-w-0'>
+                <h2 className='text-xl font-bold text-slate-900 break-words'>{c.name}</h2>
                 {c.organization && <p className='text-sm text-slate-500'>{c.organization}</p>}
               </div>
             </div>
-            <div className='flex items-center gap-2'>
+            <div className='flex items-center gap-2 flex-shrink-0'>
               <Link
                 to={`/clients/${c._id}`}
-                className='px-3 py-1.5 rounded-lg bg-slate-900 text-sm text-white hover:bg-slate-800 flex items-center gap-1.5 transition-colors'
+                className='px-3 py-1.5 rounded-lg bg-slate-900 text-sm text-white hover:bg-slate-800 flex items-center gap-1.5 whitespace-nowrap transition-colors'
               >
                 <HiEye className='w-4 h-4' />{t('contacts.viewDeals')}</Link>
               <button
                 onClick={onEdit}
-                className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 transition-colors'
+                className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 whitespace-nowrap transition-colors'
               >
                 <HiPencil className='w-4 h-4' />{t('contacts.edit')}</button>
               <button

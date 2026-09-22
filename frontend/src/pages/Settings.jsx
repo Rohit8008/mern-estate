@@ -243,19 +243,24 @@ export default function Settings() {
             className='inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors'
           >
             <HiUser className='w-4 h-4' />{t('settings.profile')}</Link>
-          <button
-            onClick={saveSettings}
-            disabled={saving}
-            className='inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 text-sm font-semibold transition-colors'
-          >
-            {saving ? (
-              <>
-                <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin' />{t('settings.saving')}</>
-            ) : (
-              <>
-                <HiCheck className='w-4 h-4' />{t('settings.saveChanges')}</>
-            )}
-          </button>
+          {/* This saves notification and privacy preferences only. On the
+              workspace tabs it sat next to the panel's own save and did nothing
+              for what had just been edited, so it shows only where it applies. */}
+          {(activeSection === 'notifications' || activeSection === 'privacy') && (
+            <button
+              onClick={saveSettings}
+              disabled={saving}
+              className='inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 text-sm font-semibold transition-colors'
+            >
+              {saving ? (
+                <>
+                  <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin' />{t('settings.saving')}</>
+              ) : (
+                <>
+                  <HiCheck className='w-4 h-4' />{t('settings.saveChanges')}</>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

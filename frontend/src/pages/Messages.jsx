@@ -135,7 +135,7 @@ export default function Messages() {
       {/* New Message Modal */}
       {showNewChat && (
         <div
-          className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-24'
+          className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-24'
           onClick={() => setShowNewChat(false)}
         >
           <div className='bg-white rounded-xl shadow-2xl w-full max-w-md mx-4' onClick={(e) => e.stopPropagation()}>

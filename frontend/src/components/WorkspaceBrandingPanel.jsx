@@ -101,6 +101,30 @@ function ColorField({ token, value, onChange }) {
   );
 }
 
+function snapshotOf(tenant) {
+  return {
+    name: tenant.name || '',
+    branding: {
+      productName: tenant.branding?.productName || '',
+      logoUrl: tenant.branding?.logoUrl || '',
+      logoMarkUrl: tenant.branding?.logoMarkUrl || '',
+      supportEmail: tenant.branding?.supportEmail || '',
+      tokens: { ...(tenant.branding?.tokens || {}) },
+    },
+    locale: { ...(tenant.locale || {}) },
+  };
+}
+
+/** Deep equality that ignores key order, which JSON.stringify does not. */
+function sameValue(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+  const ka = Object.keys(a).filter((k) => a[k] !== undefined);
+  const kb = Object.keys(b).filter((k) => b[k] !== undefined);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => sameValue(a[k], b[k]));
+}
+
 export default function WorkspaceBrandingPanel() {
   const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
@@ -110,20 +134,22 @@ export default function WorkspaceBrandingPanel() {
   const [saving, setSaving] = useState(false);
   const [usage, setUsage] = useState(null);
 
+  // What was loaded, captured the moment the draft was made. "Unsaved changes"
+  // compares against this, not against a fresh read of `tenant`: the workspace
+  // config reloads in the background, and comparing to whatever arrived last
+  // flagged the page dirty the moment it opened.
+  const [baseline, setBaseline] = useState(null);
+
   useEffect(() => {
-    if (!tenant || draft) return;
-    setDraft({
-      name: tenant.name || '',
-      branding: {
-        productName: tenant.branding?.productName || '',
-        logoUrl: tenant.branding?.logoUrl || '',
-        logoMarkUrl: tenant.branding?.logoMarkUrl || '',
-        supportEmail: tenant.branding?.supportEmail || '',
-        tokens: { ...(tenant.branding?.tokens || {}) },
-      },
-      locale: { ...(tenant.locale || {}) },
-    });
-  }, [tenant, draft]);
+    if (!tenant) return;
+    const loaded = snapshotOf(tenant);
+    // Take the load when there is no draft yet, or when nothing has been edited
+    // (so a background refresh is picked up instead of being called an edit).
+    if (!draft || (baseline && sameValue(draft, baseline) && !sameValue(loaded, baseline))) {
+      setDraft(loaded);
+      setBaseline(loaded);
+    }
+  }, [tenant, draft, baseline]);
 
   useEffect(() => {
     apiClient
@@ -132,21 +158,10 @@ export default function WorkspaceBrandingPanel() {
       .catch(() => setUsage(null));
   }, []);
 
-  const dirty = useMemo(() => {
-    if (!draft || !tenant) return false;
-    return (
-      draft.name !== tenant.name ||
-      JSON.stringify(draft.branding) !==
-        JSON.stringify({
-          productName: tenant.branding?.productName || '',
-          logoUrl: tenant.branding?.logoUrl || '',
-          logoMarkUrl: tenant.branding?.logoMarkUrl || '',
-          supportEmail: tenant.branding?.supportEmail || '',
-          tokens: { ...(tenant.branding?.tokens || {}) },
-        }) ||
-      JSON.stringify(draft.locale) !== JSON.stringify({ ...(tenant.locale || {}) })
-    );
-  }, [draft, tenant]);
+  const dirty = useMemo(
+    () => Boolean(draft && baseline && !sameValue(draft, baseline)),
+    [draft, baseline]
+  );
 
   // A brand colour with unreadable text on it is the single most common way a
   // themed product ends up looking broken, so it is checked before saving
@@ -177,6 +192,7 @@ export default function WorkspaceBrandingPanel() {
         branding: draft.branding,
         locale: draft.locale,
       });
+      setBaseline(draft); // what is saved is the new "no changes" point
       await refresh(); // repaints the shell with the new palette immediately
       showSuccess('Your workspace has been updated.');
     } catch (err) {
