@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
+import { formatDate } from '../utils/currency';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
   HiOutlineBell, HiOutlinePlus, HiOutlineTrash, HiOutlineCalendar,
@@ -31,12 +32,17 @@ const REMINDER_OPTIONS = [
   { label: '1 day before',    value: 1440 },
 ];
 
-const STORAGE_KEY = 'cal_custom_events';
+// Custom events live on the server (/api/calendar-events) so they follow the
+// agent across devices. This key is only read once, to move events saved by the
+// old browser-only version up to the server.
+const LEGACY_STORAGE_KEY = 'cal_custom_events';
 
-function loadEvents() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+function readLegacyEvents() {
+  try { return JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]'); }
   catch { return []; }
 }
+
+const fromServer = (e) => ({ id: e._id, title: e.title, date: e.date, time: e.time, reminderMinutes: e.reminderMinutes });
 
 export default function Calendar() {
   const { t } = useTranslation();
@@ -53,7 +59,7 @@ export default function Calendar() {
   const [error,     setError]     = useState('');
 
   /* ─── custom events ─── */
-  const [events,         setEvents]         = useState(loadEvents);
+  const [events,         setEvents]         = useState([]);
   const [showModal,      setShowModal]      = useState(false);
   // Tracked, not read at render: allowing notifications in site settings after
   // the page loaded left the "blocked" badge up until a reload.
@@ -89,10 +95,32 @@ export default function Calendar() {
     catch { notifiedRef.current = new Set(); }
   }
 
-  /* persist events to localStorage */
+  /* load events; first move any browser-only events to the server */
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-  }, [events]);
+    if (!currentUser?._id) return undefined;
+    let cancelled = false;
+    (async () => {
+      const legacy = readLegacyEvents();
+      if (legacy.length) {
+        const results = await Promise.allSettled(
+          legacy.map((ev) => apiClient.post('/calendar-events', {
+            title: ev.title, date: ev.date, time: ev.time || '09:00', reminderMinutes: Number(ev.reminderMinutes) || 0,
+          }, { silent: true }))
+        );
+        // Only forget the local copy once every event made it up.
+        if (results.every((r) => r.status === 'fulfilled')) {
+          try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* ignore */ }
+        }
+      }
+      try {
+        const res = await apiClient.get('/calendar-events', { silent: true });
+        if (!cancelled) setEvents((res?.data || []).map(fromServer));
+      } catch {
+        if (!cancelled) setEvents(legacy);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?._id]);
 
   /* helper — send one notification */
   function sendNotification(title, body) {
@@ -273,20 +301,31 @@ export default function Calendar() {
     setTimeout(() => setNotifStatus(''), 6000);
   };
 
-  const saveEvent = () => {
+  const saveEvent = async () => {
     if (!newEvent.title.trim()) return;
-    const ev = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      title: newEvent.title.trim(),
-      date: newEvent.date,
-      time: newEvent.time,
-      reminderMinutes: Number(newEvent.reminderMinutes),
-    };
-    setEvents((prev) => [...prev, ev]);
-    setShowModal(false);
+    try {
+      const res = await apiClient.post('/calendar-events', {
+        title: newEvent.title.trim(),
+        date: newEvent.date,
+        time: newEvent.time,
+        reminderMinutes: Number(newEvent.reminderMinutes),
+      });
+      setEvents((prev) => [...prev, fromServer(res?.data || res)]);
+      setShowModal(false);
+    } catch {
+      // apiClient has already shown why; keep the dialog open so nothing typed is lost.
+    }
   };
 
-  const deleteEvent = (id) => setEvents((prev) => prev.filter((e) => e.id !== id));
+  const deleteEvent = async (id) => {
+    const previous = events;
+    setEvents((prev) => prev.filter((e) => e.id !== id));
+    try {
+      await apiClient.delete(`/calendar-events/${id}`);
+    } catch {
+      setEvents(previous);
+    }
+  };
 
   if (!canAccess) return null;
 
@@ -358,7 +397,7 @@ export default function Calendar() {
             <div className='bg-white rounded-2xl border border-slate-200 overflow-hidden'>
               <div className='px-4 py-3 border-b border-slate-200 flex items-center justify-between'>
                 <div className='font-semibold text-slate-900'>
-                  {monthStart.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
+                  {formatDate(monthStart, { day: undefined, month: 'long', year: 'numeric' })}
                 </div>
                 <button
                   onClick={loadRange}
@@ -429,7 +468,7 @@ export default function Calendar() {
               <div className='px-4 py-3 border-b border-slate-200 flex items-center justify-between'>
                 <div>
                   <div className='font-semibold text-slate-900'>{t('calendar.agenda')}</div>
-                  <div className='text-sm text-slate-600 mt-0.5'>{selected.toLocaleDateString()}</div>
+                  <div className='text-sm text-slate-600 mt-0.5'>{formatDate(selected)}</div>
                 </div>
                 <button
                   onClick={openModal}

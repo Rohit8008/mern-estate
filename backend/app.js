@@ -22,6 +22,7 @@ import healthRouter from './routes/health.route.js';
 import clientRouter from './routes/client.route.js';
 import documentRouter from './routes/document.route.js';
 import taskRouter from './routes/task.route.js';
+import calendarEventRouter from './routes/calendarEvent.route.js';
 import metricsRouter from './routes/metrics.route.js';
 import crmRouter from './routes/crm.route.js';
 import analyticsRouter from './routes/analytics.route.js';
@@ -142,6 +143,7 @@ export function createApp() {
   app.use('/api/clients', clientRouter);
   app.use('/api/documents', documentRouter);
   app.use('/api/tasks', taskRouter);
+  app.use('/api/calendar-events', calendarEventRouter);
   app.use('/api/metrics', metricsRouter);
   app.use('/api/crm', crmRouter);
   app.use('/api/analytics', analyticsRouter);

@@ -917,3 +917,11 @@ export const transactionValidation = {
   }).messages({ 'commission.combinedTooHigh': 'Combined commission percentage cannot exceed 100%' }),
 };
 
+export const calendarEventValidation = {
+  create: Joi.object({
+    title: Joi.string().trim().min(1).max(200).required(),
+    date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+    time: Joi.string().pattern(/^\d{2}:\d{2}$/).default('09:00'),
+    reminderMinutes: Joi.number().integer().min(0).max(10080).default(15),
+  }),
+};
