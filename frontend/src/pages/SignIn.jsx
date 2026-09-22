@@ -36,7 +36,9 @@ export default function SignIn() {
       setUserSignedOut(false);
       dispatch(signInSuccess(data));
       showSuccess('Welcome back! You have been signed in successfully.');
-      navigate('/');
+      // Agency staff work in the CRM; the landing page is for visitors.
+      const isCrmUser = data?.role === 'admin' || data?.role === 'employee';
+      navigate(isCrmUser ? '/dashboard' : '/');
     } catch (error) {
       const apiError = handleApiError(error, error);
       dispatch(signInFailure(apiError.message));

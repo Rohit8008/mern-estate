@@ -403,7 +403,13 @@ export const adminToggleUserStatus = async (req, res, next) => {
 export const getUserListings = async (req, res, next) => {
   if (req.user.id === req.params.id) {
     try {
-      const listings = await Listing.find({ userRef: req.params.id, isDeleted: { $ne: true } });
+      // An agent's listings are the ones they added AND the ones assigned to
+      // them; most of an employee's book is assigned by an admin, so reading
+      // only userRef showed them an empty list.
+      const listings = await Listing.find({
+        $or: [{ userRef: req.params.id }, { assignedAgent: req.params.id }],
+        isDeleted: { $ne: true },
+      });
       res.status(200).json(listings);
     } catch (error) {
       next(error);

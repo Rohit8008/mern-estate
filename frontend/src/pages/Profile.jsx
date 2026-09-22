@@ -285,8 +285,10 @@ export default function Profile() {
                 {listingsLoading ? 'Loading...' : 'View My Listings'}
               </Button>
               {!isBuyerViewMode && (isAdmin || isEmployee) && (
-                <Button as={Link} to='/admin' variant='secondary' className='w-full justify-center'>
-                  {isAdmin ? 'Admin Panel' : 'Employee Panel'}
+                // /admin is the admin console; an employee sent there is bounced
+                // to Unauthorized. Their workspace is the CRM dashboard.
+                <Button as={Link} to={isAdmin ? '/admin' : '/dashboard'} variant='secondary' className='w-full justify-center'>
+                  {isAdmin ? 'Admin Panel' : 'Go to dashboard'}
                 </Button>
               )}
             </div>
