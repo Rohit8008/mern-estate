@@ -136,8 +136,10 @@ export function formatCompactCurrency(amount) {
   const abs = Math.abs(value);
 
   if (current.numberLocale === 'en-IN') {
-    if (abs >= 1e7) return `${formatCurrency(value / 1e7, { maximumFractionDigits: 2 })} Cr`;
-    if (abs >= 1e5) return `${formatCurrency(value / 1e5, { maximumFractionDigits: 2 })} L`;
+    // minimumFractionDigits 0: the currency's default two decimals printed
+    // "₹30.00 L"; the short form should read "₹30 L", "₹1.5 Cr".
+    if (abs >= 1e7) return `${formatCurrency(value / 1e7, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} Cr`;
+    if (abs >= 1e5) return `${formatCurrency(value / 1e5, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} L`;
     return formatCurrency(value);
   }
 

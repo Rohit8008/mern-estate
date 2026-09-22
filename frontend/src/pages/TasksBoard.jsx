@@ -889,8 +889,10 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
         </div>
       </div>
 
-      {/* Click outside to close */}
-      <div className='flex-1 h-full' onClick={onClose} />
+      {/* Click outside to close. order-first: it sat after the panel, so as
+          a flex-1 it took the left of the row and pushed the panel off the
+          right edge where justify-end meant to put it. */}
+      <div className='order-first flex-1 h-full' onClick={onClose} />
     </div>
   );
 }
