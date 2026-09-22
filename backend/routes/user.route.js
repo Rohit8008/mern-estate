@@ -1,5 +1,5 @@
 import express from 'express';
-import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, me, myPermissions, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
+import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, changePassword, me, myPermissions, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
 import { validateBody, userRouteValidation } from '../middleware/validation.js';
@@ -61,6 +61,7 @@ router.post('/role/:id', verifyToken, validateBody(userRouteValidation.setUserRo
 // authRateLimit, not just the global API limiter: these are reachable without a
 // session and hand out / consume a credential.
 router.post('/password/request-otp', authRateLimit, validateBody(userRouteValidation.requestPasswordOtp), requestPasswordReset)
+router.post('/password/change', verifyToken, authRateLimit, validateBody(userRouteValidation.changePassword), changePassword)
 router.post('/password/reset', authRateLimit, validateBody(userRouteValidation.resetPasswordWithOtp), resetPasswordWithOtp)
 
 export default router;

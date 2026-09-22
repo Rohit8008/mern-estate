@@ -263,6 +263,58 @@ export const resetPasswordWithOtp = async (req, res, next) => {
   }
 };
 
+/**
+ * A signed-in user changing their own password.
+ *
+ * The Profile form used to post the current password to the OTP reset as if it
+ * were the code, which the 6-digit validator rejected every time. This checks
+ * the current password instead. Saving bumps passwordChangedAt, so every
+ * session — this one included — is signed out, which the caller must expect.
+ */
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user || user.isDeleted) return next(errorHandler(404, 'User not found'));
+
+    // Google-only accounts have no password to check against; they set one
+    // through Forgot password, which proves they own the address.
+    if (!user.password) {
+      return next(errorHandler(400, 'This account has no password yet. Use "Forgot password" to set one.'));
+    }
+
+    const ok = await user.correctPassword(String(currentPassword), user.password);
+    if (!ok) {
+      logger.security?.('password_change_wrong_current', { userId: String(user._id), ip: req.ip });
+      return next(errorHandler(400, 'Current password is incorrect.'));
+    }
+
+    if (currentPassword === newPassword) {
+      return next(errorHandler(400, 'New password must be different from the current one.'));
+    }
+
+    const strength = validatePassword(String(newPassword));
+    if (!strength.isValid) {
+      return next(
+        errorHandler(
+          400,
+          'Use at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol.'
+        )
+      );
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    logger.security?.('password_changed', { userId: String(user._id), ip: req.ip });
+
+    res.status(200).json({ success: true, message: 'Password changed. Please sign in again.' });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(403, 'You can only delete your own account!'));

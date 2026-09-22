@@ -127,9 +127,8 @@ export default function Profile() {
     try {
       setPasswordError('');
       setPasswordSuccess(false);
-      const data = await apiClient.post('/user/password/reset', {
-        email: currentUser.email,
-        otp: passwordData.oldPassword,
+      const data = await apiClient.post('/user/password/change', {
+        currentPassword: passwordData.oldPassword,
         newPassword: passwordData.newPassword,
       }, { silent: true });
       if (data.success === false) {
@@ -139,10 +138,13 @@ export default function Profile() {
       }
       setPasswordSuccess(true);
       setPasswordData({ oldPassword: '', newPassword: '' });
-      showSuccess('Password changed successfully!');
-    } catch {
-      setPasswordError('Password change failed. Please try again.');
-      showError('Password change failed. Please try again.');
+      // The change signs out every session, this one included.
+      showSuccess('Password changed. Please sign in again.');
+      setTimeout(handleSignOut, 1500);
+    } catch (err) {
+      const message = err?.message || 'Password change failed. Please try again.';
+      setPasswordError(message);
+      showError(message);
     }
   };
 
