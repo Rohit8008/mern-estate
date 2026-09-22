@@ -59,7 +59,7 @@ export const sendMessage = async (req, res, next) => {
     const msg = await Message.create({
       senderId: req.user.id,
       receiverId,
-      listingId: listingId || '',
+      listingId: listingId || null,
       content: encryptedContent,
       isEncrypted: true,
     });

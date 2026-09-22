@@ -207,7 +207,7 @@ export function setupSocket() {
         const msg = await Message.create({
           senderId: userId,
           receiverId,
-          listingId: listingId || '',
+          listingId: listingId || null,
           content: encryptMessageWithKey(finalContent),
           isEncrypted: true,
         });
