@@ -834,6 +834,7 @@ export default function ContactsBoard() {
 
 // ContactCard component
 function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, showStatusDropdown, setShowStatusDropdown }) {
+  const { t } = useTranslation();
   const config = STATUS_CONFIG[contact.status] || STATUS_CONFIG.lead;
 
   return (
@@ -953,6 +954,7 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
 
 // ContactFormModal component (for create and edit)
 function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: contact?.name || '',
     email: contact?.email || '',
@@ -1132,6 +1134,7 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
 
 // ContactDetailPanel component
 function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange }) {
+  const { t } = useTranslation();
   const c = contact;
   const config = STATUS_CONFIG[c.status] || STATUS_CONFIG.lead;
   const [activeTab, setActiveTab] = useState('overview');

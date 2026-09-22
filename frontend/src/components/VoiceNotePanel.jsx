@@ -16,6 +16,7 @@ function formatDate(dateStr) {
 }
 
 function VoiceNoteItem({ note, onDelete, deleting }) {
+  const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
   const audioRef = useState(() => new Audio(note.url))[0];
 

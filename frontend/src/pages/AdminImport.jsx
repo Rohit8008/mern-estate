@@ -135,6 +135,7 @@ function SourceStep({
   templateBusy,
   parsing,
 }) {
+  const { t } = useTranslation();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
   const sheet = sheets[sheetIndex];
@@ -299,6 +300,7 @@ const CONFIDENCE_BADGE = {
 };
 
 function MapStep({ headers, rows, mapping, coreFields, categoryFields, categoryName, onChange }) {
+  const { t } = useTranslation();
   const coreByKey = useMemo(() => new Map(coreFields.map((f) => [f.key, f])), [coreFields]);
   const attrByKey = useMemo(() => new Map(categoryFields.map((f) => [f.key, f])), [categoryFields]);
 
@@ -460,6 +462,7 @@ function ReviewStep({
   onFilter,
   onDownloadIssues,
 }) {
+  const { t } = useTranslation();
   const filtered = useMemo(() => {
     if (filter === 'issues') return rows.filter((r) => r.status !== 'ready' || r.warnings.length);
     if (filter === 'all') return rows;
@@ -646,6 +649,7 @@ function ReviewStep({
 // ─── Step 4 — result ──────────────────────────────────────────────────────────
 
 function ResultStep({ result, categorySlug, onDownloadReport, onStartOver }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const total = result.created + result.updated;
 

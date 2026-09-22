@@ -45,6 +45,7 @@ function EntityIcon({ entity, className = 'w-4 h-4' }) {
 }
 
 function AnnotationChips({ annotations }) {
+  const { t } = useTranslation();
   if (!annotations?.length) return null;
   return (
     <div className="flex items-center gap-1.5 flex-wrap px-4 py-2 border-b border-slate-50 bg-indigo-50/40">
@@ -110,6 +111,7 @@ function ResultGroup({ group, startIndex, activeIndex, onHover, onSelect }) {
 }
 
 function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearAll }) {
+  const { t } = useTranslation();
   if (query.length >= 2) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-400">
@@ -166,6 +168,7 @@ function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearA
 }
 
 function SaveSearchPrompt({ onSave, onCancel }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const inputRef = useRef(null);
 

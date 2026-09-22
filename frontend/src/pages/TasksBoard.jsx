@@ -559,6 +559,7 @@ export default function TasksBoard() {
 
 // TaskCard component
 function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatusDropdown, setShowStatusDropdown, formatDueDate }) {
+  const { t } = useTranslation();
   const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const due = formatDueDate(task.dueAt);
@@ -657,6 +658,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
 
 // TaskFormModal component (for create and edit)
 function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     title: task?.title || '',
     description: task?.description || '',
@@ -756,6 +758,7 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
 
 // TaskDetailPanel component
 function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, formatDueDate }) {
+  const { t } = useTranslation();
   const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);

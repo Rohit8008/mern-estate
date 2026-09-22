@@ -34,6 +34,7 @@ function formatPrice(amount) {
 }
 
 function PropertyCard({ property, brand }) {
+  const { t } = useTranslation();
   const [active, setActive] = useState(0);
   const images = (property.imageUrls || []).map(normalizeImageUrl);
   const price = formatPrice(property.offer ? property.discountPrice : property.regularPrice);

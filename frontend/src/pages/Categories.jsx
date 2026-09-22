@@ -42,6 +42,7 @@ function slugPreview(name) {
 // ─── One category ─────────────────────────────────────────────────────────────
 
 function CategoryCard({ category, hasPerm, onDelete, onRename, deleting }) {
+  const { t } = useTranslation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(category.name);

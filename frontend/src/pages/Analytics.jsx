@@ -18,7 +18,7 @@ import {
   HiUserGroup,
   HiSwitchHorizontal,
 } from 'react-icons/hi';
-import { formatCompactCurrency, formatCurrency, formatDate, formatNumber as formatNumberLocale } from '../utils/currency';
+import { formatCompactCurrency, formatCurrency as formatCurrencyLocale, formatDate, formatNumber as formatNumberLocale } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
 
 export default function Analytics() {
@@ -117,7 +117,7 @@ export default function Analytics() {
     } else if (amount >= 100000) {
       return formatCompactCurrency(amount);
     }
-    return formatCurrency(amount);
+    return formatCurrencyLocale(amount);
   };
 
   const formatNumber = formatNumberLocale;

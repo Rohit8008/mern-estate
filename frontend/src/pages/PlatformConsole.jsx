@@ -53,6 +53,7 @@ function slugify(name) {
 // ─── New workspace form ───────────────────────────────────────────────────────
 
 function NewWorkspaceModal({ open, onClose, onCreated }) {
+  const { t } = useTranslation();
   const { showError } = useNotification();
   const [form, setForm] = useState({
     name: '', slug: '', adminEmail: '', adminName: '', plan: 'trial', trialDays: 14,

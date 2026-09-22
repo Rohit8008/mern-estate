@@ -374,6 +374,7 @@ function buildReportHtml({ template, clientName, propertyName, notes, agentName,
 // ─── Report Preview Modal ────────────────────────────────────────────────────
 
 function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
+  const { t } = useTranslation();
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const iframeRef = useRef(null);
@@ -450,6 +451,7 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
 // ─── Template Modal ──────────────────────────────────────────────────────────
 
 function TemplateModal({ isOpen, onClose, template, onSave }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({ name: '', type: 'property_summary', description: '', sections: [] });
 
   useEffect(() => {
@@ -539,6 +541,7 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
 // ─── Generate / Edit Report Modal ────────────────────────────────────────────
 
 function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingReport, preselectedTemplateId, onInstallTemplates }) {
+  const { t } = useTranslation();
   const empty = { templateId: '', clientId: '', clientName: '', clientEmail: '', propertyName: '', notes: '', listing: null };
   const [formData, setFormData] = useState(empty);
   const [clients, setClients] = useState([]);
@@ -812,6 +815,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 // ─── Report Editor Modal ─────────────────────────────────────────────────────
 
 function ReportEditorModal({ isOpen, onClose, report, onSave }) {
+  const { t } = useTranslation();
   const iframeRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -1033,6 +1037,7 @@ const SAMPLE_LISTING = {
 };
 
 function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
+  const { t } = useTranslation();
   const iframeRef = useRef(null);
   const isInstalled = !!template?._id;
 
@@ -1124,6 +1129,7 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
 // ─── Report Card (Generated Reports tab) ─────────────────────────────────────
 
 function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, typeInfo }) {
+  const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 

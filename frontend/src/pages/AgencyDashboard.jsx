@@ -109,6 +109,7 @@ function saveWidgetsToStorage(widgets) {
 }
 
 function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats, teamMembers, fmt, resolveData, statusBreakdown, monthlyTrend, isDragOver, onDragStart, onDragOver, onDragLeave, onDrop }) {
+  const { t } = useTranslation();
   const props = analytics?.properties || {};
   const buyers = analytics?.buyers || {};
   const recentListings = analytics?.recent?.listings || [];

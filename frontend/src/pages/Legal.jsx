@@ -110,6 +110,7 @@ function LegalPage({ title, intro, sections }) {
 }
 
 export function Privacy() {
+  const { t } = useTranslation();
   return (
     <LegalPage
       title={t('legal.privacyPolicy')}
@@ -120,6 +121,7 @@ export function Privacy() {
 }
 
 export function Terms() {
+  const { t } = useTranslation();
   return (
     <LegalPage
       title={t('legal.termsOfService')}

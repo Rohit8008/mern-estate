@@ -46,6 +46,7 @@ const defaultIcon = new L.Icon({
 // https://sabe.io/blog/javascript-format-numbers-commas#:~:text=The%20best%20way%20to%20format,format%20the%20number%20with%20commas.
 
 function ShareLocationButton({ lat, lng, name }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
 

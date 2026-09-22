@@ -32,6 +32,7 @@ const fmtDate = (d) =>
 // ─── EntityPicker ──────────────────────────────────────────────────────────────
 // Searchable async-dropdown linked to real DB records
 function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem }) {
+  const { t } = useTranslation();
   const [query, setQuery]     = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen]       = useState(false);
@@ -122,6 +123,7 @@ function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem
 
 // ─── TransactionDrawer ─────────────────────────────────────────────────────────
 function TransactionDrawer({ open, onClose, transaction, onSaved }) {
+  const { t } = useTranslation();
   const EMPTY = {
     property: null,
     manualPropertyName: '',
