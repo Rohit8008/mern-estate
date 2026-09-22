@@ -12,7 +12,8 @@ import { useTranslation } from 'react-i18next';
  * product rather than claiming a customer.
  *
  * It plays once on load, then the stages are buttons: clicking one shows the
- * deal at that point. Reduced motion shows the finished deal without playing.
+ * deal at that point. Reduced motion shows the finished deal instead of
+ * playing on load; Play again still plays it on request.
  */
 
 const STAGES = ['enquiry', 'visit', 'negotiation', 'token', 'registry'];
@@ -44,8 +45,10 @@ export default function DealJourney() {
     setStage(i);
   };
 
+  // A click is the person asking to watch it, so this plays even with reduced
+  // motion on; only the automatic play on load respects that setting.
   const replay = () => {
-    if (prefersReducedMotion()) { setStage(last); return; }
+    clearTimeout(timer.current);
     setStage(0);
     setPlaying(true);
   };
@@ -62,7 +65,7 @@ export default function DealJourney() {
           className='w-12 h-12 rounded-2xl bg-marigold-100 text-marigold-700 font-display font-bold text-lg flex items-center justify-center flex-shrink-0'
           aria-hidden='true'
         >
-          HK
+          AS
         </div>
         <div className='min-w-0 flex-1'>
           <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>

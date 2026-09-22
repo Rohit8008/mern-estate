@@ -12,8 +12,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        // Landing page headlines only. Devanagari falls back to the system face.
-        display: ['"Bricolage Grotesque"', 'Outfit', '"Noto Sans Devanagari"', 'sans-serif'],
+        // Landing page headlines: the app's own face, so the site and the CRM
+        // read as one product.
+        display: ['Outfit', '"Noto Sans Devanagari"', 'sans-serif'],
       },
       colors: {
         /**

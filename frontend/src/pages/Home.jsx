@@ -142,7 +142,7 @@ export default function Home() {
       <section className='pt-28 pb-20 lg:pt-36 lg:pb-28'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-12 lg:gap-10 items-start'>
           <div className='lg:col-span-6 xl:col-span-6 lg:pt-10'>
-            <h1 className='font-display font-extrabold text-[clamp(2.6rem,6vw,4.9rem)] leading-[1] tracking-[-0.022em] text-brand-950 text-balance max-w-[13ch]'>
+            <h1 className='font-display font-bold text-[clamp(2.25rem,4.6vw,3.75rem)] leading-[1.08] tracking-[-0.02em] text-brand-950 text-balance max-w-[13ch]'>
               {t('landing.heroTitle')}
             </h1>
             <p className='mt-7 text-lg sm:text-xl leading-relaxed text-slate-600 max-w-[46ch] text-pretty'>
@@ -177,7 +177,7 @@ export default function Home() {
         <div className='max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-12'>
           <div className='lg:col-span-4'>
             <div className='lg:sticky lg:top-28'>
-              <h2 className='font-display font-bold text-4xl lg:text-5xl leading-[1.04] tracking-[-0.02em] text-balance'>
+              <h2 className='font-display font-bold text-3xl lg:text-4xl leading-[1.1] tracking-[-0.015em] text-balance'>
                 {t('landing.book.title')}
               </h2>
               <p className='mt-5 text-lg text-slate-600 leading-relaxed max-w-[36ch] text-pretty'>{t('landing.book.body')}</p>
@@ -210,7 +210,7 @@ export default function Home() {
       <section className='py-20 lg:py-28'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-12'>
           <div className='lg:col-span-4'>
-            <h2 className='font-display font-bold text-4xl lg:text-5xl leading-[1.04] tracking-[-0.02em] text-balance'>
+            <h2 className='font-display font-bold text-3xl lg:text-4xl leading-[1.1] tracking-[-0.015em] text-balance'>
               {t('home.straightAnswers')}
             </h2>
             <p className='mt-5 text-lg text-slate-600 leading-relaxed max-w-[36ch] text-pretty'>{t('home.theQuestionsAgencyOwnersAskOn')}</p>
@@ -230,7 +230,7 @@ export default function Home() {
       <section className='bg-brand-950 text-white'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-24 grid lg:grid-cols-12 gap-10 items-end'>
           <div className='lg:col-span-7'>
-            <h2 className='font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl leading-[1.02] tracking-[-0.022em] text-balance max-w-[16ch]'>
+            <h2 className='font-display font-bold text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.02em] text-balance max-w-[16ch]'>
               {t('home.seeItAgainstYourOwnPipeline')}
             </h2>
             <p className='mt-6 text-lg text-brand-100 max-w-[44ch] text-pretty'>{t('home.a30MinuteWalkthroughMappedTo')}</p>
