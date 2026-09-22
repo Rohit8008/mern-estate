@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lets a development build talk to a backend over plain HTTP.
+
+  Android refuses cleartext traffic by default from targetSdk 28 onward, and
+  this app compiles against 35. A dev backend on the LAN is http://<host>:3000,
+  so without this every request fails — and it fails as a generic socket error,
+  not as anything naming permissions, which makes it a slow thing to diagnose.
+
+  This file lives in the profile/ source set, so it is merged into profile
+  builds ONLY. Release builds never see it and keep Android's default refusal,
+  which is the property that matters: a production APK cannot be talked into
+  cleartext by this file existing.
+
+  It deliberately does not pin one IP address. A dev machine's LAN address
+  changes with the network it joins, and a config that has to be edited on
+  every DHCP lease gets replaced with a permissive one the first time it is
+  inconvenient. Scoping by build type is both stricter and harder to get wrong.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

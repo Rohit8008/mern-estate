@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/network/api_client.dart';
 import '../data/auth_api.dart';
+import '../domain/app_user.dart';
 import 'auth_state.dart';
 
 class AuthController extends StateNotifier<AuthState> {
@@ -28,6 +29,17 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> signIn({required String email, required String password}) async {
     final user = await _api.signIn(email: email, password: password);
     state = AuthState.authenticated(user);
+  }
+
+  /// Replace the signed-in user without touching the auth state machine.
+  ///
+  /// Deliberately not `bootstrap()`: that transitions through
+  /// `bootstrapping`, which the router treats as "redirect to /splash" — so
+  /// saving your profile would throw you out of the screen you were editing.
+  void applyUser(AppUser user) {
+    if (state.status == AuthStatus.authenticated) {
+      state = AuthState.authenticated(user);
+    }
   }
 
   Future<void> signOut() async {

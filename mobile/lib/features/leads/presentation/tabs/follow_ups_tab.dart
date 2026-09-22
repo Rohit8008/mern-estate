@@ -9,6 +9,7 @@ import '../../../../shared/widgets/widgets.dart';
 import '../../domain/follow_up.dart';
 import '../../domain/lead.dart';
 import '../../leads_providers.dart';
+import '../add_follow_up_screen.dart';
 
 class FollowUpsTab extends ConsumerWidget {
   const FollowUpsTab({super.key, required this.lead});
@@ -29,7 +30,7 @@ class FollowUpsTab extends ConsumerWidget {
             icon: Icons.add_rounded,
             variant: AppButtonVariant.brand,
             expand: true,
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _AddFollowUpScreen(leadId: lead.id))),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddFollowUpScreen(leadId: lead.id, leadName: lead.name))),
           ),
         ),
         Expanded(
@@ -92,86 +93,5 @@ class FollowUpsTab extends ConsumerWidget {
     } on AppFailure catch (f) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(f.message)));
     }
-  }
-}
-
-class _AddFollowUpScreen extends ConsumerStatefulWidget {
-  const _AddFollowUpScreen({required this.leadId});
-  final String leadId;
-
-  @override
-  ConsumerState<_AddFollowUpScreen> createState() => _AddFollowUpScreenState();
-}
-
-class _AddFollowUpScreenState extends ConsumerState<_AddFollowUpScreen> {
-  final _notesController = TextEditingController();
-  String _type = 'call';
-  DateTime _dueAt = DateTime.now().add(const Duration(hours: 1));
-  bool _submitting = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDueAt() async {
-    final date = await showDatePicker(context: context, initialDate: _dueAt, firstDate: DateTime.now().subtract(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 365)));
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_dueAt));
-    if (time == null) return;
-    setState(() => _dueAt = DateTime(date.year, date.month, date.day, time.hour, time.minute));
-  }
-
-  Future<void> _submit() async {
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
-    try {
-      await ref.read(crmApiProvider).addFollowUp(widget.leadId, {
-        'dueAt': _dueAt.toIso8601String(),
-        'type': _type,
-        'notes': _notesController.text.trim(),
-      });
-      ref.invalidate(leadDetailProvider(widget.leadId));
-      if (mounted) Navigator.of(context).pop();
-    } on AppFailure catch (f) {
-      if (mounted) setState(() => _error = f.message);
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Follow-up')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          AppDropdownField(label: 'Type', value: _type, items: {for (final t in followUpTypes) t: followUpTypeLabel(t)}, onChanged: (v) => setState(() => _type = v)),
-          const SizedBox(height: AppSpacing.lg),
-          const Text('Due', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
-          const SizedBox(height: 6),
-          AppButton(
-            label: DateFormat('MMM d, yyyy • h:mm a').format(_dueAt),
-            icon: Icons.calendar_today_outlined,
-            variant: AppButtonVariant.secondary,
-            expand: true,
-            onPressed: _pickDueAt,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(label: 'Notes', controller: _notesController),
-          if (_error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: const TextStyle(color: AppColors.rose600, fontSize: 13)),
-          ],
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(label: 'Schedule follow-up', onPressed: _submitting ? null : _submit, loading: _submitting, variant: AppButtonVariant.brand, expand: true),
-        ],
-      ),
-    );
   }
 }

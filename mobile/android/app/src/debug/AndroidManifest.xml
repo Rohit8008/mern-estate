@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Points development builds at the cleartext exception in
+         res/xml/network_security_config.xml. Scoped to this source set, so a
+         release build keeps Android's default refusal of plain HTTP. -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

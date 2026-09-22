@@ -25,6 +25,54 @@ dev machine doesn't have, so none of it could be verified end-to-end here.
   `android/key.properties` if present and falls back to debug signing
   otherwise (so `flutter build apk --release` still works without one).
 
+## The SDK this project builds with
+
+**Flutter 3.24.5.** `pubspec.yaml` asks for Dart `^3.5.3`, which is the 3.24
+series, and the Android build is pinned to that era too: Gradle 8.3,
+AGP 8.1.0, Kotlin 1.8.22.
+
+Current Flutter (3.47) cannot build it. Its Gradle plugin declares a minimum
+Gradle of 8.14, and `--android-skip-build-dependency-validation` does not
+rescue it — the build then fails further in, inside AGP's `KgpUtils`, because
+8.1.0 does not expose the API the newer plugin calls. Flutter 3.47's own
+template is Gradle 9.3.1 / AGP 9.1.0 / Kotlin 2.4.0, so closing this gap is an
+Android toolchain migration across all 21 plugin dependencies, not a version
+bump. Worth doing before store submission; not worth doing by accident.
+
+Running a newer `flutter` against this project also rewrites files in place —
+`android/gradle.properties` (adds `android.builtInKotlin` / `android.newDsl`),
+`analysis_options.yaml`, and `pubspec.lock`. Check `git status` after, and
+revert those if you did not mean to migrate.
+
+## Testing against a dev backend on your LAN
+
+The app is cookie-auth only, so it needs a reachable backend — not `localhost`,
+which on a phone means the phone. Point it at the dev machine's LAN address:
+
+```
+flutter build apk --debug --dart-define=API_BASE_URL=http://<lan-ip>:3000
+```
+
+Serve the APK from `build/app/outputs/flutter-apk/` over the same network and
+install it on the phone; no cable and no adb pairing is involved. For hot
+reload instead, pair over Android's wireless debugging and
+`flutter run --dart-define=API_BASE_URL=http://<lan-ip>:3000`.
+
+Two things this needs on the backend side: it already binds `0.0.0.0`, and the
+app's origin has to be in the CORS allowlist for Socket.IO to connect —
+`EXTRA_CORS_ORIGINS` in `backend/.env` is the dev hook for that.
+
+**Cleartext HTTP** is handled: `android/app/src/{debug,profile}/res/xml/
+network_security_config.xml` permits it, wired in from each source set's
+manifest. Android has refused cleartext by default since targetSdk 28 and this
+app compiles against 35, so without it every request fails as a generic socket
+error that names nothing about permissions. Release builds do not get the file
+and keep the default refusal.
+
+iOS has no equivalent exception, so an iOS device cannot reach a plain-HTTP dev
+backend without an ATS entry in `Info.plist` — deliberately not added, since it
+would ship. Use an HTTPS tunnel for iOS testing.
+
 ## Still required — needs your accounts/secrets
 
 ### 1. Point the app at your real backend

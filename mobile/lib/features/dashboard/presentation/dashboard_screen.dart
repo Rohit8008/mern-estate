@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../../auth/auth_providers.dart';
+import '../../buyers/presentation/buyers_list_screen.dart';
 import '../dashboard_providers.dart';
 import '../domain/dashboard_analytics.dart';
 
@@ -112,7 +114,7 @@ class _DashboardContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.xxl),
-        _SectionHeader(title: 'Recent Listings', onViewAll: () => _pushComingSoon(context, 'Properties')),
+        _SectionHeader(title: 'Recent Listings', onViewAll: () => context.go('/properties')),
         const SizedBox(height: AppSpacing.sm),
         AppCard(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
@@ -128,7 +130,12 @@ class _DashboardContent extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        _SectionHeader(title: 'Recent Buyer Requirements', onViewAll: () => _pushComingSoon(context, 'Buyer Requirements')),
+        _SectionHeader(
+          title: 'Recent Buyer Requirements',
+          onViewAll: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const BuyersListScreen()),
+          ),
+        ),
         const SizedBox(height: AppSpacing.sm),
         AppCard(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
@@ -145,10 +152,6 @@ class _DashboardContent extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  void _pushComingSoon(BuildContext context, String title) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ComingSoonScreen(title: title)));
   }
 }
 
