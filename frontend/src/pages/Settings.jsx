@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { signOutUserSuccess } from '../redux/user/userSlice';
 import { apiClient, setUserSignedOut } from '../utils/http';
 import { invalidateNotificationPreferences } from '../hooks/useNotificationPreferences';
@@ -72,7 +72,10 @@ export default function Settings() {
   });
   const [loadingPrefs, setLoadingPrefs] = useState(true);
 
-  const [activeSection, setActiveSection] = useState('notifications');
+  // ?section=<id> opens a tab directly, so a link can land on the tab it
+  // means (the onboarding checklist's "Set up your agency" → branding).
+  const [searchParams] = useSearchParams();
+  const [activeSection, setActiveSection] = useState(searchParams.get('section') || 'notifications');
   const [saving, setSaving] = useState(false);
   const [pendingSignOutAll, setPendingSignOutAll] = useState(false);
 

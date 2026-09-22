@@ -184,7 +184,7 @@ export const getOnboarding = asyncHandler(async (req, res) => {
       label: 'Set up your agency',
       description: 'Your name, logo and colours',
       done: brandedName || hasLogo,
-      href: '/settings',
+      href: '/settings?section=branding',
     },
     {
       id: 'team',

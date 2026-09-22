@@ -55,9 +55,30 @@ export default function Calendar() {
   /* ─── custom events ─── */
   const [events,         setEvents]         = useState(loadEvents);
   const [showModal,      setShowModal]      = useState(false);
-  const [notifGranted,   setNotifGranted]   = useState(
-    () => typeof Notification !== 'undefined' && Notification.permission === 'granted'
+  // Tracked, not read at render: allowing notifications in site settings after
+  // the page loaded left the "blocked" badge up until a reload.
+  const [notifPermission, setNotifPermission] = useState(
+    () => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   );
+  const notifGranted = notifPermission === 'granted';
+  const setNotifGranted = () => {
+    if (typeof Notification !== 'undefined') setNotifPermission(Notification.permission);
+  };
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return undefined;
+    const sync = () => setNotifPermission(Notification.permission);
+    let status;
+    navigator.permissions?.query({ name: 'notifications' })
+      .then((st) => { status = st; st.onchange = sync; })
+      .catch(() => {});
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      if (status) status.onchange = null;
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, []);
   const [newEvent, setNewEvent] = useState({
     title: '', date: ymd(new Date()), time: '09:00', reminderMinutes: 15,
   });
@@ -281,11 +302,11 @@ export default function Calendar() {
 
         <div className='flex items-center gap-2 flex-wrap'>
           {/* Notification permission badge */}
-          {typeof Notification !== 'undefined' && Notification.permission === 'denied' && (
+          {notifPermission === 'denied' && (
             <span className='text-xs text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg'>{t('calendar.notificationsBlockedEnableInBrowserSettings')}</span>
           )}
 
-          {typeof Notification !== 'undefined' && Notification.permission !== 'denied' && (
+          {notifPermission !== 'denied' && notifPermission !== 'unsupported' && (
             <button
               onClick={testNotification}
               className='flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium'
@@ -540,7 +561,7 @@ export default function Calendar() {
         }
       >
         <div className='space-y-4'>
-          {!notifGranted && typeof Notification !== 'undefined' && Notification.permission !== 'denied' && (
+          {!notifGranted && notifPermission !== 'denied' && notifPermission !== 'unsupported' && (
             <div className='flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2'>
               <HiOutlineBell className='w-4 h-4 flex-shrink-0 mt-0.5' />
               <span>{t('calendar.allowNotificationsWhenPromptedToReceive')}</span>

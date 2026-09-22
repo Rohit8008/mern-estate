@@ -1,5 +1,5 @@
 import { useSelector, useDispatch } from 'react-redux';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   HiX, HiEye, HiEyeOff, HiCog, HiLogout, HiCamera,
@@ -30,6 +30,10 @@ const INPUT_CLS =
 export default function Profile() {
   const { t } = useTranslation();
   const fileRef = useRef(null);
+  // The results render at the foot of a long page, so without this the button
+  // looked like it did nothing.
+  const listingsRef = useRef(null);
+  const [scrollToListings, setScrollToListings] = useState(false);
   const { currentUser, loading, error } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
   const dispatch = useDispatch();
@@ -51,6 +55,12 @@ export default function Profile() {
   const [listingsLoading, setListingsLoading] = useState(false);
 
   const { showSuccess, showError } = useNotification();
+
+  useEffect(() => {
+    if (!scrollToListings) return;
+    listingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setScrollToListings(false);
+  }, [scrollToListings]);
 
   const isAdmin = currentUser?.role === 'admin';
   const isEmployee = currentUser?.role === 'employee';
@@ -181,9 +191,11 @@ export default function Profile() {
       if (data.success === false) { setShowListingsError(true); return; }
       setUserListings(data);
       setListingsLoaded(true);
+      setScrollToListings(true);
     } catch (err) {
       console.error('Listings fetch error:', err.message);
       setShowListingsError(true);
+      setScrollToListings(true);
     } finally {
       setListingsLoading(false);
     }
@@ -484,6 +496,7 @@ export default function Profile() {
 
       {/* Listings */}
       {(listingsLoaded || showListingsError) && (
+        <div ref={listingsRef} className='scroll-mt-20'>
         <Card>
           <CardHeader
             action={
@@ -546,6 +559,7 @@ export default function Profile() {
             ))}
           </div>
         </Card>
+        </div>
       )}
     </div>
   );
