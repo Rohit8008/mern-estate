@@ -471,41 +471,41 @@ export default function PlatformConsole() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {tenants.map((t) => {
-                  const style = STATUS_STYLE[t.status] || STATUS_STYLE.active;
-                  const overUsers = t.limits?.maxUsers > 0 && t.usage.users >= t.limits.maxUsers;
-                  const overListings = t.limits?.maxListings > 0 && t.usage.listings >= t.limits.maxListings;
+                {tenants.map((item) => {
+                  const style = STATUS_STYLE[item.status] || STATUS_STYLE.active;
+                  const overUsers = item.limits?.maxUsers > 0 && item.usage.users >= item.limits.maxUsers;
+                  const overListings = item.limits?.maxListings > 0 && item.usage.listings >= item.limits.maxListings;
                   return (
-                    <tr key={t.id} className="hover:bg-slate-50/50">
+                    <tr key={item.id} className="hover:bg-slate-50/50">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900">{t.name}</div>
+                        <div className="font-medium text-slate-900">{item.name}</div>
                         <div className="text-xs text-slate-500 font-mono">
-                          {t.customDomain || t.slug}
+                          {item.customDomain || item.slug}
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Badge variant={style.variant} size="sm">{t.status}</Badge>
-                          <span className="text-slate-600 capitalize">{t.plan}</span>
+                          <Badge variant={style.variant} size="sm">{item.status}</Badge>
+                          <span className="text-slate-600 capitalize">{item.plan}</span>
                         </div>
-                        {t.trialEndsAt && t.status === 'trial' && (
+                        {item.trialEndsAt && item.status === 'trial' && (
                           <div className="text-xs text-slate-400 mt-0.5">
-                            ends {formatDate(t.trialEndsAt)}
+                            ends {formatDate(item.trialEndsAt)}
                           </div>
                         )}
                       </td>
                       <td className={cx('px-4 py-3 tabular-nums', overUsers ? 'text-amber-700 font-medium' : 'text-slate-600')}>
-                        {t.usage.users}
-                        {t.limits?.maxUsers > 0 && <span className="text-slate-400"> / {t.limits.maxUsers}</span>}
+                        {item.usage.users}
+                        {item.limits?.maxUsers > 0 && <span className="text-slate-400"> / {item.limits.maxUsers}</span>}
                       </td>
                       <td className={cx('px-4 py-3 tabular-nums', overListings ? 'text-amber-700 font-medium' : 'text-slate-600')}>
-                        {formatNumber(t.usage.listings)}
-                        {t.limits?.maxListings > 0 && (
-                          <span className="text-slate-400"> / {formatNumber(t.limits.maxListings)}</span>
+                        {formatNumber(item.usage.listings)}
+                        {item.limits?.maxListings > 0 && (
+                          <span className="text-slate-400"> / {formatNumber(item.limits.maxListings)}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                        {formatDate(t.createdAt)}
+                        {formatDate(item.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <Button
@@ -513,8 +513,8 @@ export default function PlatformConsole() {
                           variant="ghost"
                           icon={HiOutlineMail}
                           className="mr-1"
-                          loading={busyId === t.id}
-                          onClick={() => resendInvite(t)}
+                          loading={busyId === item.id}
+                          onClick={() => resendInvite(item)}
                           title="Re-send the first admin's invitation"
                         >{t('platformConsole.invite')}</Button>
                         <Button
@@ -522,17 +522,17 @@ export default function PlatformConsole() {
                           variant="secondary"
                           icon={HiOutlineEye}
                           className="mr-2"
-                          loading={busyId === t.id}
-                          onClick={() => viewWorkspace(t)}
+                          loading={busyId === item.id}
+                          onClick={() => viewWorkspace(item)}
                         >{t('platformConsole.view')}</Button>
                         <Button
                           size="xs"
-                          variant={t.status === 'suspended' ? 'secondary' : 'ghost'}
-                          icon={t.status === 'suspended' ? HiOutlinePlay : HiOutlineBan}
-                          loading={busyId === t.id}
-                          onClick={() => toggleStatus(t)}
+                          variant={item.status === 'suspended' ? 'secondary' : 'ghost'}
+                          icon={item.status === 'suspended' ? HiOutlinePlay : HiOutlineBan}
+                          loading={busyId === item.id}
+                          onClick={() => toggleStatus(item)}
                         >
-                          {t.status === 'suspended' ? 'Resume' : 'Suspend'}
+                          {item.status === 'suspended' ? 'Resume' : 'Suspend'}
                         </Button>
                       </td>
                     </tr>

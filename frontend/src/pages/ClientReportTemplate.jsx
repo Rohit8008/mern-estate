@@ -1679,20 +1679,20 @@ export default function ClientReportTemplate() {
                       <div className='bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 text-left'>
                         <p className='text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide'>{t('clientReport.includedStarterTemplates')}</p>
                         <div className='space-y-1.5'>
-                          {DEFAULT_TEMPLATES.map((t, i) => {
-                            const ti = REPORT_TYPES.find(r => r.id === t.type);
+                          {DEFAULT_TEMPLATES.map((item, i) => {
+                            const ti = REPORT_TYPES.find(r => r.id === item.type);
                             return (
                               <div key={i} className='flex items-center gap-2.5 group rounded-lg px-2 py-1.5 hover:bg-white hover:shadow-sm transition-all'>
                                 <div className={`w-6 h-6 rounded-lg ${ti?.color || 'text-slate-600 bg-slate-100'} flex items-center justify-center shrink-0`}>
                                   {ti ? <ti.Component className='w-3.5 h-3.5' /> : null}
                                 </div>
                                 <div className='min-w-0 flex-1'>
-                                  <p className='text-xs font-semibold text-slate-800 truncate'>{t.name}</p>
-                                  <p className='text-xs text-slate-400 truncate'>{t.sections.slice(0, 3).join(' · ')}{t.sections.length > 3 ? ` +${t.sections.length - 3}` : ''}</p>
+                                  <p className='text-xs font-semibold text-slate-800 truncate'>{item.name}</p>
+                                  <p className='text-xs text-slate-400 truncate'>{item.sections.slice(0, 3).join(' · ')}{item.sections.length > 3 ? ` +${item.sections.length - 3}` : ''}</p>
                                 </div>
                                 <button
                                   type='button'
-                                  onClick={() => setPreviewTemplate(t)}
+                                  onClick={() => setPreviewTemplate(item)}
                                   className='shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity'
                                 >
                                   <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
