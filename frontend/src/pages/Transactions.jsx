@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useCrmAccess } from '../hooks/useCrmAccess';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
@@ -277,7 +278,8 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
     }
   };
 
-  return (
+  // Portalled to <body> so the CRM top bar cannot paint over the drawer.
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -481,7 +483,8 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -733,17 +736,17 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody className='divide-y divide-slate-100'>
-                {transactions.map((t) => {
-                  const sm = STATUS_META[t.status] || STATUS_META.pending;
+                {transactions.map((item) => {
+                  const sm = STATUS_META[item.status] || STATUS_META.pending;
                   return (
-                    <tr key={t._id} className='hover:bg-slate-50 transition-colors'>
+                    <tr key={item._id} className='hover:bg-slate-50 transition-colors'>
                       <td className='px-4 py-3'>
                         <div className='flex items-center gap-2'>
                           <div className='w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0'>
                             <HiHome className='w-4 h-4 text-slate-500' />
                           </div>
                           <span className='text-sm font-medium text-slate-900 truncate max-w-[160px]'>
-                            {t.propertyName}
+                            {item.propertyName}
                           </span>
                         </div>
                       </td>
@@ -752,27 +755,27 @@ export default function Transactions() {
                           <div className='flex items-center gap-2'>
                             <div className='w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0'>
                               <span className='text-xs font-semibold text-indigo-600'>
-                                {t.clientName?.charAt(0).toUpperCase()}
+                                {item.clientName?.charAt(0).toUpperCase()}
                               </span>
                             </div>
-                            <span className='text-sm text-slate-700'>{t.clientName}</span>
+                            <span className='text-sm text-slate-700'>{item.clientName}</span>
                           </div>
-                          {t.coAgentName && (
-                            <span className='text-xs text-slate-400 pl-9'>↗ {t.coAgentName}</span>
+                          {item.coAgentName && (
+                            <span className='text-xs text-slate-400 pl-9'>↗ {item.coAgentName}</span>
                           )}
                         </div>
                       </td>
                       <td className='px-4 py-3'>
-                        <span className='text-sm text-slate-600 capitalize'>{t.type}</span>
+                        <span className='text-sm text-slate-600 capitalize'>{item.type}</span>
                       </td>
                       <td className='px-4 py-3'>
-                        <span className='text-sm font-semibold text-slate-900'>{fmtINR(t.amount)}</span>
+                        <span className='text-sm font-semibold text-slate-900'>{fmtINR(item.amount)}</span>
                       </td>
                       <td className='px-4 py-3'>
                         <div className='flex items-center gap-1'>
-                          <span className='text-sm font-medium text-emerald-600'>{fmtINR(t.commission)}</span>
-                          {t.commissionPercent > 0 && (
-                            <span className='text-xs text-slate-400'>({t.commissionPercent}%)</span>
+                          <span className='text-sm font-medium text-emerald-600'>{fmtINR(item.commission)}</span>
+                          {item.commissionPercent > 0 && (
+                            <span className='text-xs text-slate-400'>({item.commissionPercent}%)</span>
                           )}
                         </div>
                       </td>
@@ -780,19 +783,19 @@ export default function Transactions() {
                         <Badge variant={sm.variant}>{sm.label}</Badge>
                       </td>
                       <td className='px-4 py-3 whitespace-nowrap'>
-                        <span className='text-sm text-slate-500'>{fmtDate(t.date)}</span>
+                        <span className='text-sm text-slate-500'>{fmtDate(item.date)}</span>
                       </td>
                       <td className='px-4 py-3'>
                         <div className='flex items-center justify-end gap-1'>
                           <button
-                            onClick={() => openEdit(t)}
+                            onClick={() => openEdit(item)}
                             className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors'
                             title={t('transactions.edit')}
                           >
                             <HiPencil className='w-4 h-4' />
                           </button>
                           <button
-                            onClick={() => setPendingDelete(t._id)}
+                            onClick={() => setPendingDelete(item._id)}
                             className='p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors'
                             title={t('transactions.delete')}
                           >

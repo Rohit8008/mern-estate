@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { HiX } from 'react-icons/hi';
 
 function cx(...xs) { return xs.filter(Boolean).join(' '); }
@@ -21,8 +22,10 @@ export default function Modal({ open, onClose, title, description, children, foo
 
   if (!open) return null;
 
-  return (
-    <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+  // Portalled to <body>: rendered in place, the modal sat inside the page's
+  // stacking context, so the CRM top bar painted over its backdrop and header.
+  return createPortal(
+    <div className='fixed inset-0 z-[1000] flex items-center justify-center p-4'>
       {/* Backdrop */}
       <button
         type='button'
@@ -33,7 +36,9 @@ export default function Modal({ open, onClose, title, description, children, foo
 
       {/* Panel */}
       <div className={cx(
-        'relative bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden',
+        // Capped at the viewport so the body scrolls. Without the cap a long form
+        // grew past the screen and centring pushed its title and footer off both ends.
+        'relative bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden max-h-[calc(100dvh-2rem)]',
         SIZE_CLS[size],
         className
       )}>
@@ -57,7 +62,7 @@ export default function Modal({ open, onClose, title, description, children, foo
         )}
 
         {/* Body */}
-        <div className='flex-1 overflow-y-auto px-6 py-5'>
+        <div className='flex-1 min-h-0 overflow-y-auto px-6 py-5'>
           {children}
         </div>
 
@@ -68,6 +73,7 @@ export default function Modal({ open, onClose, title, description, children, foo
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
