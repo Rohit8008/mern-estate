@@ -32,6 +32,10 @@ const brandingSchema = new mongoose.Schema(
 
     supportEmail: { type: String, default: '' },
     supportPhone: { type: String, default: '' },
+
+    // Set when an admin saves the workspace branding in Settings; it is what
+    // "Set up your agency" on the onboarding checklist means.
+    customizedAt: { type: Date, default: null },
   },
   { _id: false }
 );

@@ -240,7 +240,8 @@ export const getStats = async (req, res, next) => {
       {
         $group: {
           _id: null,
-          totalPipeline:   { $sum: { $cond: [{ $ne: ['$status', 'cancelled'] }, '$amount',     0] } },
+          // Open deals only; completed ones used to be counted as "pipeline".
+          totalPipeline:   { $sum: { $cond: [{ $in: ['$status', ['pending', 'in_progress']] }, '$amount', 0] } },
           totalCommission: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$commission', 0] } },
           completed:       { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
           pending:         { $sum: { $cond: [{ $in: ['$status', ['pending', 'in_progress']] }, 1, 0] } },

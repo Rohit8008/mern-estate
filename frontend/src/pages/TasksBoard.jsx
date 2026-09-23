@@ -12,6 +12,7 @@ import {
   HiClipboardList, HiExclamation,
 } from 'react-icons/hi';
 import { useTranslation } from 'react-i18next';
+import { formatDate } from '../utils/currency';
 
 const STATUS_CONFIG = {
   todo: { label: 'To Do', color: 'bg-slate-400', textColor: 'text-slate-600', bgLight: 'bg-slate-50', border: 'border-slate-200' },
@@ -163,7 +164,9 @@ export default function TasksBoard() {
     setShowEditModal(true);
   };
 
-  const formatDueDate = (dateStr) => {
+  // A finished task is not "Overdue", whatever its due date was.
+  const formatDueDate = (dateStr, status) => {
+    if (status === 'done') return { text: 'Done', class: 'text-emerald-700 bg-emerald-50' };
     if (!dateStr) return null;
     const date = new Date(dateStr);
     const now = new Date();
@@ -174,7 +177,7 @@ export default function TasksBoard() {
     if (days === 0) return { text: 'Today', class: 'text-amber-600 bg-amber-50' };
     if (days === 1) return { text: 'Tomorrow', class: 'text-amber-600 bg-amber-50' };
     if (days <= 7) return { text: `${days} days`, class: 'text-indigo-600 bg-indigo-50' };
-    return { text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), class: 'text-slate-600 bg-slate-50' };
+    return { text: formatDate(date, { year: undefined }), class: 'text-slate-600 bg-slate-50' };
   };
 
   if (!canAccess) {
@@ -416,7 +419,7 @@ export default function TasksBoard() {
                       </tr>
                       {/* Task rows */}
                       {!isCollapsed && items.map((task) => {
-                        const due = formatDueDate(task.dueAt);
+                        const due = formatDueDate(task.dueAt, task.status);
                         const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
                         return (
                           <tr
@@ -562,7 +565,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
   const { t } = useTranslation();
   const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
-  const due = formatDueDate(task.dueAt);
+  const due = formatDueDate(task.dueAt, task.status);
 
   return (
     <div
@@ -762,7 +765,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
   const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const due = formatDueDate(task.dueAt);
+  const due = formatDueDate(task.dueAt, task.status);
 
   useEffect(() => {
     const handleKey = (e) => { if (e.key === 'Escape') onClose?.(); };

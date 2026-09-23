@@ -628,7 +628,30 @@
     "totalProperties": "Total Properties",
     "underNegotiation": "Under Negotiation",
     "viewAll": "View all",
-    "widgetNotConfigured": "Widget not configured"
+    "widgetNotConfigured": "Widget not configured",
+    "goodMorning": "Good morning",
+    "goodAfternoon": "Good afternoon",
+    "goodEvening": "Good evening",
+    "overviewSubtitle": "How your agency is doing",
+    "availableCount": "{{count}} available",
+    "soldRentedCount": "{{sold}} sold, {{rented}} rented",
+    "listingsInNegotiation": "Listings in negotiation",
+    "activeCount": "{{count}} active",
+    "matchedCount": "{{count}} matched",
+    "adminsAndAgents": "admins and agents",
+    "successfullyMatched": "Successfully matched",
+    "salesOverview": "Sales overview",
+    "salesOverviewSubtitle": "Open deals and follow-ups right now; won deals and new clients in the last 30 days",
+    "openDeals": "Open deals",
+    "pipelineValue": "{{value}} in the pipeline",
+    "followUpsToDo": "Follow-ups to do",
+    "overdueCount": "{{count}} overdue",
+    "dueThisWeek": "{{count}} due in the next 7 days",
+    "dealsWon30": "Deals won (30 days)",
+    "commissionValue": "{{value}} commission",
+    "newClients30": "New clients (30 days)",
+    "clientsTotal": "{{count}} clients in total",
+    "inviteSent": "Invite sent to {{email}}. They will get an email with a link to set their own password; the link can be used once."
   },
   "analytics": {
     "activities": "Activities",
@@ -684,7 +707,26 @@
     "tryAgain": "Try Again",
     "value": "Value",
     "won": "Won",
-    "noPropertiesInRange": "No properties in this date range yet."
+    "noPropertiesInRange": "No properties in this date range yet.",
+    "activeNow": "{{count}} active now",
+    "newInPeriod": "{{count}} new in this period",
+    "dealsWonInPeriod": "Deals won in this period",
+    "noneInPeriod": "None in this period",
+    "followUpsToDo": "Follow-ups to do",
+    "followUpsOverdueAndDue": "{{overdue}} overdue, {{upcoming}} due in the next 7 days",
+    "followUpsDueWeek": "{{count}} due in the next 7 days",
+    "allClientsNow": "Every client by status right now (not limited to the dates above).",
+    "revenueSourceNote": "Value and commission recorded on deals marked won in this period. Money actually received is kept in Transactions.",
+    "openTransactions": "Open Transactions",
+    "rangeBackwards": "The start date is after the end date. Pick a start date on or before the end date.",
+    "tabs": {
+      "overview": "Overview",
+      "properties": "Properties",
+      "sales": "Sales",
+      "leads": "Leads",
+      "revenue": "Revenue",
+      "agents": "Agents"
+    }
   },
   "appShell": {
     "skipToContent": "Skip to content"
@@ -1919,7 +1961,9 @@
     "totalPipeline": "Total Pipeline",
     "trackAndManageAllPropertyTransactions": "Track and manage all property transactions",
     "transactions": "Transactions",
-    "type": "Type"
+    "type": "Type",
+    "pendingAndInProgress": "Pending and in progress",
+    "fromCompletedDeals": "Earned on completed deals"
   },
   "unauthorized": {
     "accessDenied": "Access Denied",

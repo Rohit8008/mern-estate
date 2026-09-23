@@ -677,8 +677,8 @@ export default function Transactions() {
 
       {/* KPI cards */}
       <div className='grid grid-cols-2 lg:grid-cols-4 gap-4'>
-        <KpiCard title={t('transactions.totalPipeline')} value={fmtINR(stats.totalPipeline)}    sub='All active deals'  color='emerald' icon={HiCurrencyDollar} />
-        <KpiCard title={t('transactions.commission2')}    value={fmtINR(stats.totalCommission)}  sub='From completed'    color='blue'    icon={HiCurrencyDollar} />
+        <KpiCard title={t('transactions.totalPipeline')} value={fmtINR(stats.totalPipeline)}    sub={t('transactions.pendingAndInProgress')}  color='emerald' icon={HiCurrencyDollar} />
+        <KpiCard title={t('transactions.commission2')}    value={fmtINR(stats.totalCommission)}  sub={t('transactions.fromCompletedDeals')}    color='blue'    icon={HiCurrencyDollar} />
         <KpiCard title={t('transactions.completed')}     value={stats.completed ?? 0}           sub='Successful deals'  color='purple'  icon={HiCheck} />
         <KpiCard title={t('transactions.pending')}       value={stats.pending   ?? 0}           sub='In progress'       color='amber'   icon={HiClock} />
       </div>

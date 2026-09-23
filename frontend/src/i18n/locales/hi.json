@@ -628,7 +628,30 @@
     "totalProperties": "कुल संपत्तियाँ",
     "underNegotiation": "बातचीत जारी",
     "viewAll": "सभी देखें",
-    "widgetNotConfigured": "विजेट कॉन्फ़िगर नहीं"
+    "widgetNotConfigured": "विजेट कॉन्फ़िगर नहीं",
+    "goodMorning": "सुप्रभात",
+    "goodAfternoon": "नमस्कार",
+    "goodEvening": "शुभ संध्या",
+    "overviewSubtitle": "आपकी एजेंसी का हाल",
+    "availableCount": "{{count}} उपलब्ध",
+    "soldRentedCount": "{{sold}} बिकी, {{rented}} किराये पर",
+    "listingsInNegotiation": "मोलभाव में लिस्टिंग",
+    "activeCount": "{{count}} सक्रिय",
+    "matchedCount": "{{count}} मेल खाए",
+    "adminsAndAgents": "एडमिन और एजेंट",
+    "successfullyMatched": "सफलतापूर्वक मेल",
+    "salesOverview": "बिक्री का सारांश",
+    "salesOverviewSubtitle": "अभी की खुली डील और फ़ॉलो-अप; पिछले 30 दिनों में जीती डील और नए क्लाइंट",
+    "openDeals": "खुली डील",
+    "pipelineValue": "पाइपलाइन में {{value}}",
+    "followUpsToDo": "बाकी फ़ॉलो-अप",
+    "overdueCount": "{{count}} समय से पीछे",
+    "dueThisWeek": "{{count}} अगले 7 दिनों में",
+    "dealsWon30": "जीती डील (30 दिन)",
+    "commissionValue": "{{value}} कमीशन",
+    "newClients30": "नए क्लाइंट (30 दिन)",
+    "clientsTotal": "कुल {{count}} क्लाइंट",
+    "inviteSent": "{{email}} को आमंत्रण भेजा गया। उन्हें अपना पासवर्ड बनाने के लिए एक लिंक वाला ईमेल मिलेगा; लिंक एक ही बार काम करेगा।"
   },
   "analytics": {
     "activities": "गतिविधियाँ",
@@ -684,7 +707,26 @@
     "tryAgain": "पुनः प्रयास करें",
     "value": "मान",
     "won": "जीता",
-    "noPropertiesInRange": "इस अवधि में अभी कोई प्रॉपर्टी नहीं है।"
+    "noPropertiesInRange": "इस अवधि में अभी कोई प्रॉपर्टी नहीं है।",
+    "activeNow": "अभी {{count}} सक्रिय",
+    "newInPeriod": "इस अवधि में {{count}} नए",
+    "dealsWonInPeriod": "इस अवधि में जीती गई डील",
+    "noneInPeriod": "इस अवधि में कोई नहीं",
+    "followUpsToDo": "बाकी फ़ॉलो-अप",
+    "followUpsOverdueAndDue": "{{overdue}} समय से पीछे, {{upcoming}} अगले 7 दिनों में",
+    "followUpsDueWeek": "{{count}} अगले 7 दिनों में",
+    "allClientsNow": "अभी सभी क्लाइंट उनकी स्थिति के अनुसार (ऊपर की तारीखों तक सीमित नहीं)।",
+    "revenueSourceNote": "इस अवधि में जीती गई डील पर दर्ज मूल्य और कमीशन। वास्तव में मिला पैसा ट्रांज़ैक्शन में दर्ज होता है।",
+    "openTransactions": "ट्रांज़ैक्शन खोलें",
+    "rangeBackwards": "शुरू की तारीख अंतिम तारीख के बाद है। अंतिम तारीख या उससे पहले की तारीख चुनें।",
+    "tabs": {
+      "overview": "सारांश",
+      "properties": "प्रॉपर्टी",
+      "sales": "बिक्री",
+      "leads": "लीड",
+      "revenue": "आय",
+      "agents": "एजेंट"
+    }
   },
   "appShell": {
     "skipToContent": "सामग्री पर जाएँ"
@@ -1919,7 +1961,9 @@
     "totalPipeline": "कुल पाइपलाइन",
     "trackAndManageAllPropertyTransactions": "सभी संपत्ति लेन-देन ट्रैक और प्रबंधित करें",
     "transactions": "लेन-देन",
-    "type": "प्रकार"
+    "type": "प्रकार",
+    "pendingAndInProgress": "लंबित और जारी",
+    "fromCompletedDeals": "पूरी हुई डील पर कमाया"
   },
   "unauthorized": {
     "accessDenied": "पहुँच अस्वीकृत",

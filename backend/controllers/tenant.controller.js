@@ -131,6 +131,9 @@ export const updateTenantConfig = asyncHandler(async (req, res) => {
     if (key === 'name') tenant.name = req.body.name;
     else tenant.set(key, { ...(tenant[key]?.toObject?.() ?? tenant[key] ?? {}), ...req.body[key] });
   });
+  if (req.body.name !== undefined || req.body.branding !== undefined) {
+    tenant.set('branding.customizedAt', new Date());
+  }
 
   await tenant.save();
   invalidateTenantCache(tenant);
@@ -174,8 +177,13 @@ export const getOnboarding = asyncHandler(async (req, res) => {
     Client.countDocuments({ isDeleted: { $ne: true } }),
   ]);
 
-  // Branding counts as done once it differs from what provisioning set up.
-  const brandedName = Boolean(tenant.branding?.productName && tenant.branding.productName !== 'Real Vista');
+  // Done once the agency has saved its branding, or has a logo or its own
+  // product name. Comparing only the name to 'Real Vista' left the step open
+  // for an agency whose product IS Real Vista, however much it had set up.
+  const brandedName = Boolean(
+    tenant.branding?.customizedAt ||
+    (tenant.branding?.productName && tenant.branding.productName !== 'Real Vista')
+  );
   const hasLogo = Boolean(tenant.branding?.logoUrl);
 
   const steps = [
