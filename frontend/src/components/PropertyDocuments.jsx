@@ -42,7 +42,8 @@ export default function PropertyDocuments({ listingId, canEdit }) {
   async function loadDocs() {
     setLoading(true);
     try {
-      const res = await apiClient.get(`/documents?kind=listing&listingId=${listingId}&limit=50`);
+      // silent: a refusal is shown in this panel, not as a bare "Forbidden" toast.
+      const res = await apiClient.get(`/documents?kind=listing&listingId=${listingId}&limit=50`, { silent: true });
       setDocs(res?.data || []);
     } catch (_) {}
     finally { setLoading(false); }

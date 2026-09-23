@@ -23,7 +23,9 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient, normalizeImageUrl } from '../utils/http';
-import { formatCurrency, formatListingPrice, isPlaceholderPrice } from '../utils/currency';
+import { formatCurrency, formatListingPrice, isPlaceholderPrice, formatDate, formatArea } from '../utils/currency';
+import { listingStatusLabel } from '../utils/listingStatus';
+
 import { cn } from '../utils/cn';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import PropertyDocuments from '../components/PropertyDocuments';
@@ -31,6 +33,10 @@ import CategoryMapFallback from '../components/CategoryMapFallback';
 import usePageTitle from '../hooks/usePageTitle';
 import { Button, Badge, PageLoader } from '../design-system';
 import { useTranslation } from 'react-i18next';
+import SharePropertiesDialog from '../components/SharePropertiesDialog';
+import { useNotification } from '../contexts/NotificationContext';
+
+const STATUS_BADGE = { available: 'success', under_negotiation: 'warning', sold: 'default', rented: 'info' };
 
 const defaultIcon = new L.Icon({
   iconUrl:
@@ -95,6 +101,8 @@ export default function Listing() {
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [contact, setContact] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const { showSuccess } = useNotification();
   const [pendingDelete, setPendingDelete] = useState(false);
   const [categoryFields, setCategoryFields] = useState([]);
   const [propertyTypeData, setPropertyTypeData] = useState(null);
@@ -165,6 +173,12 @@ export default function Listing() {
   const listerId = listing ? String(listing.userRef?._id || listing.userRef || '') : '';
   const isOwnListing = Boolean(currentUser && listerId && listerId === String(currentUser._id));
   const isStaff = currentUser?.role === 'admin' || currentUser?.role === 'employee';
+  // Who may change this listing: an admin, whoever added it, or the agent it is
+  // assigned to. Employees saw Edit and Delete on every listing and were then
+  // refused by the server.
+  const assignedId = listing ? String(listing.assignedAgent?._id || listing.assignedAgent || '') : '';
+  const canWorkOn = currentUser?.role === 'admin' || isOwnListing || (currentUser && assignedId === String(currentUser._id));
+  const hasCategoryFacts = Boolean(listing?.category && Object.keys(listing?.attributes || {}).length);
 
   return (
     <main>
@@ -213,9 +227,12 @@ export default function Listing() {
           </div>
           <button
             type='button'
-            aria-label={t('listing.copyListingLink')}
+            aria-label={isStaff ? t('listing.shareWithClient') : t('listing.copyListingLink')}
             className='fixed top-20 right-4 z-10 border border-slate-200 rounded-full w-12 h-12 flex justify-center items-center bg-white/90 backdrop-blur cursor-pointer shadow hover:shadow-md transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
             onClick={() => {
+              // For staff this page's own address is behind sign-in, so a client
+              // who got it met a login screen. Staff make a real share link.
+              if (isStaff) { setShareOpen(true); return; }
               navigator.clipboard.writeText(window.location.href);
               setCopied(true);
               setTimeout(() => {
@@ -227,6 +244,9 @@ export default function Listing() {
           </button>
           {copied && (
             <p className='fixed top-36 right-6 z-10 rounded-md bg-slate-900 text-white text-xs px-2 py-1 shadow'>{t('listing.linkCopied2')}</p>
+          )}
+          {isStaff && (
+            <SharePropertiesDialog open={shareOpen} onClose={() => setShareOpen(false)} listings={[listing]} />
           )}
           <div className='max-w-6xl mx-auto px-3 my-7 grid grid-cols-1 lg:grid-cols-3 gap-6'>
             <div className='lg:col-span-2 flex flex-col gap-4'>
@@ -245,7 +265,7 @@ export default function Listing() {
                     {(!currentUser?.role || currentUser?.role === 'buyer') ? (
                       // Hide owner details for buyers
                       listing.createdAt && (
-                        <span>Posted on {new Date(listing.createdAt).toLocaleDateString()}</span>
+                        <span>Posted on {formatDate(listing.createdAt)}</span>
                       )
                     ) : (
                       // Show owner details for agents/employees
@@ -261,7 +281,7 @@ export default function Listing() {
                           </Link>
                         )}
                         {listing.createdAt && (
-                          <span>on {new Date(listing.createdAt).toLocaleDateString()}</span>
+                          <span>on {formatDate(listing.createdAt)}</span>
                         )}
                       </>
                     )}
@@ -269,6 +289,10 @@ export default function Listing() {
                   <div className='flex flex-wrap gap-2 mt-2'>
                     <Badge variant={listing.type === 'rent' ? 'info' : 'purple'} size='md'>
                       {listing.type === 'rent' ? 'For Rent' : 'For Sale'}
+                    </Badge>
+                    {/* Sold / rented / in negotiation was shown nowhere on this page. */}
+                    <Badge variant={STATUS_BADGE[listing.status] || 'default'} size='md'>
+                      {listingStatusLabel(listing.status)}
                     </Badge>
                     {listing.offer && listing.discountPrice > 0 && (!currentUser?.role || currentUser?.role === 'buyer') ? (
                       <Badge variant='success' size='md'>{t('listing.specialOffer')}</Badge>
@@ -331,18 +355,23 @@ export default function Listing() {
                     second, parallel dynamic-field store that nothing wrote to.
                     It was retired by scripts/migrateFieldStores.js; category
                     fields render from `attributes` above. */}
-                {/* Quick info pills — only for listings with no property type,
-                    where there are no typed fields to show instead. */}
-                {!listing.propertyType && (
+                {/* Quick info pills, unless category fields already describe the
+                    property. Keyed on the category, not the property type: a type
+                    set without a category hid every one of these facts. */}
+                {!hasCategoryFacts && (Boolean(listing.bedrooms || listing.bathrooms) || listing.parking || listing.furnished) && (
                   <ul className='mt-4 text-slate-700 font-semibold text-sm flex flex-wrap items-center gap-3 sm:gap-4'>
-                    <li className='flex items-center gap-2 whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-1 rounded-full'>
-                      <MdBed className='text-base' />
-                      {listing.bedrooms > 1 ? `${listing.bedrooms} beds` : `${listing.bedrooms} bed`}
-                    </li>
-                    <li className='flex items-center gap-2 whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-1 rounded-full'>
-                      <MdBathroom className='text-base' />
-                      {listing.bathrooms > 1 ? `${listing.bathrooms} baths` : `${listing.bathrooms} bath`}
-                    </li>
+                    {listing.bedrooms > 0 && (
+                      <li className='flex items-center gap-2 whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-1 rounded-full'>
+                        <MdBed className='text-base' />
+                        {listing.bedrooms > 1 ? `${listing.bedrooms} beds` : `${listing.bedrooms} bed`}
+                      </li>
+                    )}
+                    {listing.bathrooms > 0 && (
+                      <li className='flex items-center gap-2 whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-1 rounded-full'>
+                        <MdBathroom className='text-base' />
+                        {listing.bathrooms > 1 ? `${listing.bathrooms} baths` : `${listing.bathrooms} bath`}
+                      </li>
+                    )}
                     <li className='flex items-center gap-2 whitespace-nowrap bg-slate-100 text-slate-700 px-3 py-1 rounded-full'>
                       <HiOutlineTruck className='text-base' />
                       {listing.parking ? 'Parking spot' : 'No Parking'}
@@ -356,7 +385,7 @@ export default function Listing() {
               </div>
 
               {/* New Property Details */}
-              {(listing.areaName || listing.plotSize || listing.sqYard || listing.propertyNo || listing.remarks) && (
+              {Boolean(listing.areaName || listing.plotSize || listing.sqYard > 0 || listing.areaSqFt > 0 || listing.sqYardRate > 0 || listing.totalValue > 1 || listing.propertyNo || listing.remarks) && (
                 <div className='bg-white rounded-xl shadow p-4 sm:p-6 mt-4'>
                   <h2 className='font-semibold text-lg mb-4 text-slate-800'>{t('listing.propertyDetails')}</h2>
                   <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
@@ -372,19 +401,20 @@ export default function Listing() {
                         <span className='text-slate-800'>{listing.plotSize}</span>
                       </div>
                     )}
-                    {listing.sqYard && listing.sqYard > 0 && (
+                    {/* `x && …` rendered a bare "0" for every zero value here. */}
+                    {(listing.sqYard > 0 || listing.areaSqFt > 0) && (
                       <div className='flex flex-col'>
-                        <span className='text-sm font-medium text-slate-600'>{t('listing.squareYards')}</span>
-                        <span className='text-slate-800'>{listing.sqYard} sq yards</span>
+                        <span className='text-sm font-medium text-slate-600'>{t('listing.area')}</span>
+                        <span className='text-slate-800'>{listing.sqYard > 0 ? `${listing.sqYard} sq yards` : formatArea(listing.areaSqFt)}</span>
                       </div>
                     )}
-                    {listing.sqYardRate && listing.sqYardRate > 0 && (
+                    {listing.sqYardRate > 0 && (
                       <div className='flex flex-col'>
                         <span className='text-sm font-medium text-slate-600'>{t('listing.ratePerSqYard')}</span>
                         <span className='text-slate-800'>{formatCurrency(listing.sqYardRate)}</span>
                       </div>
                     )}
-                    {listing.totalValue && !isPlaceholderPrice(listing.totalValue) && (
+                    {listing.totalValue > 0 && !isPlaceholderPrice(listing.totalValue) && (
                       <div className='flex flex-col'>
                         <span className='text-sm font-medium text-slate-600'>{t('listing.totalValue')}</span>
                         <span className='text-slate-800 font-semibold'>{formatListingPrice(listing.totalValue)}</span>
@@ -494,7 +524,7 @@ export default function Listing() {
                 <CategoryMapFallback categorySlug={listing.category} listingId={listing._id} />
               )}
             {/* Property Documents — visible to admin/employee only */}
-            {currentUser && !isBuyerViewMode && (currentUser.role === 'admin' || currentUser.role === 'employee') && listing._id && (
+            {currentUser && !isBuyerViewMode && isStaff && canWorkOn && listing._id && (
               <PropertyDocuments
                 listingId={listing._id}
                 canEdit={
@@ -538,7 +568,7 @@ export default function Listing() {
                 {/* A buyer's button. Agency staff reach owners through Property Owners,
                     and the lister has no one to contact about their own listing. */}
                 {currentUser && !isOwnListing && !isStaff && !contact && (
-                  <Button onClick={() => setContact(true)} size='lg' className='mt-5 w-full justify-center uppercase'>{t('listing.contactLandlord')}</Button>
+                  <Button onClick={() => setContact(true)} size='lg' className='mt-5 w-full justify-center'>{t('listing.contactLandlord')}</Button>
                 )}
                 {contact && (
                   <div className='mt-4 space-y-3'>
@@ -548,7 +578,7 @@ export default function Listing() {
                 {currentUser &&
                   !isBuyerViewMode &&
                   (currentUser.role === 'admin' ||
-                    currentUser.role === 'employee' ||
+                    (currentUser.role === 'employee' && canWorkOn) ||
                     (currentUser.role === 'seller' &&
                       ((typeof listing.userRef === 'string' && listing.userRef === currentUser._id) ||
                         (listing.userRef && typeof listing.userRef === 'object' && listing.userRef._id === currentUser._id)))) && (
@@ -558,13 +588,13 @@ export default function Listing() {
                         to={`/update-listing/${listing._id}`}
                         variant='secondary'
                         icon={HiOutlinePencil}
-                        className='w-1/2 justify-center uppercase'
+                        className='w-1/2 justify-center'
                       >{t('listing.edit')}</Button>
                       <Button
                         variant='danger'
                         icon={HiOutlineTrash}
                         onClick={() => setPendingDelete(true)}
-                        className='w-1/2 justify-center uppercase'
+                        className='w-1/2 justify-center'
                       >{t('listing.delete')}</Button>
                     </div>
                   )}
@@ -584,7 +614,8 @@ export default function Listing() {
             const data = await apiClient.delete(`/listing/delete/${listing._id}`);
             if (data.success === false) return;
             window.dispatchEvent(new CustomEvent('listing-deleted', { detail: { id: listing._id } }));
-            if (window.history.length > 2) { navigate(-1); } else { navigate('/search'); }
+            showSuccess(`${listing.name} was deleted.`);
+            navigate(isStaff ? '/properties' : '/search');
           } catch (_) { }
         }}
         onCancel={() => setPendingDelete(false)}

@@ -117,8 +117,11 @@ describe('formatListingPrice', () => {
     expect(digitsOf(formatListingPrice(7_500_000))).toBe('7500000');
   });
 
-  it('does not mistake zero for the sentinel', () => {
-    expect(formatListingPrice(0)).not.toBe('Price on request');
+  // 0 is the form's "no price entered", so a listing never shows "₹0"; the
+  // plain currency formatter still prints zero for totals and the like.
+  it('treats an unset (zero) listing price as price on request', () => {
+    expect(formatListingPrice(0)).toBe('Price on request');
+    expect(formatCurrency(0)).not.toBe('Price on request');
   });
 });
 

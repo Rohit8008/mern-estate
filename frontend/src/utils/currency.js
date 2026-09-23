@@ -120,7 +120,8 @@ export function formatNumber(value, options) {
 // Formats a Listing's regularPrice/discountPrice for display, showing
 // "Price on request" for listings imported without real price data.
 export function formatListingPrice(amount) {
-  if (isPlaceholderPrice(amount)) return 'Price on request';
+  // 0 / empty is "no price entered" (the form's default), not a price of ₹0.
+  if (isPlaceholderPrice(amount) || !Number(amount)) return 'Price on request';
   return formatCurrency(amount);
 }
 

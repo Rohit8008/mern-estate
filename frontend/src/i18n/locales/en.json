@@ -1326,7 +1326,9 @@
     "notFoundTitle": "This property isn't available",
     "notFoundBody": "It may have been deleted, or the link is for another workspace.",
     "backToProperties": "Back to properties",
-    "loadFailedBody": "The property could not be loaded. Check your connection and try again."
+    "loadFailedBody": "The property could not be loaded. Check your connection and try again.",
+    "area": "Area",
+    "shareWithClient": "Share with a client"
   },
   "listingForm": {
     "30x50": "30x50",
@@ -1651,8 +1653,12 @@
     "type": "Type",
     "unassigned": "Unassigned",
     "viewPublicPage": "View public page",
-    "whereConditionValue": "Where / condition / value",
-    "yes": "Yes"
+    "whereConditionValue": "Narrow the list. A property has to match every filter you set.",
+    "yes": "Yes",
+    "sharedLinks": "Shared links",
+    "export": "Export",
+    "lease": "Lease",
+    "deleted": "Deleted"
   },
   "propertyDocuments": {
     "cancel": "Cancel",

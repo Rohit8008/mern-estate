@@ -462,7 +462,9 @@ export default function PortfolioDashboard() {
                             </div>
                             <div>
                               <p className='text-sm font-medium text-slate-900 truncate max-w-[200px]'>{property.name}</p>
-                              <p className='text-xs text-slate-500'>{property.bedrooms || 0} bed • {property.bathrooms || 0} bath</p>
+                              {Boolean(property.bedrooms || property.bathrooms) && (
+                                <p className='text-xs text-slate-500'>{[property.bedrooms ? `${property.bedrooms} bed` : '', property.bathrooms ? `${property.bathrooms} bath` : ''].filter(Boolean).join(' • ')}</p>
+                              )}
                             </div>
                           </div>
                         </td>

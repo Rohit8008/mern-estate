@@ -16,6 +16,12 @@ import {
 } from '../utils/documentTypes.js';
 import { fileTypeFromBuffer } from 'file-type';
 
+// An employee works on a listing they added OR one assigned to them. These
+// checks read only userRef, so an agent could not see the paperwork on the
+// listings an admin had given them.
+const worksOnListing = (listing, userId) =>
+  String(listing.userRef) === String(userId) || String(listing.assignedAgent || '') === String(userId);
+
 const uploadsDir = path.join(process.cwd(), 'uploads', 'docs');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -70,9 +76,9 @@ export const uploadDocument = async (req, res, next) => {
       if (!c) return next(errorHandler(404, 'Client not found'));
       if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
     } else if (kind === 'listing') {
-      const l = await Listing.findById(listingId).select('userRef');
+      const l = await Listing.findById(listingId).select('userRef assignedAgent');
       if (!l) return next(errorHandler(404, 'Listing not found'));
-      if (req.user.role !== 'admin' && String(l.userRef) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (req.user.role !== 'admin' && !worksOnListing(l, req.user.id)) return next(errorHandler(403, "You can only manage documents on properties you added or that are assigned to you."));
     } else if (kind === 'category') {
       const cat = await Category.findById(categoryId).select('slug');
       if (!cat) return next(errorHandler(404, 'Category not found'));
@@ -173,9 +179,9 @@ export const listDocuments = async (req, res, next) => {
         if (String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
       }
       if (filter['related.listingId']) {
-        const l = await Listing.findById(filter['related.listingId']).select('userRef');
+        const l = await Listing.findById(filter['related.listingId']).select('userRef assignedAgent');
         if (!l) return next(errorHandler(404, 'Listing not found'));
-        if (String(l.userRef) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+        if (!worksOnListing(l, req.user.id)) return next(errorHandler(403, "You can only see documents on properties you added or that are assigned to you."));
       }
       if (filter['related.categoryId']) {
         const cat = await Category.findById(filter['related.categoryId']).select('slug');
@@ -208,8 +214,8 @@ export const deleteDocument = async (req, res, next) => {
         const c = await Client.findById(doc.related.clientId).select('assignedTo');
         if (!c || String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
       } else if (doc.related.kind === 'listing' && doc.related.listingId) {
-        const l = await Listing.findById(doc.related.listingId).select('userRef');
-        if (!l || String(l.userRef) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+        const l = await Listing.findById(doc.related.listingId).select('userRef assignedAgent');
+        if (!l || !worksOnListing(l, req.user.id)) return next(errorHandler(403, "You can only manage documents on properties you added or that are assigned to you."));
       } else if (doc.related.kind === 'category' && doc.related.categoryId) {
         const cat = await Category.findById(doc.related.categoryId).select('slug');
         if (!cat || !(req.user.assignedCategories || []).includes(cat.slug)) return next(errorHandler(403, 'Forbidden'));
@@ -313,8 +319,8 @@ export const serveDocumentFile = async (req, res, next) => {
         const c = await Client.findById(doc.related.clientId).select('assignedTo');
         if (!c || String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
       } else if (doc.related.kind === 'listing' && doc.related.listingId) {
-        const l = await Listing.findById(doc.related.listingId).select('userRef');
-        if (!l || String(l.userRef) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+        const l = await Listing.findById(doc.related.listingId).select('userRef assignedAgent');
+        if (!l || !worksOnListing(l, req.user.id)) return next(errorHandler(403, "You can only manage documents on properties you added or that are assigned to you."));
       } else if (doc.related.kind === 'category' && doc.related.categoryId) {
         const cat = await Category.findById(doc.related.categoryId).select('slug');
         if (!cat || !(req.user.assignedCategories || []).includes(cat.slug)) {
