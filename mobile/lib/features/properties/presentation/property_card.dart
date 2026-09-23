@@ -1,13 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/utils/format.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/listing.dart';
 
-final _priceFmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
 AppBadgeVariant listingStatusVariant(String status) => switch (status) {
       'available' => AppBadgeVariant.success,
@@ -74,8 +73,8 @@ class PropertyCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      '${_priceFmt.format(listing.displayPrice)}${listing.type == 'rent' ? ' / mo' : ''}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.indigo700),
+                      '${Fmt.price(listing.displayPrice)}${listing.type == 'rent' && listing.displayPrice > 1 ? ' / mo' : ''}',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.moneyInk(context)),
                     ),
                     const Spacer(),
                     if (listing.bedrooms > 0) ...[

@@ -109,7 +109,7 @@ class _DocumentRow extends ConsumerWidget {
                   Text(document.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                   const SizedBox(height: 2),
                   Text(
-                    '${formatFileSize(document.size)}${document.createdAt != null ? ' · ${DateFormat('MMM d, yyyy').format(document.createdAt!)}' : ''}',
+                    '${formatFileSize(document.size)}${document.createdAt != null ? ' · ${DateFormat('d MMM yyyy').format(document.createdAt!)}' : ''}',
                     style: const TextStyle(color: AppColors.slate500, fontSize: 11.5),
                   ),
                 ],

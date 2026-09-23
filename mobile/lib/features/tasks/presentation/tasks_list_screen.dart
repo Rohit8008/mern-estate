@@ -97,7 +97,7 @@ class _TaskRow extends StatelessWidget {
                 Text(task.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                 if (task.dueAt != null) ...[
                   const SizedBox(height: 2),
-                  Text(DateFormat('MMM d, yyyy').format(task.dueAt!), style: TextStyle(color: overdue ? AppColors.rose600 : AppColors.slate500, fontSize: 12)),
+                  Text(DateFormat('d MMM yyyy').format(task.dueAt!), style: TextStyle(color: overdue ? AppColors.rose600 : AppColors.slate500, fontSize: 12)),
                 ],
               ],
             ),
@@ -117,16 +117,18 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final on = dark ? AppColors.indigo600 : AppColors.slate900;
     return Material(
-      color: selected ? AppColors.slate900 : AppColors.white,
+      color: selected ? on : (dark ? AppColors.slate900 : AppColors.white),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? AppColors.slate900 : AppColors.slate200)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? on : (dark ? AppColors.slate700 : AppColors.slate200))),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: TextStyle(color: selected ? AppColors.white : AppColors.slate600, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
     );

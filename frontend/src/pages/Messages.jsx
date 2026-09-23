@@ -7,6 +7,10 @@ import { apiClient } from '../utils/http';
 import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
 import { PageHeader, Button, Spinner } from '../design-system';
 import { HiPlus, HiX, HiSearch } from 'react-icons/hi';
+
+/** First and last name when there is one, else the username. */
+const personName = (u) =>
+  [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || u?.username || '';
 import { useTranslation } from 'react-i18next';
 
 export default function Messages() {
@@ -29,6 +33,10 @@ export default function Messages() {
   const searchTimerRef = useRef(null);
 
   const [activeChatUser, setActiveChatUser] = useState('');
+  // Who the open chat is with, as the list or search already knows them —
+  // the chat used to fetch /user/:id and show a raw id when that failed.
+  const [activeUserInfo, setActiveUserInfo] = useState(null);
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     if (!showNewChat) return;
@@ -58,8 +66,9 @@ export default function Messages() {
     }, 300);
   }, []);
 
-  const startConversation = (userId) => {
-    setActiveChatUser(userId);
+  const startConversation = (user) => {
+    setActiveChatUser(user._id);
+    setActiveUserInfo(user);
     setShowNewChat(false);
     setSearchQuery('');
     setSearchResults([]);
@@ -68,9 +77,12 @@ export default function Messages() {
   useEffect(() => {
     const load = async () => {
       try {
-        setLoading(true);
+        // Spinner on the first load only: every new message reloads the list,
+        // and the spinner flashed above it each time.
+        if (!loadedOnceRef.current) setLoading(true);
         const cData = await apiClient.get('/message/conversations');
         setConversations(Array.isArray(cData) ? cData : []);
+        loadedOnceRef.current = true;
       } catch (_) {}
       setLoading(false);
     };
@@ -107,17 +119,19 @@ export default function Messages() {
     if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
-    const diff = now - date;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (days === 1) return 'Yesterday';
+    // Calendar days, not 24-hour blocks: 1 am today is not "yesterday" of 11 pm.
+    const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const days = Math.round((startOf(now) - startOf(date)) / (1000 * 60 * 60 * 24));
+    const sameDay = date.toDateString() === now.toDateString();
+    if (sameDay) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (days === 1) return t('chat.yesterday');
     if (days < 7) return date.toLocaleDateString([], { weekday: 'short' });
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString([], { day: 'numeric', month: 'short' });
   };
 
   const filtered = (Array.isArray(conversations) ? conversations : []).filter((c) => {
     if (!query.trim()) return true;
-    const name = c.otherUser?.username || '';
+    const name = `${personName(c.otherUser)} ${c.otherUser?.username || ''}`;
     const last = c.lastMessage?.content || '';
     return name.toLowerCase().includes(query.toLowerCase()) || last.toLowerCase().includes(query.toLowerCase());
   });
@@ -170,7 +184,7 @@ export default function Messages() {
                 {searchResults.map((u) => (
                   <button
                     key={u._id}
-                    onClick={() => startConversation(u._id)}
+                    onClick={() => startConversation(u)}
                     className='w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left'
                   >
                     <div className='relative'>
@@ -178,10 +192,8 @@ export default function Messages() {
                       {onlineMap[u._id] && <span className='absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full' />}
                     </div>
                     <div>
-                      <div className='text-sm font-medium text-slate-800'>{u.username}</div>
-                      {(u.firstName || u.lastName) && (
-                        <div className='text-xs text-slate-500'>{[u.firstName, u.lastName].filter(Boolean).join(' ')}</div>
-                      )}
+                      <div className='text-sm font-medium text-slate-800'>{personName(u)}</div>
+                      {personName(u) !== u.username && <div className='text-xs text-slate-500'>@{u.username}</div>}
                     </div>
                   </button>
                 ))}
@@ -198,7 +210,7 @@ export default function Messages() {
                     {onlineUsersList.map((u) => (
                       <button
                         key={u._id}
-                        onClick={() => startConversation(u._id)}
+                        onClick={() => startConversation(u)}
                         className='w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left'
                       >
                         <div className='relative'>
@@ -206,10 +218,8 @@ export default function Messages() {
                           <span className='absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full' />
                         </div>
                         <div>
-                          <div className='text-sm font-medium text-slate-800'>{u.username}</div>
-                          {(u.firstName || u.lastName) && (
-                            <div className='text-xs text-slate-500'>{[u.firstName, u.lastName].filter(Boolean).join(' ')}</div>
-                          )}
+                          <div className='text-sm font-medium text-slate-800'>{personName(u)}</div>
+                          {personName(u) !== u.username && <div className='text-xs text-slate-500'>@{u.username}</div>}
                         </div>
                       </button>
                     ))}
@@ -223,7 +233,9 @@ export default function Messages() {
 
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
         {/* Conversations sidebar */}
-        <section className='lg:col-span-1'>
+        {/* On a phone the list and the chat take turns; they used to stack,
+            so opening a chat meant scrolling past every conversation. */}
+        <section className={`lg:col-span-1 ${activeChatUser ? 'hidden lg:block' : ''}`}>
           <div className='bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm'>
             <div className='p-3 border-b border-slate-100'>
               <div className='relative'>
@@ -246,7 +258,12 @@ export default function Messages() {
               {filtered.map((c) => (
                 <button
                   key={c.otherId}
-                  onClick={() => setActiveChatUser(c.otherId)}
+                  onClick={() => {
+                    setActiveChatUser(c.otherId);
+                    setActiveUserInfo(c.otherUser || null);
+                    // Read on open; the server's reload would confirm it a moment later.
+                    setConversations((list) => list.map((x) => (x.otherId === c.otherId ? { ...x, unread: 0 } : x)));
+                  }}
                   className={`p-3 text-left border-b border-slate-50 flex gap-3 items-center transition-colors ${
                     activeChatUser === c.otherId
                       ? 'bg-indigo-50 border-l-4 border-l-indigo-600'
@@ -264,7 +281,7 @@ export default function Messages() {
                   <div className='flex-1 min-w-0'>
                     <div className='flex justify-between items-center mb-0.5'>
                       <span className='text-sm font-semibold text-slate-800 truncate'>
-                        {c.otherUser?.username || c.otherId}
+                        {personName(c.otherUser) || t('messages.formerMember')}
                       </span>
                       <span className='text-xs text-slate-400 flex-shrink-0 ml-2'>
                         {formatTime(c.lastMessage?.createdAt)}
@@ -297,9 +314,13 @@ export default function Messages() {
         </section>
 
         {/* Chat area */}
-        <section className='lg:col-span-2'>
+        <section className={`lg:col-span-2 ${activeChatUser ? '' : 'hidden lg:block'}`}>
           {activeChatUser ? (
-            <Chat otherIdProp={activeChatUser} />
+            <Chat
+              otherIdProp={activeChatUser}
+              otherUserInfo={activeUserInfo}
+              onBack={() => { setActiveChatUser(''); setActiveUserInfo(null); }}
+            />
           ) : (
             <div className='h-[calc(100vh-230px)] flex flex-col items-center justify-center border border-slate-200 rounded-xl bg-white shadow-sm'>
               <div className='w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4'>

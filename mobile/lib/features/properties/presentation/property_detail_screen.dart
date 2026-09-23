@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/utils/format.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -58,7 +59,7 @@ class PropertyDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _share(Listing listing) async {
-    final buffer = StringBuffer('${listing.name}\n${_priceFmt.format(listing.displayPrice)}');
+    final buffer = StringBuffer('${listing.name}\n${Fmt.price(listing.displayPrice)}');
     if (listing.lat != null && listing.lng != null) {
       buffer.write('\nhttps://www.google.com/maps?q=${listing.lat},${listing.lng}');
     }
@@ -121,8 +122,8 @@ class _DetailBody extends ConsumerWidget {
               ],
               const SizedBox(height: AppSpacing.md),
               Text(
-                '${_priceFmt.format(listing.displayPrice)}${listing.type == 'rent' ? ' / month' : ''}',
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.indigo700),
+                '${Fmt.price(listing.displayPrice)}${listing.type == 'rent' && listing.displayPrice > 1 ? ' / month' : ''}',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.moneyInk(context)),
               ),
               if (listing.offer && listing.discountPrice > 0 && listing.discountPrice < listing.regularPrice) ...[
                 const SizedBox(height: 2),

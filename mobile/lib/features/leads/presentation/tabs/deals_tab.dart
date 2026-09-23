@@ -60,7 +60,7 @@ class DealsTab extends ConsumerWidget {
                           Text('${deal.type[0].toUpperCase()}${deal.type.substring(1)}', style: const TextStyle(color: AppColors.slate500, fontSize: 12.5)),
                           if (deal.expectedCloseDate != null) ...[
                             const SizedBox(height: 4),
-                            Text('Expected close: ${DateFormat('MMM d, yyyy').format(deal.expectedCloseDate!)}', style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
+                            Text('Expected close: ${DateFormat('d MMM yyyy').format(deal.expectedCloseDate!)}', style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
                           ],
                           if (deal.notes != null && deal.notes!.isNotEmpty) ...[
                             const SizedBox(height: 6),

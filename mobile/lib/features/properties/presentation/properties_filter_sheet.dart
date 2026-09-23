@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/listing.dart';
@@ -100,7 +99,7 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   Widget _sectionLabel(String text) => Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.slate700)),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
       );
 
   Widget _chipRow(List<String> values, String? selected, ValueChanged<String> onTap, {String Function(String)? labelBuilder}) {

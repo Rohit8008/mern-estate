@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/widgets.dart';
 import '../../../properties/domain/field_definition.dart';
 
@@ -52,7 +51,7 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(_label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+            Text(_label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             Switch(value: boolValue, onChanged: widget.onChanged),
           ],
         );
@@ -71,10 +70,10 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+            Text(_label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             AppButton(
-              label: date != null ? DateFormat('MMM d, yyyy').format(date) : 'Select date',
+              label: date != null ? DateFormat('d MMM yyyy').format(date) : 'Select date',
               icon: Icons.calendar_today_outlined,
               variant: AppButtonVariant.secondary,
               expand: true,

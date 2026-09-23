@@ -14,6 +14,7 @@ class KpiCard extends StatelessWidget {
     this.accent = AppAccent.blue,
     this.trendValue,
     this.trendLabel,
+    this.subtitle,
     this.onTap,
   });
 
@@ -23,6 +24,9 @@ class KpiCard extends StatelessWidget {
   final AppAccent accent;
   final int? trendValue;
   final String? trendLabel;
+
+  /// A short line under the value ("3 available, 1 sold").
+  final String? subtitle;
   final VoidCallback? onTap;
 
   @override
@@ -62,13 +66,26 @@ class KpiCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: 28, fontWeight: FontWeight.w800, color: ink, fontFeatures: const [FontFeature.tabularFigures()]),
+          // Shrinks to fit instead of cutting off: a long amount used to read
+          // "₹2,13,4…", which hid the very number the card is for.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                  fontSize: 28, fontWeight: FontWeight.w800, color: ink, fontFeatures: const [FontFeature.tabularFigures()]),
+            ),
           ),
+          // Flexible: in a fixed-height grid cell (and with large system
+          // fonts) the sub-line gives way instead of overflowing the card.
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Flexible(
+              child: Text(subtitle!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.slate500)),
+            ),
+          ],
           if (trendValue != null) ...[
             const SizedBox(height: 8),
             _TrendPill(value: trendValue!, label: trendLabel),

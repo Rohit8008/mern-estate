@@ -47,7 +47,7 @@ class ReviewStep extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               Text(
                 '${_priceFmt.format(draft.regularPrice)}${draft.type == 'rent' ? ' / month' : ''}',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.indigo700),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.moneyInk(context)),
               ),
               if (draft.offer && draft.discountPrice > 0) Text('Offer price: ${_priceFmt.format(draft.discountPrice)}', style: const TextStyle(color: AppColors.emerald600, fontSize: 12.5)),
             ],

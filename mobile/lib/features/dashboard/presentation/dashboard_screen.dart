@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/format.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../../auth/auth_providers.dart';
 import '../../buyers/presentation/buyers_list_screen.dart';
+import '../../tasks/presentation/tasks_list_screen.dart';
+import '../../transactions/presentation/transactions_list_screen.dart';
 import '../dashboard_providers.dart';
 import '../domain/dashboard_analytics.dart';
 
@@ -61,8 +63,12 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat.decimalPattern('en_IN');
-    final today = DateFormat('EEEE, MMMM d').format(DateTime.now());
+    final today = Fmt.longDay(DateTime.now());
+    final p = analytics.properties;
+    final b = analytics.buyers;
+    void push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    String parts(List<(int, String)> items) =>
+        items.where((e) => e.$1 > 0).map((e) => '${Fmt.count(e.$1)} ${e.$2}').join(' · ');
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
@@ -76,43 +82,57 @@ class _DashboardContent extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: AppSpacing.md,
             crossAxisSpacing: AppSpacing.md,
-            mainAxisExtent: 140,
+            mainAxisExtent: 152,
           ),
           children: [
             KpiCard(
               title: 'Total Properties',
-              value: fmt.format(analytics.properties.total),
+              value: Fmt.count(p.total),
+              subtitle: parts([(p.available, 'available'), (p.sold, 'sold'), (p.rented, 'rented')]),
               icon: Icons.apartment_rounded,
               accent: AppAccent.blue,
+              onTap: () => context.go('/properties'),
             ),
             KpiCard(
               title: 'Under Negotiation',
-              value: fmt.format(analytics.properties.underNegotiation),
+              value: Fmt.count(p.underNegotiation),
+              subtitle: p.underNegotiation == 0 ? 'None right now' : 'Properties in talks',
               icon: Icons.hourglass_bottom_rounded,
               accent: AppAccent.amber,
+              onTap: () => context.go('/properties'),
             ),
             KpiCard(
               title: 'Buyer Requirements',
-              value: fmt.format(analytics.buyers.total),
+              value: Fmt.count(b.total),
+              subtitle: parts([(b.active, 'active'), (b.matched, 'matched')]),
               icon: Icons.fact_check_outlined,
               accent: AppAccent.purple,
+              onTap: () => push(const BuyersListScreen()),
             ),
             if (isAdmin)
               KpiCard(
                 title: 'Team Members',
-                value: fmt.format(analytics.employees.total),
+                value: Fmt.count(analytics.employees.total),
+                subtitle: '${Fmt.count(analytics.employees.active)} active',
                 icon: Icons.groups_2_outlined,
                 accent: AppAccent.emerald,
               )
             else
               KpiCard(
                 title: 'Closed Buyers',
-                value: fmt.format(analytics.buyers.closed),
+                value: Fmt.count(b.closed),
                 icon: Icons.check_circle_outline_rounded,
                 accent: AppAccent.emerald,
+                onTap: () => push(const BuyersListScreen()),
               ),
           ],
         ),
+        if (analytics.sales != null) ...[
+          const SizedBox(height: AppSpacing.xxl),
+          _SectionHeader(title: 'Sales overview', actionLabel: 'Deals', onViewAll: () => push(const TransactionsListScreen())),
+          const SizedBox(height: AppSpacing.sm),
+          _SalesOverview(sales: analytics.sales!, onFollowUps: () => push(const TasksListScreen()), onLeads: () => context.go('/leads')),
+        ],
         const SizedBox(height: AppSpacing.xxl),
         _SectionHeader(title: 'Recent Listings', onViewAll: () => context.go('/properties')),
         const SizedBox(height: AppSpacing.sm),
@@ -130,12 +150,7 @@ class _DashboardContent extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        _SectionHeader(
-          title: 'Recent Buyer Requirements',
-          onViewAll: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const BuyersListScreen()),
-          ),
-        ),
+        _SectionHeader(title: 'Recent Buyer Requirements', onViewAll: () => push(const BuyersListScreen())),
         const SizedBox(height: AppSpacing.sm),
         AppCard(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
@@ -189,9 +204,10 @@ class _GreetingBanner extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.onViewAll});
+  const _SectionHeader({required this.title, required this.onViewAll, this.actionLabel = 'View all'});
 
   final String title;
+  final String actionLabel;
   final VoidCallback onViewAll;
 
   @override
@@ -200,9 +216,66 @@ class _SectionHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.slate900)),
+          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         ),
-        TextButton(onPressed: onViewAll, child: const Text('View all', style: TextStyle(fontSize: 12.5))),
+        TextButton(onPressed: onViewAll, child: Text(actionLabel, style: const TextStyle(fontSize: 12.5))),
+      ],
+    );
+  }
+}
+
+/// Deals and follow-ups at a glance — the same four figures as the website's
+/// Sales overview, so the phone and the desk tell the same story.
+class _SalesOverview extends StatelessWidget {
+  const _SalesOverview({required this.sales, required this.onFollowUps, required this.onLeads});
+
+  final SalesOverview sales;
+  final VoidCallback onFollowUps;
+  final VoidCallback onLeads;
+
+  @override
+  Widget build(BuildContext context) {
+    final overdue = sales.followUpsOverdue;
+    return GridView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: AppSpacing.md,
+        crossAxisSpacing: AppSpacing.md,
+        mainAxisExtent: 152,
+      ),
+      children: [
+        KpiCard(
+          title: 'Open deals',
+          value: Fmt.count(sales.openDeals),
+          subtitle: sales.pipelineValue > 0 ? '${Fmt.moneyCompact(sales.pipelineValue)} in the pipeline' : 'Nothing in the pipeline',
+          icon: Icons.trending_up_rounded,
+          accent: AppAccent.blue,
+        ),
+        KpiCard(
+          title: 'Follow-ups',
+          value: Fmt.count(overdue + sales.followUpsUpcoming),
+          subtitle: overdue > 0 ? '$overdue overdue · ${sales.followUpsUpcoming} this week' : '${sales.followUpsUpcoming} due this week',
+          icon: overdue > 0 ? Icons.warning_amber_rounded : Icons.event_note_outlined,
+          accent: overdue > 0 ? AppAccent.rose : AppAccent.amber,
+          onTap: onFollowUps,
+        ),
+        KpiCard(
+          title: 'Won (30 days)',
+          value: Fmt.count(sales.wonDeals),
+          subtitle: sales.wonCommission > 0 ? '${Fmt.moneyCompact(sales.wonCommission)} commission' : null,
+          icon: Icons.emoji_events_outlined,
+          accent: AppAccent.emerald,
+        ),
+        KpiCard(
+          title: 'New leads (30 days)',
+          value: Fmt.count(sales.newClients),
+          subtitle: '${Fmt.count(sales.totalClients)} leads in total',
+          icon: Icons.person_add_alt_1_outlined,
+          accent: AppAccent.purple,
+          onTap: onLeads,
+        ),
       ],
     );
   }

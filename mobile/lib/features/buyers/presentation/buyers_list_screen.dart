@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/utils/format.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/contact_launcher.dart';
@@ -12,7 +12,6 @@ import '../buyers_providers.dart';
 import '../domain/buyer_requirement.dart';
 import 'buyer_form_screen.dart';
 
-final _priceFmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
 AppBadgeVariant _buyerStatusVariant(String status) => switch (status) {
       'active' => AppBadgeVariant.success,
@@ -115,7 +114,7 @@ class _BuyerCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final budget = (buyer.minPrice != null || buyer.maxPrice != null)
-        ? '${buyer.minPrice != null ? _priceFmt.format(buyer.minPrice) : 'Any'} – ${buyer.maxPrice != null && buyer.maxPrice! > 0 ? _priceFmt.format(buyer.maxPrice) : 'Any'}'
+        ? '${buyer.minPrice != null ? Fmt.moneyCompact(buyer.minPrice) : 'Any'} – ${buyer.maxPrice != null && buyer.maxPrice! > 0 ? Fmt.moneyCompact(buyer.maxPrice) : 'Any'}'
         : null;
 
     return AppCard(
@@ -136,7 +135,7 @@ class _BuyerCard extends ConsumerWidget {
           ],
           if (budget != null) ...[
             const SizedBox(height: 6),
-            Text(budget, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: AppColors.indigo700)),
+            Text(budget, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: AppColors.moneyInk(context))),
           ],
           if (buyer.buyerPhone != null && buyer.buyerPhone!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -170,16 +169,18 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final on = dark ? AppColors.indigo600 : AppColors.slate900;
     return Material(
-      color: selected ? AppColors.slate900 : AppColors.white,
+      color: selected ? on : (dark ? AppColors.slate900 : AppColors.white),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? AppColors.slate900 : AppColors.slate200)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? on : (dark ? AppColors.slate700 : AppColors.slate200))),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: TextStyle(color: selected ? AppColors.white : AppColors.slate600, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
     );

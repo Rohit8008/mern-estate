@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/format.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/chat_message.dart';
 import '../domain/chat_user.dart';
@@ -66,7 +66,9 @@ class _ConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = conversation.otherUser;
-    final name = user?.displayName ?? 'Unknown user';
+    final name = (user?.displayName.trim().isNotEmpty ?? false) ? user!.displayName : 'Former team member';
+    final unread = conversation.unread > 0;
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
     return AppCard(
       onTap: () {
@@ -75,7 +77,11 @@ class _ConversationRow extends StatelessWidget {
       },
       child: Row(
         children: [
-          CircleAvatar(radius: 20, backgroundColor: AppColors.slate200, child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: AppColors.slate700, fontWeight: FontWeight.w700))),
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: dark ? AppColors.slate700 : AppColors.slate200,
+            child: Text(name[0].toUpperCase(), style: TextStyle(color: dark ? AppColors.slate100 : AppColors.slate700, fontWeight: FontWeight.w700)),
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -84,12 +90,17 @@ class _ConversationRow extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                    Text(DateFormat('MMM d').format(conversation.lastMessage.createdAt), style: const TextStyle(color: AppColors.slate400, fontSize: 11.5)),
+                    Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(Fmt.ago(conversation.lastMessage.createdAt),
+                        style: TextStyle(color: unread ? AppColors.indigo600 : AppColors.slate400, fontSize: 11.5, fontWeight: unread ? FontWeight.w700 : FontWeight.w400)),
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(conversation.lastMessage.content, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.slate500, fontSize: 12.5)),
+                Text(conversation.lastMessage.content.replaceAll('\n', ' '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: unread ? null : AppColors.slate500, fontSize: 12.5, fontWeight: unread ? FontWeight.w600 : FontWeight.w400)),
               ],
             ),
           ),
@@ -98,7 +109,7 @@ class _ConversationRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(color: AppColors.indigo600, borderRadius: BorderRadius.circular(999)),
-              child: Text('${conversation.unread}', style: const TextStyle(color: AppColors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              child: Text(conversation.unread > 99 ? '99+' : '${conversation.unread}', style: const TextStyle(color: AppColors.white, fontSize: 11, fontWeight: FontWeight.w700)),
             ),
           ],
         ],
@@ -167,7 +178,7 @@ class _NewMessageSheetState extends ConsumerState<_NewMessageSheet> {
                       itemBuilder: (context, index) {
                         final user = _results[index];
                         return ListTile(
-                          leading: CircleAvatar(radius: 18, backgroundColor: AppColors.slate200, child: Text(user.displayName[0].toUpperCase())),
+                          leading: CircleAvatar(radius: 18, backgroundColor: AppColors.slate200, child: Text(user.displayName.isEmpty ? '?' : user.displayName[0].toUpperCase())),
                           title: Text(user.displayName),
                           onTap: () => Navigator.of(context).pop(user),
                         );

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
 
 /// Labeled dropdown matching AppTextField's label placement — used by every
 /// enum-backed field (status, priority, stage, type…) across create/edit
@@ -18,7 +17,7 @@ class AppDropdownField<T extends Object> extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         DropdownButtonFormField<T>(
           value: value,

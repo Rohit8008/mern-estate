@@ -110,9 +110,9 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          const Text('Due date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+          const Text('Due date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          AppButton(label: _dueAt != null ? DateFormat('MMM d, yyyy').format(_dueAt!) : 'No due date', icon: Icons.calendar_today_outlined, variant: AppButtonVariant.secondary, expand: true, onPressed: _pickDueDate),
+          AppButton(label: _dueAt != null ? DateFormat('d MMM yyyy').format(_dueAt!) : 'No due date', icon: Icons.calendar_today_outlined, variant: AppButtonVariant.secondary, expand: true, onPressed: _pickDueDate),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
             Text(_error!, style: const TextStyle(color: AppColors.rose600, fontSize: 13)),

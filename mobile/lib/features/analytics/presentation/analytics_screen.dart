@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/format.dart';
+
 import '../../../core/errors/app_failure.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -56,7 +58,7 @@ class AnalyticsScreen extends ConsumerWidget {
                 children: [
                   KpiCard(
                     title: 'Closed value',
-                    value: _money.format(report.sales.closedDeals.totalValue),
+                    value: Fmt.moneyCompact(report.sales.closedDeals.totalValue),
                     icon: Icons.trending_up_rounded,
                     accent: AppAccent.emerald,
                   ),
@@ -68,13 +70,13 @@ class AnalyticsScreen extends ConsumerWidget {
                   ),
                   KpiCard(
                     title: 'Average deal',
-                    value: _money.format(report.sales.closedDeals.avgValue),
+                    value: Fmt.moneyCompact(report.sales.closedDeals.avgValue),
                     icon: Icons.straighten_rounded,
                     accent: AppAccent.purple,
                   ),
                   KpiCard(
                     title: 'Commission',
-                    value: _money.format(report.sales.closedDeals.totalCommission),
+                    value: Fmt.moneyCompact(report.sales.closedDeals.totalCommission),
                     icon: Icons.account_balance_wallet_outlined,
                     accent: AppAccent.amber,
                   ),
@@ -200,7 +202,7 @@ class _Funnel extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: top == 0 ? 0 : count / top,
                       minHeight: 8,
-                      backgroundColor: AppColors.slate100,
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark ? AppColors.slate800 : AppColors.slate100,
                     ),
                   ),
                 ),
@@ -265,7 +267,7 @@ class _BucketList extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: max == 0 ? 0 : bucket.count / max,
                         minHeight: 8,
-                        backgroundColor: AppColors.slate100,
+                        backgroundColor: Theme.of(context).brightness == Brightness.dark ? AppColors.slate800 : AppColors.slate100,
                       ),
                     ),
                   ),

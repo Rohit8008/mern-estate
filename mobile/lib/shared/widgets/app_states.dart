@@ -47,7 +47,7 @@ class AppEmptyState extends StatelessWidget {
               child: Icon(icon, size: 26, color: AppColors.slate400),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             if (message != null) ...[
               const SizedBox(height: 6),
               Text(message!,
@@ -90,7 +90,7 @@ class AppErrorState extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Text(title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             if (message != null) ...[
               const SizedBox(height: 6),
               Text(message!,

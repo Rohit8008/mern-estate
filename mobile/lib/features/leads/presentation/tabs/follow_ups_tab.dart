@@ -19,7 +19,7 @@ class FollowUpsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sorted = [...lead.followUps]..sort((a, b) => a.dueAt.compareTo(b.dueAt));
-    final dateFmt = DateFormat('MMM d, yyyy • h:mm a');
+    final dateFmt = DateFormat('d MMM yyyy • h:mm a');
 
     return Column(
       children: [

@@ -904,7 +904,10 @@
   },
   "chat": {
     "noMessagesYetSayHello": "No messages yet. Say hello!",
-    "typeAMessage": "Type a message..."
+    "sendFailed": "Couldn't send. Check your connection and try again.",
+    "today": "Today",
+    "typeAMessage": "Type a message...",
+    "yesterday": "Yesterday"
   },
   "clientDetail": {
     "3bhkSouthFacingNearSchool": "3BHK, south-facing, near school...",
@@ -1441,7 +1444,9 @@
     "clickTheMapToPlaceThis": "Click the map to place this property, or search an address above"
   },
   "messages": {
+    "backToConversations": "Back to conversations",
     "chooseFromYourExistingConversationsOr": "Choose from your existing conversations or start a new one",
+    "formerMember": "Former team member",
     "loading": "Loading...",
     "messages": "Messages",
     "newMessage": "New message",

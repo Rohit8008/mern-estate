@@ -56,7 +56,7 @@ class LeadTasksTab extends ConsumerWidget {
                                   Text(task.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                                   if (task.dueAt != null) ...[
                                     const SizedBox(height: 2),
-                                    Text(DateFormat('MMM d, yyyy').format(task.dueAt!), style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
+                                    Text(DateFormat('d MMM yyyy').format(task.dueAt!), style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
                                   ],
                                 ],
                               ),
@@ -181,10 +181,10 @@ class _TaskFormScreenState extends ConsumerState<_TaskFormScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          const Text('Due date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+          const Text('Due date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           AppButton(
-            label: _dueAt != null ? DateFormat('MMM d, yyyy').format(_dueAt!) : 'No due date',
+            label: _dueAt != null ? DateFormat('d MMM yyyy').format(_dueAt!) : 'No due date',
             icon: Icons.calendar_today_outlined,
             variant: AppButtonVariant.secondary,
             expand: true,

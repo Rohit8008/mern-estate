@@ -154,8 +154,9 @@ class _IconToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: active ? AppColors.indigo600 : AppColors.white,
+      color: active ? AppColors.indigo600 : (dark ? AppColors.slate900 : AppColors.white),
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -163,8 +164,8 @@ class _IconToggleButton extends StatelessWidget {
         child: Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? AppColors.indigo600 : AppColors.slate200)),
-          child: Icon(icon, size: 20, color: active ? AppColors.white : AppColors.slate600),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? AppColors.indigo600 : (dark ? AppColors.slate700 : AppColors.slate200))),
+          child: Icon(icon, size: 20, color: active ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600)),
         ),
       ),
     );

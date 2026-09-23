@@ -1,8 +1,10 @@
+import mongoose from 'mongoose';
 import Message from '../models/message.model.js';
 import { errorHandler } from '../utils/error.js';
 import { io } from '../socket.js';
 import { onlineInTenant } from '../utils/onlineUsers.js';
 import User from '../models/user.model.js';
+import Notification from '../models/notification.model.js';
 import Listing from '../models/listing.model.js';
 import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../utils/encryption.js';
 import { inHomeTenant } from '../tenancy/tenantContext.js';
@@ -39,16 +41,27 @@ function decryptMessages(messages) {
 export const sendMessage = async (req, res, next) => {
   try {
     const { receiverId, content, listingId } = req.body;
-    if (!receiverId || !content) return next(errorHandler(400, 'Missing fields'));
-    let finalContent = content;
+    if (!receiverId || !content || !String(content).trim()) return next(errorHandler(400, 'Write a message first.'));
+    if (String(receiverId) === String(req.user.id)) return next(errorHandler(400, 'You cannot message yourself.'));
+    // The receiver must be a live member of this workspace: a stale id used
+    // to create a message nobody could ever read.
+    if (!mongoose.isValidObjectId(receiverId)) return next(errorHandler(400, 'Choose who to send this to.'));
+    const receiver = await User.findById(receiverId).select('_id isDeleted status').lean();
+    if (!receiver || receiver.isDeleted) return next(errorHandler(404, 'That person is no longer on your team.'));
+    let finalContent = String(content).trim();
     try {
       if (listingId) {
         const listing = await Listing.findById(listingId).lean();
         if (listing) {
           const price = listing.offer ? listing.discountPrice : listing.regularPrice;
           const priceSuffix = listing.type === 'rent' ? ' / month' : '';
+          // In the workspace's own currency; this printed "$" for everyone.
+          const loc = req.tenant?.locale || {};
+          const priceText = price > 1
+            ? new Intl.NumberFormat(loc.numberLocale || 'en-IN', { style: 'currency', currency: loc.currency || 'INR', maximumFractionDigits: 0 }).format(price)
+            : 'Price on request';
           const link = `${process.env.PUBLIC_BASE_URL || ''}/listing/${listing._id}`.replace(/\/$/, '');
-          const details = `\n\n---\nProperty: ${listing.name}\nAddress: ${listing.address}\nPrice: $${price}${priceSuffix}\nType: ${listing.type}${listing.category ? `\nCategory: ${String(listing.category).toUpperCase()}` : ''}\nLink: ${link}`;
+          const details = `\n\n---\nProperty: ${listing.name}\nAddress: ${listing.address}\nPrice: ${priceText}${priceSuffix}\nType: ${listing.type}${listing.category ? `\nCategory: ${String(listing.category).toUpperCase()}` : ''}\nLink: ${link}`;
           finalContent = `${content}${details}`;
         }
       }
@@ -67,9 +80,8 @@ export const sendMessage = async (req, res, next) => {
     const sender = await inHomeTenant(req, () =>
       User.findById(req.user.id).select('username firstName lastName').lean()
     );
-    const senderName = sender?.firstName && sender?.lastName
-      ? `${sender.firstName} ${sender.lastName}`
-      : null;
+    // First name alone is still a name; it used to need both.
+    const senderName = [sender?.firstName, sender?.lastName].filter(Boolean).join(' ') || null;
     // Return plaintext content in all outgoing responses
     const decrypted = {
       ...msg.toObject(),
@@ -86,14 +98,32 @@ export const sendMessage = async (req, res, next) => {
     io.to(`user:${req.user.id}`).emit('message:sent', decrypted);
     // The bell keeps it: the live toast used to be the only trace, and it
     // was gone in five seconds if you were on another screen.
-    notify({
-      to: receiverId,
-      type: 'message.received',
-      title: `New message from ${senderName || sender?.username || 'a colleague'}`,
-      body: finalContent.length > 120 ? `${finalContent.slice(0, 120)}…` : finalContent,
-      link: '/messages',
-      actorId: req.user.id,
-    }).catch(() => {});
+    // One bell row per sender while it is unread: a ten-message chat used
+    // to leave ten notifications. A further message refreshes that row.
+    const who = senderName || sender?.username || 'a colleague';
+    const preview = finalContent.length > 120 ? `${finalContent.slice(0, 120)}…` : finalContent;
+    const pending = await Notification.findOne({
+      user: receiverId, type: 'message.received', createdBy: req.user.id, readAt: null,
+    }).select('_id').lean();
+    if (pending) {
+      // Through the driver: createdAt is immutable to Mongoose, and moving it
+      // is what puts the row back at the top of the feed. Keyed by _id, which
+      // the tenant-scoped findOne above already vetted.
+      await Notification.collection.updateOne(
+        { _id: pending._id },
+        { $set: { title: `New messages from ${who}`, body: preview, createdAt: new Date(), updatedAt: new Date() } }
+      );
+    } else {
+      notify({
+        to: receiverId,
+        type: 'message.received',
+        title: `New message from ${who}`,
+        body: preview,
+        // Opens this conversation, not just the inbox.
+        link: `/messages?user=${req.user.id}`,
+        actorId: req.user.id,
+      }).catch(() => {});
+    }
     res.status(201).json(decrypted);
   } catch (error) {
     next(error);
@@ -145,6 +175,11 @@ export const markRead = async (req, res, next) => {
       { senderId: otherId, receiverId: req.user.id, read: false },
       { $set: { read: true } }
     );
+    // Reading the chat settles its bell row too.
+    await Notification.updateMany(
+      { user: req.user.id, type: 'message.received', createdBy: otherId, readAt: null },
+      { $set: { readAt: new Date() } }
+    ).catch(() => {});
     io.to(`user:${otherId}`).emit('message:read', { from: req.user.id });
     // Update the conversations list/badge for the user who marked as read
     io.to(`user:${req.user.id}`).emit('conversations:update');
@@ -156,33 +191,39 @@ export const markRead = async (req, res, next) => {
 
 export const getConversations = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = String(req.user.id);
     const msgs = await Message.find({
       $or: [{ senderId: userId }, { receiverId: userId }],
     })
       .sort({ createdAt: -1 })
-      .limit(200);
+      .limit(500);
 
+    // senderId/receiverId are ObjectIds since the model changed, and this
+    // compared them to the string id with ===, which is never true. Every
+    // message became its own "conversation" keyed by an ObjectId instance, no
+    // name could be looked up ("Unknown user" everywhere), and unread was
+    // always 0. Compare and key as strings.
     const map = new Map();
     for (const m of msgs) {
-      const otherId = m.senderId === userId ? m.receiverId : m.senderId;
+      const sender = String(m.senderId);
+      const receiver = String(m.receiverId);
+      const otherId = sender === userId ? receiver : sender;
       if (!map.has(otherId)) {
-        // Decrypt the last message content for preview
-        const decryptedMessage = decryptMessageContent(m);
-        map.set(otherId, {
-          otherId,
-          lastMessage: decryptedMessage,
-          unread: 0,
-        });
+        map.set(otherId, { otherId, lastMessage: decryptMessageContent(m), unread: 0 });
       }
-      const entry = map.get(otherId);
-      if (!m.read && m.receiverId === userId) entry.unread++;
+      if (!m.read && receiver === userId) map.get(otherId).unread++;
     }
     const list = Array.from(map.values());
-    const otherIds = list.map((e) => e.otherId);
-    const users = await User.find({ _id: { $in: otherIds } }).select('username avatar _id');
+    const users = await User.find({ _id: { $in: list.map((e) => e.otherId) } })
+      .select('username firstName lastName avatar _id')
+      .lean();
     const userMap = new Map(users.map((u) => [String(u._id), u]));
-    const withUsers = list.map((e) => ({ ...e, otherUser: userMap.get(e.otherId) || null }));
+    // Someone who has left the workspace still gets a name, so the thread can
+    // be read rather than showing as unknown.
+    const withUsers = list.map((e) => ({
+      ...e,
+      otherUser: userMap.get(e.otherId) || { _id: e.otherId, username: 'Former team member' },
+    }));
     res.status(200).json(withUsers);
   } catch (error) {
     next(error);

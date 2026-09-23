@@ -27,6 +27,10 @@ abstract final class AppColors {
   static const indigo700 = Color(0xFF4338CA);
   static const indigo800 = Color(0xFF3730A3);
 
+  /// Prices and amounts: indigo 700 is unreadable on a dark card.
+  static Color moneyInk(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? indigo300 : indigo700;
+
   // Emerald — success / won / positive trend.
   static const emerald50 = Color(0xFFECFDF5);
   static const emerald100 = Color(0xFFD1FAE5);

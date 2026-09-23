@@ -10,7 +10,21 @@ class DashboardAnalytics {
     required this.employees,
     required this.recentListings,
     required this.recentBuyers,
+    this.sales,
   });
+
+  /// Open deals, follow-ups, won deals and new clients (GET
+  /// /api/analytics/dashboard); null if that request failed.
+  final SalesOverview? sales;
+
+  DashboardAnalytics withSales(SalesOverview? value) => DashboardAnalytics(
+        properties: properties,
+        buyers: buyers,
+        employees: employees,
+        recentListings: recentListings,
+        recentBuyers: recentBuyers,
+        sales: value,
+      );
 
   final PropertyStats properties;
   final BuyerStats buyers;
@@ -34,19 +48,62 @@ class DashboardAnalytics {
 }
 
 class PropertyStats {
-  const PropertyStats({required this.total, required this.available, required this.sold, required this.underNegotiation});
+  const PropertyStats({required this.total, required this.available, required this.sold, required this.rented, required this.underNegotiation});
 
   final int total;
   final int available;
   final int sold;
+  final int rented;
   final int underNegotiation;
 
   factory PropertyStats.fromJson(Map<String, dynamic> json) => PropertyStats(
         total: (json['total'] as num?)?.toInt() ?? 0,
         available: (json['available'] as num?)?.toInt() ?? 0,
         sold: (json['sold'] as num?)?.toInt() ?? 0,
+        rented: (json['rented'] as num?)?.toInt() ?? 0,
         underNegotiation: (json['underNegotiation'] as num?)?.toInt() ?? 0,
       );
+}
+
+/// The CRM half of the dashboard: right-now open deals and follow-ups, and
+/// won deals / new clients over the last 30 days.
+class SalesOverview {
+  const SalesOverview({
+    required this.openDeals,
+    required this.pipelineValue,
+    required this.followUpsOverdue,
+    required this.followUpsUpcoming,
+    required this.wonDeals,
+    required this.wonCommission,
+    required this.newClients,
+    required this.totalClients,
+  });
+
+  final int openDeals;
+  final num pipelineValue;
+  final int followUpsOverdue;
+  final int followUpsUpcoming;
+  final int wonDeals;
+  final num wonCommission;
+  final int newClients;
+  final int totalClients;
+
+  factory SalesOverview.fromJson(Map<String, dynamic> json) {
+    final deals = json['deals'] as Map<String, dynamic>? ?? const {};
+    final fu = json['followUps'] as Map<String, dynamic>? ?? const {};
+    final clients = json['clients'] as Map<String, dynamic>? ?? const {};
+    int i(Object? v) => (v as num?)?.toInt() ?? 0;
+    return SalesOverview(
+      openDeals: i(deals['activeDeals']),
+      pipelineValue: (deals['pipelineValue'] as num?) ?? 0,
+      followUpsOverdue: i(fu['overdue']),
+      followUpsUpcoming: i(fu['upcoming']),
+      wonDeals: i(deals['closedWon']),
+      wonCommission: (deals['totalCommission'] as num?) ?? 0,
+      newClients: i(clients['new']),
+      totalClients: i(clients['total']),
+    );
+  }
 }
 
 class BuyerStats {

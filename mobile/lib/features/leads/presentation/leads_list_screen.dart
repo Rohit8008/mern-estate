@@ -127,9 +127,10 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chipColor = color ?? AppColors.slate900;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final chipColor = color ?? (dark ? AppColors.indigo600 : AppColors.slate900);
     return Material(
-      color: selected ? chipColor : AppColors.white,
+      color: selected ? chipColor : (dark ? AppColors.slate900 : AppColors.white),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
@@ -137,10 +138,10 @@ class _FilterChip extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: selected ? chipColor : AppColors.slate200),
+            border: Border.all(color: selected ? chipColor : (dark ? AppColors.slate700 : AppColors.slate200)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: TextStyle(color: selected ? AppColors.white : AppColors.slate600, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
     );

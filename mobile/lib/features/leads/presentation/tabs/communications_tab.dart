@@ -50,7 +50,7 @@ class CommunicationsTab extends ConsumerWidget {
                               const SizedBox(width: 6),
                               Text(communicationTypeLabel(comm.type), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                               const Spacer(),
-                              if (comm.createdAt != null) Text(DateFormat('MMM d, h:mm a').format(comm.createdAt!), style: const TextStyle(color: AppColors.slate400, fontSize: 11.5)),
+                              if (comm.createdAt != null) Text(DateFormat('d MMM, h:mm a').format(comm.createdAt!), style: const TextStyle(color: AppColors.slate400, fontSize: 11.5)),
                             ],
                           ),
                           const SizedBox(height: 6),

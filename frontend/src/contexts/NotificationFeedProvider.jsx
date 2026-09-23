@@ -139,11 +139,20 @@ export const NotificationFeedProvider = ({ children }) => {
       setTotal((t) => t + 1);
     };
 
+    // Reading a chat marks its message notification read on the server.
+    const onConversations = () => {
+      refreshCount();
+      if (loadedRef.current) load();
+    };
+
     socket.on('notification:new', onNew);
+    socket.on('conversations:update', onConversations);
     return () => {
       socket.off('notification:new', onNew);
+      socket.off('conversations:update', onConversations);
       socket.close();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const value = useMemo(() => ({

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/format.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
@@ -73,8 +75,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                   mainAxisExtent: 140,
                 ),
                 children: [
-                  KpiCard(title: 'Pipeline', value: _priceFmt.format(stats.totalPipeline), icon: Icons.trending_up_rounded, accent: AppAccent.indigo),
-                  KpiCard(title: 'Commission', value: _priceFmt.format(stats.totalCommission), icon: Icons.payments_outlined, accent: AppAccent.emerald),
+                  KpiCard(title: 'Pipeline', value: Fmt.moneyCompact(stats.totalPipeline), subtitle: 'Pending and in progress', icon: Icons.trending_up_rounded, accent: AppAccent.indigo),
+                  KpiCard(title: 'Commission', value: Fmt.moneyCompact(stats.totalCommission), subtitle: 'Earned on completed deals', icon: Icons.payments_outlined, accent: AppAccent.emerald),
                   KpiCard(title: 'Completed', value: '${stats.completed}', icon: Icons.check_circle_outline_rounded, accent: AppAccent.blue),
                   KpiCard(title: 'Pending', value: '${stats.pending}', icon: Icons.hourglass_bottom_rounded, accent: AppAccent.amber),
                 ],
@@ -152,7 +154,7 @@ class _TransactionRow extends ConsumerWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              Text(_priceFmt.format(transaction.amount), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.indigo700)),
+              Text(_priceFmt.format(transaction.amount), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.moneyInk(context))),
               const SizedBox(width: AppSpacing.sm),
               if (transaction.commission > 0)
                 Text('· ${_priceFmt.format(transaction.commission)} comm.', style: const TextStyle(color: AppColors.slate400, fontSize: 11.5)),
@@ -172,16 +174,22 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Theme-aware: in dark mode the selected chip was the page colour (so
+    // "All" vanished) and the rest were bright white pills.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = selected ? (dark ? AppColors.indigo600 : AppColors.slate900) : (dark ? AppColors.slate900 : AppColors.white);
+    final border = selected ? bg : (dark ? AppColors.slate700 : AppColors.slate200);
+    final fg = selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600);
     return Material(
-      color: selected ? AppColors.slate900 : AppColors.white,
+      color: bg,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? AppColors.slate900 : AppColors.slate200)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: border)),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: TextStyle(color: selected ? AppColors.white : AppColors.slate600, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          child: Text(label, style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
     );

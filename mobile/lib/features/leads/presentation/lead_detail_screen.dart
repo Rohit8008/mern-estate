@@ -107,7 +107,7 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = leadStatusStyle(lead.status);
-    final dateFmt = DateFormat('MMM d, yyyy');
+    final dateFmt = DateFormat('d MMM yyyy');
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),

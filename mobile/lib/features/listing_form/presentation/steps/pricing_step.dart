@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/widgets.dart';
 import '../../domain/listing_draft.dart';
@@ -50,7 +49,7 @@ class _PricingStepState extends State<PricingStep> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Special offer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+            const Text('Special offer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             Switch(value: draft.offer, onChanged: (v) => draft.update(() => draft.offer = v)),
           ],
         ),

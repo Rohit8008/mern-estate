@@ -904,7 +904,10 @@
   },
   "chat": {
     "noMessagesYetSayHello": "अभी कोई संदेश नहीं। नमस्ते कहें!",
-    "typeAMessage": "संदेश लिखें…"
+    "sendFailed": "संदेश नहीं भेजा जा सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    "today": "आज",
+    "typeAMessage": "संदेश लिखें…",
+    "yesterday": "कल"
   },
   "clientDetail": {
     "3bhkSouthFacingNearSchool": "3BHK, दक्षिणमुखी, स्कूल के पास…",
@@ -1441,7 +1444,9 @@
     "clickTheMapToPlaceThis": "इस संपत्ति को रखने के लिए मानचित्र पर क्लिक करें, या ऊपर पता खोजें"
   },
   "messages": {
+    "backToConversations": "बातचीत पर वापस जाएँ",
     "chooseFromYourExistingConversationsOr": "अपनी मौजूदा बातचीत में से चुनें या नई शुरू करें",
+    "formerMember": "पूर्व टीम सदस्य",
     "loading": "लोड हो रहा है…",
     "messages": "संदेश",
     "newMessage": "नया संदेश",

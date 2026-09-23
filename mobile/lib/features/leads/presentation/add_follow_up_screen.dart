@@ -115,10 +115,10 @@ class _AddFollowUpScreenState extends ConsumerState<AddFollowUpScreen> {
             onChanged: (v) => setState(() => _type = v),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const Text('Due', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+          const Text('Due', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           AppButton(
-            label: DateFormat('MMM d, yyyy • h:mm a').format(_dueAt),
+            label: DateFormat('d MMM yyyy • h:mm a').format(_dueAt),
             icon: Icons.calendar_today_outlined,
             variant: AppButtonVariant.secondary,
             expand: true,

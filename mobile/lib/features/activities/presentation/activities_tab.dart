@@ -93,16 +93,18 @@ class _ActivitiesTabState extends ConsumerState<ActivitiesTab> {
 
   Widget _chip(String label, _ActivityFilter value) {
     final selected = _filter == value;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final on = dark ? AppColors.indigo600 : AppColors.slate900;
     return Material(
-      color: selected ? AppColors.slate900 : AppColors.white,
+      color: selected ? on : (dark ? AppColors.slate900 : AppColors.white),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: () => setState(() => _filter = value),
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? AppColors.slate900 : AppColors.slate200)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? on : (dark ? AppColors.slate700 : AppColors.slate200))),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: TextStyle(color: selected ? AppColors.white : AppColors.slate600, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
     );
@@ -210,7 +212,7 @@ class _EntryTile extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(task.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                  if (task.dueAt != null) Text(DateFormat('MMM d, h:mm a').format(task.dueAt!), style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
+                  if (task.dueAt != null) Text(DateFormat('d MMM, h:mm a').format(task.dueAt!), style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
                 ],
               ),
             ),
@@ -235,7 +237,7 @@ class _EntryTile extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${followUpTypeLabel(followUp.type)} · ${followUp.clientName}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                  Text(DateFormat('MMM d, h:mm a').format(followUp.dueAt), style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
+                  Text(DateFormat('d MMM, h:mm a').format(followUp.dueAt), style: const TextStyle(color: AppColors.slate500, fontSize: 12)),
                 ],
               ),
             ),

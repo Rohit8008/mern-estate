@@ -111,14 +111,14 @@ class _BasicsStepState extends ConsumerState<BasicsStep> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Furnished', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+            const Text('Furnished', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             Switch(value: draft.furnished, onChanged: (v) => draft.update(() => draft.furnished = v)),
           ],
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Parking available', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+            const Text('Parking available', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             Switch(value: draft.parking, onChanged: (v) => draft.update(() => draft.parking = v)),
           ],
         ),
@@ -138,7 +138,7 @@ class _Stepper extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.slate700)),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(border: Border.all(color: AppColors.slate200), borderRadius: BorderRadius.circular(8)),
