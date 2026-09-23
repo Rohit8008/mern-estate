@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { NATIVE_FIELD_ALIASES } from '../utils/nativeFieldAliases';
+import { isCategoryFieldActive } from '../utils/categoryFieldRules';
+import { useNotification } from '../contexts/NotificationContext';
 
 /**
  * The state behind adding and editing a property.
@@ -29,8 +31,8 @@ const EMPTY = {
   type: 'sale',
   status: 'available',
   propertyType: '',
-  bedrooms: 1,
-  bathrooms: 1,
+  bedrooms: 0,
+  bathrooms: 0,
   regularPrice: 0,
   discountPrice: 0,
   offer: false,
@@ -52,6 +54,22 @@ const EMPTY = {
   remarks: '',
 };
 
+/** The fields this form owns and saves; also what "unsaved changes" compares. */
+const payloadOf = (form) => Object.fromEntries(Object.keys(EMPTY).map((key) => [key, form[key]]));
+
+/**
+ * Seeded categories reuse keys that are real listing columns (bedrooms,
+ * bathrooms, parking, furnishing). The form hides its own input for those and
+ * shows the category's, so the value is copied into the column as well —
+ * filters, cards and the bed/bath line all read the column.
+ */
+const NATIVE_MIRRORS = {
+  bedrooms: (v) => ({ bedrooms: Number(v) || 0 }),
+  bathrooms: (v) => ({ bathrooms: Number(v) || 0 }),
+  parking: (v) => ({ parking: Boolean(v) && !/^(no|none|0|not available)/i.test(String(v)) }),
+  furnishing: (v) => ({ furnished: Boolean(v) && !/^un/i.test(String(v)) }),
+};
+
 export function useListingForm({ mode, listingId }) {
   const navigate = useNavigate();
   const isEdit = mode === 'edit';
@@ -64,15 +82,23 @@ export function useListingForm({ mode, listingId }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const { showSuccess } = useNotification();
+  // What was loaded (or EMPTY for a new property), to tell edits from nothing.
+  const baselineRef = useRef(JSON.stringify(payloadOf(EMPTY)));
+  const savedRef = useRef(false);
 
-  const patch = useCallback((changes) => {
+  const patch = useCallback((changes, { overwrite = false } = {}) => {
     setForm((prev) => {
       const next = { ...prev };
       Object.entries(changes).forEach(([key, value]) => {
-        // A geocode result must not blank a field the user already filled in —
-        // it fills gaps, it does not overwrite.
+        // Never blank a field. And unless the user picked a suggestion, only
+        // fill empty ones: "Find on map" used to replace a typed Bathinda
+        // address with the geocoder's Hyderabad match. The pin itself is the
+        // point of a lookup, so `location` is always taken.
         if (value === undefined || value === null || value === '') return;
-        next[key] = value;
+        const current = prev[key];
+        const isEmpty = current === undefined || current === null || current === '';
+        if (key === 'location' || overwrite || isEmpty) next[key] = value;
       });
       return next;
     });
@@ -94,7 +120,11 @@ export function useListingForm({ mode, listingId }) {
     setForm((prev) =>
       nativeKey
         ? { ...prev, [nativeKey]: value }
-        : { ...prev, attributes: { ...prev.attributes, [key]: value } }
+        : {
+            ...prev,
+            ...(NATIVE_MIRRORS[key] ? NATIVE_MIRRORS[key](value) : {}),
+            attributes: { ...prev.attributes, [key]: value },
+          }
     );
   }, []);
 
@@ -136,7 +166,7 @@ export function useListingForm({ mode, listingId }) {
       .then((data) => {
         if (!alive) return;
         const listing = data?.data || data;
-        setForm({
+        const loaded = {
           ...EMPTY,
           ...listing,
           // Mongoose Maps arrive as plain objects; a null location must still
@@ -147,7 +177,9 @@ export function useListingForm({ mode, listingId }) {
             typeof o === 'string' ? o : String(o._id)
           ),
           imageUrls: listing.imageUrls || [],
-        });
+        };
+        baselineRef.current = JSON.stringify(payloadOf(loaded));
+        setForm(loaded);
       })
       .catch((err) => {
         if (alive) setLoadError(err?.message || 'That property could not be loaded.');
@@ -179,10 +211,11 @@ export function useListingForm({ mode, listingId }) {
     if (form.discountPrice && form.regularPrice && Number(form.discountPrice) >= Number(form.regularPrice)) {
       return 'The offer price has to be below the regular price.';
     }
+    const valueOf = (key) => (NATIVE_FIELD_ALIASES[key] ? form[NATIVE_FIELD_ALIASES[key]] : form.attributes?.[key]);
     const missing = (selectedCategory?.fields || [])
-      .filter((f) => f.required)
+      .filter((f) => f.required && isCategoryFieldActive(f, valueOf))
       .filter((f) => {
-        const v = NATIVE_FIELD_ALIASES[f.key] ? form[NATIVE_FIELD_ALIASES[f.key]] : form.attributes?.[f.key];
+        const v = valueOf(f.key);
         return v === undefined || v === null || v === '';
       })
       .map((f) => f.label);
@@ -208,9 +241,7 @@ export function useListingForm({ mode, listingId }) {
         // the rest. That works, but it makes the request say things the form did
         // not mean, and any future field added to a read would silently start
         // being written back.
-        const payload = Object.fromEntries(
-          Object.keys(EMPTY).map((key) => [key, form[key]])
-        );
+        const payload = payloadOf(form);
 
         const data = isEdit
           ? await apiClient.post(`/listing/update/${listingId}`, payload)
@@ -222,6 +253,8 @@ export function useListingForm({ mode, listingId }) {
             detail: { id: saved?._id },
           })
         );
+        savedRef.current = true;
+        showSuccess(isEdit ? 'Changes saved.' : 'Property added.');
         navigate(`/listing/${saved?._id || listingId}`);
         return saved;
       } catch (err) {
@@ -233,11 +266,14 @@ export function useListingForm({ mode, listingId }) {
         setSaving(false);
       }
     },
-    [form, isEdit, listingId, navigate, validate]
+    [form, isEdit, listingId, navigate, validate, showSuccess]
   );
+
+  const isDirty = !loading && !savedRef.current && JSON.stringify(payloadOf(form)) !== baselineRef.current;
 
   return {
     form,
+    isDirty,
     setField,
     patch,
     setForm,

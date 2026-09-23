@@ -29,7 +29,10 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-export const DEFAULT_CENTER = [28.6139, 77.209]; // Delhi
+// With no pin yet, show the whole country rather than a Delhi street: a
+// zoomed-in city view read as if the property had already been placed there.
+export const DEFAULT_CENTER = [22.5, 79.0];
+const DEFAULT_ZOOM = 5;
 
 const MARKER_ICON = new L.Icon({
   iconUrl:
@@ -104,7 +107,7 @@ function MapControls({ location }) {
         <div className="leaflet-control leaflet-bar rounded-lg shadow-md border border-slate-200 overflow-hidden">
           {button(() => map.zoomIn(), 'Zoom in', HiOutlinePlus, true)}
           {button(() => map.zoomOut(), 'Zoom out', HiOutlineMinus)}
-          {button(() => map.setView(DEFAULT_CENTER, 12), 'Reset view', HiOutlineRefresh)}
+          {button(() => map.setView(DEFAULT_CENTER, DEFAULT_ZOOM), 'Reset view', HiOutlineRefresh)}
           {hasPin &&
             button(
               () => map.setView([location.lat, location.lng], 16),
@@ -138,7 +141,10 @@ export default function ListingMapPicker({
   const tiles = TILE_LAYERS[layer] || TILE_LAYERS.street;
 
   return (
-    <div className={`relative rounded-xl overflow-hidden border border-slate-200 ${className}`}>
+    // isolate: Leaflet's panes and controls (z-index up to 1000) stay inside
+    // this box, so they cannot draw over sticky page chrome like the form's
+    // Save bar.
+    <div className={`relative isolate rounded-xl overflow-hidden border border-slate-200 ${className}`}>
       {onLayer && (
         // Above Leaflet's own panes (z-index 400–800) but below any modal.
         <div className="absolute top-3 left-3 z-[500] flex rounded-lg overflow-hidden shadow-md border border-slate-200">
@@ -159,7 +165,7 @@ export default function ListingMapPicker({
 
       <MapContainer
         center={center}
-        zoom={hasPin ? 16 : 12}
+        zoom={hasPin ? 16 : DEFAULT_ZOOM}
         zoomControl={false}
         className={`${height} w-full`}
       >

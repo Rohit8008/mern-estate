@@ -23,6 +23,9 @@ import { apiClient } from '@/utils/http';
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
+vi.mock('@/contexts/NotificationContext', () => ({
+  useNotification: () => ({ showSuccess: vi.fn(), showError: vi.fn(), showInfo: vi.fn(), showWarning: vi.fn() }),
+}));
 
 // vi.mock is hoisted above the imports, so `apiClient` above is already the mock.
 vi.mock('@/utils/http', () => ({

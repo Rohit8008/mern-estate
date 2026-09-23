@@ -9,6 +9,7 @@ import {
 import { apiClient } from '../../utils/http';
 import { Button, Input, Badge, EmptyState } from '../../design-system';
 import { useTranslation } from 'react-i18next';
+import { useNotification } from '../../contexts/NotificationContext';
 
 /**
  * Choosing which owners a property belongs to, and adding one without leaving
@@ -54,6 +55,8 @@ export default function OwnerSelector({ owners, selectedIds, onChange, onOwnerCr
     onChange([...next]);
   };
 
+  const { showInfo } = useNotification();
+
   async function createOwner() {
     if (!draft.name.trim()) return;
     setSaving(true);
@@ -61,10 +64,14 @@ export default function OwnerSelector({ owners, selectedIds, onChange, onOwnerCr
     try {
       const created = await apiClient.post('/owner/', draft);
       const owner = created?.data || created;
-      onOwnerCreated?.(owner);
+      // The API hands back an existing owner with the same phone number rather
+      // than making a duplicate; only a genuinely new one joins the list.
+      if (!owner.existing) onOwnerCreated?.(owner);
+      else showInfo(`${owner.name} is already an owner with that phone number, so they were selected.`);
       // Selected straight away — creating an owner from inside the property
       // form always means "and this property is theirs".
-      onChange([...selected, String(owner._id)]);
+      const id = String(owner._id);
+      onChange(selected.map(String).includes(id) ? selected : [...selected, id]);
       setDraft({ name: '', email: '', phone: '', companyName: '' });
       setAdding(false);
     } catch (err) {

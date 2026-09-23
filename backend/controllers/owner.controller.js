@@ -2,9 +2,22 @@ import Owner from '../models/owner.model.js';
 import { errorHandler } from '../utils/error.js';
 import { emitToTenant } from '../socket.js';
 import { logFromRequest, diffFields } from '../utils/activity.js';
+import { phoneKeyOf } from '../utils/phoneKey.js';
 
 export const createOwner = async (req, res, next) => {
   try {
+    // The same person entered twice (the inline "New owner" on the properties
+    // board made a fresh record each time) splits their listings across
+    // duplicates. A matching phone number returns the existing owner instead.
+    const key = phoneKeyOf(req.body?.phone);
+    if (key) {
+      const candidates = await Owner.find({ isDeleted: { $ne: true }, phone: { $nin: ['', null] } })
+        .select('name phone email companyName')
+        .limit(5000)
+        .lean();
+      const existing = candidates.find((o) => phoneKeyOf(o.phone) === key);
+      if (existing) return res.status(200).json({ ...existing, existing: true });
+    }
     const owner = await Owner.create(req.body);
     logFromRequest(req, {
       entityType: 'owner',

@@ -29,15 +29,17 @@ const listingSchema = new mongoose.Schema(
       required: false,
       default: 0,
     },
+    // 0 means "not given". The default was 1, so every plot, shop and office
+    // was recorded — and shown — as "1 bed · 1 bath".
     bathrooms: {
       type: Number,
       required: false,
-      default: 1,
+      default: 0,
     },
     bedrooms: {
       type: Number,
       required: false,
-      default: 1,
+      default: 0,
     },
     /**
      * @deprecated Retired 2026-09-04 by scripts/migrateFieldStores.js.
