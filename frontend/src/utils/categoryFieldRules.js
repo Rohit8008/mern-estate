@@ -103,3 +103,17 @@ export function fieldProblems(fields) {
     .map((field, index) => ({ index, message: fieldProblem(field, index, fields) }))
     .filter((p) => p.message);
 }
+
+/**
+ * Whether a category field applies, given the record's other values; a field
+ * hidden by its showWhen condition is neither shown nor required. Mirrors
+ * backend/utils/categoryVisibility.js — keep the two identical.
+ */
+export function isCategoryFieldActive(field, valueOf) {
+  if (!field?.showWhen?.field) return true;
+  const current = valueOf(field.showWhen.field);
+  const allowed = (field.showWhen.values || []).map(String);
+  if (current === undefined || current === null || current === '') return false;
+  if (Array.isArray(current)) return current.some((v) => allowed.includes(String(v)));
+  return allowed.includes(String(current));
+}

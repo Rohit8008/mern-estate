@@ -14,8 +14,9 @@ import { apiClient } from '../utils/http';
  * between a new property and an edit where the user may have typed over things
  * already.
  *
- * @param {(patch: object) => void} onResolved  called with the fields a lookup
- *        filled in, so the caller merges them into its own state
+ * @param {(patch: object, opts: {overwrite: boolean}) => void} onResolved
+ *        called with the fields a lookup found. `overwrite` is true only for a
+ *        suggestion the user picked; otherwise the caller fills gaps only.
  */
 export function useAddressGeocoding(onResolved) {
   const [geocoding, setGeocoding] = useState(false);
@@ -44,20 +45,45 @@ export function useAddressGeocoding(onResolved) {
     statusTimerRef.current = setTimeout(() => setStatus(''), ms);
   }, []);
 
-  /** Address → coordinates, filling in city / locality / state / pincode. */
+  /**
+   * The typed address → a map pin, filling any empty city / locality / state /
+   * pincode.
+   *
+   * `parts` is everything the user typed, not just the street line: sending
+   * only "House 12, Street 4" matched a street of that name in Hyderabad for a
+   * Bathinda address. If the full query finds nothing, the street line is
+   * dropped and the rest tried. A match whose city or pincode disagrees with
+   * what was typed is refused with a message rather than applied.
+   */
   const geocodeAddress = useCallback(
-    async (address) => {
-      if (!address || address.trim().length < 3) return null;
+    async (parts = {}) => {
+      const typed = typeof parts === 'string' ? { address: parts } : parts;
+      const clean = (v) => String(v || '').trim();
+      const rest = [typed.locality, typed.city, typed.state, typed.pincode].map(clean).filter(Boolean);
+      const queries = [[clean(typed.address), ...rest].filter(Boolean).join(', '), rest.join(', ')]
+        .filter((q, i, all) => q.length >= 3 && all.indexOf(q) === i);
+      if (!queries.length) return null;
       setGeocoding(true);
       setStatus('Finding location…');
       try {
-        const res = await apiClient.get(
-          `/geocode/search?q=${encodeURIComponent(address)}&limit=1`,
-          { silent: true }
-        );
-        const hit = (res?.data || [])[0];
+        let hit = null;
+        for (const q of queries) {
+          const res = await apiClient.get(`/geocode/search?q=${encodeURIComponent(q)}&limit=1`, { silent: true });
+          hit = (res?.data || [])[0];
+          if (hit) break;
+        }
         if (!hit) {
-          flashStatus('No match for that address');
+          flashStatus('No match for that address. Place the pin on the map instead.', 4000);
+          return null;
+        }
+        const norm = (v) => clean(v).toLowerCase();
+        const typedCity = norm(typed.city);
+        const typedPin = clean(typed.pincode).replace(/\s/g, '');
+        const cityClash = typedCity && hit.city && !norm(hit.city).includes(typedCity) && !typedCity.includes(norm(hit.city));
+        const pinClash = typedPin && hit.pincode && String(hit.pincode).replace(/\s/g, '') !== typedPin;
+        if (cityClash || pinClash) {
+          const where = [hit.locality, hit.city, hit.pincode].filter(Boolean).join(', ');
+          flashStatus(`The closest match is in ${where}, which does not match what you entered. Nothing was changed; place the pin on the map instead.`, 7000);
           return null;
         }
         const patch = {
@@ -67,7 +93,8 @@ export function useAddressGeocoding(onResolved) {
           state: hit.state,
           pincode: hit.pincode,
         };
-        resolvedRef.current?.(patch);
+        // Fill gaps only: what the user typed stays as typed.
+        resolvedRef.current?.(patch, { overwrite: false });
         flashStatus('Location found');
         return patch;
       } catch (_) {
@@ -93,7 +120,8 @@ export function useAddressGeocoding(onResolved) {
         state: hit.state,
         pincode: hit.pincode,
       };
-      resolvedRef.current?.(patch);
+      // Moving the pin fixes the location; it does not retype the address.
+      resolvedRef.current?.(patch, { overwrite: false });
       return patch;
     } catch (_) {
       // Silent: the pin is placed either way and the user can type the address.
@@ -143,7 +171,8 @@ export function useAddressGeocoding(onResolved) {
       state: suggestion.state,
       pincode: suggestion.pincode,
     };
-    resolvedRef.current?.(patch);
+    // An explicit pick from the list replaces the address fields.
+    resolvedRef.current?.(patch, { overwrite: true });
     setShowSuggestions(false);
     setActiveIndex(-1);
     return patch;

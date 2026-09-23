@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isCategoryFieldActive } from '../utils/categoryFieldRules';
 
 /**
  * DynamicCategoryFields - Renders category-specific form fields with conditional visibility
@@ -9,6 +10,11 @@ import { useTranslation } from 'react-i18next';
  * @param {Function} onChange - Callback when a field value changes
  * @param {Object} errors - Validation errors object
  */
+// Labels are tied to their control, so a click focuses it and the browser's
+// "please fill in this field" bubble and screen readers can name it.
+const fieldId = (key) => `category-field-${key}`;
+const LINKABLE = new Set(['text', 'textarea', 'number', 'select', 'date']);
+
 export default function DynamicCategoryFields({ fields = [], values = {}, onChange, errors = {} }) {
   const { t } = useTranslation();
   // Group fields by their group property
@@ -27,22 +33,8 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
     return groups;
   }, [fields]);
 
-  // Check if a field should be visible based on showWhen condition
-  const isFieldVisible = (field) => {
-    if (!field.showWhen) return true;
-
-    const { field: dependentField, values: allowedValues } = field.showWhen;
-    const currentValue = values[dependentField];
-
-    if (!currentValue) return false;
-
-    // Handle array values (for multi-select)
-    if (Array.isArray(currentValue)) {
-      return currentValue.some(v => allowedValues.includes(v));
-    }
-
-    return allowedValues.includes(currentValue);
-  };
+  // One rule for shown and required: utils/categoryFieldRules.js.
+  const isFieldVisible = (field) => isCategoryFieldActive(field, (key) => values[key]);
 
   // Handle field value change
   const handleFieldChange = (fieldKey, value) => {
@@ -65,6 +57,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
       case 'text':
         return (
           <input
+            id={fieldId(field.key)}
             type="text"
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
@@ -78,6 +71,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
       case 'textarea':
         return (
           <textarea
+            id={fieldId(field.key)}
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
@@ -91,6 +85,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
         return (
           <div className="relative">
             <input
+            id={fieldId(field.key)}
               type="number"
               value={value}
               onChange={(e) => handleFieldChange(field.key, e.target.value ? Number(e.target.value) : '')}
@@ -156,6 +151,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
         // Single select dropdown
         return (
           <select
+            id={fieldId(field.key)}
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             className={baseInputClass}
@@ -199,6 +195,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
       case 'date':
         return (
           <input
+            id={fieldId(field.key)}
             type="date"
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
@@ -349,7 +346,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
                     key={field.key}
                     className={`${field.type === 'select' && field.multiple ? 'md:col-span-2 lg:col-span-3' : ''}`}
                   >
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor={LINKABLE.has(field.type) && !field.multiple ? fieldId(field.key) : undefined} className="block text-sm font-medium text-gray-700 mb-2">
                       {field.label}
                       {field.required && <span className="text-red-500 ml-1">*</span>}
                       {field.unit && <span className="text-gray-400 ml-1">({field.unit})</span>}
@@ -396,7 +393,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
 
                   return (
                     <div key={field.key}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor={LINKABLE.has(field.type) && !field.multiple ? fieldId(field.key) : undefined} className="block text-sm font-medium text-gray-700 mb-2">
                         {field.label}
                         {field.required && <span className="text-red-500 ml-1">*</span>}
                       </label>

@@ -219,3 +219,7 @@ export function describeFieldErrors(errors) {
     .map((e) => (e.index === null ? e.message : `Field ${e.index + 1}: ${e.message}`))
     .join(' ');
 }
+
+// Lives in its own module: importMapping.js needs it, and this file already
+// imports importMapping.js.
+export { isCategoryFieldActive } from './categoryVisibility.js';

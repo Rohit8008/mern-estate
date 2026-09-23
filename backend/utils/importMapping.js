@@ -7,6 +7,8 @@
  * file — nowhere else.
  */
 
+import { isCategoryFieldActive } from './categoryVisibility.js';
+
 // ─── Value coercion ───────────────────────────────────────────────────────────
 
 const CRORE = 10000000;
@@ -474,7 +476,10 @@ export function buildListingRow({ row, mapping, category, rowNumber }) {
   }
 
   // Category's own required fields and constraints.
+  const valueOf = (key) => (NATIVE_FIELD_ALIASES[key] ? values[NATIVE_FIELD_ALIASES[key]] : attributes[key]);
   categoryFields.forEach((f) => {
+    // Not required, and not checked, when its showWhen condition is not met.
+    if (!isCategoryFieldActive(f, valueOf)) return;
     const nativeKey = NATIVE_FIELD_ALIASES[f.key];
     const val = nativeKey ? values[nativeKey] : attributes[f.key];
     if (f.required && (val === undefined || val === null || val === '')) {
