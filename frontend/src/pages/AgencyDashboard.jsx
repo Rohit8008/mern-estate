@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useAppearance } from '../contexts/useAppearance';
 import { apiClient } from '../utils/http';
@@ -15,7 +15,8 @@ import {
 import { KpiCard, PageHeader, Button, Badge, Input, Select, Textarea } from '../design-system';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import DashboardCrmSearch from '../components/DashboardCrmSearch';
-import { formatDate, formatNumber } from '../utils/currency';
+import { formatDate, formatNumber, formatCompactCurrency } from '../utils/currency';
+import { listingStatusLabel } from '../utils/listingStatus';
 import { useTranslation } from 'react-i18next';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -41,11 +42,19 @@ const WIDGET_PRESETS = {
     { key: 'total_properties', label: 'Total Properties', dataPath: 'properties.total' },
     { key: 'available', label: 'Available Properties', dataPath: 'properties.available' },
     { key: 'sold', label: 'Sold Properties', dataPath: 'properties.sold' },
+    { key: 'rented', label: 'Rented Properties', dataPath: 'properties.rented' },
     { key: 'under_negotiation', label: 'Under Negotiation', dataPath: 'properties.underNegotiation' },
     { key: 'total_buyers', label: 'Total Buyers', dataPath: 'buyers.total' },
     { key: 'active_buyers', label: 'Active Buyers', dataPath: 'buyers.active' },
     { key: 'matched_buyers', label: 'Matched Buyers', dataPath: 'buyers.matched' },
     { key: 'closed_buyers', label: 'Closed Buyers', dataPath: 'buyers.closed' },
+    // CRM figures (from /analytics/dashboard, last 30 days where it says so).
+    { key: 'open_deals', label: 'Open Deals', dataPath: 'crm.deals.activeDeals' },
+    { key: 'pipeline_value', label: 'Pipeline Value', dataPath: 'crm.deals.pipelineValue', format: 'currency' },
+    { key: 'followups_todo', label: 'Follow-ups To Do', dataPath: 'crm.followUps.total' },
+    { key: 'won_30d', label: 'Deals Won (30 days)', dataPath: 'crm.deals.closedWon' },
+    { key: 'commission_30d', label: 'Commission (30 days)', dataPath: 'crm.deals.totalCommission', format: 'currency' },
+    { key: 'new_clients_30d', label: 'New Clients (30 days)', dataPath: 'crm.clients.new' },
   ],
   chart: [
     { key: 'status_bar', label: 'Listing Status (Bar)' },
@@ -99,13 +108,21 @@ function loadWidgetsFromStorage() {
   } catch { return []; }
 }
 
+const CURRENCY_PRESETS = new Set(
+  Object.values(WIDGET_PRESETS).flat().filter((p) => p.format === 'currency').map((p) => p.key)
+);
+
+/** Just the fields the API stores (and no icon component). */
+const widgetForSaving = ({ id, type, preset, label, dataPath, span }) => ({
+  id, type, preset: preset || '', label: label || '', dataPath: dataPath || '', span: span === 'lg' ? 'lg' : 'sm',
+});
+
+// Widgets are saved on the account (/api/user/dashboard-widgets) so they
+// follow the user to another browser; localStorage stays as the offline copy.
 function saveWidgetsToStorage(widgets) {
-  // Strip non-serializable fields (icon component refs) before saving
-  const safe = widgets.map(({ ...w }) => {
-    delete w.icon;
-    return w;
-  });
+  const safe = widgets.map(widgetForSaving);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safe)); } catch { }
+  apiClient.put('/user/dashboard-widgets', { items: safe.slice(0, 30) }, { silent: true }).catch(() => {});
 }
 
 function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats, teamMembers, fmt, resolveData, statusBreakdown, monthlyTrend, isDragOver, onDragStart, onDragOver, onDragLeave, onDrop }) {
@@ -119,7 +136,8 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
     // --- Number ---
     if (widget.type === 'number') {
       const value = resolveData(widget.dataPath);
-      return <div className='text-3xl font-bold text-slate-900'>{fmt(value)}</div>;
+      const shown = CURRENCY_PRESETS.has(widget.preset) ? formatCompactCurrency(value) : fmt(value);
+      return <div className='text-3xl font-bold text-slate-900 whitespace-nowrap'>{shown}</div>;
     }
 
     // --- Chart ---
@@ -364,6 +382,8 @@ export default function AgencyDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [propertyStats, setPropertyStats] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [crm, setCrm] = useState(null);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -406,19 +426,27 @@ export default function AgencyDashboard() {
       const requests = [
         apiClient.get(`/dashboard/analytics${agentParam}`),
         apiClient.get(`/dashboard/property-stats${agentParam}`),
+        // CRM figures: the dashboard had none (no leads, pipeline, follow-ups
+        // or commission). Last 30 days, scoped to the caller like Analytics.
+        apiClient.get('/analytics/dashboard', { silent: true }).catch(() => null),
       ];
       if (isAdmin) {
         requests.push(apiClient.get('/user/list'));
       }
       const results = await Promise.all(requests);
+      const crmData = results[2]?.data || null;
+      setCrm(crmData ? {
+        ...crmData,
+        followUps: { ...crmData.followUps, total: (crmData.followUps?.overdue || 0) + (crmData.followUps?.upcoming || 0) },
+      } : null);
       const analyticsData = results[0]?.data || results[0];
       setAnalytics(analyticsData);
 
       const statsData = results[1]?.data || results[1];
       setPropertyStats(statsData);
 
-      if (isAdmin && results[2]) {
-        const users = Array.isArray(results[2]) ? results[2] : results[2]?.data || [];
+      if (isAdmin && results[3]) {
+        const users = Array.isArray(results[3]) ? results[3] : results[3]?.data || [];
         setTeamMembers(
           users
             .filter((u) => u.role === 'employee' || u.role === 'admin')
@@ -443,6 +471,23 @@ export default function AgencyDashboard() {
     fetchData();
   }, [fetchData]);
 
+  // Widgets from the account; the first time, the browser's old ones go up.
+  useEffect(() => {
+    let alive = true;
+    apiClient.get('/user/dashboard-widgets', { silent: true }).then((res) => {
+      if (!alive) return;
+      const remote = res?.data;
+      if (Array.isArray(remote)) {
+        setCustomWidgets(remote.map((w) => ({ ...w, span: w.span || WIDGET_DEFAULT_SPAN[w.type] || 'sm' })));
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch { }
+      } else {
+        const local = loadWidgetsFromStorage();
+        if (local.length) saveWidgetsToStorage(local);
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   // Derived data
   const props = analytics?.properties || {};
   const buyers = analytics?.buyers || {};
@@ -453,7 +498,7 @@ export default function AgencyDashboard() {
   const statusBreakdown = useMemo(() => {
     const raw = propertyStats?.statusBreakdown || [];
     return raw.map((s) => ({
-      label: (s._id || 'unknown').replace('_', ' '),
+      label: listingStatusLabel(s._id),
       count: s.count,
       color: STATUS_COLORS[s._id] || '#94a3b8',
     }));
@@ -546,7 +591,8 @@ export default function AgencyDashboard() {
   // Resolve a dot-path like 'properties.total' from analytics
   const resolveData = (path) => {
     if (!path || !analytics) return 0;
-    return path.split('.').reduce((obj, key) => obj?.[key], analytics) || 0;
+    const source = { ...analytics, crm: crm || {} };
+    return path.split('.').reduce((obj, key) => obj?.[key], source) || 0;
   };
 
   // Invite handler
@@ -564,23 +610,17 @@ export default function AgencyDashboard() {
       const suffix = Math.random().toString(36).slice(2, 5); // 3 alphanum chars
       const username = prefix.length >= 3 ? `${prefix}${suffix}` : `user${suffix}`;
 
-      // Password that always passes: upper + lower + digit + special, ≥ 12 chars
-      const rand = Math.random().toString(36).slice(2, 8); // 6 lowercase+digit chars
-      const tempPassword = `Inv@${rand}1A`;
-
+      // No password: the API creates the account unusable and emails a
+      // single-use link to set one. This used to show a made-up "temp
+      // password" the server had discarded, which could never sign anyone in.
       await apiClient.post('/user/employee', {
         username,
         email: inviteEmail.trim(),
-        password: tempPassword,
         firstName: '',
         lastName: '',
         message: inviteMessage.trim(),
       });
-      setInviteSuccess(
-        `Invite sent to ${inviteEmail.trim()} ✓\n\n` +
-        `A welcome email with login credentials has been delivered.\n\n` +
-        `Temp password (in case email doesn't arrive): ${tempPassword}`
-      );
+      setInviteSuccess(t('agencyDashboard.inviteSent', { email: inviteEmail.trim() }));
       setInviteEmail('');
       setInviteMessage('');
       if (isAdmin) fetchData();
@@ -623,9 +663,10 @@ export default function AgencyDashboard() {
   const chartStrokeColor  = isDark ? '#0f172a' : '#fff';
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12 ? t('agencyDashboard.goodMorning') : hour < 17 ? t('agencyDashboard.goodAfternoon') : t('agencyDashboard.goodEvening');
   const displayName = (currentUser?.username || 'there').split(/[\s_]+/)[0];
-  const todayString = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  // The workspace's date format, not the browser's US default.
+  const todayString = formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className='space-y-6'>
@@ -633,7 +674,7 @@ export default function AgencyDashboard() {
       <PageHeader
         dark
         title={`${greeting}, ${displayName}!`}
-        description={`${todayString} · Agency performance overview`}
+        description={`${todayString}. ${t('agencyDashboard.overviewSubtitle')}`}
         actions={
           <>
             <Button
@@ -745,7 +786,8 @@ export default function AgencyDashboard() {
                 value={fmt(props.total)}
                 icon={HiHome}
                 color='blue'
-                sub={<><span className='text-emerald-600 font-medium'>{fmt(props.available)} available</span>{' · '}{fmt(props.sold)} sold</>}
+                sub={<><span className='text-emerald-600 font-medium'>{t('agencyDashboard.availableCount', { count: props.available || 0 })}</span>{', '}{t('agencyDashboard.soldRentedCount', { sold: props.sold || 0, rented: props.rented || 0 })}</>}
+                onClick={() => navigate('/properties')}
               />
             )}
             {(
@@ -754,7 +796,8 @@ export default function AgencyDashboard() {
                 value={fmt(props.underNegotiation)}
                 icon={HiClock}
                 color='amber'
-                sub='Active deals in progress'
+                sub={t('agencyDashboard.listingsInNegotiation')}
+                onClick={() => navigate('/properties?status=under_negotiation')}
               />
             )}
             {(
@@ -763,7 +806,8 @@ export default function AgencyDashboard() {
                 value={fmt(buyers.total)}
                 icon={HiUserGroup}
                 color='purple'
-                sub={<><span className='text-emerald-600 font-medium'>{fmt(buyers.active)} active</span>{' · '}{fmt(buyers.matched)} matched</>}
+                sub={<><span className='text-emerald-600 font-medium'>{t('agencyDashboard.activeCount', { count: buyers.active || 0 })}</span>{', '}{t('agencyDashboard.matchedCount', { count: buyers.matched || 0 })}</>}
+                onClick={() => navigate('/buyers')}
               />
             )}
             {isAdmin && (
@@ -772,7 +816,8 @@ export default function AgencyDashboard() {
                 value={fmt(employees.total)}
                 icon={HiUsers}
                 color='emerald'
-                sub={<><span className='text-emerald-600 font-medium'>{fmt(employees.active)} active</span>{' employees'}</>}
+                sub={<><span className='text-emerald-600 font-medium'>{t('agencyDashboard.activeCount', { count: employees.active || 0 })}</span>{', '}{t('agencyDashboard.adminsAndAgents')}</>}
+                onClick={() => navigate('/admin')}
               />
             )}
             {!isAdmin && (
@@ -781,10 +826,58 @@ export default function AgencyDashboard() {
                 value={fmt(buyers.closed)}
                 icon={HiCheck}
                 color='emerald'
-                sub='Successfully matched'
+                sub={t('agencyDashboard.successfullyMatched')}
+                onClick={() => navigate('/buyers')}
               />
             )}
           </div>
+
+          {/* Sales and follow-ups: the CRM half of the agency, which the
+              dashboard did not show at all. */}
+          {crm && (
+            <>
+              <div>
+                <h2 className='text-base font-semibold text-slate-900'>{t('agencyDashboard.salesOverview')}</h2>
+                <p className='text-slate-500 text-xs mt-0.5'>{t('agencyDashboard.salesOverviewSubtitle')}</p>
+              </div>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                <KpiCard
+                  title={t('agencyDashboard.openDeals')}
+                  value={fmt(crm.deals?.activeDeals)}
+                  icon={HiClock}
+                  color='blue'
+                  sub={t('agencyDashboard.pipelineValue', { value: formatCompactCurrency(crm.deals?.pipelineValue || 0) })}
+                  onClick={() => navigate('/pipeline')}
+                />
+                <KpiCard
+                  title={t('agencyDashboard.followUpsToDo')}
+                  value={fmt((crm.followUps?.overdue || 0) + (crm.followUps?.upcoming || 0))}
+                  icon={HiClock}
+                  color='amber'
+                  sub={crm.followUps?.overdue
+                    ? <span className='text-rose-600 font-medium'>{t('agencyDashboard.overdueCount', { count: crm.followUps.overdue })}</span>
+                    : t('agencyDashboard.dueThisWeek', { count: crm.followUps?.upcoming || 0 })}
+                  onClick={() => navigate('/calendar')}
+                />
+                <KpiCard
+                  title={t('agencyDashboard.dealsWon30')}
+                  value={fmt(crm.deals?.closedWon)}
+                  icon={HiCheck}
+                  color='emerald'
+                  sub={t('agencyDashboard.commissionValue', { value: formatCompactCurrency(crm.deals?.totalCommission || 0) })}
+                  onClick={() => navigate('/pipeline')}
+                />
+                <KpiCard
+                  title={t('agencyDashboard.newClients30')}
+                  value={fmt(crm.clients?.new)}
+                  icon={HiUserGroup}
+                  color='purple'
+                  sub={t('agencyDashboard.clientsTotal', { count: crm.clients?.total || 0 })}
+                  onClick={() => navigate('/clients')}
+                />
+              </div>
+            </>
+          )}
 
           {/* Charts */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
@@ -1070,7 +1163,7 @@ export default function AgencyDashboard() {
             </div>
             <div className='p-6 space-y-4'>
               {inviteSuccess && (
-                <div className='bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 whitespace-pre-wrap font-mono leading-relaxed'>{inviteSuccess}</div>
+                <div className='bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 whitespace-pre-wrap leading-relaxed'>{inviteSuccess}</div>
               )}
               {inviteError && (
                 <div className='bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-700'>{inviteError}</div>

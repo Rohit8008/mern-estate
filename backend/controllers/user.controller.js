@@ -342,6 +342,29 @@ export const putSavedViews = async (req, res, next) => {
   }
 };
 
+export const getDashboardWidgets = async (req, res, next) => {
+  try {
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('preferences.dashboardWidgets').lean());
+    const items = user?.preferences?.dashboardWidgets;
+    // null (never saved) is different from [] (removed them all): the browser
+    // uploads its old local widgets only in the first case.
+    res.status(200).json({ success: true, data: Array.isArray(items) ? items : null });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const putDashboardWidgets = async (req, res, next) => {
+  try {
+    await inHomeTenant(req, () =>
+      User.updateOne({ _id: req.user.id }, { $set: { 'preferences.dashboardWidgets': req.body.items } })
+    );
+    res.status(200).json({ success: true, data: req.body.items });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(403, 'You can only delete your own account!'));

@@ -254,6 +254,11 @@ const userSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.Mixed,
         default: () => ({}),
       },
+      /* The dashboard's custom widgets; they were browser-only as well. */
+      dashboardWidgets: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: undefined,
+      },
       privacy: {
         showEmail: { type: Boolean, default: false },
         showPhone: { type: Boolean, default: false },

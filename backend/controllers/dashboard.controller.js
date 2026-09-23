@@ -3,36 +3,49 @@ import BuyerRequirement from '../models/buyerRequirement.model.js';
 import User from '../models/user.model.js';
 import { asyncHandler, sendSuccessResponse, AuthorizationError } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
+import mongoose from 'mongoose';
+import { listingScopeFor } from '../utils/analyticsScope.js';
+
+const oid = (id) => new mongoose.Types.ObjectId(String(id));
+
+/**
+ * Listings this dashboard covers: the same scope as the Properties list, with
+ * ObjectIds so aggregations match. The old filter held the user id as a
+ * string: countDocuments casts it, aggregate does not, so an employee's counts
+ * worked while every chart on their dashboard was empty.
+ */
+function dashboardListingQuery(req) {
+  const query = listingScopeFor(req);
+  if (req.user?.role === 'admin' && req.query.agentIds) {
+    const ids = String(req.query.agentIds).split(',').filter((v) => mongoose.isValidObjectId(v)).map(oid);
+    if (ids.length) query.$or = [{ assignedAgent: { $in: ids } }, { userRef: { $in: ids } }];
+  }
+  return query;
+}
+
+function dashboardBuyerQuery(req) {
+  const query = { isDeleted: { $ne: true } };
+  if (req.user?.role !== 'admin') query.assignedAgent = oid(req.user.id);
+  if (req.user?.role === 'admin' && req.query.agentIds) {
+    const ids = String(req.query.agentIds).split(',').filter((v) => mongoose.isValidObjectId(v)).map(oid);
+    if (ids.length) query.$or = [{ assignedAgent: { $in: ids } }, { createdBy: { $in: ids } }];
+  }
+  return query;
+}
 
 // Get dashboard analytics
 export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
   const isAdmin = req.user?.role === 'admin';
-  const isEmployee = req.user?.role === 'employee';
 
-  // Build query based on role
-  const listingQuery = { isDeleted: false };
-  const buyerQuery = { isDeleted: { $ne: true } };
-
-  // Employees only see their assigned data
-  if (isEmployee && !isAdmin) {
-    listingQuery.assignedAgent = req.user.id;
-    buyerQuery.assignedAgent = req.user.id;
-  }
-
-  // Admin can filter by specific agent IDs
-  if (isAdmin && req.query.agentIds) {
-    const agentIds = req.query.agentIds.split(',').filter(Boolean);
-    if (agentIds.length > 0) {
-      listingQuery.$or = [{ assignedAgent: { $in: agentIds } }, { userRef: { $in: agentIds } }];
-      buyerQuery.$or = [{ assignedAgent: { $in: agentIds } }, { createdBy: { $in: agentIds } }];
-    }
-  }
+  const listingQuery = dashboardListingQuery(req);
+  const buyerQuery = dashboardBuyerQuery(req);
 
   // Parallel queries for better performance
   const [
     totalProperties,
     availableProperties,
     soldProperties,
+    rentedProperties,
     underNegotiationProperties,
     totalBuyers,
     activeBuyers,
@@ -47,14 +60,17 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
   ] = await Promise.all([
     Listing.countDocuments(listingQuery),
     Listing.countDocuments({ ...listingQuery, status: 'available' }),
-    Listing.countDocuments({ ...listingQuery, status: { $in: ['sold', 'rented'] } }),
+    // Sold and rented are counted apart: they were summed and shown as "sold".
+    Listing.countDocuments({ ...listingQuery, status: 'sold' }),
+    Listing.countDocuments({ ...listingQuery, status: 'rented' }),
     Listing.countDocuments({ ...listingQuery, status: 'under_negotiation' }),
     BuyerRequirement.countDocuments(buyerQuery),
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'active' }),
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'matched' }),
     BuyerRequirement.countDocuments({ ...buyerQuery, status: 'closed' }),
-    isAdmin ? User.countDocuments({ role: 'employee', isDeleted: { $ne: true } }) : Promise.resolve(0),
-    isAdmin ? User.countDocuments({ role: 'employee', status: 'active', isDeleted: { $ne: true } }) : Promise.resolve(0),
+    // The whole team (admins and agents), matching the People list.
+    isAdmin ? User.countDocuments({ role: { $in: ['admin', 'employee'] }, isDeleted: { $ne: true } }) : Promise.resolve(0),
+    isAdmin ? User.countDocuments({ role: { $in: ['admin', 'employee'] }, status: 'active', isDeleted: { $ne: true } }) : Promise.resolve(0),
     Listing.find(listingQuery)
       .sort({ createdAt: -1 })
       .limit(5)
@@ -65,12 +81,14 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
       .limit(5)
       .select('buyerName buyerPhone preferredCity status priority createdAt')
       .lean(),
+    // Uncategorised listings included: without them one categorised listing
+    // showed as 100% of a book of seven.
     Listing.aggregate([
-      { $match: { ...listingQuery, category: { $nin: [null, ''] } } },
-      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $match: listingQuery },
+      { $group: { _id: { $cond: [{ $in: [{ $ifNull: ['$category', ''] }, ['']] }, null, '$category'] }, count: { $sum: 1 } } },
       { $lookup: { from: 'categories', localField: '_id', foreignField: 'slug', as: 'cat' } },
       { $unwind: { path: '$cat', preserveNullAndEmptyArrays: true } },
-      { $project: { categoryName: { $ifNull: ['$cat.name', '$_id'] }, count: 1 } },
+      { $project: { categoryName: { $ifNull: ['$cat.name', { $ifNull: ['$_id', 'Uncategorised'] }] }, count: 1 } },
       { $sort: { count: -1 } },
     ]),
     Listing.aggregate([
@@ -86,6 +104,7 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
       total: totalProperties,
       available: availableProperties,
       sold: soldProperties,
+      rented: rentedProperties,
       underNegotiation: underNegotiationProperties,
       byCategory: propertiesByCategory,
       byCity: propertiesByCity,
@@ -118,21 +137,8 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
 
 // Get property statistics
 export const getPropertyStats = asyncHandler(async (req, res, next) => {
-  const isAdmin = req.user?.role === 'admin';
-  const isEmployee = req.user?.role === 'employee';
 
-  const listingQuery = { isDeleted: false };
-  if (isEmployee && !isAdmin) {
-    listingQuery.assignedAgent = req.user.id;
-  }
-
-  // Admin can filter by specific agent IDs
-  if (isAdmin && req.query.agentIds) {
-    const agentIds = req.query.agentIds.split(',').filter(Boolean);
-    if (agentIds.length > 0) {
-      listingQuery.$or = [{ assignedAgent: { $in: agentIds } }, { userRef: { $in: agentIds } }];
-    }
-  }
+  const listingQuery = dashboardListingQuery(req);
 
   const [
     statusBreakdown,
@@ -196,13 +202,8 @@ export const getPropertyStats = asyncHandler(async (req, res, next) => {
 
 // Get buyer statistics
 export const getBuyerStats = asyncHandler(async (req, res, next) => {
-  const isAdmin = req.user?.role === 'admin';
-  const isEmployee = req.user?.role === 'employee';
 
-  const buyerQuery = { isDeleted: { $ne: true } };
-  if (isEmployee && !isAdmin) {
-    buyerQuery.assignedAgent = req.user.id;
-  }
+  const buyerQuery = dashboardBuyerQuery(req);
 
   const [
     statusBreakdown,
@@ -272,8 +273,9 @@ export const getEmployeePerformance = asyncHandler(async (req, res, next) => {
   const performanceData = await Promise.all(
     employees.map(async (employee) => {
       const [assignedListings, soldListings, assignedBuyers, closedBuyers] = await Promise.all([
-        Listing.countDocuments({ assignedAgent: employee._id, isDeleted: false }),
-        Listing.countDocuments({ assignedAgent: employee._id, status: { $in: ['sold', 'rented'] }, isDeleted: false }),
+        Listing.countDocuments({ assignedAgent: employee._id, isDeleted: { $ne: true } }),
+        // Closed = sold or rented; named as such where it is shown.
+        Listing.countDocuments({ assignedAgent: employee._id, status: { $in: ['sold', 'rented'] }, isDeleted: { $ne: true } }),
         BuyerRequirement.countDocuments({ assignedAgent: employee._id, isDeleted: { $ne: true } }),
         BuyerRequirement.countDocuments({ assignedAgent: employee._id, status: 'closed', isDeleted: { $ne: true } }),
       ]);

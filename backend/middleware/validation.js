@@ -350,6 +350,19 @@ export const userRouteValidation = {
     email: Joi.string().email().max(254).required(),
   }),
 
+  dashboardWidgets: Joi.object({
+    items: Joi.array().max(30).items(
+      Joi.object({
+        id: Joi.string().max(64).required(),
+        type: Joi.string().valid('number', 'chart', 'battery', 'timeline', 'table', 'workload').required(),
+        preset: Joi.string().max(40).allow('', null),
+        label: Joi.string().trim().max(80).allow(''),
+        dataPath: Joi.string().max(80).allow('', null),
+        span: Joi.string().valid('sm', 'lg').default('sm'),
+      })
+    ).required(),
+  }),
+
   savedViews: Joi.object({
     items: Joi.array().max(50).items(
       Joi.object({
