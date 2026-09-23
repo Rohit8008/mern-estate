@@ -17,14 +17,16 @@ export default function CategoryMapFallback({ categorySlug, listingId }) {
     async function load() {
       if (!categorySlug || !listingId) { setLoading(false); return; }
       try {
-        const ownMap = await apiClient.get(`/documents?kind=listing&listingId=${listingId}&tag=map&limit=1`);
+        // Best-effort: a missing or off-limits map just means no fallback
+        // image, so none of these may raise an error toast.
+        const ownMap = await apiClient.get(`/documents?kind=listing&listingId=${listingId}&tag=map&limit=1`, { silent: true });
         if (cancelled) return;
         if ((ownMap?.data || []).length > 0) { setLoading(false); return; }
 
-        const category = await apiClient.get(`/category/by-slug/${categorySlug}`);
+        const category = await apiClient.get(`/category/by-slug/${categorySlug}`, { silent: true });
         if (cancelled || !category?._id) { setLoading(false); return; }
 
-        const categoryMap = await apiClient.get(`/documents?kind=category&categoryId=${category._id}&tag=map&limit=1`);
+        const categoryMap = await apiClient.get(`/documents?kind=category&categoryId=${category._id}&tag=map&limit=1`, { silent: true });
         if (cancelled) return;
         setDoc((categoryMap?.data || [])[0] || null);
       } catch (_) {
