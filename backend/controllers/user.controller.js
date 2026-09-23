@@ -671,6 +671,9 @@ export const createEmployee = async (req, res, next) => {
         token: inviteToken,
         tenant: req.tenant,
         inviterName: req.user?.username || null,
+        role: user.role,
+        recipientName: user.firstName || user.username || '',
+        expiresAt: user.inviteExpiresAt,
       });
       // Returned to the ADMIN so they can pass it on by hand when mail is down.
       // Never logged: the token is the credential.

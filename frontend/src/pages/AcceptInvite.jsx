@@ -46,11 +46,14 @@ export default function AcceptInvite() {
       const res = await fetch(`${API_BASE_URL}/api/auth/invite/${encodeURIComponent(token)}`);
       const body = await res.json().catch(() => null);
       if (res.ok && body?.data) return setState({ status: 'ready', data: body.data });
+      if (body?.code === 'INVITE_REPLACED') {
+        return setState({ status: 'invalid', replaced: true, message: t('acceptInvite.replacedTitle') });
+      }
       return setState({ status: 'invalid', message: body?.message || 'This invitation is no longer valid.' });
     } catch (_) {
       setState({ status: 'invalid', message: 'Could not reach the server. Check your connection and try again.' });
     }
-  }, [token]);
+  }, [token, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -107,7 +110,9 @@ export default function AcceptInvite() {
         <div className="text-center max-w-sm">
           <HiOutlineExclamationCircle className="w-10 h-10 text-slate-300 mx-auto" />
           <h1 className="text-base font-semibold text-slate-900 mt-3">{state.message}</h1>
-          <p className="text-sm text-slate-500 mt-1">{t('acceptInvite.invitationsExpireAndCanOnlyBe')}</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {state.replaced ? t('acceptInvite.replacedBody') : t('acceptInvite.invitationsExpireAndCanOnlyBe')}
+          </p>
           <button
             type="button"
             onClick={() => navigate('/sign-in')}

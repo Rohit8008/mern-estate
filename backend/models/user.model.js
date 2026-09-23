@@ -162,6 +162,15 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
+    // Links from earlier sends of the same invitation. They do NOT work — a
+    // re-send is also how a leaked link is killed — but they are recognised,
+    // so opening the older of two emails says "a newer invitation was sent"
+    // instead of "no longer valid, ask for a new one". Hashes only.
+    previousInviteTokenHashes: {
+      type: [String],
+      default: undefined,
+      select: false,
+    },
     invitedAt: {
       type: Date,
       default: null,
@@ -370,6 +379,7 @@ userSchema.methods.toJSON = function() {
   delete userObject.password;
   delete userObject.passwordResetOtpHash;
   delete userObject.inviteTokenHash;
+  delete userObject.previousInviteTokenHashes;
   delete userObject.refreshTokens;
   return userObject;
 };

@@ -272,6 +272,9 @@ export async function provisionTenant(input = {}) {
         token: inviteToken,
         tenant,
         inviterName: input.invitedByName,
+        role: 'admin',
+        recipientName: input.adminName || '',
+        expiresAt: adminUser.inviteExpiresAt,
       }).catch((err) => {
         logger.warn('Invite email threw during provisioning', { adminEmail, error: err.message });
         return { sent: false, url: inviteUrl(inviteToken, tenant) };

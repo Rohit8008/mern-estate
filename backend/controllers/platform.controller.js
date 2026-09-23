@@ -55,6 +55,7 @@ export const createTenant = asyncHandler(async (req, res) => {
     locale: req.body.locale,
     features: req.body.features,
     seedSampleData: req.body.seedSampleData,
+    invitedByName: req.platformAdmin?.name,
   });
 
   logger.info('Workspace provisioned via platform API', {
@@ -424,7 +425,7 @@ export const resendTenantInvite = asyncHandler(async (req, res) => {
 
   const admin = await runWithTenant({ tenantId }, () =>
     User.findOne({ role: 'admin', isDeleted: { $ne: true } })
-      .select('+inviteTokenHash +inviteExpiresAt')
+      .select('+inviteTokenHash +inviteExpiresAt +previousInviteTokenHashes')
       .sort({ createdAt: 1 })
   );
   if (!admin) throw new NotFoundError('That workspace has no admin account to invite.');
@@ -436,7 +437,10 @@ export const resendTenantInvite = asyncHandler(async (req, res) => {
     to: admin.email,
     token,
     tenant,
-    inviterName: req.platformAdmin?.email,
+    inviterName: req.platformAdmin?.name,
+    role: 'admin',
+    recipientName: admin.firstName || admin.username || '',
+    expiresAt: admin.inviteExpiresAt,
   });
 
   logger.security?.('tenant_invite_resent', {

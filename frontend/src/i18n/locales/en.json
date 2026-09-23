@@ -374,6 +374,8 @@
     "goToSignIn": "Go to sign in",
     "invitationsExpireAndCanOnlyBe": "Invitations expire and can only be used once. Ask whoever invited you to send a new one.",
     "password": "Password",
+    "replacedBody": "Only the newest link works. Open the most recent invitation email in your inbox (it may be grouped with this one) and use its button.",
+    "replacedTitle": "This invitation was sent again",
     "signingInAs": "Signing in as",
     "thoseDoNotMatch": "Those do not match."
   },
@@ -1517,7 +1519,7 @@
     "done": "Done",
     "everyWorkspaceOnThePlatform": "Every workspace on the platform.",
     "forgotPassword": "Forgot password",
-    "invite": "Invite",
+    "invite": "Resend invite",
     "newWorkspace": "New workspace",
     "ownerAcmerealtyIn": "owner@acmerealty.in",
     "plan": "Plan",

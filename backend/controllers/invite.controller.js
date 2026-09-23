@@ -47,6 +47,32 @@ async function findInvitee(token) {
   return user;
 }
 
+/**
+ * Whether this is an earlier link of an invitation that has since been sent
+ * again. Only someone holding a real, once-valid link can get this answer, so
+ * it tells a guesser nothing; it tells the invitee to open the newer email.
+ */
+async function wasReplaced(token) {
+  if (!token || typeof token !== 'string') return false;
+  const user = await runWithoutTenantScope('recognising a superseded invitation link', () =>
+    User.findOne({ previousInviteTokenHashes: hashInviteToken(token), isDeleted: { $ne: true } })
+      .select('+inviteExpiresAt')
+      .lean()
+  );
+  return Boolean(user?.inviteExpiresAt && user.inviteExpiresAt > new Date());
+}
+
+async function rejectInvite(req, res) {
+  if (await wasReplaced(req.params.token)) {
+    return res.status(410).json({
+      success: false,
+      code: 'INVITE_REPLACED',
+      message: 'A newer invitation was sent to you.',
+    });
+  }
+  throw new NotFoundError('This invitation is no longer valid. Ask for a new one.');
+}
+
 /** The workspace an invitation belongs to, for branding the page. */
 async function workspaceFor(tenantId) {
   return runWithoutTenantScope('branding the invitation page', () =>
@@ -63,7 +89,7 @@ async function workspaceFor(tenantId) {
  */
 export const getInvite = asyncHandler(async (req, res) => {
   const user = await findInvitee(req.params.token);
-  if (!user) throw new NotFoundError('This invitation is no longer valid. Ask for a new one.');
+  if (!user) return rejectInvite(req, res);
 
   const tenant = await workspaceFor(user.tenantId);
 
@@ -98,7 +124,7 @@ export const getInvite = asyncHandler(async (req, res) => {
  */
 export const acceptInvite = asyncHandler(async (req, res) => {
   const user = await findInvitee(req.params.token);
-  if (!user) throw new NotFoundError('This invitation is no longer valid. Ask for a new one.');
+  if (!user) return rejectInvite(req, res);
 
   const password = req.body?.password;
   if (!password) throw new ValidationError('Choose a password.', 'password');
@@ -118,6 +144,7 @@ export const acceptInvite = asyncHandler(async (req, res) => {
     user.password = password;
     // Single-use: consumed the moment it works, so a forwarded link is spent.
     user.inviteTokenHash = null;
+    user.previousInviteTokenHashes = [];
     user.inviteExpiresAt = null;
     user.status = 'active';
     await user.save();

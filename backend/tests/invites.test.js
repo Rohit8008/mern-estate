@@ -16,6 +16,7 @@ import {
   hashInviteToken,
   generateInviteToken,
   inviteUrl,
+  buildInviteEmail,
   DEFAULT_INVITE_DAYS,
 } from '../tenancy/invites.js';
 
@@ -142,6 +143,47 @@ describe('a link that should no longer work', () => {
 
     expect(await findByToken(first)).toBeNull();
     expect(await findByToken(second)).not.toBeNull();
+  });
+
+  it('is still recognised as replaced, so its page can point to the newer email', async () => {
+    const { user, token: first } = await invitee(inA);
+    await inA(async () => {
+      const u = await User.findById(user._id).select('+inviteTokenHash +inviteExpiresAt +previousInviteTokenHashes');
+      attachInvite(u);
+      await u.save({ validateBeforeSave: false });
+    });
+    const replaced = await runWithoutTenantScope('test', () =>
+      User.findOne({ previousInviteTokenHashes: hashInviteToken(first) }).select('+previousInviteTokenHashes')
+    );
+    expect(String(replaced._id)).toBe(String(user._id));
+    expect(replaced.toJSON().previousInviteTokenHashes).toBeUndefined();
+  });
+});
+
+describe('the email', () => {
+  const base = {
+    url: 'https://realvista.example/invite/abc',
+    workspace: 'AkmRealtor',
+    inviterName: 'Rohit Mittal',
+    role: 'admin',
+    recipientName: 'Rohit',
+    expiresAt: new Date('2026-09-30T12:00:00Z'),
+  };
+
+  it('says who invited them, to what, and when it expires', () => {
+    const { subject, text, html } = buildInviteEmail(base);
+    expect(subject).toBe('Rohit Mittal invited you to AkmRealtor on Real Vista');
+    expect(text).toContain('Rohit Mittal has invited you to join AkmRealtor on Real Vista as an administrator');
+    expect(text).toContain('30 September 2026');
+    expect(html).toContain('Accept invitation');
+    expect(html).toContain(base.url);
+  });
+
+  it('escapes names, so a workspace called <script> cannot inject markup', () => {
+    const { html } = buildInviteEmail({ ...base, workspace: '<script>x</script>', inviterName: 'A & B' });
+    expect(html).not.toContain('<script>x');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('A &amp; B');
   });
 });
 

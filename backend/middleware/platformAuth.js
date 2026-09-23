@@ -39,7 +39,7 @@ export const requirePlatformAdmin = async (req, res, next) => {
     // own account record does not live there — an unpinned lookup would find
     // nothing and lock them out of the console they are standing in.
     const user = await runWithTenant({ tenantId: String(req.homeTenantId || req.tenantId) }, () =>
-      User.findById(req.user.id).select('+isPlatformAdmin email status').lean()
+      User.findById(req.user.id).select('+isPlatformAdmin email status username firstName lastName').lean()
     );
 
     if (!user || user.status !== 'active' || !user.isPlatformAdmin) {
@@ -54,7 +54,12 @@ export const requirePlatformAdmin = async (req, res, next) => {
       return next(new AuthorizationError('This area is restricted to platform operators.'));
     }
 
-    req.platformAdmin = { id: String(user._id), email: user.email };
+    req.platformAdmin = {
+      id: String(user._id),
+      email: user.email,
+      // For "Rohit Mittal has invited you", which read as a bare email address.
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || '',
+    };
     return next();
   } catch (err) {
     return next(err);

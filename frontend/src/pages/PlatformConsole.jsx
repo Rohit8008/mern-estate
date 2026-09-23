@@ -130,13 +130,34 @@ function NewWorkspaceModal({ open, onClose, onCreated }) {
             </div>
           </div>
 
-          {result.needsPasswordSetup && (
+          {/* The invitation went out at creation. This box used to say "no
+              password was set, tell them to use Forgot password", so the
+              natural next step was pressing Invite again. */}
+          {result.needsPasswordSetup && result.invite?.sent && (
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <HiOutlineMail className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-emerald-900">
+                An invitation is on its way to <strong>{result.admin.email}</strong>. They open the link, choose a
+                password and land in {result.tenant.name}. The link works for 7 days. There&apos;s no need to send
+                another.
+              </p>
+            </div>
+          )}
+          {result.needsPasswordSetup && !result.invite?.sent && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <HiOutlineExclamation className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-900">
-                No password was set. Tell {result.admin.email} to use <strong>{t('platformConsole.forgotPassword')}</strong>
-                {' '}on the sign-in page to choose their own.
-              </p>
+              <div className="text-sm text-amber-900 min-w-0">
+                <p>
+                  The invitation email could not be sent. Pass this link to <strong>{result.admin.email}</strong>{' '}
+                  yourself. It works once, for 7 days.
+                </p>
+                {result.invite?.url && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="flex-1 min-w-0 truncate rounded bg-white border border-amber-200 px-2 py-1 text-xs">{result.invite.url}</code>
+                    <Button size="xs" variant="secondary" onClick={() => navigator.clipboard?.writeText(result.invite.url)}>Copy</Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -515,7 +536,7 @@ export default function PlatformConsole() {
                           className="mr-1"
                           loading={busyId === item.id}
                           onClick={() => resendInvite(item)}
-                          title="Re-send the first admin's invitation"
+                          title="Email the first admin a fresh invitation. Only the newest link works."
                         >{t('platformConsole.invite')}</Button>
                         <Button
                           size="xs"

@@ -50,8 +50,18 @@ export function hashInviteToken(token) {
  *
  * @returns {string} the raw token, the only time it exists in the clear
  */
+/** How many earlier links of one invitation stay usable. */
+const MAX_PREVIOUS_LINKS = 4;
+
 export function attachInvite(user, { days = DEFAULT_INVITE_DAYS, invitedBy = null } = {}) {
   const token = generateInviteToken();
+  // A re-send remembers the links it replaces, so they can be recognised as
+  // superseded (the caller selects +inviteTokenHash +inviteExpiresAt
+  // +previousInviteTokenHashes). An expired invitation starts clean.
+  const stillOpen = user.inviteTokenHash && user.inviteExpiresAt && user.inviteExpiresAt > new Date();
+  user.previousInviteTokenHashes = stillOpen
+    ? [user.inviteTokenHash, ...(user.previousInviteTokenHashes || [])].slice(0, MAX_PREVIOUS_LINKS)
+    : [];
   user.inviteTokenHash = hashInviteToken(token);
   user.inviteExpiresAt = new Date(Date.now() + days * 86400000);
   user.invitedAt = new Date();
@@ -83,24 +93,105 @@ export function inviteUrl(token, tenant) {
  * console shows them the link to pass on by hand. The token is already stored,
  * so nothing is lost.
  */
-export async function sendInviteEmail({ to, token, tenant, inviterName }) {
+const escapeHtml = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+const ROLE_LINE = {
+  admin: 'as an administrator, so you can set up the workspace and invite your team',
+  employee: 'as a team member',
+};
+
+/**
+ * The invitation email: who invited them, to what, what to do, and when the
+ * link stops working. It used to be one line ("x has invited you to y") and
+ * a bare link, which reads as spam and says nothing about the product.
+ */
+export function buildInviteEmail({ url, workspace, inviterName, role, recipientName, expiresAt, accent }) {
+  const product = 'Real Vista';
+  const who = inviterName ? `${inviterName} has invited you` : 'You have been invited';
+  const roleLine = ROLE_LINE[role] ? ` ${ROLE_LINE[role]}` : '';
+  const expires = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+    .format(expiresAt || new Date(Date.now() + DEFAULT_INVITE_DAYS * 86400000));
+  const hello = recipientName ? `Hi ${recipientName},` : 'Hello,';
+  const colour = /^#[0-9a-f]{6}$/i.test(accent || '') ? accent : '#1e4f6b';
+
+  const subject = inviterName
+    ? `${inviterName} invited you to ${workspace} on ${product}`
+    : `You're invited to ${workspace} on ${product}`;
+
+  const text = [
+    hello,
+    '',
+    `${who} to join ${workspace} on ${product}${roleLine}.`,
+    '',
+    `${product} is where the agency keeps its properties, leads, deals and follow-ups in one place, on the web and on Android.`,
+    '',
+    'Accept the invitation and choose your password:',
+    url,
+    '',
+    `This link works once and expires on ${expires}.`,
+    "If you weren't expecting this invitation, you can ignore this email; no account is active until you accept.",
+  ].join('\n');
+
+  const e = escapeHtml;
+  const html = `<!doctype html>
+<html><body style="margin:0;padding:0;background:#f3f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a">
+<div style="display:none;max-height:0;overflow:hidden">${e(who)} to join ${e(workspace)}. Accept by ${e(expires)}.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f4;padding:32px 16px">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0">
+      <tr><td style="padding:28px 32px 0">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td style="width:36px;height:36px;border-radius:10px;background:${colour};color:#fff;font-weight:700;font-size:16px;text-align:center;vertical-align:middle">${e(workspace.charAt(0).toUpperCase())}</td>
+          <td style="padding-left:10px;font-weight:700;font-size:15px">${e(workspace)}</td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:24px 32px 0">
+        <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:700">You're invited to ${e(workspace)}</h1>
+        <p style="margin:14px 0 0;font-size:15px;line-height:1.6;color:#334155">${e(hello)}</p>
+        <p style="margin:8px 0 0;font-size:15px;line-height:1.6;color:#334155">
+          ${inviterName ? `<strong>${e(inviterName)}</strong> has invited you` : 'You have been invited'} to join
+          <strong>${e(workspace)}</strong> on ${product}${e(roleLine)}.
+        </p>
+        <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#64748b">
+          ${product} keeps the agency's properties, leads, deals and follow-ups in one place, on the web and on Android.
+        </p>
+      </td></tr>
+      <tr><td style="padding:24px 32px 0">
+        <a href="${e(url)}" style="display:inline-block;background:${colour};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:999px">Accept invitation</a>
+        <p style="margin:12px 0 0;font-size:13px;color:#64748b">You'll choose your password, then go straight into the workspace.</p>
+      </td></tr>
+      <tr><td style="padding:24px 32px 28px">
+        <p style="margin:0;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.6;color:#64748b">
+          The button works once and expires on <strong>${e(expires)}</strong>. If it doesn't open, paste this into your browser:<br>
+          <a href="${e(url)}" style="color:${colour};word-break:break-all">${e(url)}</a>
+        </p>
+        <p style="margin:12px 0 0;font-size:12.5px;line-height:1.6;color:#94a3b8">
+          Weren't expecting this? You can ignore this email. No account is active until the invitation is accepted.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+
+  return { subject, text, html };
+}
+
+export async function sendInviteEmail({ to, token, tenant, inviterName, role = 'admin', recipientName = '', expiresAt = null }) {
   const url = inviteUrl(token, tenant);
   const workspace = tenant?.branding?.productName || tenant?.name || 'your workspace';
-  const from = inviterName ? `${inviterName} has invited you` : 'You have been invited';
+  const { subject, text, html } = buildInviteEmail({
+    url,
+    workspace,
+    inviterName,
+    role,
+    recipientName,
+    expiresAt,
+    accent: tenant?.branding?.tokens?.primary || tenant?.branding?.primaryColor,
+  });
 
-  const text =
-    `${from} to ${workspace}.\n\n` +
-    `Set your password and sign in:\n${url}\n\n` +
-    `This link expires in ${DEFAULT_INVITE_DAYS} days and can only be used once. ` +
-    `If you were not expecting this, you can ignore it.`;
-
-  const html =
-    `<p>${from} to <b>${workspace}</b>.</p>` +
-    `<p><a href="${url}">Set your password and sign in</a></p>` +
-    `<p style="color:#64748b;font-size:13px">This link expires in ${DEFAULT_INVITE_DAYS} days ` +
-    `and can only be used once. If you were not expecting this, you can ignore it.</p>`;
-
-  const result = await sendMail({ to, subject: `Your ${workspace} account`, text, html });
+  const result = await sendMail({ to, subject, text, html });
 
   if (!result.sent) {
     logger.warn('Invite email not delivered', { to, workspace, reason: result.reason });
