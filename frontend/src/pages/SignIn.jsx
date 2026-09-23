@@ -106,6 +106,9 @@ export default function SignIn() {
         {/* Footer */}
         <div className='text-center'>
           <p className='text-sm text-slate-500 font-medium'>{t('signIn.needAccessContactYourAdministrator')}</p>
+          <p className='text-sm text-slate-500 mt-2'>
+            <Link to='/download' className='font-medium text-brand-700 hover:underline'>{t('signIn.getAndroidApp')}</Link>
+          </p>
         </div>
       </div>
 

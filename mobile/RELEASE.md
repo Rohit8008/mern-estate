@@ -44,6 +44,27 @@ Running a newer `flutter` against this project also rewrites files in place —
 `analysis_options.yaml`, and `pubspec.lock`. Check `git status` after, and
 revert those if you did not mean to migrate.
 
+## Sideloaded releases (until the app is on the Play Store)
+
+The app is published as an APK at **https://realvista.duckdns.org/download**.
+The page reads `/app/latest.json`, so a new version needs no web deploy:
+
+```
+# bump `version:` in pubspec.yaml first
+./scripts/publish-apk.sh "What changed in this version"
+```
+
+It builds with Flutter 3.24.5 from `~/development/flutter-3.24.5` (override with
+`FLUTTER=`), points the app at `https://realvista.duckdns.org`, uploads the APK
+and then `latest.json` to `~/sites/realvista-app/` on the server (nginx serves
+it at `/app/`), and restores the committed `pubspec.lock`.
+
+**The release keystore is `~/.realvista/realvista-upload.jks`** (password in
+`android/key.properties`, with a copy in `~/.realvista/key.properties.backup`).
+Back up both somewhere safe. Android only installs an update signed with the
+same key as the installed app, so losing it means every user has to uninstall
+and reinstall. Use the same key for the Play Store upload key later.
+
 ## Testing against a dev backend on your LAN
 
 The app is cookie-auth only, so it needs a reachable backend — not `localhost`,

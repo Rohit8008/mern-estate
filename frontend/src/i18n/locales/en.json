@@ -1201,7 +1201,8 @@
     "registrationsClosed": "Registrations closed",
     "talkToTheTeam": "Talk to the team",
     "termsOfService": "Terms of service",
-    "yourEmailCom": "your@email.com"
+    "yourEmailCom": "your@email.com",
+    "androidApp": "Android app"
   },
   "forgotPassword": {
     "backToSignIn": "Back to Sign In",
@@ -1828,7 +1829,8 @@
     "password": "Password",
     "signIn": "Sign in",
     "signInToYourAccount": "Sign in to your account",
-    "welcomeBack": "Welcome back"
+    "welcomeBack": "Welcome back",
+    "getAndroidApp": "Get the Android app"
   },
   "signUp": {
     "goToSignIn": "Go to Sign In",
@@ -2243,6 +2245,29 @@
         "q": "What happens if we leave?",
         "a": "Your listings and portfolio export to CSV from the screens that hold them, so the records open in any spreadsheet. Ask us for a full workspace export and you will get one."
       }
-    }
+    },
+    "getAndroidApp": "Get the Android app."
+  },
+  "download": {
+    "pageTitle": "Download the Android app",
+    "title": "Real Vista for Android",
+    "body": "The Real Vista app for your agency's team: leads, follow-ups, properties and messages on your phone. It is not on the Play Store yet, so you install it from here.",
+    "appName": "Real Vista",
+    "meta": "Version {{version}}, {{size}} MB, released {{date}}",
+    "button": "Download for Android",
+    "loading": "Checking for the latest version…",
+    "unavailable": "The app is not available to download right now. Please try again later, or use Real Vista in your browser.",
+    "iosNote": "There is no iPhone app yet. Real Vista works in Safari: open realvista.duckdns.org and sign in.",
+    "desktopNote": "Open this page on your Android phone to install the app:",
+    "howTitle": "How to install",
+    "step1": "Tap Download for Android. If your browser warns that the file might be harmful, choose Download anyway: Android shows this for every app from outside the Play Store.",
+    "step2": "Open the downloaded file from the notification or your Downloads folder.",
+    "step3": "If Android asks, allow your browser to install unknown apps (Settings opens for you; switch it on, then go back).",
+    "step4": "Tap Install, open Real Vista and sign in with your usual email and password.",
+    "updateNote": "For a new version, download and install it the same way. It installs over the old one and you stay signed in.",
+    "verifyTitle": "Check the file (optional)",
+    "verifyBody": "The SHA-256 fingerprint of the file on this page. If yours matches, it has not been altered.",
+    "webNote": "Prefer the browser?",
+    "signInWeb": "Sign in on the web"
   }
 }

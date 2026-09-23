@@ -72,7 +72,9 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // Fall back to cached index.html for all SPA navigation when offline
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        // /app/ holds the Android APK and its latest.json: never answer those
+        // with the SPA shell.
+        navigateFallbackDenylist: [/^\/api\//, /^\/app\//],
         runtimeCaching: [
           {
             // Cache GET API responses for 30 minutes; mutations are not cached

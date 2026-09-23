@@ -163,7 +163,10 @@ export default function Home() {
                 {t('landing.signIn')}
               </Link>
             </div>
-            <p className='mt-6 text-sm text-slate-500 max-w-[46ch] text-pretty'>{t('landing.inviteNote')}</p>
+            <p className='mt-6 text-sm text-slate-500 max-w-[46ch] text-pretty'>
+              {t('landing.inviteNote')}{' '}
+              <Link to='/download' className='font-medium text-brand-700 hover:underline'>{t('landing.getAndroidApp')}</Link>
+            </p>
           </div>
 
           <div className='lg:col-span-6 xl:col-span-5 xl:col-start-8'>

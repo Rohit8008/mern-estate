@@ -163,6 +163,7 @@ export default function Footer() {
         <div className='max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3 text-slate-600 text-xs'>
           <span>{t('footer.2026RealVistaAllRightsReserved')}</span>
           <nav aria-label={t('footer.legal')} className='flex gap-5'>
+            <Link to='/download' className='hover:text-slate-300 transition-colors'>{t('footer.androidApp')}</Link>
             <Link to='/privacy' className='hover:text-slate-300 transition-colors'>{t('footer.privacyPolicy')}</Link>
             <Link to='/terms' className='hover:text-slate-300 transition-colors'>{t('footer.termsOfService')}</Link>
           </nav>

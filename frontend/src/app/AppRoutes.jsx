@@ -19,6 +19,7 @@ const Unauthorized    = lazy(() => import('../pages/Unauthorized'));
 const NotFound        = lazy(() => import('../pages/NotFound'));
 const Privacy         = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Privacy })));
 const Terms           = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Terms })));
+const DownloadApp     = lazy(() => import('../pages/DownloadApp'));
 const Listing         = lazy(() => import('../pages/Listing'));
 const UserProfile     = lazy(() => import('../pages/UserProfile'));
 const Search          = lazy(() => import('../pages/Search'));
@@ -84,6 +85,8 @@ export default function AppRoutes() {
         <Route path='/forgot-password' element={<ForgotPassword />} />
         <Route path='/privacy' element={<Privacy />} />
         <Route path='/terms' element={<Terms />} />
+        {/* Public: the Android APK, while the app is not on the Play Store. */}
+        <Route path='/download' element={<DownloadApp />} />
         {/* Formerly public. The property book is not browsable without a
             session; sharing specific properties goes through /s/:token. */}
         {/* The one page a stranger can reach. Outside AppShell on purpose: a
