@@ -113,16 +113,23 @@ class _PropertiesListScreenState extends ConsumerState<PropertiesListScreen> {
               if (_mode == _ViewMode.map) {
                 return PropertiesMapView(listings: state.listings, onOpenListing: _openDetail);
               }
+              // Cell height = photo (16:10 of the cell width) + the text block
+              // at the phone's font size. A fixed aspect ratio clipped the
+              // card's last line under a larger system font.
+              final width = MediaQuery.sizeOf(context).width;
+              final cellWidth = (width - AppSpacing.lg * 2 - AppSpacing.md) / 2;
+              final textBlock = MediaQuery.textScalerOf(context).scale(100);
+              final cellHeight = cellWidth * 10 / 16 + AppSpacing.md * 2 + textBlock + 4;
               return RefreshIndicator(
                 onRefresh: () => ref.read(listingsControllerProvider.notifier).refresh(),
                 child: GridView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     mainAxisSpacing: AppSpacing.md,
                     crossAxisSpacing: AppSpacing.md,
-                    childAspectRatio: 0.72,
+                    mainAxisExtent: cellHeight,
                   ),
                   itemCount: state.listings.length + (state.hasMore ? 2 : 0),
                   itemBuilder: (context, index) {

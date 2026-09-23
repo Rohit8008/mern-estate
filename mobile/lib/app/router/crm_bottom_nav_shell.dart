@@ -21,41 +21,53 @@ class CrmBottomNavShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final index = navigationShell.currentIndex;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_tabTitles[index]),
-        actions: [
-          const NotificationBell(),
-          IconButton(
-            icon: const Icon(Icons.grid_view_rounded),
-            tooltip: 'More',
-            onPressed: () => context.push('/more'),
+    // Android back on Leads/Properties/Activities returns to the Dashboard
+    // instead of leaving the app; only back on the Dashboard exits. Screens
+    // opened on top of a tab are popped before this is ever asked.
+    return PopScope(
+        canPop: index == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && index != 0) navigationShell.goBranch(0);
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(_tabTitles[index]),
+            actions: [
+              const NotificationBell(),
+              IconButton(
+                icon: const Icon(Icons.grid_view_rounded),
+                tooltip: 'More',
+                onPressed: () => context.push('/more'),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: navigationShell,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showQuickActionSheet(context),
-        backgroundColor: AppColors.indigo600,
-        child: const Icon(Icons.add_rounded, color: AppColors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        padding: EdgeInsets.zero,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _NavButton(label: _tabTitles[0], icon: _tabIcons[0], activeIcon: _tabIconsActive[0], selected: index == 0, onTap: () => navigationShell.goBranch(0)),
-            _NavButton(label: _tabTitles[1], icon: _tabIcons[1], activeIcon: _tabIconsActive[1], selected: index == 1, onTap: () => navigationShell.goBranch(1)),
-            const SizedBox(width: 56),
-            _NavButton(label: _tabTitles[2], icon: _tabIcons[2], activeIcon: _tabIconsActive[2], selected: index == 2, onTap: () => navigationShell.goBranch(2)),
-            _NavButton(label: _tabTitles[3], icon: _tabIcons[3], activeIcon: _tabIconsActive[3], selected: index == 3, onTap: () => navigationShell.goBranch(3)),
-          ],
-        ),
-      ),
-    );
+          body: navigationShell,
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => showQuickActionSheet(context),
+            backgroundColor: AppColors.indigo600,
+            child: const Icon(Icons.add_rounded, color: AppColors.white),
+          ),
+          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          bottomNavigationBar: BottomAppBar(
+            shape: const CircularNotchedRectangle(),
+            notchMargin: 8,
+            padding: EdgeInsets.zero,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _NavButton(
+                    label: _tabTitles[0], icon: _tabIcons[0], activeIcon: _tabIconsActive[0], selected: index == 0, onTap: () => navigationShell.goBranch(0)),
+                _NavButton(
+                    label: _tabTitles[1], icon: _tabIcons[1], activeIcon: _tabIconsActive[1], selected: index == 1, onTap: () => navigationShell.goBranch(1)),
+                const SizedBox(width: 56),
+                _NavButton(
+                    label: _tabTitles[2], icon: _tabIcons[2], activeIcon: _tabIconsActive[2], selected: index == 2, onTap: () => navigationShell.goBranch(2)),
+                _NavButton(
+                    label: _tabTitles[3], icon: _tabIcons[3], activeIcon: _tabIconsActive[3], selected: index == 3, onTap: () => navigationShell.goBranch(3)),
+              ],
+            ),
+          ),
+        ));
   }
 }
 

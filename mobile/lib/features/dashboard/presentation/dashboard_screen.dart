@@ -67,23 +67,14 @@ class _DashboardContent extends StatelessWidget {
     final p = analytics.properties;
     final b = analytics.buyers;
     void push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    String parts(List<(int, String)> items) =>
-        items.where((e) => e.$1 > 0).map((e) => '${Fmt.count(e.$1)} ${e.$2}').join(' · ');
+    String parts(List<(int, String)> items) => items.where((e) => e.$1 > 0).map((e) => '${Fmt.count(e.$1)} ${e.$2}').join(' · ');
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
       children: [
         _GreetingBanner(greeting: _greeting, name: firstName ?? 'there', dateLabel: today),
         const SizedBox(height: AppSpacing.xl),
-        GridView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: AppSpacing.md,
-            crossAxisSpacing: AppSpacing.md,
-            mainAxisExtent: 152,
-          ),
+        KpiGrid(
           children: [
             KpiCard(
               title: 'Total Properties',
@@ -192,11 +183,9 @@ class _GreetingBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$greeting, $name!',
-              style: const TextStyle(color: AppColors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+          Text('$greeting, $name!', style: const TextStyle(color: AppColors.white, fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text('$dateLabel · Agency performance overview',
-              style: TextStyle(color: AppColors.white.withOpacity(0.7), fontSize: 13)),
+          Text('$dateLabel · Agency performance overview', style: TextStyle(color: AppColors.white.withOpacity(0.7), fontSize: 13)),
         ],
       ),
     );
@@ -236,15 +225,7 @@ class _SalesOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overdue = sales.followUpsOverdue;
-    return GridView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: AppSpacing.md,
-        crossAxisSpacing: AppSpacing.md,
-        mainAxisExtent: 152,
-      ),
+    return KpiGrid(
       children: [
         KpiCard(
           title: 'Open deals',

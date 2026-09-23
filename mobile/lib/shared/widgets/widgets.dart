@@ -6,3 +6,4 @@ export 'app_states.dart';
 export 'app_text_field.dart';
 export 'confirm_dialog.dart';
 export 'kpi_card.dart';
+export 'kpi_grid.dart';

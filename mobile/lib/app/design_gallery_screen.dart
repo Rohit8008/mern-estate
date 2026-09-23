@@ -58,16 +58,8 @@ class DesignGalleryScreen extends StatelessWidget {
             ],
           ),
           const _Section('KPI cards'),
-          GridView(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: AppSpacing.md,
-              crossAxisSpacing: AppSpacing.md,
-              mainAxisExtent: 140,
-            ),
-            children: const [
+          const KpiGrid(
+            children: [
               KpiCard(title: 'Active Leads', value: '48', icon: Icons.people_alt_rounded, accent: AppAccent.indigo, trendValue: 12, trendLabel: 'vs last week'),
               KpiCard(title: 'Properties', value: '312', icon: Icons.apartment_rounded, accent: AppAccent.blue),
               KpiCard(title: 'Closed Deals', value: '₹42L', icon: Icons.emoji_events_rounded, accent: AppAccent.emerald, trendValue: 8),

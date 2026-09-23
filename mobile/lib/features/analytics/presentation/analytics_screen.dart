@@ -42,19 +42,9 @@ class AnalyticsScreen extends ConsumerWidget {
             children: [
               const _SectionLabel('Closed business'),
               const SizedBox(height: AppSpacing.sm),
-              // A fixed height, not childAspectRatio: an aspect ratio derives the
-              // cell height from the viewport width, so a ratio that fits on one
-              // screen clips the taller ₹ glyph on another. The dashboard and
-              // transactions grids already use mainAxisExtent for this reason.
-              GridView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: AppSpacing.sm,
-                  crossAxisSpacing: AppSpacing.sm,
-                  mainAxisExtent: 140,
-                ),
+              // Rows size to their content: a fixed cell height clipped cards
+              // with a sub-line or under a larger system font.
+              KpiGrid(
                 children: [
                   KpiCard(
                     title: 'Closed value',
@@ -100,9 +90,7 @@ class AnalyticsScreen extends ConsumerWidget {
                         Expanded(
                           child: _Stat(
                             label: 'Avg days to win',
-                            value: report.leads.avgConversionDays == 0
-                                ? '—'
-                                : '${report.leads.avgConversionDays}',
+                            value: report.leads.avgConversionDays == 0 ? '—' : '${report.leads.avgConversionDays}',
                           ),
                         ),
                       ],
@@ -273,9 +261,7 @@ class _BucketList extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
-                    showValue && bucket.value != null
-                        ? _money.format(bucket.value)
-                        : _count.format(bucket.count),
+                    showValue && bucket.value != null ? _money.format(bucket.value) : _count.format(bucket.count),
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -287,8 +273,5 @@ class _BucketList extends StatelessWidget {
   }
 
   /// Stage and status keys are stored snake_case ('site_visit_scheduled').
-  static String _humanise(String key) => key
-      .split('_')
-      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-      .join(' ');
+  static String _humanise(String key) => key.split('_').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
 }

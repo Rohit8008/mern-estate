@@ -56,7 +56,11 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Transactions'),
-        actions: [IconButton(icon: const Icon(Icons.add_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen())))],
+        actions: [
+          IconButton(
+              icon: const Icon(Icons.add_rounded),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen())))
+        ],
       ),
       body: Column(
         children: [
@@ -65,18 +69,20 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
             error: (_, __) => const SizedBox.shrink(),
             data: (stats) => Padding(
               padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
-              child: GridView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: AppSpacing.md,
-                  crossAxisSpacing: AppSpacing.md,
-                  mainAxisExtent: 140,
-                ),
+              child: KpiGrid(
                 children: [
-                  KpiCard(title: 'Pipeline', value: Fmt.moneyCompact(stats.totalPipeline), subtitle: 'Pending and in progress', icon: Icons.trending_up_rounded, accent: AppAccent.indigo),
-                  KpiCard(title: 'Commission', value: Fmt.moneyCompact(stats.totalCommission), subtitle: 'Earned on completed deals', icon: Icons.payments_outlined, accent: AppAccent.emerald),
+                  KpiCard(
+                      title: 'Pipeline',
+                      value: Fmt.moneyCompact(stats.totalPipeline),
+                      subtitle: 'Pending and in progress',
+                      icon: Icons.trending_up_rounded,
+                      accent: AppAccent.indigo),
+                  KpiCard(
+                      title: 'Commission',
+                      value: Fmt.moneyCompact(stats.totalCommission),
+                      subtitle: 'Earned on completed deals',
+                      icon: Icons.payments_outlined,
+                      accent: AppAccent.emerald),
                   KpiCard(title: 'Completed', value: '${stats.completed}', icon: Icons.check_circle_outline_rounded, accent: AppAccent.blue),
                   KpiCard(title: 'Pending', value: '${stats.pending}', icon: Icons.hourglass_bottom_rounded, accent: AppAccent.amber),
                 ],
@@ -85,7 +91,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
-            child: AppTextField(hint: 'Search by property or client…', prefixIcon: Icons.search_rounded, controller: _searchController, onChanged: _onSearchChanged),
+            child: AppTextField(
+                hint: 'Search by property or client…', prefixIcon: Icons.search_rounded, controller: _searchController, onChanged: _onSearchChanged),
           ),
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
@@ -97,7 +104,10 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                 _FilterChip(label: 'All', selected: statusFilter == null, onTap: () => ref.read(transactionsStatusFilterProvider.notifier).state = null),
                 for (final status in transactionStatuses) ...[
                   const SizedBox(width: AppSpacing.sm),
-                  _FilterChip(label: transactionStatusLabel(status), selected: statusFilter == status, onTap: () => ref.read(transactionsStatusFilterProvider.notifier).state = status),
+                  _FilterChip(
+                      label: transactionStatusLabel(status),
+                      selected: statusFilter == status,
+                      onTap: () => ref.read(transactionsStatusFilterProvider.notifier).state = status),
                 ],
               ],
             ),
@@ -106,7 +116,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           Expanded(
             child: transactionsAsync.when(
               loading: () => const AppPageLoader(),
-              error: (error, _) => AppErrorState(title: 'Unable to load transactions', onRetry: () => ref.read(transactionsControllerProvider.notifier).refresh()),
+              error: (error, _) =>
+                  AppErrorState(title: 'Unable to load transactions', onRetry: () => ref.read(transactionsControllerProvider.notifier).refresh()),
               data: (transactions) => transactions.isEmpty
                   ? AppEmptyState(
                       icon: Icons.payments_outlined,
@@ -145,7 +156,9 @@ class _TransactionRow extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(transaction.propertyName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+              Expanded(
+                  child: Text(transaction.propertyName,
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
               AppBadge(label: transactionStatusLabel(transaction.status), variant: _transactionStatusVariant(transaction.status)),
             ],
           ),

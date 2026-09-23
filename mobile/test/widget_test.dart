@@ -5,10 +5,10 @@
 // without any real network dependency.
 
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -346,6 +346,85 @@ void main() {
     expect(find.text('Messages'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Admin Panel'), findsNothing);
+  });
+
+  testWidgets('system back closes an opened screen instead of the app', (WidgetTester tester) async {
+    var exited = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemNavigator.pop') exited++;
+      return null;
+    });
+    await tester.pumpWidget(ProviderScope(
+      overrides: [apiClientProvider.overrideWithValue(_employeeApiClient())],
+      child: const RealVistaCrmApp(),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.text('Leads'));
+    await _settle(tester);
+    await tester.tap(find.text('Priya Sharma'));
+    await _settle(tester);
+    expect(find.text('Overview'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(exited, 0, reason: 'back from a lead exited the app');
+    expect(find.text('Overview'), findsNothing);
+
+    // A tab other than Dashboard goes back to Dashboard first.
+    await tester.tap(find.text('Properties').last);
+    await _settle(tester);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(exited, 0, reason: 'back on the Properties tab exited the app');
+    expect(find.text('Dashboard'), findsWidgets);
+  });
+
+  testWidgets('system back from More screens returns instead of exiting', (WidgetTester tester) async {
+    var exited = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemNavigator.pop') exited++;
+      return null;
+    });
+    await tester.pumpWidget(ProviderScope(
+      overrides: [apiClientProvider.overrideWithValue(_adminApiClient())],
+      child: const RealVistaCrmApp(),
+    ));
+    await _settle(tester);
+
+    await tester.tap(find.byTooltip('More'));
+    await _settle(tester);
+    await tester.tap(find.text('Property Owners'));
+    await _settle(tester);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(exited, 0, reason: 'back from Owners exited the app');
+    expect(find.text('Admin Panel'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(exited, 0, reason: 'back from More exited the app');
+
+  });
+
+  testWidgets('cards fit at a large system font size', (WidgetTester tester) async {
+    // Phones with "Font size: Largest" were where the cards overflowed.
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [apiClientProvider.overrideWithValue(_adminApiClient())],
+      child: const RealVistaCrmApp(),
+    ));
+    await _settle(tester);
+    expect(tester.takeException(), isNull, reason: 'Dashboard overflowed');
+
+    await tester.tap(find.text('Properties').last);
+    await _settle(tester);
+    expect(tester.takeException(), isNull, reason: 'Properties grid overflowed');
+
+    await tester.tap(find.byTooltip('More'));
+    await _settle(tester);
+    await tester.tap(find.text('Transactions'));
+    await _settle(tester);
+    expect(tester.takeException(), isNull, reason: 'Transactions overflowed');
   });
 
   testWidgets('Leads tab lists a lead and opens its detail', (WidgetTester tester) async {
