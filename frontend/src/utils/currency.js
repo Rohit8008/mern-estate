@@ -139,8 +139,10 @@ export function formatCompactCurrency(amount) {
   if (current.numberLocale === 'en-IN') {
     // minimumFractionDigits 0: the currency's default two decimals printed
     // "₹30.00 L"; the short form should read "₹30 L", "₹1.5 Cr".
-    if (abs >= 1e7) return `${formatCurrency(value / 1e7, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} Cr`;
-    if (abs >= 1e5) return `${formatCurrency(value / 1e5, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} L`;
+    // A no-break space: "₹1.16 L" wrapped in narrow cards and left the "L"
+    // alone on the next line.
+    if (abs >= 1e7) return `${formatCurrency(value / 1e7, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}\u00A0Cr`;
+    if (abs >= 1e5) return `${formatCurrency(value / 1e5, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}\u00A0L`;
     return formatCurrency(value);
   }
 

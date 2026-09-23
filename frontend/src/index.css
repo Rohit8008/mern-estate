@@ -227,6 +227,13 @@ body {
 .dark .bg-red-50     { background-color: hsl(355 30% 13%); }
 .dark .bg-orange-50  { background-color: hsl(25 35% 13%); }
 .dark .bg-cyan-50    { background-color: hsl(190 35% 13%); }
+/* teal and violet had no dark variant, so tiles using them stayed white with
+   light text on top (the Analytics pipeline). */
+.dark .bg-teal-50    { background-color: hsl(172 35% 12%); }
+.dark .bg-violet-50  { background-color: hsl(258 30% 15%); }
+.dark .border-teal-200,
+.dark .border-violet-200,
+.dark .border-cyan-200 { border-color: hsl(var(--border)); }
 /* -100 variants (badge backgrounds) */
 .dark .bg-blue-100,
 .dark .bg-indigo-100  { background-color: hsl(225 40% 18%); }

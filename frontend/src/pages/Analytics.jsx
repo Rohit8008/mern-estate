@@ -21,6 +21,8 @@ import {
 import { formatCompactCurrency, formatCurrency as formatCurrencyLocale, formatDate, formatNumber as formatNumberLocale } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
 import { localDateDaysAgo, localDateString } from '../utils/localDate';
+import { Link, useNavigate } from 'react-router-dom';
+import { useTenant } from '../contexts/TenantProvider';
 
 export default function Analytics() {
   const { t } = useTranslation();
@@ -29,6 +31,14 @@ export default function Analytics() {
     endDate: localDateString(),
   });
   const [activeTab, setActiveTab] = useState('overview');
+  const navigate = useNavigate();
+  // Stage names and order from the workspace pipeline, so Analytics says
+  // "Won" and "Site Visit" like the board does.
+  const { tenant } = useTenant();
+  const stageOrder = (tenant?.dealStages || []).map((st) => st.id);
+  const stageLabel = (id) =>
+    tenant?.dealStages?.find((st) => st.id === id)?.label || String(id || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  const rangeInvalid = Boolean(dateRange.startDate && dateRange.endDate && dateRange.startDate > dateRange.endDate);
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,6 +51,13 @@ export default function Analytics() {
     isManualRefreshRef.current = false;
 
     let mounted = true;
+    // A range that runs backwards used to load quietly with half-empty
+    // sections; it is refused here (and by the API with a 400).
+    if (!dateRange.startDate || !dateRange.endDate || dateRange.startDate > dateRange.endDate) {
+      setLoading(false);
+      setRefreshing(false);
+      return () => { mounted = false; };
+    }
     const params = `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
 
     if (isRefresh) setRefreshing(true);
@@ -50,7 +67,7 @@ export default function Analytics() {
     (async () => {
       try {
         if (activeTab === 'overview') {
-          const dashboardRes = await fetchWithRefresh(`/api/analytics/dashboard`);
+          const dashboardRes = await fetchWithRefresh(`/api/analytics/dashboard${params}`);
           if (!mounted) return;
           const dashboardData = await parseJsonSafely(dashboardRes);
           if (dashboardData?.success) setData(prev => ({ ...prev, dashboard: dashboardData.data }));
@@ -160,12 +177,12 @@ export default function Analytics() {
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: HiChartBar },
-    { id: 'properties', label: 'Properties', icon: HiHome },
-    { id: 'sales', label: 'Sales', icon: HiSwitchHorizontal },
-    { id: 'leads', label: 'Leads', icon: HiUsers },
-    { id: 'revenue', label: 'Revenue', icon: HiCurrencyRupee },
-    { id: 'agents', label: 'Agents', icon: HiUserGroup },
+    { id: 'overview', label: t('analytics.tabs.overview'), icon: HiChartBar },
+    { id: 'properties', label: t('analytics.tabs.properties'), icon: HiHome },
+    { id: 'sales', label: t('analytics.tabs.sales'), icon: HiSwitchHorizontal },
+    { id: 'leads', label: t('analytics.tabs.leads'), icon: HiUsers },
+    { id: 'revenue', label: t('analytics.tabs.revenue'), icon: HiCurrencyRupee },
+    { id: 'agents', label: t('analytics.tabs.agents'), icon: HiUserGroup },
   ];
 
   const quickDateRanges = [
@@ -237,7 +254,9 @@ export default function Analytics() {
       />
 
       {/* Tabs */}
-      <div className="bg-white border border-slate-200 rounded-xl flex overflow-x-auto shadow-sm">
+      {/* The tab row scrolls on a phone; the fade on the right says so. */}
+      <div className="relative">
+      <div className="bg-white border border-slate-200 rounded-xl flex overflow-x-auto shadow-sm [mask-image:linear-gradient(to_right,black_85%,transparent)] sm:[mask-image:none]">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -253,9 +272,14 @@ export default function Analytics() {
           </button>
         ))}
       </div>
+      </div>
+
+      {rangeInvalid && (
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{t('analytics.rangeBackwards')}</p>
+      )}
 
       {/* Content */}
-      <div>
+      <div className={rangeInvalid ? 'hidden' : undefined}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <HiRefresh className="w-10 h-10 text-slate-500 animate-spin" />
@@ -277,34 +301,44 @@ export default function Analytics() {
               <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Listings and clients are counts right now; new clients and
+                      deals won follow the date range above. The "↑ 12% new"
+                      trend was a count of new clients printed as a percentage. */}
                   <KpiCard
                     title={t('analytics.totalListings')}
                     value={formatNumber(data.dashboard.listings?.total || 0)}
-                    sub={`${formatNumber(data.dashboard.listings?.active || 0)} active`}
+                    sub={t('analytics.activeNow', { count: data.dashboard.listings?.active || 0 })}
                     icon={HiHome}
                     color="blue"
+                    onClick={() => navigate('/properties')}
                   />
                   <KpiCard
                     title={t('analytics.totalClients')}
                     value={formatNumber(data.dashboard.clients?.total || 0)}
-                    sub={`${formatNumber(data.dashboard.clients?.new || 0)} new this month`}
+                    sub={t('analytics.newInPeriod', { count: data.dashboard.clients?.new || 0 })}
                     icon={HiUsers}
                     color="emerald"
-                    trend={data.dashboard.clients?.new > 0 ? { value: data.dashboard.clients.new, label: 'new' } : undefined}
+                    onClick={() => navigate('/clients')}
                   />
                   <KpiCard
-                    title={t('analytics.dealsWon')}
+                    title={t('analytics.dealsWonInPeriod')}
                     value={formatNumber(data.dashboard.deals?.closedWon || 0)}
-                    sub={formatCurrency(data.dashboard.deals?.totalValue)}
+                    sub={data.dashboard.deals?.closedWon ? formatCurrency(data.dashboard.deals?.totalValue) : t('analytics.noneInPeriod')}
                     icon={HiSwitchHorizontal}
                     color="purple"
+                    onClick={() => navigate('/pipeline')}
                   />
                   <KpiCard
-                    title={t('analytics.followUpsDue')}
-                    value={formatNumber(data.dashboard.upcomingFollowUps || 0)}
-                    sub="Next 7 days"
+                    title={t('analytics.followUpsToDo')}
+                    value={formatNumber((data.dashboard.followUps?.overdue || 0) + (data.dashboard.followUps?.upcoming || 0))}
+                    sub={
+                      data.dashboard.followUps?.overdue
+                        ? t('analytics.followUpsOverdueAndDue', { overdue: data.dashboard.followUps.overdue, upcoming: data.dashboard.followUps.upcoming || 0 })
+                        : t('analytics.followUpsDueWeek', { count: data.dashboard.followUps?.upcoming || 0 })
+                    }
                     icon={HiClock}
                     color="amber"
+                    onClick={() => navigate('/calendar')}
                   />
                 </div>
 
@@ -313,19 +347,17 @@ export default function Analytics() {
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                       <h2 className="text-lg font-semibold text-slate-900">{t('analytics.clientPipeline')}</h2>
-                      <p className="text-sm text-slate-500">{t('analytics.trackClientsThroughEachStage')}</p>
+                      <p className="text-sm text-slate-500">{t('analytics.allClientsNow')}</p>
                     </div>
                     <div className="p-6">
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                        {data.dashboard.clients.byStatus.map((item, index) => (
+                        {sortByStatus(data.dashboard.clients.byStatus).map((item) => (
                           <div
                             key={item._id}
-                            className={`relative p-4 rounded-xl text-center transition-all hover:scale-105 ${
-                              getStatusColor(item._id, index)
-                            }`}
+                            className={`relative p-4 rounded-xl text-center transition-all hover:scale-105 ${getStatusColor(item._id)}`}
                           >
                             <div className="text-2xl font-bold text-slate-800">{formatNumber(item.count)}</div>
-                            <div className="text-xs text-slate-600 capitalize mt-1 font-medium">{item._id}</div>
+                            <div className="text-xs text-slate-600 mt-1 font-medium">{CLIENT_STATUS_LABEL[item._id] || item._id}</div>
                           </div>
                         ))}
                       </div>
@@ -471,7 +503,7 @@ export default function Analytics() {
                   <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
                     <span className="w-2 h-2 bg-purple-500 rounded-full"></span>{t('analytics.byStage')}</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {data.sales.byStage?.map((stage, index) => (
+                    {sortByStages(data.sales.byStage || [], stageOrder).map((stage, index) => (
                       <div
                         key={stage._id}
                         className={`p-4 rounded-xl text-center transition-all hover:scale-105 ${
@@ -479,7 +511,7 @@ export default function Analytics() {
                         }`}
                       >
                         <div className="text-2xl font-bold text-slate-800">{formatNumber(stage.count)}</div>
-                        <div className="text-xs text-slate-600 capitalize mt-1 font-medium">{stage._id?.replace(/_/g, ' ')}</div>
+                        <div className="text-xs text-slate-600 mt-1 font-medium">{stageLabel(stage._id)}</div>
                         <div className="text-xs text-slate-500 mt-1">{formatCurrency(stage.value)}</div>
                       </div>
                     ))}
@@ -515,7 +547,7 @@ export default function Analytics() {
                   {/* Conversion Funnel */}
                   <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
                     <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>{t('analytics.conversionFunnel')}</h3>
-                  <div className="flex items-center justify-between py-8 px-4 bg-gradient-to-r from-slate-50 to-white rounded-2xl">
+                  <div className="flex items-center justify-between gap-1 py-8 px-2 sm:px-4 bg-gradient-to-r from-slate-50 to-white rounded-2xl">
                     <FunnelStep
                       label={t('analytics.totalLeads')}
                       value={formatNumber(data.leads.funnel?.total?.[0]?.count || 0)}
@@ -566,6 +598,13 @@ export default function Analytics() {
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                   <h2 className="text-lg font-semibold text-slate-900">{t('analytics.revenueCommission')}</h2>
+                  {/* Two sources of commission exist and disagreed without
+                      saying why: this one is what won deals record; money
+                      actually received is the Transactions ledger. */}
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {t('analytics.revenueSourceNote')}{' '}
+                    <Link to="/transactions" className="font-medium text-brand-700 hover:underline">{t('analytics.openTransactions')}</Link>
+                  </p>
                   <p className="text-sm text-slate-500">{t('analytics.financialPerformanceOverview')}</p>
                 </div>
                 <div className="p-6">
@@ -602,8 +641,8 @@ export default function Analytics() {
                     <div>
                       <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
                         <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>{t('analytics.commissionByAgent')}</h3>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
+                      <div className="overflow-x-auto -mx-1 px-1">
+                        <table className="w-full min-w-[32rem]">
                           <thead>
                             <tr className="bg-slate-50">
                               <th className="text-left p-4 text-sm font-semibold text-slate-700 rounded-tl-xl">{t('analytics.agent')}</th>
@@ -732,18 +771,18 @@ export default function Analytics() {
 // Helper Components
 function FunnelStep({ label, value, color, highlight }) {
   return (
-    <div className="text-center flex-1">
+    <div className="text-center flex-1 min-w-0">
       <div className={`w-12 h-12 mx-auto ${color} rounded-xl flex items-center justify-center mb-2 ${highlight ? 'ring-4 ring-emerald-200' : ''}`}>
         <span className="text-white font-bold">{value}</span>
       </div>
-      <div className={`text-sm font-medium ${highlight ? 'text-emerald-600' : 'text-slate-600'}`}>{label}</div>
+      <div className={`text-xs sm:text-sm font-medium truncate ${highlight ? 'text-emerald-600' : 'text-slate-600'}`}>{label}</div>
     </div>
   );
 }
 
 function FunnelArrow() {
   return (
-    <div className="flex-shrink-0 px-2">
+    <div className="flex-shrink-0 px-1 sm:px-2 hidden sm:block">
       <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
       </svg>
@@ -751,18 +790,36 @@ function FunnelArrow() {
   );
 }
 
-function getStatusColor(status, index) {
-  const colors = [
-    'bg-slate-100 border border-slate-200',
-    'bg-indigo-50 border border-indigo-200',
-    'bg-purple-50 border border-purple-200',
-    'bg-amber-50 border border-amber-200',
-    'bg-teal-50 border border-teal-200',
-    'bg-emerald-50 border border-emerald-200',
-    'bg-rose-50 border border-rose-200',
-  ];
-  return colors[index % colors.length];
+// Keyed by status, not position: position-based colours changed with the
+// order the API returned, and the teal slot had no dark-mode variant, which
+// left one tile white with an invisible number.
+const CLIENT_STATUS_ORDER = ['lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
+const CLIENT_STATUS_LABEL = {
+  lead: 'Lead', contacted: 'Contacted', qualified: 'Qualified', proposal: 'Proposal',
+  negotiation: 'Negotiation', won: 'Won', lost: 'Lost',
+};
+const CLIENT_STATUS_COLOR = {
+  lead: 'bg-slate-100 border border-slate-200',
+  contacted: 'bg-indigo-50 border border-indigo-200',
+  qualified: 'bg-purple-50 border border-purple-200',
+  proposal: 'bg-cyan-50 border border-cyan-200',
+  negotiation: 'bg-amber-50 border border-amber-200',
+  won: 'bg-emerald-50 border border-emerald-200',
+  lost: 'bg-rose-50 border border-rose-200',
+};
+const sortByStatus = (rows) =>
+  [...rows].sort((a, b) => CLIENT_STATUS_ORDER.indexOf(a._id) - CLIENT_STATUS_ORDER.indexOf(b._id));
+
+function getStatusColor(status) {
+  return CLIENT_STATUS_COLOR[status] || 'bg-slate-100 border border-slate-200';
 }
+
+const sortByStages = (rows, order) =>
+  [...rows].sort((a, b) => {
+    const ia = order.indexOf(a._id);
+    const ib = order.indexOf(b._id);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
 
 function getStageColor(index) {
   const colors = [
