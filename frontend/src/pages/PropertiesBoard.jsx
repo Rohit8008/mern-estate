@@ -1133,8 +1133,8 @@ export default function PropertiesBoard() {
                                   className='rounded-lg px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-100 transition-colors'
                                   title={t('properties.clickToChangeStatus')}
                                 >
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border capitalize ${pill}`}>
-                                    {(x.status || 'available').replace('_', ' ')}
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${pill}`}>
+                                    {listingStatusLabel(x.status)}
                                   </span>
                                 </button>
                                 {editingCell?.id === x._id && editingCell?.field === 'status' && (
@@ -1205,7 +1205,14 @@ export default function PropertiesBoard() {
                   Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + items.length} of {totalCount} propert{totalCount === 1 ? 'y' : 'ies'}
                 </span>
                 <div className='flex items-center gap-3'>
-                  <span className='text-xs text-slate-500'>{t('properties.pageTotalValue')}<span className='font-semibold text-slate-700'>{formatCurrency(items.reduce((a, x) => a + (isPlaceholderPrice(x.regularPrice) ? 0 : Number(x.regularPrice) || 0), 0))}</span></span>
+                  {/* A sum of prices, so the plain currency format; sale prices only, since
+                      adding monthly rents to them means nothing. */}
+                  {(() => {
+                    const saleSum = items.filter((x) => x.type !== 'rent').reduce((a, x) => a + (isPlaceholderPrice(x.regularPrice) ? 0 : Number(x.regularPrice) || 0), 0);
+                    return saleSum > 0 ? (
+                      <span className='text-xs text-slate-500'>{t('properties.pageTotalValue')} <span className='font-semibold text-slate-700'>{formatMoney(saleSum)}</span></span>
+                    ) : null;
+                  })()}
                   <div className='flex items-center gap-1'>
                     <button
                       type='button'
