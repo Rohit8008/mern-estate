@@ -350,6 +350,16 @@ export const userRouteValidation = {
     email: Joi.string().email().max(254).required(),
   }),
 
+  savedViews: Joi.object({
+    items: Joi.array().max(50).items(
+      Joi.object({
+        id: Joi.string().max(64).required(),
+        name: Joi.string().trim().min(1).max(80).required(),
+        queryString: Joi.string().max(2000).allow('').default(''),
+      })
+    ).required(),
+  }),
+
   changePassword: Joi.object({
     currentPassword: Joi.string().min(1).max(128).required(),
     newPassword: Joi.string().min(8).max(128).required(),

@@ -9,7 +9,7 @@ import {
   unassignListingFromAgent,
   getMyAssignedListings,
   softDeleteListing,
-  restoreListing,
+  restoreListing, listDeletedListings,
   bulkImportListings,
   searchListings,
   getListingFacetCounts,
@@ -58,6 +58,7 @@ router.get('/my-assigned', verifyToken, getMyAssignedListings);
 // Soft delete and restore (Admin only)
 router.post('/soft-delete/:id', verifyToken, requireAdmin, softDeleteListing);
 router.post('/restore/:id', verifyToken, requireAdmin, restoreListing);
+router.get('/deleted', verifyToken, requireAdmin, listDeletedListings);
 
 // ─── Bulk import ────────────────────────────────────────────────────────────
 // The wizard flow: download a template, have the server suggest a column

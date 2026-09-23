@@ -39,6 +39,24 @@ export default function SharePropertiesDialog({ open, onClose, listings = [] }) 
   const [result, setResult] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  // Which of the offered properties go into the link. Everything in the view
+  // used to be sent with no way to leave one out, sold ones included; sold and
+  // rented start unticked.
+  const idOf = (l) => String(l._id || l.id);
+  const [picked, setPicked] = useState(() => new Set());
+  // Keyed on the ids, not the array: a parent passing a fresh array each
+  // render would otherwise reset the ticks on every click.
+  const listingKey = listings.map(idOf).join(',');
+  useEffect(() => {
+    if (open) setPicked(new Set(listings.filter((l) => !['sold', 'rented'].includes(l.status)).map(idOf)));
+  }, [open, listingKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosen = listings.filter((l) => picked.has(idOf(l)));
+  const togglePick = (id) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   useEffect(() => {
     if (!open) {
       setForm({ label: '', recipientName: '', recipientPhone: '', message: '', expiryDays: 30, showPrice: true, passcode: '' });
@@ -53,7 +71,7 @@ export default function SharePropertiesDialog({ open, onClose, listings = [] }) 
     setCreating(true);
     try {
       const res = await apiClient.post('/share', {
-        listingIds: listings.map((l) => l._id || l.id),
+        listingIds: chosen.map(idOf),
         label: form.label.trim(),
         recipientName: form.recipientName.trim(),
         recipientPhone: form.recipientPhone.trim(),
@@ -84,7 +102,7 @@ export default function SharePropertiesDialog({ open, onClose, listings = [] }) 
     <Modal
       open={open}
       onClose={onClose}
-      title={result ? 'Link ready' : `Share ${listings.length} propert${listings.length === 1 ? 'y' : 'ies'}`}
+      title={result ? 'Link ready' : `Share ${chosen.length} propert${chosen.length === 1 ? 'y' : 'ies'}`}
     >
       {result ? (
         <div className="space-y-4">
@@ -157,13 +175,25 @@ export default function SharePropertiesDialog({ open, onClose, listings = [] }) 
           }}
           className="space-y-4"
         >
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 max-h-28 overflow-y-auto">
-            {listings.map((l) => (
-              <div key={l._id || l.id} className="text-sm text-slate-700 truncate">
-                {l.name}
-              </div>
-            ))}
-          </div>
+          <fieldset className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 max-h-44 overflow-y-auto">
+            <legend className="sr-only">Properties in this link</legend>
+            {listings.map((l) => {
+              const id = idOf(l);
+              const inactive = ['sold', 'rented'].includes(l.status);
+              return (
+                <label key={id} className="flex items-center gap-2 py-1 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={picked.has(id)}
+                    onChange={() => togglePick(id)}
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="truncate">{l.name}</span>
+                  {inactive && <span className="ml-auto text-xs text-slate-500 flex-shrink-0">{l.status === 'sold' ? 'Sold' : 'Rented'}</span>}
+                </label>
+              );
+            })}
+          </fieldset>
 
           <Input
             label={t('shareProperties.whatIsThisList')}
@@ -224,7 +254,7 @@ export default function SharePropertiesDialog({ open, onClose, listings = [] }) 
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={onClose}>{t('shareProperties.cancel')}</Button>
-            <Button type="submit" icon={HiOutlineShare} loading={creating} disabled={!listings.length}>{t('shareProperties.createLink')}</Button>
+            <Button type="submit" icon={HiOutlineShare} loading={creating} disabled={!chosen.length}>{t('shareProperties.createLink')}</Button>
           </div>
         </form>
       )}

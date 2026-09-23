@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient, normalizeImageUrl } from '../utils/http';
-import { formatListingPrice, formatNumber, isPlaceholderPrice } from '../utils/currency';
+import { formatListingPrice, formatNumber, isPlaceholderPrice, formatCurrency as formatMoney, formatDate } from '../utils/currency';
+import BulkActionBar, { BulkSelect, BulkButton } from '../components/BulkActionBar';
+import ShareLinksDialog from '../components/ShareLinksDialog';
+import DeletedListingsDialog from '../components/DeletedListingsDialog';
+import { toCsv, downloadTextFile } from '../utils/spreadsheet';
+import { localDateString } from '../utils/localDate';
+import { useNotification } from '../contexts/NotificationContext';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
@@ -12,6 +18,7 @@ import SharePropertiesDialog from '../components/SharePropertiesDialog';
 import { HiPlus, HiOfficeBuilding, HiOutlineUpload, HiOutlineShare, HiX } from 'react-icons/hi';
 import { PageHeader, Button, EmptyState, Modal } from '../design-system';
 import { useTranslation } from 'react-i18next';
+import { LISTING_STATUS_LABELS, listingStatusLabel } from '../utils/listingStatus';
 
 const PAGE_SIZE = 50;
 
@@ -23,12 +30,8 @@ const VIEW_TABS = [
 ];
 
 const STATUS_ORDER = ['available', 'under_negotiation', 'sold', 'rented'];
-const STATUS_LABEL = {
-  available: 'New properties',
-  under_negotiation: 'Negotiation',
-  sold: 'Sold',
-  rented: 'Rented',
-};
+// Names come from utils/listingStatus.js so every view agrees.
+const STATUS_LABEL = LISTING_STATUS_LABELS;
 
 const STATUS_STYLE = {
   available: { stripe: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
@@ -97,6 +100,31 @@ export default function PropertiesBoard() {
   // only way anything in it reaches someone outside the agency.
   const [selectedToShare, setSelectedToShare] = useState([]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(false);
+  const [binOpen, setBinOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  // For the Filters panel: pick a category / property type instead of typing
+  // its slug.
+  const [filterCategories, setFilterCategories] = useState([]);
+  const [filterTypes, setFilterTypes] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const unwrap = (r) => (Array.isArray(r) ? r : r?.data || []);
+    Promise.all([
+      apiClient.get('/category/list', { silent: true }).catch(() => []),
+      apiClient.get('/property-types/list', { silent: true }).catch(() => []),
+    ]).then(([cats, types]) => {
+      if (!alive) return;
+      setFilterCategories(unwrap(cats));
+      setFilterTypes(unwrap(types));
+    });
+    return () => { alive = false; };
+  }, []);
+  // Row selection for Share / bulk actions / export. Share used to send every
+  // property in the current results, with no way to choose.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const { showSuccess, showError: toastError } = useNotification();
   // Inline editing: { id: listingId, field: 'status'|'agent'|'owner' }
   const [editingCell, setEditingCell] = useState(null);
 
@@ -318,17 +346,65 @@ export default function PropertiesBoard() {
     };
   }, [adminQuery, canAccess, currentUser?.role]);
 
+  async function reload() {
+    const isEmployee = currentUser?.role === 'employee';
+    const endpoint = isEmployee ? `/listing/my-assigned${adminQuery}` : `/listing/get${adminQuery}`;
+    const data = await apiClient.get(endpoint);
+    const listings = data?.data?.listings || [];
+    setItems(Array.isArray(listings) ? listings : []);
+  }
+
   async function updateStatus(listingId, toStatus) {
     try {
       await apiClient.post(`/listing/update/${listingId}`, { status: toStatus });
-      const isEmployee = currentUser?.role === 'employee';
-      const endpoint = isEmployee ? `/listing/my-assigned${adminQuery}` : `/listing/get${adminQuery}`;
-      const data = await apiClient.get(endpoint);
-      const listings = data?.data?.listings || [];
-      setItems(Array.isArray(listings) ? listings : []);
+      await reload();
+      showSuccess(`Marked ${listingStatusLabel(toStatus).toLowerCase()}.`);
     } catch (e) {
       setError(e?.message || 'Failed to update status');
     }
+  }
+
+  const selectedItems = items.filter((x) => selectedIds.has(x._id));
+  const toggleSelected = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allSelected = items.length > 0 && items.every((x) => selectedIds.has(x._id));
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(items.map((x) => x._id)));
+
+  // One request per property: there is no bulk endpoint, and the per-listing
+  // routes carry the permission checks (an employee only changes their own).
+  async function runBulk(label, fn) {
+    const targets = selectedItems;
+    if (!targets.length) return;
+    setBulkBusy(true);
+    let ok = 0;
+    let failed = 0;
+    for (const x of targets) {
+      try { await fn(x); ok += 1; } catch { failed += 1; }
+    }
+    setBulkBusy(false);
+    try { await reload(); } catch { /* the list keeps what it had */ }
+    setSelectedIds(new Set());
+    if (ok) showSuccess(`${label}: ${ok} propert${ok === 1 ? 'y' : 'ies'}.`);
+    if (failed) toastError(`${failed} could not be changed. You can only change properties you added or that are assigned to you.`);
+  }
+
+  function exportCsv(rows) {
+    const grid = [
+      ['Name', 'Status', 'For', 'Property type', 'Price', 'Offer price', 'Address', 'Locality', 'City', 'State', 'Pincode', 'Bedrooms', 'Bathrooms', 'Agent', 'Owner', 'Added'],
+      ...rows.map((x) => [
+        x.name, listingStatusLabel(x.status), x.type === 'rent' ? 'Rent' : x.type === 'lease' ? 'Lease' : 'Sale',
+        x.propertyType || '', Number(x.regularPrice) > 1 ? x.regularPrice : '', Number(x.discountPrice) > 0 ? x.discountPrice : '',
+        x.address || '', x.locality || '', x.city || '', x.state || '', x.pincode || '',
+        x.bedrooms || '', x.bathrooms || '', x.assignedAgent?.username || '',
+        (x.ownerIds || []).map((o) => o?.name).filter(Boolean).join('; '),
+        x.createdAt ? formatDate(x.createdAt) : '',
+      ]),
+    ];
+    downloadTextFile(`properties-${localDateString()}.csv`, toCsv(grid));
+    showSuccess(`Exported ${rows.length} propert${rows.length === 1 ? 'y' : 'ies'}.`);
   }
 
   // Inline update: status, agent, or owner — optimistic UI
@@ -363,6 +439,11 @@ export default function PropertiesBoard() {
       } else if (field === 'owner') {
         await apiClient.post(`/listing/update/${listingId}`, { ownerIds: value ? [value] : [] });
       }
+      showSuccess(
+        field === 'status' ? `Marked ${listingStatusLabel(value).toLowerCase()}.`
+          : field === 'agent' ? (value ? 'Agent assigned.' : 'Agent removed.')
+            : (value ? 'Owner linked.' : 'Owner removed.')
+      );
     } catch (e) {
       setError(e?.message || `Failed to update ${field}`);
       // Revert on error — refetch
@@ -596,12 +677,36 @@ export default function PropertiesBoard() {
             )}
             <button
               type='button'
-              onClick={() => { setSelectedToShare(items); setShareOpen(true); }}
+              onClick={() => { setSelectedToShare(selectedItems.length ? selectedItems : items); setShareOpen(true); }}
               disabled={items.length === 0}
-              title={items.length ? `Share these ${items.length} properties` : 'Nothing to share'}
+              title={selectedItems.length ? `Share the ${selectedItems.length} selected` : 'Choose which properties to share'}
               className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
             >
               <HiOutlineShare className='w-4 h-4' />{t('properties.share')}</button>
+            <button
+              type='button'
+              onClick={() => setLinksOpen(true)}
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+            >
+              {t('properties.sharedLinks')}
+            </button>
+            <button
+              type='button'
+              onClick={() => exportCsv(items)}
+              disabled={items.length === 0}
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+            >
+              {t('properties.export')}
+            </button>
+            {currentUser?.role === 'admin' && (
+              <button
+                type='button'
+                onClick={() => setBinOpen(true)}
+                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              >
+                {t('properties.deleted')}
+              </button>
+            )}
             <Link
               to='/create-listing'
               className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
@@ -616,10 +721,61 @@ export default function PropertiesBoard() {
         onClose={() => setShareOpen(false)}
         listings={selectedToShare}
       />
+      <ShareLinksDialog open={linksOpen} onClose={() => setLinksOpen(false)} />
+      {currentUser?.role === 'admin' && (
+        <DeletedListingsDialog open={binOpen} onClose={() => setBinOpen(false)} onRestored={() => reload().catch(() => {})} />
+      )}
+
+      <BulkActionBar count={selectedItems.length} onClear={() => setSelectedIds(new Set())}>
+        <BulkSelect
+          value=''
+          disabled={bulkBusy}
+          aria-label='Set status'
+          onChange={(e) => { const v = e.target.value; if (v) runBulk(`Marked ${listingStatusLabel(v).toLowerCase()}`, (x) => apiClient.post(`/listing/update/${x._id}`, { status: v }, { silent: true })); }}
+        >
+          <option value=''>Set status…</option>
+          {STATUS_ORDER.map((st) => <option key={st} value={st}>{listingStatusLabel(st)}</option>)}
+        </BulkSelect>
+        {currentUser?.role === 'admin' && (
+          <BulkSelect
+            value=''
+            disabled={bulkBusy}
+            aria-label='Assign agent'
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              if (v === '__none') runBulk('Unassigned', (x) => apiClient.post('/listing/unassign-agent', { listingId: x._id }, { silent: true }));
+              else runBulk('Assigned', (x) => apiClient.post('/listing/assign-agent', { listingId: x._id, agentId: v }, { silent: true }));
+            }}
+          >
+            <option value=''>Assign agent…</option>
+            <option value='__none'>No agent</option>
+            {agents.map((a) => <option key={a._id} value={a._id}>{a.username}</option>)}
+          </BulkSelect>
+        )}
+        <BulkButton onClick={() => { setSelectedToShare(selectedItems); setShareOpen(true); }} disabled={bulkBusy}>Share</BulkButton>
+        <BulkButton onClick={() => exportCsv(selectedItems)} disabled={bulkBusy}>Export</BulkButton>
+        {currentUser?.role === 'admin' && (
+          <BulkButton
+            danger
+            disabled={bulkBusy}
+            onClick={() => {
+              const n = selectedItems.length;
+              if (window.confirm(`Delete ${n} propert${n === 1 ? 'y' : 'ies'}? This cannot be undone from here.`)) {
+                runBulk('Deleted', (x) => apiClient.delete(`/listing/delete/${x._id}`, { silent: true }));
+              }
+            }}
+          >
+            Delete
+          </BulkButton>
+        )}
+      </BulkActionBar>
 
       <div className='bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden'>
-        <div className='px-4 py-2.5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center gap-3'>
-          <div className='flex items-center gap-1'>
+        {/* Two rows: view tabs and saved views, then the filters across the
+            full width. On one row the filters were squeezed into a sliver. */}
+        <div className='px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center gap-3'>
+          <div className='order-1 flex items-center gap-1'>
             {VIEW_TABS.map((t) => (
               <button
                 key={t.id}
@@ -635,10 +791,8 @@ export default function PropertiesBoard() {
             ))}
           </div>
           
-          <div className='h-6 w-px bg-slate-200 hidden lg:block' />
 
-          {/* Wraps: at 1440px the last filter was cut off at the card edge. */}
-          <div className='flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 flex-1 min-w-0'>
+          <div className='order-3 basis-full flex flex-col md:flex-row md:flex-wrap md:items-center gap-2'>
             <div className='relative w-full md:w-[280px]'>
               <svg className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /></svg>
               <input
@@ -648,8 +802,18 @@ export default function PropertiesBoard() {
                 onChange={(e) => setParam('q', e.target.value)}
               />
             </div>
+            {/* Phones: the selects filled the whole first screen, so they sit
+                behind this toggle; from md up they are always shown. */}
+            <button
+              type='button'
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+              aria-expanded={mobileFiltersOpen}
+              className='md:hidden w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700'
+            >
+              {mobileFiltersOpen ? 'Hide filters' : `Filters${activeFilters?.length ? ` (${activeFilters.length})` : ''}`}
+            </button>
             <select
-              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all'
+              className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all`}
               value={status}
               onChange={(e) => setParam('status', e.target.value)}
             >
@@ -663,7 +827,7 @@ export default function PropertiesBoard() {
 
             {currentUser?.role === 'admin' && (
               <select
-                className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all'
+                className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all`}
                 value={assignedAgent}
                 onChange={(e) => setParam('assignedAgent', e.target.value)}
               >
@@ -678,7 +842,7 @@ export default function PropertiesBoard() {
             )}
 
             <select
-              className='w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all'
+              className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all`}
               value={ownerId}
               onChange={(e) => setParam('ownerId', e.target.value)}
               disabled={owners.length === 0}
@@ -694,7 +858,7 @@ export default function PropertiesBoard() {
             <button
               type='button'
               onClick={() => setFiltersOpen(true)}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 transition-colors'
+              className={`${mobileFiltersOpen ? 'flex' : 'hidden'} md:flex px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium items-center gap-1.5 transition-colors`}
             >
               <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' /></svg>{t('properties.filters')}</button>
             {(q || status || assignedAgent || ownerId || city || locality || minPrice || maxPrice) && (
@@ -706,7 +870,7 @@ export default function PropertiesBoard() {
             )}
           </div>
 
-          <div className='w-full lg:w-auto'>
+          <div className='order-2 ml-auto w-full sm:w-auto'>
             <SavedViewsBar
               namespace='properties'
               getCurrentQueryString={getCurrentQueryString}
@@ -770,7 +934,16 @@ export default function PropertiesBoard() {
             <table className='min-w-full text-sm'>
               <thead className='bg-slate-50/80 sticky top-0 z-10'>
                 <tr className='border-b border-slate-200'>
-                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[280px]'>{t('properties.property')}</th>
+                  <th className='pl-4 pr-1 py-3 w-8'>
+                    <input
+                      type='checkbox'
+                      aria-label='Select all'
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      className='w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500'
+                    />
+                  </th>
+                  <th className='text-left pl-2 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[280px]'>{t('properties.property')}</th>
                   <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.location')}</th>
                   <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.type')}</th>
                   <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('properties.price')}</th>
@@ -785,17 +958,22 @@ export default function PropertiesBoard() {
                   const rows = groups.get(s) || [];
                   if (rows.length === 0) return null;
                   const stripe = STATUS_STYLE[s]?.stripe || 'bg-slate-300';
-                  const totalPrice = rows.reduce((acc, x) => acc + (isPlaceholderPrice(x.regularPrice) ? 0 : Number(x.regularPrice) || 0), 0);
+                  // Sale prices and monthly rents are different quantities; adding
+                  // them gave a meaningless total.
+                  const sumOf = (list) => list.reduce((acc, x) => acc + (isPlaceholderPrice(x.regularPrice) ? 0 : Number(x.regularPrice) || 0), 0);
+                  const saleTotal = sumOf(rows.filter((x) => x.type !== 'rent'));
+                  const rentTotal = sumOf(rows.filter((x) => x.type === 'rent'));
+                  const totalLabel = [saleTotal > 0 && formatMoney(saleTotal), rentTotal > 0 && `${formatMoney(rentTotal)} / month`].filter(Boolean).join(' · ');
 
                   return (
                     <>{ }
                       <tr key={`${s}-header`}>
-                        <td colSpan={8} className='px-0 py-0'>
+                        <td colSpan={9} className='px-0 py-0'>
                           <div className='flex items-center gap-3 px-4 py-2.5 bg-slate-50/60 border-y border-slate-200'>
                             <div className={`w-1 h-5 rounded-full ${stripe}`} />
                             <span className='text-[13px] font-bold text-slate-800'>{STATUS_LABEL[s] || s}</span>
                             <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full'>{rows.length}</span>
-                            <span className='text-xs text-slate-400 ml-auto'>{formatCurrency(totalPrice)}</span>
+                            {totalLabel && <span className='text-xs text-slate-400 ml-auto'>{totalLabel}</span>}
                           </div>
                         </td>
                       </tr>
@@ -812,7 +990,16 @@ export default function PropertiesBoard() {
                             className='group hover:bg-indigo-50/40 transition-colors cursor-pointer'
                             onClick={() => { setFilesQ(''); setQuickView(x); }}
                           >
-                            <td className='pl-4 pr-2 py-2.5'>
+                            <td className='pl-4 pr-1 py-2.5' onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type='checkbox'
+                                aria-label={`Select ${x.name}`}
+                                checked={selectedIds.has(x._id)}
+                                onChange={() => toggleSelected(x._id)}
+                                className='w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500'
+                              />
+                            </td>
+                            <td className='pl-2 pr-2 py-2.5'>
                               <div className='flex items-center gap-3'>
                                 <div className='w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200'>
                                   {thumb ? (
@@ -825,7 +1012,7 @@ export default function PropertiesBoard() {
                                 </div>
                                 <div className='min-w-0'>
                                   <div className='font-semibold text-slate-900 truncate text-[13px] group-hover:text-indigo-700 transition-colors'>{x.name}</div>
-                                  {(x.bedrooms || x.bathrooms) && (
+                                  {Boolean(x.bedrooms || x.bathrooms) && (
                                     <div className='text-[11px] text-slate-400 mt-0.5'>
                                       {x.bedrooms ? `${x.bedrooms} bed` : ''}{x.bedrooms && x.bathrooms ? ' · ' : ''}{x.bathrooms ? `${x.bathrooms} bath` : ''}
                                     </div>
@@ -838,10 +1025,14 @@ export default function PropertiesBoard() {
                               {x.locality && <div className='text-[11px] text-slate-400 truncate'>{x.locality}</div>}
                             </td>
                             <td className='px-3 py-2.5'>
-                              <span className='text-[12px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-md capitalize'>{x.propertyType || x.type || '-'}</span>
+                              <span className='text-[12px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-md'>{x.type === 'rent' ? 'Rent' : x.type === 'lease' ? 'Lease' : 'Sale'}</span>
+                              {x.propertyType && <div className='text-[11px] text-slate-400 mt-1 capitalize truncate'>{String(x.propertyType).replace(/[-_]+/g, ' ')}</div>}
                             </td>
                             <td className='px-3 py-2.5'>
-                              <div className='font-semibold text-slate-900 text-[13px]'>{formatCurrency(x.regularPrice)}</div>
+                              <div className='font-semibold text-slate-900 text-[13px]'>
+                                {formatCurrency(x.regularPrice)}
+                                {x.type === 'rent' && Number(x.regularPrice) > 1 && <span className='font-normal text-slate-400'> / month</span>}
+                              </div>
                               {x.discountPrice > 0 && x.discountPrice < x.regularPrice && (
                                 <div className='text-[11px] text-emerald-600 font-medium'>{formatCurrency(x.discountPrice)}</div>
                               )}
@@ -852,7 +1043,7 @@ export default function PropertiesBoard() {
                                 <button
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'agent' ? null : { id: x._id, field: 'agent' }); }}
-                                  className='flex items-center gap-2 rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left'
+                                  className='flex items-center gap-2 rounded-lg px-2 py-1 -mx-2 -my-1 min-h-[36px] hover:bg-slate-100 transition-colors w-full text-left'
                                   title={t('properties.clickToAssignAgent')}
                                 >
                                   {agentName ? (
@@ -959,7 +1150,7 @@ export default function PropertiesBoard() {
                                           className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2.5 ${x.status === st ? 'bg-slate-50 font-medium' : ''}`}
                                         >
                                           <div className={`w-2 h-2 rounded-full ${stStripe}`} />
-                                          <span className='capitalize'>{(STATUS_LABEL[st] || st).replace('_', ' ')}</span>
+                                          <span>{listingStatusLabel(st)}</span>
                                           {x.status === st && <svg className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                         </button>
                                       );
@@ -999,7 +1190,7 @@ export default function PropertiesBoard() {
 
                 {items.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <BoardEmptyState />
                     </td>
                   </tr>
@@ -1152,7 +1343,7 @@ export default function PropertiesBoard() {
                           STATUS_STYLE[x.status || 'available']?.pill || 'bg-slate-100 text-slate-700 border-slate-200'
                         )}
                       >
-                        {x.status || 'available'}
+                        {listingStatusLabel(x.status)}
                       </span>
                     </div>
                   </div>
@@ -1184,6 +1375,12 @@ export default function PropertiesBoard() {
                     : totalCount > items.length
                       ? `${mapItems.length} of ${totalCount} shown — narrow the filters to map more`
                       : `${mapItems.length} propert${mapItems.length === 1 ? 'y' : 'ies'} on the map`}
+                  {/* Otherwise the unplotted ones simply seemed not to exist. */}
+                  {mapItems.length > 0 && items.length > mapItems.length && (
+                    <span className='text-slate-500'>
+                      {`. ${items.length - mapItems.length} more ha${items.length - mapItems.length === 1 ? 's' : 've'} no location; set one with Find on map in the property form.`}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className='h-[520px]'>
@@ -1282,12 +1479,14 @@ export default function PropertiesBoard() {
                 </div>
                 <div>
                   <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.propertyType')}</label>
-                  <input
+                  <select
                     value={propertyType}
                     onChange={(e) => setParam('propertyType', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder={t('properties.eGApartment')}
-                  />
+                  >
+                    <option value=''>{t('properties.any')}</option>
+                    {filterTypes.map((pt) => <option key={pt._id} value={pt.slug}>{pt.name}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -1359,16 +1558,19 @@ export default function PropertiesBoard() {
                     <option value=''>{t('properties.any')}</option>
                     <option value='sale'>{t('properties.sale')}</option>
                     <option value='rent'>{t('properties.rent')}</option>
+                    <option value='lease'>{t('properties.lease')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.categorySlug')}</label>
-                  <input
+                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.category')}</label>
+                  <select
                     value={category}
                     onChange={(e) => setParam('category', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
-                    placeholder={t('properties.eGApartment')}
-                  />
+                  >
+                    <option value=''>{t('properties.any')}</option>
+                    {filterCategories.map((c) => <option key={c._id} value={c.slug}>{c.name}</option>)}
+                  </select>
                 </div>
               </div>
             </div>

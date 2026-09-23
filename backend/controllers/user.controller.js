@@ -315,6 +315,33 @@ export const changePassword = async (req, res, next) => {
   }
 };
 
+// A screen name used as a key under preferences.savedViews.
+const SAVED_VIEW_NAMESPACE = /^[a-z][a-z0-9-]{0,39}$/;
+
+export const getSavedViews = async (req, res, next) => {
+  try {
+    const { namespace } = req.params;
+    if (!SAVED_VIEW_NAMESPACE.test(namespace)) return next(errorHandler(400, 'Unknown screen'));
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('preferences.savedViews').lean());
+    res.status(200).json({ success: true, data: user?.preferences?.savedViews?.[namespace] || [] });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const putSavedViews = async (req, res, next) => {
+  try {
+    const { namespace } = req.params;
+    if (!SAVED_VIEW_NAMESPACE.test(namespace)) return next(errorHandler(400, 'Unknown screen'));
+    await inHomeTenant(req, () =>
+      User.updateOne({ _id: req.user.id }, { $set: { [`preferences.savedViews.${namespace}`]: req.body.items } })
+    );
+    res.status(200).json({ success: true, data: req.body.items });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(403, 'You can only delete your own account!'));

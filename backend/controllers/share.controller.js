@@ -159,7 +159,9 @@ export const listShares = asyncHandler(async (req, res) => {
   // person accountable for it would be the wrong default.
   const filter = req.user.role === 'admin' ? {} : { createdBy: req.user.id };
 
-  const shares = await PropertyShare.find(filter).sort({ createdAt: -1 }).limit(200);
+  // passcodeHash is select:false, so without asking for it every link reported
+  // hasPasscode: false. It is only read for that flag, never returned.
+  const shares = await PropertyShare.find(filter).select('+passcodeHash').sort({ createdAt: -1 }).limit(200);
   const listingCounts = shares.map((s) => s.listingIds.length);
 
   sendSuccessResponse(

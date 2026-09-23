@@ -245,6 +245,15 @@ const userSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.Mixed,
         default: () => ({}),
       },
+      /*
+       * Saved filter views, keyed by screen ("properties" → [{ id, name,
+       * queryString }]). They lived in the browser's localStorage, so a view
+       * saved on the office PC was missing on the agent's phone.
+       */
+      savedViews: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({}),
+      },
       privacy: {
         showEmail: { type: Boolean, default: false },
         showPhone: { type: Boolean, default: false },

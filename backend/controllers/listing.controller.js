@@ -16,6 +16,7 @@ import {
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 import { notify } from '../utils/notify.js';
+import { isCategoryFieldActive } from '../utils/categoryVisibility.js';
 import { canAccessListing, listingScope } from '../middleware/permissions.js';
 import { assertWithinLimit } from '../tenancy/limits.js';
 import { runHook } from '../plugins/registry.js';
@@ -103,6 +104,8 @@ async function getListingUpdateRecipients(category) {
 async function validateCategoryAttributes(cat, attrs) {
   const fieldDefs = (cat.fields || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   for (const f of fieldDefs) {
+    // A field hidden by its showWhen condition does not apply to this record.
+    if (!isCategoryFieldActive(f, (key) => attrs[key])) continue;
     if (f.required && (attrs[f.key] === undefined || attrs[f.key] === null || attrs[f.key] === '')) {
       throw new ValidationError(`Missing required field: ${f.label}`, f.key);
     }
@@ -384,7 +387,9 @@ export const updateListing = asyncHandler(async (req, res, next) => {
 });
 
 export const getListing = asyncHandler(async (req, res, next) => {
-  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+  // Same scope as the list: an employee's list showed only their listings, but
+  // any other one opened by URL. Outside the scope it is simply not found.
+  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true }, ...listingScope(req.user) })
     .populate('userRef', 'username avatar _id')
     .populate('ownerIds', 'name email phone companyName _id')
     .lean();
@@ -628,6 +633,21 @@ export const softDeleteListing = asyncHandler(async (req, res, next) => {
 });
 
 // Restore a soft-deleted listing (Admin only)
+// The bin: listings deleted from the board are soft-deleted, and restore
+// existed, but nothing could list them, so a deleted listing was gone for good
+// as far as anyone using the app could tell.
+export const listDeletedListings = asyncHandler(async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    throw new AuthorizationError('Only admins can see deleted listings');
+  }
+  const listings = await Listing.find({ isDeleted: true })
+    .select('name address locality city type status regularPrice deletedAt imageUrls')
+    .sort({ deletedAt: -1 })
+    .limit(200)
+    .lean();
+  sendSuccessResponse(res, { listings }, 'Deleted listings');
+});
+
 export const restoreListing = asyncHandler(async (req, res, next) => {
   if (req.user?.role !== 'admin') {
     throw new AuthorizationError('Only admins can restore listings');

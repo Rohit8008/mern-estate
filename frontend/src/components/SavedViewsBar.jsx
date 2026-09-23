@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useSelector } from 'react-redux';
 
 import { loadSavedViews, saveSavedViews } from '../utils/savedViews';
+import { apiClient } from '../utils/http';
 import { useTranslation } from 'react-i18next';
 
 export default function SavedViewsBar({ namespace, getCurrentQueryString, onApplyQueryString }) {
@@ -15,8 +16,29 @@ export default function SavedViewsBar({ namespace, getCurrentQueryString, onAppl
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Views are kept on the account (/api/user/saved-views) so they follow the
+  // agent across devices. Views saved by the old browser-only version are
+  // merged up once; the browser copy stays as the offline fallback.
   useEffect(() => {
-    setViews(loadSavedViews({ userId, namespace }));
+    let alive = true;
+    const local = loadSavedViews({ userId, namespace });
+    setViews(local);
+    if (!userId) return undefined;
+    (async () => {
+      try {
+        const res = await apiClient.get(`/user/saved-views/${namespace}`, { silent: true });
+        const remote = Array.isArray(res?.data) ? res.data : [];
+        const missing = local.filter((v) => !remote.some((r) => r.id === v.id));
+        const merged = [...remote, ...missing].slice(0, 50);
+        if (missing.length) await apiClient.put(`/user/saved-views/${namespace}`, { items: merged }, { silent: true });
+        if (!alive) return;
+        setViews(merged);
+        saveSavedViews({ userId, namespace, items: merged });
+      } catch {
+        // Offline or older server: the browser copy is what we have.
+      }
+    })();
+    return () => { alive = false; };
   }, [namespace, userId]);
 
   const selected = useMemo(() => views.find((v) => v.id === selectedId) || null, [selectedId, views]);
@@ -24,6 +46,11 @@ export default function SavedViewsBar({ namespace, getCurrentQueryString, onAppl
   function persist(next) {
     setViews(next);
     saveSavedViews({ userId, namespace, items: next });
+    if (userId) {
+      apiClient
+        .put(`/user/saved-views/${namespace}`, { items: next.slice(0, 50) }, { silent: true })
+        .catch(() => { /* kept locally; synced on the next load */ });
+    }
   }
 
   function handleApply(id) {
