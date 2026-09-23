@@ -507,9 +507,13 @@ export const me = async (req, res, next) => {
     if (!req.user?.id) return next(errorHandler(401, 'Unauthorized'));
     // The caller's own record, which lives in their home workspace — not
     // necessarily the one this request is scoped to. See inHomeTenant.
-    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('-password'));
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('-password +isPlatformAdmin'));
     if (!user) return next(errorHandler(404, 'User not found!'));
-    res.status(200).json(user);
+    // The same shape as the sign-in response. isPlatformAdmin is select:false,
+    // so this left it out, and every page load replaced the signed-in user
+    // with one that lacked it — the Platform link vanished on refresh. Telling
+    // someone their own status is safe; /api/platform re-checks it anyway.
+    res.status(200).json({ ...user.toJSON(), isPlatformAdmin: Boolean(user.isPlatformAdmin) });
   } catch (error) {
     next(error);
   }
