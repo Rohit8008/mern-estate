@@ -2320,5 +2320,17 @@
     "verifyBody": "The SHA-256 fingerprint of the file on this page. If yours matches, it has not been altered.",
     "webNote": "Prefer the browser?",
     "signInWeb": "Sign in on the web"
+  },
+  "workspacePicker": {
+    "change": "Change",
+    "checkFailed": "Couldn't check that workspace. Check your connection and try again.",
+    "checking": "Checking…",
+    "enterName": "Enter your workspace name.",
+    "hint": "Your agency's workspace name, as given in your invitation email.",
+    "keep": "Keep {{name}}",
+    "label": "Workspace",
+    "signingInTo": "Signing in to",
+    "use": "Continue",
+    "useDefault": "Use Real Vista"
   }
 }

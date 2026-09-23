@@ -6,7 +6,8 @@
  *   1. the `tid` claim on a signed JWT       — cannot be forged
  *   2. a custom domain           (crm.acme.in)
  *   3. a subdomain of the app     (acme.realvista.app)
- *   4. the `x-tenant` header      — API clients and local development
+ *   4. the `x-tenant` header      — the workspace chosen on the sign-in
+ *                                   screen (web and app), and API clients
  *   5. the default tenant         — single-tenant deployments and the
  *                                   migration window before every user's token
  *                                   carries a tenant
@@ -111,6 +112,20 @@ function claimsFromToken(req) {
   }
 }
 
+/**
+ * Where a person chooses which workspace to enter. On these the workspace
+ * they typed beats a session cookie left over from another workspace —
+ * otherwise signing in to B while still holding A's cookie looked the email
+ * up in A and answered "invalid email or password".
+ */
+const ENTRY_ROUTES = new Set([
+  'POST /auth/signin',
+  'POST /user/password/request-otp',
+  'POST /user/password/reset',
+  'GET /tenant/lookup',
+]);
+const isEntryRoute = (req) => ENTRY_ROUTES.has(`${req.method} ${req.path}`);
+
 /** Split the Host header into a candidate subdomain and the bare host. */
 function hostParts(req) {
   const raw = String(req.headers['x-forwarded-host'] || req.headers.host || '');
@@ -143,10 +158,20 @@ export function resolveTenant({ required = true } = {}) {
       const fromDomain = host ? await findTenantByDomain(host) : false;
       const fromSubdomain = subdomain ? await findTenantBySlug(subdomain) : false;
 
-      const headerSlug = req.headers['x-tenant'];
-      const fromHeader = headerSlug ? await findTenantBySlug(String(headerSlug).toLowerCase()) : false;
+      const headerSlug = String(req.headers['x-tenant'] || '').trim().toLowerCase();
+      const fromHeader = headerSlug ? await findTenantBySlug(headerSlug) : false;
 
       const fromHost = fromDomain || fromSubdomain || false;
+
+      // A named workspace that does not exist is an answer, not a reason to
+      // fall through to the default one: a typo on the sign-in screen must
+      // say "no such workspace", never sign someone in to another agency.
+      if (headerSlug && !fromHeader && !fromHost && (!fromToken || isEntryRoute(req))) {
+        const err = new TenantScopeError(`There's no workspace called "${headerSlug}". Check the name and try again.`);
+        err.code = 'WORKSPACE_NOT_FOUND';
+        err.statusCode = 404;
+        return next(err);
+      }
 
       // A session must not be usable on another agency's host.
       if (fromToken && fromHost && String(fromHost._id) !== String(fromToken)) {
@@ -159,7 +184,11 @@ export function resolveTenant({ required = true } = {}) {
         return next(new TenantScopeError('This session does not belong to this workspace.'));
       }
 
+      // The chosen workspace wins on the screens where it is being chosen.
+      const chosen = fromHeader && !fromHost && isEntryRoute(req) ? fromHeader : false;
+
       let tenant =
+        chosen ||
         (fromToken ? await findTenantById(fromToken) : false) ||
         fromHost ||
         fromHeader ||

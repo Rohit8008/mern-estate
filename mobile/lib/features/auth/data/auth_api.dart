@@ -23,6 +23,27 @@ class AuthApi {
     }
   }
 
+  /// Checks a workspace name typed on the login screen. Throws an
+  /// AppFailure ("There's no workspace called …") when it does not exist.
+  /// An empty [slug] asks for the default workspace.
+  Future<WorkspaceInfo> lookupWorkspace(String slug) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/api/tenant/lookup',
+        // Always explicit, so the check is of the name typed, not the one saved.
+        options: Options(headers: {'x-tenant': slug}),
+      );
+      final data = (res.data?['data'] as Map<String, dynamic>?) ?? const {};
+      return WorkspaceInfo(
+        slug: (data['slug'] ?? '').toString(),
+        name: (data['name'] ?? 'Real Vista').toString(),
+        logoUrl: (data['logoUrl'] ?? '').toString(),
+      );
+    } on DioException catch (e) {
+      throw AppFailure.fromDioException(e);
+    }
+  }
+
   Future<AppUser> me() async {
     try {
       final res = await _dio.get<Map<String, dynamic>>('/api/user/me');
@@ -70,4 +91,11 @@ class AuthApi {
       throw AppFailure.fromDioException(e);
     }
   }
+}
+
+class WorkspaceInfo {
+  const WorkspaceInfo({required this.slug, required this.name, this.logoUrl = ''});
+  final String slug;
+  final String name;
+  final String logoUrl;
 }

@@ -7,16 +7,23 @@ import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'workspace_store.dart';
+
 /// Wraps Dio with a disk-persisted cookie jar (the backend is 100%
 /// httpOnly-cookie JWT auth — access_token/refresh_token — with no
 /// bearer-token mode, so this is what lets the session survive app
 /// restarts) and a refresh-on-401 interceptor mirroring the web app's
 /// fetchWithRefresh() in utils/http.js.
 class ApiClient {
-  ApiClient._(this.dio, this._cookieJar);
+  ApiClient._(this.dio, this._cookieJar, this.workspace) {
+    dio.interceptors.insert(0, _WorkspaceInterceptor(workspace));
+  }
 
   final Dio dio;
   final CookieJar _cookieJar;
+
+  /// Which agency to sign in to; sent as `x-tenant`.
+  final WorkspaceStore workspace;
 
   static Future<ApiClient> create({required String baseUrl}) async {
     final dio = Dio(BaseOptions(
@@ -34,7 +41,7 @@ class ApiClient {
       (dio.httpClientAdapter as dynamic).withCredentials = true;
       dio.interceptors.add(_CsrfInterceptor(dio));
       dio.interceptors.add(_RefreshOn401Interceptor(dio));
-      return ApiClient._(dio, CookieJar());
+      return ApiClient._(dio, CookieJar(), WorkspaceStore.memory());
     }
 
     final supportDir = await getApplicationSupportDirectory();
@@ -45,7 +52,7 @@ class ApiClient {
     dio.interceptors.add(_CsrfInterceptor(dio));
     dio.interceptors.add(_RefreshOn401Interceptor(dio));
 
-    return ApiClient._(dio, cookieJar);
+    return ApiClient._(dio, cookieJar, await WorkspaceStore.open(supportDir));
   }
 
   /// Test-only entry point — skips the disk-backed cookie jar (which needs
@@ -53,7 +60,8 @@ class ApiClient {
   /// test) in favor of an in-memory one, and takes a pre-built Dio so the
   /// transport can be swapped for a fake adapter.
   @visibleForTesting
-  factory ApiClient.forTesting({required Dio dio, CookieJar? cookieJar}) => ApiClient._(dio, cookieJar ?? CookieJar());
+  factory ApiClient.forTesting({required Dio dio, CookieJar? cookieJar, WorkspaceStore? workspace}) =>
+      ApiClient._(dio, cookieJar ?? CookieJar(), workspace ?? WorkspaceStore.memory());
 
   /// Wipes the local cookie store — used on sign-out so a stale
   /// refresh_token never lingers on the device after the server revokes it.
@@ -74,6 +82,21 @@ class ApiClient {
     final cookies = await _cookieJar.loadForRequest(Uri.parse(baseUrl));
     if (cookies.isEmpty) return const {};
     return {'Cookie': cookies.map((c) => '${c.name}=${c.value}').join('; ')};
+  }
+}
+
+/// Adds the chosen workspace to every request, unless the call names one
+/// itself (the login screen checking a name before keeping it).
+class _WorkspaceInterceptor extends Interceptor {
+  _WorkspaceInterceptor(this._store);
+  final WorkspaceStore _store;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (_store.slug.isNotEmpty && !options.headers.containsKey('x-tenant')) {
+      options.headers['x-tenant'] = _store.slug;
+    }
+    handler.next(options);
   }
 }
 

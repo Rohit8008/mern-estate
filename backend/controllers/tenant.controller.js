@@ -50,6 +50,29 @@ const PLATFORM_ONLY = ['slug', 'customDomain', 'status', 'plan', 'features', 'li
 
 // ─── GET /api/tenant/config ───────────────────────────────────────────────────
 
+/**
+ * GET /api/tenant/lookup — "is this a workspace, and what is it called?"
+ *
+ * For the Workspace field on the sign-in screen (web and app): the name
+ * typed arrives as the x-tenant header, resolveTenant has already answered
+ * 404 if it does not exist, so reaching here means it does. Returns only what
+ * the sign-in screen shows. Rate limited like sign-in, because a lookup that
+ * cannot be hammered is a directory that cannot be scraped.
+ */
+export const lookupWorkspace = asyncHandler(async (req, res) => {
+  const tenant = req.tenant;
+  if (!tenant) throw new NotFoundError('No workspace matched this request.');
+  if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+    throw new NotFoundError('That workspace is not available.');
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  sendSuccessResponse(res, {
+    slug: tenant.slug,
+    name: tenant.branding?.productName || tenant.name,
+    logoUrl: tenant.branding?.logoUrl || '',
+  }, 'Workspace');
+});
+
 export const getTenantConfig = asyncHandler(async (req, res) => {
   const tenant = req.tenant;
   if (!tenant) throw new NotFoundError('No workspace matched this request.');

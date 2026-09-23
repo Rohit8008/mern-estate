@@ -1,3 +1,4 @@
+import { getWorkspace } from './workspace';
 // API base URL - empty for same-origin (dev), full URL for production
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -241,10 +242,17 @@ function withCsrf(options = {}) {
   return { ...options, headers: { ...(options.headers || {}), 'X-CSRF-Token': token } };
 }
 
+// The workspace chosen on the sign-in screen (utils/workspace.js).
+function withWorkspace(options = {}) {
+  const slug = getWorkspace();
+  if (!slug) return options;
+  return { ...options, headers: { ...(options.headers || {}), 'x-tenant': slug } };
+}
+
 // Enhanced fetch with automatic token refresh
 export async function fetchWithRefresh(url, options = {}, silent = false) {
   const response = await fetch(url, {
-    ...withCsrf(options),
+    ...withCsrf(withWorkspace(options)),
     credentials: 'include',
   });
 
@@ -255,7 +263,7 @@ export async function fetchWithRefresh(url, options = {}, silent = false) {
       // Retry the original request with new token
       // withCsrf again, not the earlier value: the refresh just minted a new token.
       return fetch(url, {
-        ...withCsrf(options),
+        ...withCsrf(withWorkspace(options)),
         credentials: 'include',
       });
     } else if (!silent) {

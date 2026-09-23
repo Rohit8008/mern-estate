@@ -11,6 +11,7 @@ import { apiClient, handleApiError, setUserSignedOut } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { Input, Button } from '../design-system';
 import usePageTitle from '../hooks/usePageTitle';
+import WorkspacePicker from '../components/WorkspacePicker';
 import { useTranslation } from 'react-i18next';
 
 export default function SignIn() {
@@ -61,6 +62,10 @@ export default function SignIn() {
 
         {/* Form */}
         <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
+          {/* Which agency: every workspace shares this address. */}
+          <div className='mb-5'>
+            <WorkspacePicker onChange={() => dispatch(signInFailure(null))} />
+          </div>
           <form onSubmit={handleSubmit} className='space-y-5'>
             <Input
               label={t('signIn.emailAddress')}

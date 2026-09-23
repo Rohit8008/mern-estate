@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { HiOutlineExclamationCircle, HiOutlineCheck } from 'react-icons/hi';
 import { API_BASE_URL, normalizeImageUrl } from '../utils/http';
+import { setWorkspace } from '../utils/workspace';
 import { useTenant } from '../contexts/TenantProvider';
 import { signInSuccess } from '../redux/user/userSlice';
 import { useTranslation } from 'react-i18next';
@@ -74,6 +75,10 @@ export default function AcceptInvite() {
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.message || 'Could not set your password.');
+
+      // Remembered, so the next sign-in on this device goes to this workspace
+      // without anyone having to know its name.
+      setWorkspace(state.data?.workspace?.slug || '');
 
       // Accepting sets the session cookies, but the client also has to know who
       // it is: the route guards read Redux, not cookies, so without this the

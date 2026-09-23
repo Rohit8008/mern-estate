@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getTenantConfig,
+  lookupWorkspace,
   getTenantFeatures,
   getScreenCatalogue,
   getTenantUsage,
@@ -15,12 +16,15 @@ import {
   dismissOnboarding,
 } from '../controllers/tenant.controller.js';
 import { verifyToken } from '../utils/verifyUser.js';
+import { authRateLimit } from '../middleware/security.js';
 
 const router = express.Router();
 
 // Public: the login screen needs this workspace's logo, name and colours before
 // anyone has signed in. toPublicConfig() is what keeps that safe.
 router.get('/config', getTenantConfig);
+// Public: the sign-in screen's Workspace field checks the name typed.
+router.get('/lookup', authRateLimit, lookupWorkspace);
 router.get('/features', getTenantFeatures);
 
 // Workspace admins editing their own branding, locale and workflow.

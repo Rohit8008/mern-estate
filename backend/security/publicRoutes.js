@@ -72,6 +72,11 @@ export const PUBLIC_ROUTES = [
     path: '/api/tenant/config',
     why: 'The sign-in screen needs this workspace\'s name, logo and colours before anyone has signed in. Serves toPublicConfig() only — never limits, billing or internal notes.',
   },
+  {
+    method: 'GET',
+    path: '/api/tenant/lookup',
+    why: 'The sign-in Workspace field confirms the name typed exists and shows what it is called. Returns slug, name and logo only; rate limited like sign-in.',
+  },
   { method: 'GET', path: '/api/tenant/features', why: 'Which modules this workspace has, for rendering the signed-out shell.' },
 
   // ── Sharing, which replaced the public catalogue ───────────────────────────

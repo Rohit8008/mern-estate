@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../auth_providers.dart';
 import 'forgot_password_screen.dart';
+import 'workspace_tile.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -74,13 +75,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: const Icon(Icons.home_work_rounded, color: AppColors.white, size: 26),
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    Text('Sign in to Real Vista', style: Theme.of(context).textTheme.headlineSmall),
+                    Text('Sign in', style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 6),
                     const Text(
                       'Use the account your admin set up for you.',
                       style: TextStyle(color: AppColors.slate500, fontSize: 14),
                     ),
-                    const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(height: AppSpacing.xl),
+                    // Which agency: every workspace shares this server.
+                    WorkspaceTile(onChanged: () => setState(() => _errorText = null)),
+                    const SizedBox(height: AppSpacing.lg),
                     AppTextField(
                       label: 'Email',
                       hint: 'you@realvista.com',

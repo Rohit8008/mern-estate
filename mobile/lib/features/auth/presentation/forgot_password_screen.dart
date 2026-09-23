@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../auth_providers.dart';
+import 'workspace_tile.dart';
 
 enum _Step { email, resetWithOtp, done }
 
@@ -109,6 +110,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       const Text("We'll send a 6-digit code to reset your password.",
           style: TextStyle(color: AppColors.slate500, fontSize: 13.5)),
       const SizedBox(height: AppSpacing.xl),
+      // The code is looked up in the workspace chosen here.
+      const WorkspaceTile(),
+      const SizedBox(height: AppSpacing.lg),
       AppTextField(
         label: 'Email',
         hint: 'you@realvista.com',

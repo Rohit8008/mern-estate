@@ -52,6 +52,28 @@ function slugify(name) {
 
 // ─── New workspace form ───────────────────────────────────────────────────────
 
+/** The link that opens sign-in with this workspace already chosen. */
+const signInLink = (slug) => `${window.location.origin}/sign-in?workspace=${encodeURIComponent(slug)}`;
+
+function CopySignInLink({ slug, className = '' }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(signInLink(slug)).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }).catch(() => window.prompt('Sign-in link for this workspace:', signInLink(slug)));
+      }}
+      className={`text-xs font-medium text-brand-700 hover:text-brand-900 ${className}`}
+      title="Opens the sign-in page with this workspace already chosen"
+    >
+      {copied ? 'Copied' : 'Copy sign-in link'}
+    </button>
+  );
+}
+
 function NewWorkspaceModal({ open, onClose, onCreated }) {
   const { t } = useTranslation();
   const { showError } = useNotification();
@@ -115,7 +137,10 @@ function NewWorkspaceModal({ open, onClose, onCreated }) {
             <HiOutlineCheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-emerald-900">
               <p className="font-semibold">{result.tenant.name} is ready.</p>
-              <p className="mt-0.5">{t('platformConsole.address')}<span className="font-mono">{result.tenant.slug}</span></p>
+              <p className="mt-0.5">
+                Workspace name: <span className="font-mono font-semibold">{result.tenant.slug}</span>. Members type
+                this on the sign-in screen, or use <CopySignInLink slug={result.tenant.slug} />.
+              </p>
             </div>
           </div>
 
@@ -500,8 +525,10 @@ export default function PlatformConsole() {
                     <tr key={item.id} className="hover:bg-slate-50/50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-900">{item.name}</div>
-                        <div className="text-xs text-slate-500 font-mono">
-                          {item.customDomain || item.slug}
+                        <div className="text-xs text-slate-500">
+                          <span className="font-mono">{item.customDomain || item.slug}</span>
+                          <span className="mx-1.5 text-slate-300">·</span>
+                          <CopySignInLink slug={item.slug} />
                         </div>
                       </td>
                       <td className="px-4 py-3">

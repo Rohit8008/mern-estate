@@ -103,6 +103,8 @@ export const getInvite = asyncHandler(async (req, res) => {
       hasPassword: Boolean(user.password),
       workspace: {
         name: tenant?.branding?.productName || tenant?.name || 'Workspace',
+        // Remembered by the page, so later sign-ins go to this workspace.
+        slug: tenant?.slug || '',
         logoUrl: tenant?.branding?.logoUrl || '',
         tokens: tenant?.branding?.tokens || {},
       },

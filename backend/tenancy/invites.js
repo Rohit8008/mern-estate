@@ -106,7 +106,7 @@ const ROLE_LINE = {
  * link stops working. It used to be one line ("x has invited you to y") and
  * a bare link, which reads as spam and says nothing about the product.
  */
-export function buildInviteEmail({ url, workspace, inviterName, role, recipientName, expiresAt, accent }) {
+export function buildInviteEmail({ url, workspace, workspaceSlug = '', inviterName, role, recipientName, expiresAt, accent }) {
   const product = 'Real Vista';
   const who = inviterName ? `${inviterName} has invited you` : 'You have been invited';
   const roleLine = ROLE_LINE[role] ? ` ${ROLE_LINE[role]}` : '';
@@ -130,6 +130,7 @@ export function buildInviteEmail({ url, workspace, inviterName, role, recipientN
     url,
     '',
     `This link works once and expires on ${expires}.`,
+    ...(workspaceSlug ? ['', `To sign in later, enter the workspace "${workspaceSlug}" on the sign-in screen.`] : []),
     "If you weren't expecting this invitation, you can ignore this email; no account is active until you accept.",
   ].join('\n');
 
@@ -160,6 +161,7 @@ export function buildInviteEmail({ url, workspace, inviterName, role, recipientN
       <tr><td style="padding:24px 32px 0">
         <a href="${e(url)}" style="display:inline-block;background:${colour};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:999px">Accept invitation</a>
         <p style="margin:12px 0 0;font-size:13px;color:#64748b">You'll choose your password, then go straight into the workspace.</p>
+        ${workspaceSlug ? `<p style="margin:14px 0 0;padding:10px 14px;background:#f1f5f9;border-radius:10px;font-size:13px;color:#334155">To sign in later, enter the workspace <strong style="font-family:ui-monospace,Menlo,monospace">${e(workspaceSlug)}</strong> on the sign-in screen, on the web or in the Android app.</p>` : ''}
       </td></tr>
       <tr><td style="padding:24px 32px 28px">
         <p style="margin:0;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.6;color:#64748b">
@@ -184,6 +186,8 @@ export async function sendInviteEmail({ to, token, tenant, inviterName, role = '
   const { subject, text, html } = buildInviteEmail({
     url,
     workspace,
+    // The default workspace needs nothing typed, so no hint for it.
+    workspaceSlug: tenant?.slug && tenant.slug !== (config.tenancy?.defaultTenantSlug || 'default') ? tenant.slug : '',
     inviterName,
     role,
     recipientName,

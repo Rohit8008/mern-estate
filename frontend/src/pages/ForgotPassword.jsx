@@ -5,6 +5,7 @@ import { apiClient, handleApiError } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { Input, Button } from '../design-system';
 import { useTranslation } from 'react-i18next';
+import WorkspacePicker from '../components/WorkspacePicker';
 
 export default function ForgotPassword() {
   const { t } = useTranslation();
@@ -106,6 +107,8 @@ export default function ForgotPassword() {
         <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className='space-y-5'>
+              {/* The reset code is looked up in the workspace chosen here. */}
+              <WorkspacePicker onChange={() => setError('')} />
               <Input
                 label={t('forgotPassword.emailAddress')}
                 type='email'
