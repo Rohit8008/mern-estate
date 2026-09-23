@@ -216,7 +216,7 @@ export default function Analytics() {
                     key={range.days}
                     onClick={() => setQuickRange(range.days)}
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                      isActive ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                     }`}
                   >
                     {range.label}
@@ -263,8 +263,8 @@ export default function Analytics() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
               activeTab === tab.id
-                ? 'text-slate-900 border-slate-900 bg-slate-50'
-                : 'text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50'
+                ? 'text-slate-900 border-slate-900 bg-slate-50 dark:text-white dark:border-white dark:bg-slate-800'
+                : 'text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/60'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -443,13 +443,16 @@ export default function Analytics() {
                         <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>{t('analytics.byType')}</h3>
                       <div className="space-y-3">
                         {data.properties.byType?.map((type) => (
-                          <div key={type._id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-                            <span className="text-sm font-medium text-slate-700 capitalize">{type._id}</span>
+                          <div key={type._id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 capitalize">{type._id}</span>
                             <div className="text-right">
-                              <span className="text-sm font-semibold text-slate-900">{formatNumber(type.count)}</span>
-                              <span className="text-xs text-slate-500 ml-2">
-                                Avg: {formatCurrency(type.avgPrice)}
-                              </span>
+                              <span className="text-sm font-semibold text-slate-900 dark:text-white">{formatNumber(type.count)}</span>
+                              {/* No average when nothing in the group has a price. */}
+                              {type.avgPrice > 0 && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
+                                  Avg: {formatCurrency(type.avgPrice)}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -536,8 +539,8 @@ export default function Analytics() {
                         {(data.leads.conversionRate || 0).toFixed(1)}%
                       </div>
                     </div>
-                    <div className="flex-1 min-w-[200px] p-6 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl">
-                      <div className="text-sm text-slate-600 mb-1">{t('analytics.avgDaysToConvert')}</div>
+                    <div className="flex-1 min-w-[200px] p-6 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 rounded-2xl">
+                      <div className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('analytics.avgDaysToConvert')}</div>
                       <div className="text-4xl font-bold text-slate-800">
                         {data.leads.avgConversionDays || 0}
                       </div>
@@ -605,7 +608,6 @@ export default function Analytics() {
                     {t('analytics.revenueSourceNote')}{' '}
                     <Link to="/transactions" className="font-medium text-brand-700 hover:underline">{t('analytics.openTransactions')}</Link>
                   </p>
-                  <p className="text-sm text-slate-500">{t('analytics.financialPerformanceOverview')}</p>
                 </div>
                 <div className="p-6">
                   {/* Revenue Summary */}
