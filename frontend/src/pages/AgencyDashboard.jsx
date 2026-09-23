@@ -122,7 +122,7 @@ const widgetForSaving = ({ id, type, preset, label, dataPath, span }) => ({
 function saveWidgetsToStorage(widgets) {
   const safe = widgets.map(widgetForSaving);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safe)); } catch { }
-  apiClient.put('/user/dashboard-widgets', { items: safe.slice(0, 30) }, { silent: true }).catch(() => {});
+  apiClient.put('/user/preferences/dashboard-widgets', { items: safe.slice(0, 30) }, { silent: true }).catch(() => {});
 }
 
 function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats, teamMembers, fmt, resolveData, statusBreakdown, monthlyTrend, isDragOver, onDragStart, onDragOver, onDragLeave, onDrop }) {
@@ -474,7 +474,7 @@ export default function AgencyDashboard() {
   // Widgets from the account; the first time, the browser's old ones go up.
   useEffect(() => {
     let alive = true;
-    apiClient.get('/user/dashboard-widgets', { silent: true }).then((res) => {
+    apiClient.get('/user/preferences/dashboard-widgets', { silent: true }).then((res) => {
       if (!alive) return;
       const remote = res?.data;
       if (Array.isArray(remote)) {

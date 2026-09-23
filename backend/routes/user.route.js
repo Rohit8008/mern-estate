@@ -61,8 +61,10 @@ router.post('/role/:id', verifyToken, validateBody(userRouteValidation.setUserRo
 // authRateLimit, not just the global API limiter: these are reachable without a
 // session and hand out / consume a credential.
 router.post('/password/request-otp', authRateLimit, validateBody(userRouteValidation.requestPasswordOtp), requestPasswordReset)
-router.get('/dashboard-widgets', verifyToken, getDashboardWidgets)
-router.put('/dashboard-widgets', verifyToken, validateBody(userRouteValidation.dashboardWidgets), putDashboardWidgets)
+// Two segments on purpose: a single-segment GET is swallowed by the earlier
+// GET /:id (user lookup), which answered 404 "Invalid identifier".
+router.get('/preferences/dashboard-widgets', verifyToken, getDashboardWidgets)
+router.put('/preferences/dashboard-widgets', verifyToken, validateBody(userRouteValidation.dashboardWidgets), putDashboardWidgets)
 router.get('/saved-views/:namespace', verifyToken, getSavedViews)
 router.put('/saved-views/:namespace', verifyToken, validateBody(userRouteValidation.savedViews), putSavedViews)
 router.post('/password/change', verifyToken, authRateLimit, validateBody(userRouteValidation.changePassword), changePassword)
