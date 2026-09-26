@@ -4,10 +4,17 @@
          Socket.IO, everything — silently fails. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- No backups: the persistent cookie jar (app support dir) holds a 30-day
+         refresh token, and allowBackup defaults to true, which would copy it
+         into the user's Google Drive backup and restore a live session onto
+         another device. fullBackupContent="false" says the same to the
+         API 23+ auto-backup agent. -->
     <application
         android:label="Real Vista"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

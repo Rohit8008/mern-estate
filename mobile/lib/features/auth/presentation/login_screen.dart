@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
@@ -139,6 +140,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       variant: AppButtonVariant.brand,
                       size: AppButtonSize.lg,
                       expand: true,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    // Just the links. Acceptance is recorded separately after
+                    // sign-in, so this line must not claim that signing in agrees.
+                    const Center(
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.xs,
+                        children: [
+                          LegalLinkText(LegalDocument.terms),
+                          Text('·', style: TextStyle(color: AppColors.slate400, fontSize: 12)),
+                          LegalLinkText(LegalDocument.privacy),
+                        ],
+                      ),
                     ),
                   ],
                 ),

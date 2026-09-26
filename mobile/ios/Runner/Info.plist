@@ -47,5 +47,9 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
-	</dict>
+		<key>NSCameraUsageDescription</key>
+	<string>Real Vista uses the camera only when you choose to photograph a property or document.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Real Vista opens your photo library only when you choose photos to attach to a property.</string>
+</dict>
 </plist>

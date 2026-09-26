@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'app/realtime_overlay.dart';
 import 'app/router/app_router.dart';
@@ -11,6 +14,17 @@ import 'core/utils/root_messenger.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Fonts come from assets/google_fonts/ only. Left on, google_fonts would
+  // download any missing weight from fonts.gstatic.com at runtime — handing
+  // a third party every user's IP address, which the privacy policy does not
+  // disclose.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  LicenseRegistry.addLicense(() async* {
+    final license = await rootBundle.loadString('assets/google_fonts/OFL.txt');
+    yield LicenseEntryWithLineBreaks(['Outfit'], license);
+  });
+
   final apiClient = await ApiClient.create(baseUrl: Env.apiBaseUrl);
 
   runApp(ProviderScope(

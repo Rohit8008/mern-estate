@@ -145,6 +145,7 @@ class _LocationStepState extends ConsumerState<LocationStep> {
                 TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.realvista.crm'),
                 if (draft.lat != null && draft.lng != null)
                   MarkerLayer(markers: [Marker(point: LatLng(draft.lat!, draft.lng!), width: 36, height: 36, child: const Icon(Icons.location_on_rounded, color: AppColors.rose600, size: 32))]),
+                const SimpleAttributionWidget(source: Text('OpenStreetMap contributors')),
               ],
             ),
           ),

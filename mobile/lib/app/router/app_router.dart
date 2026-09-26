@@ -8,6 +8,7 @@ import '../../features/auth/auth_providers.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/legal/presentation/legal_acceptance_screen.dart';
 import '../../features/leads/presentation/leads_list_screen.dart';
 import '../../features/properties/presentation/properties_list_screen.dart';
 import '../../shared/widgets/app_states.dart';
@@ -16,6 +17,7 @@ import 'go_router_refresh_notifier.dart';
 import 'more_screen.dart';
 
 const _publicPaths = ['/login', '/forgot-password'];
+const _legalAcceptancePath = '/legal-acceptance';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -34,7 +36,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         case AuthStatus.unauthenticated:
           return onPublicPath ? null : '/login';
         case AuthStatus.authenticated:
-          return (onPublicPath || loc == '/splash' || loc == '/offline') ? '/home' : null;
+          // Terms not yet accepted: this step is the only screen reachable.
+          if (authState.needsLegalAcceptance) {
+            return loc == _legalAcceptancePath ? null : _legalAcceptancePath;
+          }
+          return (onPublicPath || loc == '/splash' || loc == '/offline' || loc == _legalAcceptancePath)
+              ? '/home'
+              : null;
       }
     },
     routes: [
@@ -52,6 +60,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: _legalAcceptancePath, builder: (context, state) => const LegalAcceptanceScreen()),
       GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(path: '/more', builder: (context, state) => const MoreScreen()),
       StatefulShellRoute.indexedStack(

@@ -403,6 +403,7 @@ class _LocationMap extends StatelessWidget {
             children: [
               TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.realvista.crm'),
               MarkerLayer(markers: [Marker(point: LatLng(lat, lng), width: 36, height: 36, child: const Icon(Icons.location_on_rounded, color: AppColors.rose600, size: 32))]),
+              const SimpleAttributionWidget(source: Text('OpenStreetMap contributors')),
             ],
           ),
         ),

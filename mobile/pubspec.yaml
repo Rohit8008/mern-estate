@@ -51,7 +51,8 @@ dependencies:
   # Call/email/WhatsApp one-tap actions from a lead's card and detail screen
   url_launcher: ^6.3.1
 
-  # Typography — mirrors the web app's 'Outfit' font family
+  # Typography — mirrors the web app's 'Outfit' font family. Served from
+  # bundled assets only (assets/google_fonts/); runtime fetching is off.
   google_fonts: ^6.2.1
 
   # Typed models for fixed-schema API resources
@@ -123,6 +124,17 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/icon/
+    # Outfit, bundled so google_fonts never fetches from fonts.gstatic.com
+    # (runtime fetching is switched off in main()). File names must stay in
+    # the package's `Family-Weight.ttf` form or it will not find them. Only
+    # Regular is here because it is the only variant the app requests:
+    # GoogleFonts.outfitTextTheme() builds every style as Outfit_regular, and
+    # AppTypography's copyWith(fontWeight: …) keeps that file. Add the file
+    # before asking GoogleFonts.outfit() for any other weight —
+    # test/bundled_fonts_test.dart fails if one is missing. Static TTFs are from the
+    # upstream repo Google Fonts pins (Outfitio/Outfit-Fonts @ 9027738),
+    # since google/fonts itself only ships the variable font.
+    - assets/google_fonts/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

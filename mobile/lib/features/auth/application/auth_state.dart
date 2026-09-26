@@ -17,14 +17,22 @@ enum AuthStatus {
 }
 
 class AuthState {
-  const AuthState._({required this.status, this.user, this.errorMessage});
+  const AuthState._({required this.status, this.user, this.errorMessage, this.pendingLegalVersion});
 
   const AuthState.bootstrapping() : this._(status: AuthStatus.bootstrapping);
-  const AuthState.authenticated(AppUser user) : this._(status: AuthStatus.authenticated, user: user);
+
+  /// [pendingLegalVersion] is set when the server says this user has not yet
+  /// accepted the Terms version in force; the router holds them on the
+  /// acceptance step until it clears.
+  const AuthState.authenticated(AppUser user, {String? pendingLegalVersion})
+      : this._(status: AuthStatus.authenticated, user: user, pendingLegalVersion: pendingLegalVersion);
   const AuthState.unauthenticated() : this._(status: AuthStatus.unauthenticated);
   const AuthState.bootstrapError(String message) : this._(status: AuthStatus.bootstrapError, errorMessage: message);
 
   final AuthStatus status;
   final AppUser? user;
   final String? errorMessage;
+  final String? pendingLegalVersion;
+
+  bool get needsLegalAcceptance => status == AuthStatus.authenticated && pendingLegalVersion != null;
 }

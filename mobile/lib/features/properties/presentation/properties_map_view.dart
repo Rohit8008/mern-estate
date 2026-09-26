@@ -57,6 +57,8 @@ class _PropertiesMapViewState extends State<PropertiesMapView> {
                   ),
               ],
             ),
+            // The OpenStreetMap licence (ODbL) requires this credit on the map.
+            const SimpleAttributionWidget(source: Text('OpenStreetMap contributors')),
           ],
         ),
         if (_selected != null)

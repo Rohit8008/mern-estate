@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
+import '../../../core/legal/legal_links.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/notification_preferences.dart';
 import '../settings_providers.dart';
 
-/// Notification and privacy preferences.
+/// Notification and privacy preferences, plus links to the published policies.
 ///
 /// Every row is generated from the server's catalogue, so a notification type
 /// added on the backend appears here with no change in this file.
@@ -107,6 +108,26 @@ class SettingsScreen extends ConsumerWidget {
               'Changes save as you make them.',
               style: TextStyle(color: AppColors.slate400, fontSize: 12),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            const _SectionLabel('Legal'),
+            const SizedBox(height: AppSpacing.xs),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < LegalDocument.values.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(LegalDocument.values[i].title,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: AppColors.slate400),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      onTap: () => openLegalDocument(context, ref, LegalDocument.values[i]),
+                    ),
+                  ],
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.xxl),
           ],
