@@ -276,6 +276,23 @@ const userSchema = new mongoose.Schema(
       },
     },
 
+    /**
+     * When this person accepted the Terms and Privacy Policy, and which version
+     * (utils/legalVersion.js). Recorded at invitation acceptance — the moment an
+     * account starts. Null for accounts created before this existed.
+     */
+    legalAcceptance: {
+      type: new mongoose.Schema(
+        {
+          version: { type: String, required: true, maxlength: 20 },
+          acceptedAt: { type: Date, required: true },
+        },
+        { _id: false }
+      ),
+      default: null,
+      select: false,
+    },
+
     lastLogin: {
       type: Date,
       default: null,

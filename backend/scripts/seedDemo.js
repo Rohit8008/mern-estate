@@ -64,14 +64,14 @@ async function seed() {
 
   // ── OWNERS ───────────────────────────────────────────────────────────────
   const ownersData = [
-    { name: 'Rajesh Kumar',  phone: '9811234501', email: 'rajesh.kumar.demo@gmail.com',  companyName: 'Kumar Properties',  city: 'Mumbai',      state: 'Maharashtra', notes: 'Prefers WhatsApp. Multiple flats in Worli.' },
-    { name: 'Priya Sharma',  phone: '9811234502', email: 'priya.sharma.demo@gmail.com',  companyName: '',                  city: 'Mumbai',      state: 'Maharashtra', notes: 'Inherited property. Wants quick sale.' },
-    { name: 'Suresh Patel',  phone: '9811234503', email: 'suresh.patel.demo@gmail.com',  companyName: 'Patel Realty',      city: 'Pune',        state: 'Maharashtra', notes: 'Developer. Has portfolio of 5 units.' },
-    { name: 'Anjali Mehta',  phone: '9811234504', email: 'anjali.mehta.demo@gmail.com',  companyName: 'Mehta Estates',     city: 'Mumbai',      state: 'Maharashtra', notes: 'Premium segment owner. Sea-facing only.' },
-    { name: 'Vikram Singh',  phone: '9811234505', email: 'vikram.singh.demo@gmail.com',  companyName: '',                  city: 'Thane',       state: 'Maharashtra', notes: 'Investment properties for rental yield.' },
-    { name: 'Sonia Reddy',   phone: '9811234506', email: 'sonia.reddy.demo@gmail.com',   companyName: 'Reddy Properties',  city: 'Mumbai',      state: 'Maharashtra', notes: 'Manages NRI-owned flats in Bandra.' },
-    { name: 'Arun Agarwal',  phone: '9811234507', email: 'arun.agarwal.demo@gmail.com',  companyName: 'Agarwal Group',     city: 'Navi Mumbai', state: 'Maharashtra', notes: 'Commercial space specialist. Serious about timelines.' },
-    { name: 'Deepa Nair',    phone: '9811234508', email: 'deepa.nair.demo@gmail.com',    companyName: '',                  city: 'Pune',        state: 'Maharashtra', notes: 'Land and plot owner in Pune region.' },
+    { name: 'Rajesh Kumar',  phone: '9811234501', email: 'rajesh.kumar.demo@example.com',  companyName: 'Kumar Properties',  city: 'Mumbai',      state: 'Maharashtra', notes: 'Prefers WhatsApp. Multiple flats in Worli.' },
+    { name: 'Priya Sharma',  phone: '9811234502', email: 'priya.sharma.demo@example.com',  companyName: '',                  city: 'Mumbai',      state: 'Maharashtra', notes: 'Inherited property. Wants quick sale.' },
+    { name: 'Suresh Patel',  phone: '9811234503', email: 'suresh.patel.demo@example.com',  companyName: 'Patel Realty',      city: 'Pune',        state: 'Maharashtra', notes: 'Developer. Has portfolio of 5 units.' },
+    { name: 'Anjali Mehta',  phone: '9811234504', email: 'anjali.mehta.demo@example.com',  companyName: 'Mehta Estates',     city: 'Mumbai',      state: 'Maharashtra', notes: 'Premium segment owner. Sea-facing only.' },
+    { name: 'Vikram Singh',  phone: '9811234505', email: 'vikram.singh.demo@example.com',  companyName: '',                  city: 'Thane',       state: 'Maharashtra', notes: 'Investment properties for rental yield.' },
+    { name: 'Sonia Reddy',   phone: '9811234506', email: 'sonia.reddy.demo@example.com',   companyName: 'Reddy Properties',  city: 'Mumbai',      state: 'Maharashtra', notes: 'Manages NRI-owned flats in Bandra.' },
+    { name: 'Arun Agarwal',  phone: '9811234507', email: 'arun.agarwal.demo@example.com',  companyName: 'Agarwal Group',     city: 'Navi Mumbai', state: 'Maharashtra', notes: 'Commercial space specialist. Serious about timelines.' },
+    { name: 'Deepa Nair',    phone: '9811234508', email: 'deepa.nair.demo@example.com',    companyName: '',                  city: 'Pune',        state: 'Maharashtra', notes: 'Land and plot owner in Pune region.' },
   ];
 
   const owners = [];

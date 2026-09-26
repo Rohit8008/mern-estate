@@ -39,6 +39,7 @@ export default function AcceptInvite() {
   const [state, setState] = useState({ status: 'loading' });
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -71,7 +72,7 @@ export default function AcceptInvite() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, acceptTerms }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.message || 'Could not set your password.');
@@ -103,8 +104,9 @@ export default function AcceptInvite() {
 
   if (state.status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status">
+        <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" aria-hidden="true" />
+        <span className="sr-only">Checking your invitation…</span>
       </div>
     );
   }
@@ -132,7 +134,7 @@ export default function AcceptInvite() {
   const brand = workspace?.tokens?.brand || '#0f172a';
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+    <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2.5 mb-6">
           {workspace.logoUrl ? (
@@ -163,59 +165,84 @@ export default function AcceptInvite() {
             <div className="text-sm font-medium text-slate-900 truncate">{email}</div>
           </div>
 
-          <label className="block text-sm font-medium text-slate-700 mt-4 mb-1.5">{t('acceptInvite.password')}</label>
+          <label htmlFor="invite-password" className="block text-sm font-medium text-slate-700 mt-4 mb-1.5">{t('acceptInvite.password')}</label>
           <input
+            id="invite-password"
+            aria-describedby="invite-password-rules"
             type="password"
             autoFocus
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
           />
 
-          <ul className="mt-2.5 space-y-1">
+          <ul id="invite-password-rules" className="mt-2.5 space-y-1">
             {RULES.map((r) => {
               const ok = r.test(password);
               return (
                 <li
                   key={r.id}
-                  className={`flex items-center gap-1.5 text-xs ${ok ? 'text-emerald-600' : 'text-slate-400'}`}
+                  className={`flex items-center gap-1.5 text-xs ${ok ? 'text-emerald-700' : 'text-slate-600'}`}
                 >
-                  <HiOutlineCheck className={`w-3.5 h-3.5 ${ok ? 'opacity-100' : 'opacity-30'}`} />
+                  <HiOutlineCheck className={`w-3.5 h-3.5 ${ok ? 'opacity-100' : 'opacity-30'}`} aria-hidden="true" />
                   {r.label}
+                  <span className="sr-only">{ok ? ' — done' : ' — not yet'}</span>
                 </li>
               );
             })}
           </ul>
 
-          <label className="block text-sm font-medium text-slate-700 mt-4 mb-1.5">{t('acceptInvite.confirmPassword')}</label>
+          <label htmlFor="invite-confirm" className="block text-sm font-medium text-slate-700 mt-4 mb-1.5">{t('acceptInvite.confirmPassword')}</label>
           <input
+            id="invite-confirm"
+            aria-invalid={confirm.length > 0 && !matches}
+            aria-describedby={confirm.length > 0 && !matches ? 'invite-confirm-error' : undefined}
             type="password"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
           />
           {confirm.length > 0 && !matches && (
-            <p className="text-xs text-rose-600 mt-1.5">{t('acceptInvite.thoseDoNotMatch')}</p>
+            <p id="invite-confirm-error" className="text-xs text-rose-700 mt-1.5">{t('acceptInvite.thoseDoNotMatch')}</p>
           )}
 
+          {/* Unticked by default and never pre-ticked: acceptance only counts
+              if the person made it. The server records the version and time. */}
+          <div className="mt-5 flex items-start gap-2.5">
+            <input
+              id="invite-accept-terms"
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-400 text-slate-900 focus:ring-2 focus:ring-slate-900"
+            />
+            <label htmlFor="invite-accept-terms" className="text-sm text-slate-700 leading-snug">
+              I agree to the{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-slate-900 underline underline-offset-2">Terms of Service</a>
+              {' '}and have read the{' '}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-slate-900 underline underline-offset-2">Privacy Policy</a>
+              <span className="sr-only"> (opens in a new tab)</span>.
+            </label>
+          </div>
+
           {error && (
-            <p className="text-sm text-rose-600 mt-3 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+            <p role="alert" className="text-sm text-rose-700 mt-3 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
           <button
             type="submit"
-            disabled={saving || !strongEnough || !matches}
-            className="w-full mt-5 px-4 py-2.5 rounded-lg text-white text-sm font-semibold disabled:opacity-50 transition-opacity"
+            disabled={saving || !strongEnough || !matches || !acceptTerms}
+            className="w-full mt-5 px-4 py-2.5 rounded-lg text-white text-sm font-semibold disabled:opacity-50 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900"
             style={{ background: brand }}
           >
             {saving ? 'Setting up…' : 'Set password and continue'}
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }

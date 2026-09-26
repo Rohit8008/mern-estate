@@ -17,6 +17,14 @@ const securityLogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Retention. These rows hold emails (including ones typed into a failed
+// sign-in), IPs and user agents, and were kept forever. 180 days is the floor
+// CERT-In's 28 April 2022 directions set for ICT logs, and no longer than that
+// is needed to investigate an incident — the DPDP Act asks that personal data
+// not outlive its purpose. Changing this figure is a compliance decision.
+export const SECURITY_LOG_RETENTION_SECONDS = 180 * 24 * 60 * 60;
+securityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: SECURITY_LOG_RETENTION_SECONDS });
+
 const SecurityLog = mongoose.model('SecurityLog', securityLogSchema);
 
 export default SecurityLog;

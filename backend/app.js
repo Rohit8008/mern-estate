@@ -28,7 +28,6 @@ import crmRouter from './routes/crm.route.js';
 import analyticsRouter from './routes/analytics.route.js';
 import dashboardRouter from './routes/dashboard.route.js';
 import propertyTypeRouter from './routes/propertyType.route.js';
-import subscriberRouter from './routes/subscriber.route.js';
 import activityRouter from './routes/activity.route.js';
 import notificationRouter from './routes/notification.route.js';
 import tagRouter from './routes/tag.route.js';
@@ -44,6 +43,7 @@ import reportTemplateRouter from './routes/reportTemplate.route.js';
 import generatedReportRouter from './routes/generatedReport.route.js';
 import searchRouter from './routes/search.route.js';
 import contactRouter from './routes/contact.route.js';
+import unsubscribeRouter from './routes/unsubscribe.route.js';
 import transactionRouter from './routes/transaction.route.js';
 
 import {
@@ -113,6 +113,13 @@ export function createApp() {
   // workspace, and a broken tenant lookup must not take the pod out of service.
   app.use('/api/health', healthRouter);
 
+  // Unsubscribe also answers before tenant resolution. The signed token names
+  // the workspace, and the link must work however the request arrives: from a
+  // mail client's one-click POST to an old domain, or for an agency that has
+  // since been suspended or closed — a person's "stop" is honoured regardless.
+  // The controller enters the token's workspace itself.
+  app.use('/api/unsubscribe', unsubscribeRouter);
+
   // Everything past this line runs inside a tenant context, so every query is
   // scoped without any handler having to remember to scope it.
   app.use('/api', resolveTenant());
@@ -158,7 +165,6 @@ export function createApp() {
   app.use('/api/rules', rulesRouter);
   app.use('/api/sequences', sequenceRouter);
   app.use('/api/lead-import', leadImportRouter);
-  app.use('/api/newsletter', subscriberRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/report-templates', reportTemplateRouter);
   app.use('/api/generated-reports', generatedReportRouter);

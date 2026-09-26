@@ -351,7 +351,7 @@ export default function Calendar() {
               className='flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium'
               title='Send a test desktop notification to confirm event reminders can reach you (separate from the notification bell above)'
             >
-              <HiOutlineBell className='w-4 h-4' />{t('calendar.testReminderAlerts')}</button>
+              <HiOutlineBell className='w-4 h-4' aria-hidden='true' />{t('calendar.testReminderAlerts')}</button>
           )}
 
           <Link
@@ -363,7 +363,7 @@ export default function Calendar() {
             onClick={openModal}
             className='flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'
           >
-            <HiOutlinePlus className='w-4 h-4' />{t('calendar.addEvent')}</button>
+            <HiOutlinePlus className='w-4 h-4' aria-hidden='true' />{t('calendar.addEvent')}</button>
 
           <button onClick={() => setCursor(startOfMonth(addDays(monthStart, -1)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.prev')}</button>
           <button onClick={() => setCursor(startOfMonth(addDays(monthStart, 32)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.next')}</button>
@@ -424,10 +424,18 @@ export default function Calendar() {
                   return (
                     <button
                       key={key}
+                      type='button'
                       onClick={() => setSelected(startOfDay(d))}
-                      className={`h-24 md:h-28 border-b border-r border-slate-200 p-2 text-left hover:bg-slate-50 transition-colors ${
-                        !inMonth ? 'bg-slate-50/50 text-slate-400' : 'bg-white'
-                      } ${isSelected ? 'ring-2 ring-slate-900/20' : ''}`}
+                      aria-pressed={isSelected}
+                      aria-label={[
+                        formatDate(d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+                        counts.task ? `${counts.task} task${counts.task > 1 ? 's' : ''}` : '',
+                        counts.followUp ? `${counts.followUp} follow-up${counts.followUp > 1 ? 's' : ''}` : '',
+                        counts.event ? `${counts.event} event${counts.event > 1 ? 's' : ''}` : '',
+                      ].filter(Boolean).join(', ')}
+                      className={`h-24 md:h-28 border-b border-r border-slate-200 p-2 text-left hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${
+                        !inMonth ? 'bg-slate-50/50 text-slate-500' : 'bg-white'
+                      } ${isSelected ? 'ring-2 ring-inset ring-slate-700' : ''}`}
                     >
                       <div className='flex items-center justify-between'>
                         <div className='text-sm font-semibold'>{d.getDate()}</div>
@@ -474,7 +482,7 @@ export default function Calendar() {
                   onClick={openModal}
                   className='flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors'
                 >
-                  <HiOutlinePlus className='w-3.5 h-3.5' />{t('calendar.event')}</button>
+                  <HiOutlinePlus className='w-3.5 h-3.5' aria-hidden='true' />{t('calendar.event')}</button>
               </div>
 
               <div className='p-4 space-y-5'>
@@ -504,18 +512,20 @@ export default function Calendar() {
                                   {ev.reminderMinutes !== undefined && (
                                     <>
                                       <span>·</span>
-                                      <HiOutlineBell className='w-3 h-3' />
+                                      <HiOutlineBell className='w-3 h-3' aria-hidden='true' />
                                       <span>{reminderLabel}</span>
                                     </>
                                   )}
                                 </div>
                               </div>
                               <button
+                                type='button'
                                 onClick={() => deleteEvent(ev.id)}
-                                className='flex-shrink-0 p-1 rounded-lg text-emerald-500 hover:bg-emerald-100 hover:text-rose-600 transition-colors'
+                                className='flex-shrink-0 p-1 rounded-lg text-emerald-700 hover:bg-emerald-100 hover:text-rose-600 transition-colors'
                                 title={t('calendar.deleteEvent')}
+                                aria-label={`${t('calendar.deleteEvent')}: ${ev.title}`}
                               >
-                                <HiOutlineTrash className='w-3.5 h-3.5' />
+                                <HiOutlineTrash className='w-3.5 h-3.5' aria-hidden='true' />
                               </button>
                             </div>
                           </div>
@@ -602,14 +612,15 @@ export default function Calendar() {
         <div className='space-y-4'>
           {!notifGranted && notifPermission !== 'denied' && notifPermission !== 'unsupported' && (
             <div className='flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2'>
-              <HiOutlineBell className='w-4 h-4 flex-shrink-0 mt-0.5' />
+              <HiOutlineBell className='w-4 h-4 flex-shrink-0 mt-0.5' aria-hidden='true' />
               <span>{t('calendar.allowNotificationsWhenPromptedToReceive')}</span>
             </div>
           )}
 
           <div>
-            <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.title')}</label>
+            <label htmlFor='calendar-event-title' className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.title')}</label>
             <input
+              id='calendar-event-title'
               autoFocus
               type='text'
               placeholder={t('calendar.eGClientMeetingSiteVisit')}
@@ -622,8 +633,9 @@ export default function Calendar() {
 
           <div className='grid grid-cols-2 gap-3'>
             <div>
-              <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.date')}</label>
+              <label htmlFor='calendar-event-date' className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.date')}</label>
               <input
+                id='calendar-event-date'
                 type='date'
                 value={newEvent.date}
                 onChange={(e) => setNewEvent((p) => ({ ...p, date: e.target.value }))}
@@ -631,8 +643,9 @@ export default function Calendar() {
               />
             </div>
             <div>
-              <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.time')}</label>
+              <label htmlFor='calendar-event-time' className='block text-xs font-semibold text-slate-600 mb-1'>{t('calendar.time')}</label>
               <input
+                id='calendar-event-time'
                 type='time'
                 value={newEvent.time}
                 onChange={(e) => setNewEvent((p) => ({ ...p, time: e.target.value }))}
@@ -642,9 +655,10 @@ export default function Calendar() {
           </div>
 
           <div>
-            <label className='block text-xs font-semibold text-slate-600 mb-1'>
-              <HiOutlineBell className='inline w-3.5 h-3.5 mr-1' />{t('calendar.remindMe')}</label>
+            <label htmlFor='calendar-event-reminder' className='block text-xs font-semibold text-slate-600 mb-1'>
+              <HiOutlineBell className='inline w-3.5 h-3.5 mr-1' aria-hidden='true' />{t('calendar.remindMe')}</label>
             <select
+              id='calendar-event-reminder'
               value={newEvent.reminderMinutes}
               onChange={(e) => setNewEvent((p) => ({ ...p, reminderMinutes: Number(e.target.value) }))}
               className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'

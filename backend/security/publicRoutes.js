@@ -92,8 +92,17 @@ export const PUBLIC_ROUTES = [
   },
 
   // ── Inbound from visitors ──────────────────────────────────────────────────
-  { method: 'POST', path: '/api/newsletter/subscribe', why: 'A visitor subscribing. Rate limited; stores an email only.' },
   { method: 'POST', path: '/api/contact/', why: 'The public contact form. Rate limited.' },
+  {
+    method: 'GET',
+    path: '/api/unsubscribe/:token',
+    why: 'The unsubscribe link in an automated email, opened by a lead with no account. The signed token names one lead and is the whole credential; the response is the agency name and a masked address only. Rate limited.',
+  },
+  {
+    method: 'POST',
+    path: '/api/unsubscribe/:token',
+    why: 'Records the unsubscribe — from the page, or from a mail client\'s one-click button (RFC 8058), which sends no cookies or CSRF header. It can only stop email to the address on the lead the signed token names. Rate limited.',
+  },
   { method: 'POST', path: '/api/observability/logs', why: 'Client-side error reports, which are most valuable exactly when a user cannot sign in. Rate limited.' },
 
   // ── Miscellaneous ──────────────────────────────────────────────────────────

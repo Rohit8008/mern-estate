@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { HiFilter, HiX, HiChevronDown, HiChevronUp, HiHome, HiOfficeBuilding, HiCurrencyRupee } from 'react-icons/hi';
 import { apiClient } from '../../utils/http';
 import { currencySymbol } from '../../utils/currency';
@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 export default function SearchFilters({ filters, onChange, onClear, className = '' }) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(true);
+  const uid = useId();
+  const fid = (name) => `${uid}-${name}`;
   const [popularCities, setPopularCities] = useState([]);
   const [propertyTypes, setPropertyTypes] = useState([]);
 
@@ -56,13 +58,16 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
     <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
       {/* Filter Header */}
       <div className='bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200'>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full flex items-center justify-between p-4 text-left"
-        >
-          <div className="flex items-center gap-3">
+        {/* A div, not a button: "Clear all" is its own button and buttons cannot nest. */}
+        <div className="w-full flex items-center justify-between p-4 text-left">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={isExpanded}
+            className="flex-1 flex items-center gap-3 text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
             <div className='w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center'>
-              <HiFilter className="w-5 h-5 text-white" />
+              <HiFilter className="w-5 h-5 text-white" aria-hidden="true" />
             </div>
             <div>
               <span className="font-semibold text-slate-800">{t('searchFilters.filters')}</span>
@@ -72,32 +77,38 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                 </span>
               )}
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-2">
             {activeFiltersCount > 0 && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClear();
-                }}
+                type="button"
+                onClick={onClear}
                 className="text-sm text-red-600 hover:text-red-700 font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
               >{t('searchFilters.clearAll')}</button>
             )}
-            {isExpanded ? (
-              <HiChevronUp className="w-5 h-5 text-slate-400" />
-            ) : (
-              <HiChevronDown className="w-5 h-5 text-slate-400" />
-            )}
+            {/* Mouse convenience only; the toggle above is the keyboard control. */}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <HiChevronUp className="w-5 h-5 text-slate-400" />
+              ) : (
+                <HiChevronDown className="w-5 h-5 text-slate-400" />
+              )}
+            </button>
           </div>
-        </button>
+        </div>
       </div>
 
       {/* Quick Filters (Always Visible) */}
       <div className="p-4 space-y-4 border-b border-slate-100">
         {/* Listing Type */}
         <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('searchFilters.listingType')}</label>
-          <div className="flex gap-2">
+          <span id={fid('listingType')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('searchFilters.listingType')}</span>
+          <div className="flex gap-2" role="group" aria-labelledby={fid('listingType')}>
             {[
               { value: 'all', label: 'All', icon: null },
               { value: 'sale', label: 'Buy', icon: HiHome },
@@ -105,6 +116,8 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
             ].map((type) => (
               <button
                 key={type.value}
+                type="button"
+                aria-pressed={(filters.type || 'all') === type.value}
                 onClick={() => handleChange('type', type.value)}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-xl transition-all ${
                   (filters.type || 'all') === type.value
@@ -112,7 +125,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {type.icon && <type.icon className="w-4 h-4" />}
+                {type.icon && <type.icon className="w-4 h-4" aria-hidden="true" />}
                 {type.label}
               </button>
             ))}
@@ -121,8 +134,8 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
         {/* Property Category */}
         <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('searchFilters.category')}</label>
-          <div className="grid grid-cols-2 gap-2">
+          <span id={fid('category')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('searchFilters.category')}</span>
+          <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby={fid('category')}>
             {[
               { value: 'all', label: 'All Types', icon: null },
               { value: 'residential', label: 'Residential', icon: HiHome },
@@ -131,6 +144,8 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
             ].map((cat) => (
               <button
                 key={cat.value}
+                type="button"
+                aria-pressed={(filters.propertyCategory || 'all') === cat.value}
                 onClick={() => handleChange('propertyCategory', cat.value)}
                 className={`flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition-all ${
                   (filters.propertyCategory || 'all') === cat.value
@@ -138,7 +153,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {cat.icon && <cat.icon className="w-4 h-4" />}
+                {cat.icon && <cat.icon className="w-4 h-4" aria-hidden="true" />}
                 {cat.label}
               </button>
             ))}
@@ -151,11 +166,13 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
         <div className="p-4 space-y-5">
           {/* Price Range */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.priceRange')}</label>
-            <div className="grid grid-cols-2 gap-2">
+            <span id={fid('priceRange')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.priceRange')}</span>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby={fid('priceRange')}>
               {priceRanges.map((range, index) => (
                 <button
                   key={index}
+                  type="button"
+                  aria-pressed={isPriceRangeSelected(range)}
                   onClick={() => {
                     handleChange('minPrice', range.min || '');
                     handleChange('maxPrice', range.max || '');
@@ -174,10 +191,11 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
             {/* Custom Price Range */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="block text-xs text-slate-500 mb-1.5">{t('searchFilters.minPrice')}</label>
+                <label htmlFor={fid('minPrice')} className="block text-xs text-slate-500 mb-1.5">{t('searchFilters.minPrice')}</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">{currencySymbol()}</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm" aria-hidden="true">{currencySymbol()}</span>
                   <input
+                    id={fid('minPrice')}
                     type="number"
                     placeholder="0"
                     value={filters.minPrice || ''}
@@ -187,10 +205,11 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1.5">{t('searchFilters.maxPrice')}</label>
+                <label htmlFor={fid('maxPrice')} className="block text-xs text-slate-500 mb-1.5">{t('searchFilters.maxPrice')}</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">{currencySymbol()}</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm" aria-hidden="true">{currencySymbol()}</span>
                   <input
+                    id={fid('maxPrice')}
                     type="number"
                     placeholder={t('searchFilters.any')}
                     value={filters.maxPrice || ''}
@@ -204,11 +223,13 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Bedrooms */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.bedrooms')}</label>
-            <div className="flex gap-2">
+            <span id={fid('bedrooms')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.bedrooms')}</span>
+            <div className="flex gap-2" role="group" aria-labelledby={fid('bedrooms')}>
               {['any', '1', '2', '3', '4', '5+'].map((bed) => (
                 <button
                   key={bed}
+                  type="button"
+                  aria-pressed={(filters.bedrooms || '') === (bed === 'any' ? '' : bed.replace('+', ''))}
                   onClick={() => handleChange('bedrooms', bed === 'any' ? '' : bed.replace('+', ''))}
                   className={`flex-1 px-2 py-2.5 text-sm font-medium rounded-xl border-2 transition-all ${
                     (filters.bedrooms || '') === (bed === 'any' ? '' : bed.replace('+', ''))
@@ -224,11 +245,13 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Bathrooms */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.bathrooms')}</label>
-            <div className="flex gap-2">
+            <span id={fid('bathrooms')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.bathrooms')}</span>
+            <div className="flex gap-2" role="group" aria-labelledby={fid('bathrooms')}>
               {['any', '1', '2', '3', '4+'].map((bath) => (
                 <button
                   key={bath}
+                  type="button"
+                  aria-pressed={(filters.bathrooms || '') === (bath === 'any' ? '' : bath.replace('+', ''))}
                   onClick={() => handleChange('bathrooms', bath === 'any' ? '' : bath.replace('+', ''))}
                   className={`flex-1 px-2 py-2.5 text-sm font-medium rounded-xl border-2 transition-all ${
                     (filters.bathrooms || '') === (bath === 'any' ? '' : bath.replace('+', ''))
@@ -245,8 +268,9 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
           {/* City Selection */}
           {popularCities.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.city')}</label>
+              <label htmlFor={fid('city')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.city')}</label>
               <select
+                id={fid('city')}
                 value={filters.city || ''}
                 onChange={(e) => handleChange('city', e.target.value)}
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer"
@@ -264,9 +288,11 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
           {/* Property Type */}
           {propertyTypes.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.propertyType')}</label>
-              <div className="flex flex-wrap gap-2">
+              <span id={fid('propertyType')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.propertyType')}</span>
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby={fid('propertyType')}>
                 <button
+                  type="button"
+                  aria-pressed={!filters.propertyType}
                   onClick={() => handleChange('propertyType', '')}
                   className={`px-4 py-2 text-sm font-medium rounded-full transition-all ${
                     !filters.propertyType
@@ -277,6 +303,8 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
                 {propertyTypes.map((type, index) => (
                   <button
                     key={index}
+                    type="button"
+                    aria-pressed={filters.propertyType === type.name}
                     onClick={() => handleChange('propertyType', type.name)}
                     className={`px-4 py-2 text-sm font-medium rounded-full transition-all capitalize ${
                       filters.propertyType === type.name
@@ -293,8 +321,8 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Additional Features */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.features')}</label>
-            <div className="space-y-2">
+            <span id={fid('features')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.features')}</span>
+            <div className="space-y-2" role="group" aria-labelledby={fid('features')}>
               {[
                 { key: 'offer', label: 'Special Offers', description: 'Properties with discounts' },
                 { key: 'furnished', label: 'Furnished', description: 'Ready to move in' },
@@ -325,8 +353,9 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
 
           {/* Sort Options */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.sortBy')}</label>
+            <label htmlFor={fid('sort')} className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{t('searchFilters.sortBy')}</label>
             <select
+              id={fid('sort')}
               value={`${filters.sort || 'relevance'}-${filters.order || 'desc'}`}
               onChange={(e) => {
                 const [sort, order] = e.target.value.split('-');

@@ -8,6 +8,7 @@ import { runHook } from '../plugins/registry.js';
 import { streamCsv, joinNames } from '../utils/csvExport.js';
 import { emitEvent } from '../utils/webhooks.js';
 import mongoose from 'mongoose';
+import { suppress, unsuppressAgentEntry } from '../utils/unsubscribe.js';
 
 /**
  * Normalise a phone number for comparison.
@@ -571,6 +572,64 @@ export const removeInterestedListing = async (req, res, next) => {
     existing.interestedListings = existing.interestedListings.filter((x) => String(x) !== String(listingId));
     await existing.save();
     res.json({ success: true, data: existing });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Record that a lead asked not to receive automated email — said so on the
+ * phone, replied "stop". Adds their address to the workspace suppression list,
+ * the same one the unsubscribe link writes to.
+ */
+export const optOutClientEmail = async (req, res, next) => {
+  try {
+    const client = await Client.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    if (!client) return next(errorHandler(404, 'Client not found'));
+    if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
+      return next(errorHandler(403, 'Forbidden'));
+    }
+    if (!client.email) return next(errorHandler(400, 'This lead has no email address'));
+
+    const record = await suppress({ email: client.email, clientId: client._id, source: 'agent', recordedBy: req.user.id });
+
+    logFromRequest(req, {
+      entityType: 'client',
+      entityId: client._id,
+      action: 'client.email_opt_out',
+      message: `Stopped automated email to ${client.name || 'lead'}`,
+    });
+
+    res.json({ success: true, data: { emailOptOut: { at: record.createdAt, source: record.source } } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Undo an opt-out recorded by mistake. Admin only, and only one the agency
+ * recorded: a person's own unsubscribe cannot be reversed by the agency — only
+ * by that person asking again.
+ */
+export const undoClientEmailOptOut = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') return next(errorHandler(403, 'Only an admin can undo this'));
+    const client = await Client.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    if (!client) return next(errorHandler(404, 'Client not found'));
+
+    const result = await unsuppressAgentEntry(client.email);
+    if (!result.removed && result.reason === 'person_unsubscribed') {
+      return next(errorHandler(409, 'This person unsubscribed themselves. Only they can opt back in.'));
+    }
+
+    logFromRequest(req, {
+      entityType: 'client',
+      entityId: client._id,
+      action: 'client.email_opt_out_undone',
+      message: `Re-enabled automated email to ${client.name || 'lead'}`,
+    });
+
+    res.json({ success: true, data: { emailOptOut: null } });
   } catch (err) {
     next(err);
   }

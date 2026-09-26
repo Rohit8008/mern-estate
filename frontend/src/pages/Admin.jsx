@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/socket';
@@ -15,6 +15,24 @@ import PropertyTypeManagement from './PropertyTypeManagement';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTranslation } from 'react-i18next';
 import { localDateString } from '../utils/localDate';
+
+// Bespoke overlays below get the keyboard contract the shared Modal has: Escape
+// closes, focus moves into the panel on open and back to the opener on close.
+function useDialog(open, onEscape, panelRef) {
+  const escRef = useRef(onEscape);
+  escRef.current = onEscape;
+  useEffect(() => {
+    if (!open) return undefined;
+    const opener = document.activeElement;
+    const onKey = (e) => { if (e.key === 'Escape') escRef.current?.(); };
+    document.addEventListener('keydown', onKey);
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
+    };
+  }, [open, panelRef]);
+}
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -205,6 +223,10 @@ export default function Admin() {
     setManagePassword('');
     setManagePasswordConfirm('');
   };
+  const manageModalRef = useRef(null);
+  useDialog(showUserManageModal && !!managingUser, () => { if (!saving) closeUserManageModal(); }, manageModalRef);
+  const importModalRef = useRef(null);
+  useDialog(showImportModal, () => { if (!importing) { setShowImportModal(false); setImportFile(null); setImportResults(null); } }, importModalRef);
 
   const toggleManageCategory = (slug) => {
     setManageCategories((prev) => {
@@ -502,7 +524,7 @@ export default function Admin() {
         <div className='bg-white border border-slate-200 rounded-xl p-10 text-center shadow-sm'>
           <h1 className='text-xl font-bold text-slate-900 mb-2'>{t('admin.accessRestricted')}</h1>
           <p className='text-sm text-slate-500 mb-1'>{t('admin.adminFeaturesAreNotAvailableIn')}</p>
-          <p className='text-xs text-slate-400'>{t('admin.exitBuyerViewModeToAccess')}</p>
+          <p className='text-xs text-slate-500'>{t('admin.exitBuyerViewModeToAccess')}</p>
         </div>
       )}
 
@@ -519,32 +541,32 @@ export default function Admin() {
           {/* Horizontal tab bar */}
           <div className='bg-white border border-slate-200 rounded-xl flex gap-1 overflow-x-auto p-1'>
             <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'dashboard' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-              <HiOutlineViewGrid className='w-4 h-4' />{t('admin.dashboard')}</button>
+              <HiOutlineViewGrid className='w-4 h-4' aria-hidden='true' />{t('admin.dashboard')}</button>
             <button onClick={() => setActiveTab('listings')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'listings' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-              <HiOutlineCollection className='w-4 h-4' />{t('admin.listings')}</button>
+              <HiOutlineCollection className='w-4 h-4' aria-hidden='true' />{t('admin.listings')}</button>
             {(hasPerm('createCategory') || hasPerm('deleteCategory') || hasPerm('updateCategory')) && (
               <button onClick={() => setActiveTab('categories')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'categories' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineTag className='w-4 h-4' />{t('admin.categories')}</button>
+                <HiOutlineTag className='w-4 h-4' aria-hidden='true' />{t('admin.categories')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('property-types')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'property-types' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineTag className='w-4 h-4' />{t('admin.propertyTypes')}</button>
+                <HiOutlineTag className='w-4 h-4' aria-hidden='true' />{t('admin.propertyTypes')}</button>
             )}
             {hasPerm('viewOwners') && (
               <button onClick={() => setActiveTab('owners')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'owners' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineUserGroup className='w-4 h-4' />{t('admin.owners')}</button>
+                <HiOutlineUserGroup className='w-4 h-4' aria-hidden='true' />{t('admin.owners')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('users')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'users' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineClipboardList className='w-4 h-4' />{t('admin.users')}</button>
+                <HiOutlineClipboardList className='w-4 h-4' aria-hidden='true' />{t('admin.users')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('roles')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'roles' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineKey className='w-4 h-4' />{t('admin.rolesPermissions')}</button>
+                <HiOutlineKey className='w-4 h-4' aria-hidden='true' />{t('admin.rolesPermissions')}</button>
             )}
             {isAdmin && (
               <button onClick={() => setActiveTab('logs')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeTab === 'logs' ? 'text-slate-900 bg-slate-50 font-semibold' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                <HiOutlineShieldCheck className='w-4 h-4' />{t('admin.securityLogs')}</button>
+                <HiOutlineShieldCheck className='w-4 h-4' aria-hidden='true' />{t('admin.securityLogs')}</button>
             )}
           </div>
 
@@ -557,10 +579,10 @@ export default function Admin() {
                     <div>
                       <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>{t('admin.listings')}</div>
                       <div className='text-2xl font-bold text-slate-900 mt-1'>{totalListings}</div>
-                      <div className='text-xs text-slate-400 mt-0.5'>{t('admin.activeItems')}</div>
+                      <div className='text-xs text-slate-500 mt-0.5'>{t('admin.activeItems')}</div>
                     </div>
                     <div className='w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center'>
-                      <HiOutlineCollection className='w-5 h-5 text-blue-500' />
+                      <HiOutlineCollection className='w-5 h-5 text-blue-500' aria-hidden='true' />
                     </div>
                   </div>
                 </div>
@@ -570,10 +592,10 @@ export default function Admin() {
                       <div>
                         <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>{t('admin.owners')}</div>
                         <div className='text-2xl font-bold text-slate-900 mt-1'>{totalOwners}</div>
-                        <div className='text-xs text-slate-400 mt-0.5'>{t('admin.registeredPartners')}</div>
+                        <div className='text-xs text-slate-500 mt-0.5'>{t('admin.registeredPartners')}</div>
                       </div>
                       <div className='w-9 h-9 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center'>
-                        <HiOutlineUserGroup className='w-5 h-5 text-emerald-500' />
+                        <HiOutlineUserGroup className='w-5 h-5 text-emerald-500' aria-hidden='true' />
                       </div>
                     </div>
                   </div>
@@ -584,10 +606,10 @@ export default function Admin() {
                       <div>
                         <div className='text-xs uppercase tracking-wider text-slate-500 font-medium'>{t('admin.users')}</div>
                         <div className='text-2xl font-bold text-slate-900 mt-1'>{totalUsers}</div>
-                        <div className='text-xs text-slate-400 mt-0.5'>{t('admin.accounts')}</div>
+                        <div className='text-xs text-slate-500 mt-0.5'>{t('admin.accounts')}</div>
                       </div>
                       <div className='w-9 h-9 rounded-xl bg-purple-50 ring-1 ring-purple-100 flex items-center justify-center'>
-                        <HiOutlineClipboardList className='w-5 h-5 text-purple-500' />
+                        <HiOutlineClipboardList className='w-5 h-5 text-purple-500' aria-hidden='true' />
                       </div>
                     </div>
                   </div>
@@ -670,7 +692,7 @@ export default function Admin() {
                         </div>
                       ));
                     })()}
-                    {listings.length === 0 && <div className='text-sm text-slate-400 text-center py-4'>{t('admin.noListingsDataAvailable')}</div>}
+                    {listings.length === 0 && <div className='text-sm text-slate-500 text-center py-4'>{t('admin.noListingsDataAvailable')}</div>}
                   </div>
                 </div>
 
@@ -685,7 +707,7 @@ export default function Admin() {
                         <Badge key={type} variant={variants[idx % variants.length]} size='md'>{type}: {count}</Badge>
                       ));
                     })()}
-                    {listings.length === 0 && <span className='text-sm text-slate-400'>{t('admin.noData')}</span>}
+                    {listings.length === 0 && <span className='text-sm text-slate-500'>{t('admin.noData')}</span>}
                   </div>
                 </div>
               </div>
@@ -699,12 +721,12 @@ export default function Admin() {
                 <h2 className='text-base font-semibold text-slate-900'>{t('admin.allListings')}</h2>
                 <div className='flex gap-2 items-center'>
                   <div className='relative'>
-                    <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' />
-                    <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.searchByNameOrAddress')} value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
+                    <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' aria-hidden='true' />
+                    <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Search listings by name or address' placeholder={t('admin.searchByNameOrAddress')} value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
                   </div>
-                  <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineDownload className='w-4 h-4' />{t('admin.export')}</button>
-                  <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineUpload className='w-4 h-4' />{t('admin.import')}</button>
-                  <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm inline-flex items-center gap-2 font-medium'><HiOutlinePlus className='w-4 h-4' />{t('admin.addNew')}</a>
+                  <button onClick={exportListingsToCSV} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineDownload className='w-4 h-4' aria-hidden='true' />{t('admin.export')}</button>
+                  <button onClick={() => setShowImportModal(true)} className='px-3 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors text-slate-700'><HiOutlineUpload className='w-4 h-4' aria-hidden='true' />{t('admin.import')}</button>
+                  <a href='/create-listing' className='px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm inline-flex items-center gap-2 font-medium'><HiOutlinePlus className='w-4 h-4' aria-hidden='true' />{t('admin.addNew')}</a>
                 </div>
               </div>
               <div className='overflow-auto'>
@@ -754,7 +776,7 @@ export default function Admin() {
               </div>
               {hasPerm('createCategory') && (
                 <div className='mb-6 flex gap-3 items-center flex-wrap'>
-                  <input type='text' placeholder='Create new category (e.g., DLF)' className='border border-slate-200 px-3 py-2 rounded-lg flex-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                  <input type='text' aria-label='New category name' placeholder='Create new category (e.g., DLF)' className='border border-slate-200 px-3 py-2 rounded-lg flex-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
                   <button
                     disabled={creating || !newCategoryName.trim()}
                     onClick={async () => {
@@ -777,7 +799,7 @@ export default function Admin() {
                     <h3 className='font-semibold text-slate-800 mb-1 text-sm'>{category.name}</h3>
                     <p className='text-xs text-slate-500 mb-3 font-mono'>{category.slug}</p>
                     <div className='flex items-center justify-between'>
-                      <span className='text-xs text-slate-400'>{category.fields?.length || 0} fields</span>
+                      <span className='text-xs text-slate-500'>{category.fields?.length || 0} fields</span>
                       {hasPerm('deleteCategory') && (
                         <button onClick={() => setPendingDeleteCategory(category)} className='px-2 py-1 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 transition-colors'>{t('admin.delete')}</button>
                       )}
@@ -802,21 +824,21 @@ export default function Admin() {
                 <div className='text-sm text-slate-500'>Total: {logsTotal}</div>
               </div>
               <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-3'>
-                <input value={logFilters.email} onChange={(e) => setLogFilters({ ...logFilters, email: e.target.value })} placeholder={t('admin.filterEmail')} className='border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' />
-                <select value={logFilters.method} onChange={(e) => setLogFilters({ ...logFilters, method: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
+                <input value={logFilters.email} onChange={(e) => setLogFilters({ ...logFilters, email: e.target.value })} aria-label='Filter by email' placeholder={t('admin.filterEmail')} className='border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' />
+                <select aria-label='Filter by method' value={logFilters.method} onChange={(e) => setLogFilters({ ...logFilters, method: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
                   <option value='all'>{t('admin.allMethods')}</option>
                   <option value='password'>{t('admin.password')}</option>
                   <option value='signup'>{t('admin.signup')}</option>
                   <option value='other'>{t('admin.other')}</option>
                 </select>
-                <select value={logFilters.status} onChange={(e) => setLogFilters({ ...logFilters, status: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
+                <select aria-label='Filter by status' value={logFilters.status} onChange={(e) => setLogFilters({ ...logFilters, status: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm'>
                   <option value='all'>{t('admin.allStatus')}</option>
                   <option value='blocked'>{t('admin.blocked')}</option>
                   <option value='invalid'>{t('admin.invalid')}</option>
                   <option value='success'>{t('admin.success')}</option>
                 </select>
-                <input type='date' value={logFilters.since} onChange={(e) => setLogFilters({ ...logFilters, since: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
-                <input type='date' value={logFilters.until} onChange={(e) => setLogFilters({ ...logFilters, until: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
+                <input type='date' aria-label='From date' value={logFilters.since} onChange={(e) => setLogFilters({ ...logFilters, since: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
+                <input type='date' aria-label='To date' value={logFilters.until} onChange={(e) => setLogFilters({ ...logFilters, until: e.target.value })} className='border border-slate-200 rounded-lg px-3 py-2 text-sm' />
               </div>
               <div className='flex items-center gap-2 mb-4'>
                 <button className='px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors' onClick={async () => {
@@ -887,15 +909,15 @@ export default function Admin() {
             <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
               <div className='flex items-center justify-between mb-4'>
                 <h2 className='text-base font-semibold text-slate-900'>{t('admin.owners')}</h2>
-                {ownersLoading && <span className='text-sm text-slate-400'>{t('admin.loading')}</span>}
+                {ownersLoading && <span className='text-sm text-slate-500'>{t('admin.loading')}</span>}
               </div>
               {hasPerm('createOwner') && (
                 <>
                   <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3'>
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.ownerName')} value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} />
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.email')} value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} />
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.phone')} value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} />
-                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.company')} value={newOwner.companyName} onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Owner name' placeholder={t('admin.ownerName')} value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Owner email' placeholder={t('admin.email')} value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Owner phone' placeholder={t('admin.phone')} value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} />
+                    <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Owner company' placeholder={t('admin.company')} value={newOwner.companyName} onChange={(e) => setNewOwner({ ...newOwner, companyName: e.target.value })} />
                   </div>
                   <div className='mb-4'>
                     <button onClick={createOwner} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors'>{t('admin.createOwner')}</button>
@@ -903,7 +925,7 @@ export default function Admin() {
                 </>
               )}
               <div className='mb-4 flex justify-end'>
-                <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.searchOwners')} value={ownersQuery} onChange={(e) => setOwnersQuery(e.target.value)} />
+                <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Search owners' placeholder={t('admin.searchOwners')} value={ownersQuery} onChange={(e) => setOwnersQuery(e.target.value)} />
               </div>
               <div className='overflow-auto'>
                 <table className='min-w-full text-sm'>
@@ -945,12 +967,12 @@ export default function Admin() {
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
                 <h2 className='text-base font-semibold text-slate-900 mb-4'>{t('admin.createEmployee')}</h2>
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.username')} autoComplete='off' value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.email')} type='email' autoComplete='off' value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Username' placeholder={t('admin.username')} autoComplete='off' value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Email' placeholder={t('admin.email')} type='email' autoComplete='off' value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
                   {/* No password field: the new employee receives a single-use
                       invite link and chooses their own. An admin typing a
                       password meant the product had to transmit it to them. */}
-                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.phoneMobileNumber')} type='tel' autoComplete='off' value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
+                  <input className='border border-slate-200 px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Phone number' placeholder={t('admin.phoneMobileNumber')} type='tel' autoComplete='off' value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
                   <div className='flex flex-wrap gap-2 items-center col-span-full'>
                     {categories.map((c) => (
                       <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
@@ -972,8 +994,8 @@ export default function Admin() {
                   <h2 className='text-base font-semibold text-slate-900'>{t('admin.allUsers')}</h2>
                   <div className='flex items-center gap-4'>
                     <div className='relative'>
-                      <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' />
-                      <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-slate-300' placeholder={t('admin.searchUsersByNameOrEmail')} value={usersQuery} onChange={(e) => setUsersQuery(e.target.value)} />
+                      <HiOutlineSearch className='absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4' aria-hidden='true' />
+                      <input className='pl-8 pr-2 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-brand-500' aria-label='Search users by name or email' placeholder={t('admin.searchUsersByNameOrEmail')} value={usersQuery} onChange={(e) => setUsersQuery(e.target.value)} />
                     </div>
                     <div className='text-sm text-slate-500'>Total: {users.length} users</div>
                   </div>
@@ -1001,7 +1023,7 @@ export default function Admin() {
                               </div>
                               <div>
                                 <div className='font-medium text-slate-900 text-sm'>{user.username || 'N/A'}</div>
-                                <div className='text-xs text-slate-400'>ID: {String(user._id).slice(-6)}</div>
+                                <div className='text-xs text-slate-500'>ID: {String(user._id).slice(-6)}</div>
                               </div>
                             </div>
                           </td>
@@ -1013,7 +1035,7 @@ export default function Admin() {
                           <td className='px-3 py-3'>
                             <div className='flex flex-wrap gap-1'>
                               {(user.assignedCategories || []).map((cat) => <Badge key={cat} variant='brand'>{cat}</Badge>)}
-                              {(!user.assignedCategories || user.assignedCategories.length === 0) && <span className='text-xs text-slate-400'>{t('admin.none')}</span>}
+                              {(!user.assignedCategories || user.assignedCategories.length === 0) && <span className='text-xs text-slate-500'>{t('admin.none')}</span>}
                             </div>
                           </td>
                           <td className='px-3 py-3'><Badge variant={user.status === 'active' ? 'success' : user.status === 'suspended' ? 'warning' : 'error'}>{user.status || 'active'}</Badge></td>
@@ -1048,11 +1070,11 @@ export default function Admin() {
       {/* User Manage Modal */}
       {showUserManageModal && managingUser && (
         <div className='fixed inset-0 !mt-0 bg-black/50 flex items-center justify-center z-50'>
-          <div className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden'>
+          <div ref={manageModalRef} role='dialog' aria-modal='true' aria-labelledby='admin-manage-user-title' tabIndex={-1} className='bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden focus:outline-none'>
             <div className='p-6 border-b flex items-start justify-between gap-4'>
               <div>
                 <div className='text-xs uppercase tracking-wide text-slate-500'>{t('admin.userDetails')}</div>
-                <div className='text-xl font-semibold text-slate-900'>{managingUser.username || 'N/A'}</div>
+                <h2 id='admin-manage-user-title' className='text-xl font-semibold text-slate-900'>{managingUser.username || 'N/A'}</h2>
                 <div className='text-sm text-slate-500'>{managingUser.email}</div>
               </div>
               <button onClick={closeUserManageModal} disabled={saving} className='px-3 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700'>{t('admin.close')}</button>
@@ -1082,14 +1104,14 @@ export default function Admin() {
                   <div className='text-sm font-semibold text-slate-800 mb-3'>{t('admin.updateProperties')}</div>
                   <div className='space-y-4'>
                     <div>
-                      <div className='text-xs font-medium text-slate-600 mb-1'>{t('admin.role')}</div>
+                      <div id='admin-manage-role-label' className='text-xs font-medium text-slate-600 mb-1'>{t('admin.role')}</div>
                       {managingUser.role === 'admin' ? (
                         <div>
                           <div className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-100 text-slate-500 cursor-not-allowed'>{t('admin.admin')}</div>
                           <p className='text-xs text-amber-600 mt-1'>{t('admin.adminRolesCannotBeChanged')}</p>
                         </div>
                       ) : (
-                        <select value={manageRole} onChange={(e) => setManageRole(e.target.value)} disabled={saving} className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300'>
+                        <select aria-labelledby='admin-manage-role-label' value={manageRole} onChange={(e) => setManageRole(e.target.value)} disabled={saving} className='w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500'>
 
                           <option value='buyer'>{t('admin.buyer')}</option>
                           <option value='seller'>{t('admin.seller')}</option>
@@ -1098,8 +1120,8 @@ export default function Admin() {
                       )}
                     </div>
                     <div>
-                      <div className='text-xs font-medium text-slate-600 mb-2'>{t('admin.assignedCategories')}</div>
-                      <div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
+                      <div id='admin-manage-categories-label' className='text-xs font-medium text-slate-600 mb-2'>{t('admin.assignedCategories')}</div>
+                      <div role='group' aria-labelledby='admin-manage-categories-label' className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
                         {categories.map((c) => (
                           <label key={c._id} className='flex items-center gap-2 text-sm text-slate-700'>
                             <input type='checkbox' checked={manageCategories.includes(c.slug)} onChange={() => toggleManageCategory(c.slug)} disabled={saving} />
@@ -1120,8 +1142,8 @@ export default function Admin() {
                 <div className='mt-6 rounded-xl border border-slate-200 p-4'>
                   <div className='text-sm font-semibold text-slate-800 mb-3'>{t('admin.resetPassword')}</div>
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
-                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder={t('admin.newPassword')} value={managePassword} onChange={(e) => setManagePassword(e.target.value)} disabled={saving} />
-                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300' type='password' placeholder={t('admin.confirmNewPassword')} value={managePasswordConfirm} onChange={(e) => setManagePasswordConfirm(e.target.value)} disabled={saving} />
+                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' type='password' aria-label='New password' placeholder={t('admin.newPassword')} value={managePassword} onChange={(e) => setManagePassword(e.target.value)} disabled={saving} />
+                    <input className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500' type='password' aria-label='Confirm new password' placeholder={t('admin.confirmNewPassword')} value={managePasswordConfirm} onChange={(e) => setManagePasswordConfirm(e.target.value)} disabled={saving} />
                   </div>
                   <div className='mt-3 flex justify-end'>
                     <button onClick={saveManagedPassword} disabled={saving || !managePassword} className='px-4 py-2 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50 text-slate-700 transition-colors'>{saving ? 'Updating…' : 'Update Password'}</button>
@@ -1136,15 +1158,15 @@ export default function Admin() {
       {/* Import Listings Modal */}
       {showImportModal && (
         <div className='fixed inset-0 !mt-0 bg-black/50 flex items-center justify-center z-50'>
-          <div className='bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden'>
+          <div ref={importModalRef} role='dialog' aria-modal='true' aria-labelledby='admin-import-title' tabIndex={-1} className='bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden focus:outline-none'>
             <div className='p-6 border-b'>
               <div className='flex items-start justify-between gap-4'>
                 <div>
-                  <h3 className='text-base font-semibold text-slate-900'>{t('admin.importListingsFromCsv')}</h3>
+                  <h3 id='admin-import-title' className='text-base font-semibold text-slate-900'>{t('admin.importListingsFromCsv')}</h3>
                   <p className='text-sm text-slate-500 mt-0.5'>{t('admin.uploadACsvFileToBulk')}</p>
                 </div>
-                <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportResults(null); }} className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors'>
-                  <HiX className='w-5 h-5' />
+                <button onClick={() => { setShowImportModal(false); setImportFile(null); setImportResults(null); }} aria-label='Close' className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'>
+                  <HiX className='w-5 h-5' aria-hidden='true' />
                 </button>
               </div>
             </div>
@@ -1153,12 +1175,12 @@ export default function Admin() {
               <div className='mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200'>
                 <p className='text-sm text-slate-600 mb-2'>{t('admin.downloadASampleCsvTemplateTo')}</p>
                 <button onClick={downloadSampleCSV} className='text-sm text-slate-700 hover:text-slate-900 font-medium flex items-center gap-1.5 transition-colors'>
-                  <HiOutlineDownload className='w-4 h-4' />{t('admin.downloadSampleTemplate')}</button>
+                  <HiOutlineDownload className='w-4 h-4' aria-hidden='true' />{t('admin.downloadSampleTemplate')}</button>
               </div>
 
               <div className='mb-4'>
-                <label className='block text-sm font-medium text-slate-700 mb-2'>{t('admin.selectCsvFile')}</label>
-                <input type='file' accept='.csv' onChange={(e) => setImportFile(e.target.files[0])} className='block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200' />
+                <label htmlFor='admin-import-file' className='block text-sm font-medium text-slate-700 mb-2'>{t('admin.selectCsvFile')}</label>
+                <input id='admin-import-file' type='file' accept='.csv' onChange={(e) => setImportFile(e.target.files[0])} className='block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200' />
                 {importFile && <p className='mt-2 text-sm text-slate-500'>Selected: {importFile.name}</p>}
               </div>
 
@@ -1200,7 +1222,7 @@ export default function Admin() {
                         <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
                       </svg>{t('admin.importing')}</>
                   ) : (
-                    <><HiOutlineUpload className='w-4 h-4' />{t('admin.importListings')}</>
+                    <><HiOutlineUpload className='w-4 h-4' aria-hidden='true' />{t('admin.importListings')}</>
                   )}
                 </button>
               )}

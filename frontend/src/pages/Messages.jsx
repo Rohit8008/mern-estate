@@ -115,6 +115,16 @@ export default function Messages() {
     } catch (_) {}
   }, [location.search]);
 
+  const closeNewChat = () => { setShowNewChat(false); setSearchQuery(''); setSearchResults([]); };
+
+  // The new-message modal closes on Escape, like every other dialog.
+  useEffect(() => {
+    if (!showNewChat) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') { setShowNewChat(false); setSearchQuery(''); setSearchResults([]); } };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showNewChat]);
+
   const formatTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -152,22 +162,31 @@ export default function Messages() {
           className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-24'
           onClick={() => setShowNewChat(false)}
         >
-          <div className='bg-white rounded-xl shadow-2xl w-full max-w-md mx-4' onClick={(e) => e.stopPropagation()}>
+          <div
+            className='bg-white rounded-xl shadow-2xl w-full max-w-md mx-4'
+            onClick={(e) => e.stopPropagation()}
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='new-message-title'
+          >
             <div className='flex items-center justify-between px-4 py-3 border-b border-slate-100'>
-              <h2 className='text-base font-semibold text-slate-800'>{t('messages.newMessage2')}</h2>
+              <h2 id='new-message-title' className='text-base font-semibold text-slate-800'>{t('messages.newMessage2')}</h2>
               <button
-                onClick={() => { setShowNewChat(false); setSearchQuery(''); setSearchResults([]); }}
-                className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors'
+                type='button'
+                onClick={closeNewChat}
+                aria-label='Close'
+                className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
               >
-                <HiX className='w-4 h-4' />
+                <HiX className='w-4 h-4' aria-hidden='true' />
               </button>
             </div>
             <div className='p-4'>
               <div className='relative'>
-                <HiSearch className='w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' />
+                <HiSearch className='w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' aria-hidden='true' />
                 <input
-                  className='w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
+                  className='w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
                   placeholder={t('messages.searchByNameUsernameOrEmail')}
+                  aria-label='Search people by name, username or email'
                   value={searchQuery}
                   onChange={(e) => handleUserSearch(e.target.value)}
                   autoFocus
@@ -179,7 +198,7 @@ export default function Messages() {
                   <p className='text-sm text-slate-500 text-center py-4'>{t('messages.noUsersFound')}</p>
                 )}
                 {!searching && searchQuery.trim().length > 0 && searchQuery.trim().length < 2 && (
-                  <p className='text-sm text-slate-400 text-center py-4'>{t('messages.typeAtLeast2CharactersTo')}</p>
+                  <p className='text-sm text-slate-500 text-center py-4'>{t('messages.typeAtLeast2CharactersTo')}</p>
                 )}
                 {searchResults.map((u) => (
                   <button
@@ -188,7 +207,7 @@ export default function Messages() {
                     className='w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left'
                   >
                     <div className='relative'>
-                      <img src={u.avatar || DEFAULT_AVATAR_URL} alt='avatar' className='w-9 h-9 rounded-full object-cover' />
+                      <img src={u.avatar || DEFAULT_AVATAR_URL} alt='' className='w-9 h-9 rounded-full object-cover' />
                       {onlineMap[u._id] && <span className='absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full' />}
                     </div>
                     <div>
@@ -203,9 +222,9 @@ export default function Messages() {
                       <span className='w-2 h-2 bg-emerald-500 rounded-full' />
                       <span className='text-xs font-semibold text-slate-500 uppercase tracking-wide'>{t('messages.onlineNow')}</span>
                     </div>
-                    {loadingOnline && <p className='text-sm text-slate-400 text-center py-3'>{t('messages.loading')}</p>}
+                    {loadingOnline && <p className='text-sm text-slate-500 text-center py-3'>{t('messages.loading')}</p>}
                     {!loadingOnline && onlineUsersList.length === 0 && (
-                      <p className='text-sm text-slate-400 text-center py-3'>{t('messages.noOtherUsersOnline')}</p>
+                      <p className='text-sm text-slate-500 text-center py-3'>{t('messages.noOtherUsersOnline')}</p>
                     )}
                     {onlineUsersList.map((u) => (
                       <button
@@ -214,7 +233,7 @@ export default function Messages() {
                         className='w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left'
                       >
                         <div className='relative'>
-                          <img src={u.avatar || DEFAULT_AVATAR_URL} alt='avatar' className='w-9 h-9 rounded-full object-cover' />
+                          <img src={u.avatar || DEFAULT_AVATAR_URL} alt='' className='w-9 h-9 rounded-full object-cover' />
                           <span className='absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full' />
                         </div>
                         <div>
@@ -239,10 +258,11 @@ export default function Messages() {
           <div className='bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm'>
             <div className='p-3 border-b border-slate-100'>
               <div className='relative'>
-                <HiSearch className='w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' />
+                <HiSearch className='w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400' aria-hidden='true' />
                 <input
-                  className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
+                  className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
                   placeholder={t('messages.searchConversations')}
+                  aria-label='Search conversations'
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -258,6 +278,7 @@ export default function Messages() {
               {filtered.map((c) => (
                 <button
                   key={c.otherId}
+                  aria-current={activeChatUser === c.otherId ? 'true' : undefined}
                   onClick={() => {
                     setActiveChatUser(c.otherId);
                     setActiveUserInfo(c.otherUser || null);
@@ -273,7 +294,7 @@ export default function Messages() {
                   <div className='relative flex-shrink-0'>
                     <img
                       src={c.otherUser?.avatar || DEFAULT_AVATAR_URL}
-                      alt='avatar'
+                      alt=''
                       className='w-10 h-10 rounded-full object-cover'
                     />
                     <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${onlineMap[c.otherId] ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -282,13 +303,14 @@ export default function Messages() {
                     <div className='flex justify-between items-center mb-0.5'>
                       <span className='text-sm font-semibold text-slate-800 truncate'>
                         {personName(c.otherUser) || t('messages.formerMember')}
+                        {onlineMap[c.otherId] && <span className='sr-only'> (online)</span>}
                       </span>
-                      <span className='text-xs text-slate-400 flex-shrink-0 ml-2'>
+                      <span className='text-xs text-slate-500 flex-shrink-0 ml-2'>
                         {formatTime(c.lastMessage?.createdAt)}
                       </span>
                     </div>
                     <div className='flex justify-between items-center'>
-                      <p className={`text-xs truncate max-w-[160px] ${c.unread > 0 ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
+                      <p className={`text-xs truncate max-w-[160px] ${c.unread > 0 ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
                         {c.lastMessage?.content || 'No messages'}
                       </p>
                       {c.unread > 0 && (
@@ -303,7 +325,7 @@ export default function Messages() {
               {!loading && filtered.length === 0 && (
                 <div className='text-center py-10 px-4'>
                   <div className='w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3'>
-                    <HiSearch className='w-5 h-5 text-slate-400' />
+                    <HiSearch className='w-5 h-5 text-slate-400' aria-hidden='true' />
                   </div>
                   <p className='text-sm text-slate-500 mb-2'>{t('messages.noConversationsYet')}</p>
                   <button onClick={() => setShowNewChat(true)} className='text-indigo-600 hover:text-indigo-700 text-sm font-medium hover:underline'>{t('messages.startANewConversation')}</button>
@@ -324,10 +346,10 @@ export default function Messages() {
           ) : (
             <div className='h-[calc(100vh-230px)] flex flex-col items-center justify-center border border-slate-200 rounded-xl bg-white shadow-sm'>
               <div className='w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4'>
-                <HiSearch className='w-7 h-7 text-slate-400' />
+                <HiSearch className='w-7 h-7 text-slate-400' aria-hidden='true' />
               </div>
               <p className='text-base font-semibold text-slate-600'>{t('messages.selectAConversation')}</p>
-              <p className='text-sm text-slate-400 mt-1'>{t('messages.chooseFromYourExistingConversationsOr')}</p>
+              <p className='text-sm text-slate-500 mt-1'>{t('messages.chooseFromYourExistingConversationsOr')}</p>
               <button onClick={() => setShowNewChat(true)} className='mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-medium hover:underline'>{t('messages.startNewMessage')}</button>
             </div>
           )}

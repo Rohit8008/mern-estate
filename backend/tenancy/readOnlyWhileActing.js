@@ -33,6 +33,10 @@ const ALWAYS_ALLOWED = [
   'POST /api/auth/signout',
   'POST /api/auth/signout-all',
   'POST /api/auth/refresh',
+  // The operator accepting the Terms for their OWN account. acceptLegal writes
+  // through inHomeTenant, so it lands on the operator's user record in their
+  // home workspace and never in the customer's.
+  'POST /api/user/legal-acceptance',
 ];
 
 /**

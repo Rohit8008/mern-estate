@@ -1236,11 +1236,9 @@
   },
   "footer": {
     "2026RealVistaAllRightsReserved": "© 2026 Real Vista. All rights reserved.",
-    "bathindaPunjab151001": "Bathinda, Punjab 151001",
-    "endToEndRealEstatePlatform": "End-to-end real estate platform. Verified listings for buyers, and a full CRM for the agencies that sell them.",
+    "endToEndRealEstatePlatform": "A CRM for real estate agencies: leads, owners, properties and deals in one workspace.",
     "forAgencies": "For Agencies",
     "getInTouch": "Get in Touch",
-    "getNewListingsInYourInbox": "Get new listings in your inbox",
     "legal": "Legal",
     "platform": "Platform",
     "privacyPolicy": "Privacy policy",
@@ -1248,8 +1246,9 @@
     "registrationsClosed": "Registrations closed",
     "talkToTheTeam": "Talk to the team",
     "termsOfService": "Terms of service",
-    "yourEmailCom": "your@email.com",
-    "androidApp": "Android app"
+    "androidApp": "Android app",
+    "cookiePolicy": "Cookie policy",
+    "refundPolicy": "Refunds"
   },
   "forgotPassword": {
     "backToSignIn": "Back to Sign In",
@@ -1299,7 +1298,6 @@
     "close": "Close",
     "closeDialog": "Close dialog",
     "demoRequestConfirmed": "Demo request confirmed",
-    "everyListingIsReviewedBeforeIt": "Every listing is reviewed before it goes live, so what you see is still on the market.",
     "findTheRightProperty": "Find the right property,",
     "findYourNextProperty": "Find your next property",
     "fullName": "Full name *",
@@ -1327,7 +1325,6 @@
     "theQuestionsAgencyOwnersAskOn": "The questions agency owners ask on the first call.",
     "toConfirmATime": "to confirm a time.",
     "upAndRunningInThreeSteps": "Up and running in three steps",
-    "verifiedListingsForBuyersAndA": "Verified listings for buyers, and a full CRM for the agencies that sell them.",
     "weWillReachOutWithin": "We will reach out within",
     "whatDoYouWantToSee": "What do you want to see?",
     "withoutTheNoise": "without the noise.",
@@ -1335,9 +1332,10 @@
   },
   "legal": {
     "backToHome": "Back to home",
-    "mittalrohit701GmailCom": "mittalrohit701@gmail.com",
     "privacyPolicy": "Privacy policy",
-    "termsOfService": "Terms of service"
+    "termsOfService": "Terms of service",
+    "cookiePolicy": "Cookie policy",
+    "refundPolicy": "Refund and cancellation policy"
   },
   "listing": {
     "additionalInformation": "Additional Information",
@@ -1583,7 +1581,7 @@
     "deleteAccount": "Delete Account",
     "deleteMyAccount": "Delete My Account",
     "deleteYourAccount": "Delete your account?",
-    "deletingYourAccountIsPermanentAnd": "Deleting your account is permanent and cannot be undone.",
+    "deletingYourAccountIsPermanentAnd": "Deleting your account permanently removes your name, email, phone and profile details. Records you created for your agency stay with the agency, shown as “Former team member”.",
     "edit": "Edit",
     "email": "Email",
     "employee": "Employee",
@@ -1616,12 +1614,17 @@
     "state": "State",
     "takePhoto": "Take Photo",
     "tellUsAboutYourself": "Tell us about yourself...",
-    "thisActionCannotBeUndoneAll": "This action cannot be undone. All your data will be permanently removed.",
+    "thisActionCannotBeUndoneAll": "This cannot be undone. Your personal details will be removed and you will be signed out. Records you created stay with your agency, without your name.",
     "updatePassword": "Update Password",
     "uploadedSuccessfully": "Uploaded successfully!",
     "user": "User",
     "username": "Username",
-    "yourListings": "Your Listings"
+    "yourListings": "Your Listings",
+    "yourData": "Your data",
+    "yourDataBody": "Download a copy of your profile and the records you created, as a JSON file.",
+    "downloadMyData": "Download my data",
+    "preparingDownload": "Preparing download…",
+    "exportFailed": "Could not prepare your download. Please try again."
   },
   "properties": {
     "addAProperty": "Add a property",
@@ -1805,7 +1808,6 @@
     "showingResultsFor": "Showing results for \"",
     "sortResults": "Sort results",
     "tryBroaderSearchTermsLikeApartment": "Try broader search terms like \"apartment\" instead of specific addresses",
-    "verifiedListings": "Verified Listings",
     "propertyCount_one": "{{formatted}} property",
     "propertyCount_other": "{{formatted}} properties"
   },
@@ -2332,5 +2334,36 @@
     "signingInTo": "Signing in to",
     "use": "Continue",
     "useDefault": "Use Real Vista"
+  },
+  "unsubscribe": {
+    "title": "Unsubscribe",
+    "working": "Unsubscribing you…",
+    "doneTitle": "You are unsubscribed",
+    "doneBody": "{{agency}} will not send you any more automated follow-up emails.",
+    "theAgency": "The agency",
+    "doneNote": "An agent may still reply if you write to them. To opt back in, ask them directly.",
+    "failedTitle": "We could not unsubscribe you",
+    "invalid": "This link is not valid. Reply to the email you received and ask to be removed.",
+    "networkError": "We could not reach the server. Check your connection and open the link again."
+  },
+  "emailOptOut": {
+    "stopAction": "Stop automated follow-up emails to this lead",
+    "stopped": "Automated follow-up emails stopped for this address.",
+    "unsubscribedSelf": "Unsubscribed from automated emails by the lead",
+    "unsubscribedAgent": "Automated emails stopped by your agency",
+    "undoAction": "Undo",
+    "undone": "Automated follow-up emails re-enabled.",
+    "failed": "Could not update. Please try again."
+  },
+  "legalGate": {
+    "title": "Please review our updated terms",
+    "body": "Before you continue, please read and accept the Terms of Service and Privacy Policy. They explain how Real Vista handles your data and your agency’s records.",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "newTab": "(links open in a new tab)",
+    "agree": "I agree to the Terms of Service and have read the Privacy Policy.",
+    "continue": "Accept and continue",
+    "signOut": "Sign out",
+    "failed": "Could not save your acceptance. Please try again."
   }
 }

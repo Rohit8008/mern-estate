@@ -13,7 +13,10 @@ import { isCategoryFieldActive } from '../utils/categoryFieldRules';
 // Labels are tied to their control, so a click focuses it and the browser's
 // "please fill in this field" bubble and screen readers can name it.
 const fieldId = (key) => `category-field-${key}`;
-const LINKABLE = new Set(['text', 'textarea', 'number', 'select', 'date']);
+const labelId = (key) => `category-field-${key}-label`;
+// Radio pairs and checkbox pills are groups: they are named by the visible
+// label through aria-labelledby rather than htmlFor.
+const isGroupField = (field) => field.type === 'boolean' || (field.type === 'select' && field.multiple);
 
 export default function DynamicCategoryFields({ fields = [], values = {}, onChange, errors = {} }) {
   const { t } = useTranslation();
@@ -49,7 +52,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
     const error = errors[field.key];
     const isRequired = field.required;
 
-    const baseInputClass = `w-full border rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400
+    const baseInputClass = `w-full border rounded-lg px-4 py-3 text-gray-900 placeholder-gray-500
       focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors
       ${error ? 'border-red-500' : 'border-gray-300'}`;
 
@@ -109,11 +112,11 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
           const selectedValues = Array.isArray(value) ? value : [];
           return (
             <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby={labelId(field.key)}>
                 {(field.options || []).map((option) => (
                   <label
                     key={option}
-                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors
+                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-brand-500
                       ${selectedValues.includes(option)
                         ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
                         : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
@@ -132,7 +135,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
                     />
                     <span>{option}</span>
                     {selectedValues.includes(option) && (
-                      <svg className="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 h-4 ml-1" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -168,7 +171,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
 
       case 'boolean':
         return (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4" role="radiogroup" aria-labelledby={labelId(field.key)}>
             <label className="inline-flex items-center">
               <input
                 type="radio"
@@ -207,6 +210,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
       default:
         return (
           <input
+            id={fieldId(field.key)}
             type="text"
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
@@ -246,47 +250,47 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
   const getGroupIcon = (groupKey) => {
     const icons = {
       basic: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       ),
       area: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
         </svg>
       ),
       features: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
       ),
       pricing: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
       rental: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       ),
       amenities: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
         </svg>
       ),
       legal: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
       ),
       food: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
       ),
       rules: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
         </svg>
       ),
@@ -305,7 +309,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
   if (!fields || fields.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
-        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
         <p>{t('dynamicCategoryFields.noAdditionalFieldsForThisCategory')}</p>
@@ -346,10 +350,10 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
                     key={field.key}
                     className={`${field.type === 'select' && field.multiple ? 'md:col-span-2 lg:col-span-3' : ''}`}
                   >
-                    <label htmlFor={LINKABLE.has(field.type) && !field.multiple ? fieldId(field.key) : undefined} className="block text-sm font-medium text-gray-700 mb-2">
+                    <label id={labelId(field.key)} htmlFor={isGroupField(field) ? undefined : fieldId(field.key)} className="block text-sm font-medium text-gray-700 mb-2">
                       {field.label}
                       {field.required && <span className="text-red-500 ml-1">*</span>}
-                      {field.unit && <span className="text-gray-400 ml-1">({field.unit})</span>}
+                      {field.unit && <span className="text-gray-500 ml-1">({field.unit})</span>}
                     </label>
 
                     {renderField(field)}
@@ -393,7 +397,7 @@ export default function DynamicCategoryFields({ fields = [], values = {}, onChan
 
                   return (
                     <div key={field.key}>
-                      <label htmlFor={LINKABLE.has(field.type) && !field.multiple ? fieldId(field.key) : undefined} className="block text-sm font-medium text-gray-700 mb-2">
+                      <label id={labelId(field.key)} htmlFor={isGroupField(field) ? undefined : fieldId(field.key)} className="block text-sm font-medium text-gray-700 mb-2">
                         {field.label}
                         {field.required && <span className="text-red-500 ml-1">*</span>}
                       </label>

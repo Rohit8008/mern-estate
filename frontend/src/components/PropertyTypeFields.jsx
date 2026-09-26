@@ -1,8 +1,13 @@
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export default function PropertyTypeFields({ fields = [], values = {}, onChange, errors = {} }) {
   const { t } = useTranslation();
+  // Labels are tied to their control (htmlFor/id); useId keeps the ids unique
+  // if two of these forms are ever on the page at once.
+  const uid = useId();
+  const fieldId = (key) => `${uid}-ptf-${key}`;
+  const labelId = (key) => `${uid}-ptf-${key}-label`;
   const groupedFields = useMemo(() => {
     const groups = {};
     const sortedFields = [...fields].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -27,7 +32,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
     const fieldError = errors[field.key];
     const isRequired = field.required;
 
-    const baseInputClass = `w-full border rounded-lg px-4 py-3 text-slate-900 placeholder-slate-400
+    const baseInputClass = `w-full border rounded-lg px-4 py-3 text-slate-900 placeholder-slate-500
       focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors
       ${fieldError ? 'border-rose-500' : 'border-slate-300'}`;
 
@@ -35,6 +40,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
       case 'text':
         return (
           <input
+            id={fieldId(field.key)}
             type="text"
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
@@ -47,6 +53,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
       case 'textarea':
         return (
           <textarea
+            id={fieldId(field.key)}
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
@@ -60,6 +67,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
         return (
           <div className="relative">
             <input
+              id={fieldId(field.key)}
               type="number"
               value={value}
               onChange={(e) => {
@@ -89,6 +97,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
       case 'select':
         return (
           <select
+            id={fieldId(field.key)}
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
             className={baseInputClass}
@@ -105,7 +114,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
 
       case 'boolean':
         return (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4" role="radiogroup" aria-labelledby={labelId(field.key)}>
             <label className="inline-flex items-center">
               <input
                 type="radio"
@@ -132,6 +141,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
       case 'date':
         return (
           <input
+            id={fieldId(field.key)}
             type="date"
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
@@ -143,6 +153,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
       default:
         return (
           <input
+            id={fieldId(field.key)}
             type="text"
             value={value}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
@@ -181,7 +192,11 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
               const fieldError = errors[field.key];
               return (
                 <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                  <label className='block text-sm font-medium text-slate-700 mb-2'>
+                  <label
+                    id={labelId(field.key)}
+                    htmlFor={field.type === 'boolean' ? undefined : fieldId(field.key)}
+                    className='block text-sm font-medium text-slate-700 mb-2'
+                  >
                     {field.label}
                     {field.required && <span className='text-rose-500 ml-1'>*</span>}
                   </label>
@@ -190,7 +205,7 @@ export default function PropertyTypeFields({ fields = [], values = {}, onChange,
                     <p className='text-xs text-slate-500 mt-1'>{field.helpText}</p>
                   )}
                   {fieldError && (
-                    <p className='text-xs text-rose-500 mt-1'>{fieldError}</p>
+                    <p className='text-xs text-rose-600 mt-1'>{fieldError}</p>
                   )}
                 </div>
               );

@@ -132,12 +132,12 @@ export default function Chat({ otherIdProp, otherUserInfo = null, onBack }) {
             aria-label={t('messages.backToConversations')}
             className='lg:hidden -ml-1 p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100'
           >
-            <HiArrowLeft className='w-5 h-5' />
+            <HiArrowLeft className='w-5 h-5' aria-hidden='true' />
           </button>
         )}
         <img
           src={otherUser?.avatar || DEFAULT_AVATAR_URL}
-          alt='avatar'
+          alt=''
           className='w-9 h-9 rounded-full object-cover'
         />
         <div>
@@ -172,7 +172,7 @@ export default function Chat({ otherIdProp, otherUserInfo = null, onBack }) {
                 }`}
               >
                 {msg.content}
-                <div className={`text-[10px] mt-1 ${isMe ? 'text-indigo-200 text-right' : 'text-slate-400'}`}>
+                <div className={`text-[10px] mt-1 ${isMe ? 'text-indigo-100 text-right' : 'text-slate-500'}`}>
                   {formatTime(msg.createdAt)}
                 </div>
               </div>
@@ -182,7 +182,7 @@ export default function Chat({ otherIdProp, otherUserInfo = null, onBack }) {
         })}
         {messages.length === 0 && (
           <div className='flex items-center justify-center h-full'>
-            <p className='text-sm text-slate-400'>{t('chat.noMessagesYetSayHello')}</p>
+            <p className='text-sm text-slate-500'>{t('chat.noMessagesYetSayHello')}</p>
           </div>
         )}
         <div ref={bottomRef} />
@@ -194,8 +194,9 @@ export default function Chat({ otherIdProp, otherUserInfo = null, onBack }) {
       {/* Input */}
       <form onSubmit={handleSend} className='flex items-center gap-2 px-4 py-3 border-t border-slate-100 flex-shrink-0'>
         <input
-          className='flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
+          className='flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all'
           placeholder={t('chat.typeAMessage')}
+          aria-label={displayName ? `Message ${displayName}` : 'Message'}
           value={text}
           onChange={(e) => { setText(e.target.value); if (sendError) setSendError(''); }}
           maxLength={1000}
@@ -204,9 +205,10 @@ export default function Chat({ otherIdProp, otherUserInfo = null, onBack }) {
         <button
           type='submit'
           disabled={!text.trim() || sending}
+          aria-label='Send message'
           className='w-9 h-9 flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0'
         >
-          <HiPaperAirplane className='w-4 h-4 rotate-90' />
+          <HiPaperAirplane className='w-4 h-4 rotate-90' aria-hidden='true' />
         </button>
       </form>
     </div>

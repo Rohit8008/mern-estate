@@ -40,9 +40,9 @@ export const Input = forwardRef(function Input(
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cx(
-            'w-full border rounded-lg text-sm text-slate-900 placeholder:text-slate-400 bg-white transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400',
-            error ? 'border-rose-400 focus:ring-rose-500/20 focus:border-rose-400' : 'border-slate-300',
+            'w-full border rounded-lg text-sm text-slate-900 placeholder:text-slate-500 bg-white transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-600',
+            error ? 'border-rose-500 focus:ring-rose-500 focus:border-rose-600' : 'border-slate-400',
             Icon ? 'pl-9' : 'pl-3',
             IconRight ? 'pr-9' : 'pr-3',
             'py-2',
@@ -55,8 +55,8 @@ export const Input = forwardRef(function Input(
           </span>
         )}
       </div>
-      {error && <p id={`${id}-error`} className='text-xs text-rose-600'>{error}</p>}
-      {hint && !error && <p id={`${id}-hint`} className='text-xs text-slate-400'>{hint}</p>}
+      {error && <p id={`${id}-error`} className='text-xs text-rose-700'>{error}</p>}
+      {hint && !error && <p id={`${id}-hint`} className='text-xs text-slate-600'>{hint}</p>}
     </div>
   );
 });
@@ -82,15 +82,15 @@ export const Select = forwardRef(function Select(
         aria-describedby={describedBy}
         className={cx(
           'w-full border rounded-lg text-sm text-slate-900 bg-white px-3 py-2 transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400',
-          error ? 'border-rose-400' : 'border-slate-300',
+          'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-600',
+          error ? 'border-rose-500' : 'border-slate-400',
           props.disabled && 'opacity-50 cursor-not-allowed bg-slate-50'
         )}
       >
         {children}
       </select>
-      {error && <p id={`${id}-error`} className='text-xs text-rose-600'>{error}</p>}
-      {hint && !error && <p id={`${id}-hint`} className='text-xs text-slate-400'>{hint}</p>}
+      {error && <p id={`${id}-error`} className='text-xs text-rose-700'>{error}</p>}
+      {hint && !error && <p id={`${id}-hint`} className='text-xs text-slate-600'>{hint}</p>}
     </div>
   );
 });
@@ -115,14 +115,14 @@ export const Textarea = forwardRef(function Textarea(
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cx(
-          'w-full border rounded-lg text-sm text-slate-900 placeholder:text-slate-400 bg-white px-3 py-2 transition-colors resize-none',
-          'focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400',
-          error ? 'border-rose-400' : 'border-slate-300',
+          'w-full border rounded-lg text-sm text-slate-900 placeholder:text-slate-500 bg-white px-3 py-2 transition-colors resize-none',
+          'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-600',
+          error ? 'border-rose-500' : 'border-slate-400',
           props.disabled && 'opacity-50 cursor-not-allowed'
         )}
       />
-      {error && <p id={`${id}-error`} className='text-xs text-rose-600'>{error}</p>}
-      {hint && !error && <p id={`${id}-hint`} className='text-xs text-slate-400'>{hint}</p>}
+      {error && <p id={`${id}-error`} className='text-xs text-rose-700'>{error}</p>}
+      {hint && !error && <p id={`${id}-hint`} className='text-xs text-slate-600'>{hint}</p>}
     </div>
   );
 });

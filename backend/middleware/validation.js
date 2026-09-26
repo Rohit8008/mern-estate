@@ -262,15 +262,6 @@ export const crmValidation = {
   }).min(1),
 };
 
-// Newsletter/subscriber validation
-export const subscriberValidation = {
-  subscribe: Joi.object({
-    email: Joi.string().email().max(254).required(),
-    name: Joi.string().max(80).optional().allow(''),
-    source: Joi.string().max(80).optional().allow(''),
-  }),
-};
-
 // Listing admin action validations
 export const listingActionValidation = {
   assignAgent: Joi.object({

@@ -149,7 +149,7 @@ function formatFrom(entry) {
  * @param {string} [opts.tenantId] workspace to send as; defaults to the current
  *        request's workspace, which is what every in-request caller wants
  */
-export async function sendMail({ to, subject, text, html, replyTo, tenantId = getTenantId() }) {
+export async function sendMail({ to, subject, text, html, replyTo, headers, tenantId = getTenantId() }) {
   // Tests must never open a socket to a real mail server: it makes the suite
   // slow, flaky and dependent on whoever's credentials are in .env.
   if (process.env.NODE_ENV === 'test') {
@@ -165,7 +165,7 @@ export async function sendMail({ to, subject, text, html, replyTo, tenantId = ge
   }
 
   try {
-    await transport.sendMail({ from: formatFrom(entry), to, subject, text, html, replyTo });
+    await transport.sendMail({ from: formatFrom(entry), to, subject, text, html, replyTo, headers });
     return { sent: true, via: entry ? 'workspace' : 'platform' };
   } catch (e) {
     console.error('[mailer] sendMail error', e);

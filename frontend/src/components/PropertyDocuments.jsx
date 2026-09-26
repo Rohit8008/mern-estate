@@ -100,10 +100,11 @@ export default function PropertyDocuments({ listingId, canEdit }) {
         <div className='flex items-center gap-2'>
           <button
             onClick={loadDocs}
-            className='p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             title={t('propertyDocuments.refresh')}
+            aria-label='Refresh documents'
           >
-            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <svg aria-hidden='true' className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' />
             </svg>
           </button>
@@ -113,6 +114,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                 ref={fileInputRef}
                 type='file'
                 multiple
+                aria-label='Upload documents'
                 className='hidden'
                 onChange={handleFileInput}
                 accept='.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.zip'
@@ -122,7 +124,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                 disabled={uploading}
                 className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1.5'
               >
-                <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                <svg aria-hidden='true' className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                   <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 4v16m8-8H4' />
                 </svg>
                 {uploading ? 'Uploading...' : 'Upload'}
@@ -139,11 +141,19 @@ export default function PropertyDocuments({ listingId, canEdit }) {
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4 ${
+          role='button'
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
             dragOver ? 'border-slate-400 bg-slate-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
           }`}
         >
-          <svg className='w-8 h-8 text-slate-300 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <svg aria-hidden='true' className='w-8 h-8 text-slate-300 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' />
           </svg>
           <p className='text-sm text-slate-500'>
@@ -152,7 +162,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
               : <><span className='font-medium text-slate-700'>{t('propertyDocuments.dropFilesHere')}</span>{' '}{t('propertyDocuments.orClickToBrowse')}</>
             }
           </p>
-          <p className='text-xs text-slate-400 mt-1'>{t('propertyDocuments.pdfWordExcelImagesUpTo')}</p>
+          <p className='text-xs text-slate-500 mt-1'>{t('propertyDocuments.pdfWordExcelImagesUpTo')}</p>
         </div>
       )}
 
@@ -165,10 +175,10 @@ export default function PropertyDocuments({ listingId, canEdit }) {
         </div>
       ) : docs.length === 0 ? (
         <div className='text-center py-8'>
-          <svg className='w-10 h-10 text-slate-200 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <svg aria-hidden='true' className='w-10 h-10 text-slate-200 mx-auto mb-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' />
           </svg>
-          <p className='text-sm text-slate-400'>{t('propertyDocuments.noDocumentsUploadedYet')}</p>
+          <p className='text-sm text-slate-500'>{t('propertyDocuments.noDocumentsUploadedYet')}</p>
         </div>
       ) : (
         <div className='space-y-2'>
@@ -189,13 +199,13 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                   /* ── Inline delete confirmation ── */
                   <div className='flex items-center gap-3 px-3 py-3'>
                     <div className='w-8 h-8 rounded-lg bg-rose-100 border border-rose-200 flex items-center justify-center shrink-0'>
-                      <svg className='w-4 h-4 text-rose-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <svg aria-hidden='true' className='w-4 h-4 text-rose-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                         <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' />
                       </svg>
                     </div>
                     <div className='flex-1 min-w-0'>
                       <p className='text-sm font-medium text-rose-800 truncate'>{doc.title}</p>
-                      <p className='text-xs text-rose-500'>{t('propertyDocuments.deleteThisDocumentThisCannotBe')}</p>
+                      <p className='text-xs text-rose-600'>{t('propertyDocuments.deleteThisDocumentThisCannotBe')}</p>
                     </div>
                     <div className='flex items-center gap-2 shrink-0'>
                       <button
@@ -210,7 +220,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                       >
                         {deleting ? (
                           <>
-                            <svg className='w-3 h-3 animate-spin' fill='none' viewBox='0 0 24 24'>
+                            <svg aria-hidden='true' className='w-3 h-3 animate-spin' fill='none' viewBox='0 0 24 24'>
                               <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
                               <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8v8z' />
                             </svg>{t('propertyDocuments.deleting')}</>
@@ -221,34 +231,36 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                 ) : (
                   /* ── Normal row ── */
                   <div className='flex items-center gap-3 p-3'>
-                    <div className={`w-10 h-10 rounded-lg border flex items-center justify-center text-lg shrink-0 ${mime.color}`}>
+                    <div className={`w-10 h-10 rounded-lg border flex items-center justify-center text-lg shrink-0 ${mime.color}`} aria-hidden='true'>
                       {mime.icon}
                     </div>
                     <div className='flex-1 min-w-0'>
                       <p className='text-sm font-medium text-slate-800 truncate'>{doc.title}</p>
-                      <p className='text-xs text-slate-400 mt-0.5'>
+                      <p className='text-xs text-slate-500 mt-0.5'>
                         {mime.label} · {fmtSize(doc.size)} · {fmtDate(doc.createdAt)}
                       </p>
                     </div>
-                    <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                    <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity'>
                       <a
                         href={doc.url}
                         target='_blank'
                         rel='noreferrer'
-                        className='p-1.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors'
+                        className='p-1.5 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors'
                         title={t('propertyDocuments.downloadView')}
+                        aria-label={`Download or view ${doc.title}`}
                       >
-                        <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                        <svg aria-hidden='true' className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' />
                         </svg>
                       </a>
                       {canEdit && (
                         <button
                           onClick={() => setConfirmDeleteId(doc._id)}
-                          className='p-1.5 rounded hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition-colors'
+                          className='p-1.5 rounded hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition-colors'
                           title={t('propertyDocuments.delete')}
+                          aria-label={`Delete ${doc.title}`}
                         >
-                          <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <svg aria-hidden='true' className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' />
                           </svg>
                         </button>

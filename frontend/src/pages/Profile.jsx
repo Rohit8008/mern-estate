@@ -168,6 +168,29 @@ export default function Profile() {
     }
   };
 
+  // DPDP s.11: a person may ask for what is held about them. The endpoint
+  // existed for months with nothing in the app calling it.
+  const [exporting, setExporting] = useState(false);
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const data = await apiClient.get('/data-rights/export/me');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `real-vista-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError(err?.message || t('profile.exportFailed'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleSignOut = async () => {
     setUserSignedOut(true);
     try {
@@ -344,10 +367,19 @@ export default function Profile() {
             </form>
           </Card>
 
+          {/* Your data */}
+          <Card>
+            <CardHeader><CardTitle>{t('profile.yourData')}</CardTitle></CardHeader>
+            <p className='text-sm text-slate-600 mb-4'>{t('profile.yourDataBody')}</p>
+            <Button type='button' variant='secondary' onClick={handleExportData} disabled={exporting} className='w-full justify-center'>
+              {exporting ? t('profile.preparingDownload') : t('profile.downloadMyData')}
+            </Button>
+          </Card>
+
           {/* Danger Zone */}
           <Card className='border-rose-200'>
             <CardHeader><CardTitle className='text-rose-600'>{t('profile.dangerZone')}</CardTitle></CardHeader>
-            <p className='text-sm text-slate-500 mb-4'>{t('profile.deletingYourAccountIsPermanentAnd')}</p>
+            <p className='text-sm text-slate-600 mb-4'>{t('profile.deletingYourAccountIsPermanentAnd')}</p>
             <button
               type='button'
               onClick={() => setPendingDeleteAccount(true)}

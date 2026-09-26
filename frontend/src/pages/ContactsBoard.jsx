@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -309,26 +309,32 @@ export default function ContactsBoard() {
           {/* View tabs */}
           <div className='flex items-center gap-1 bg-slate-100 p-1 rounded-lg'>
             <button
+              type='button'
+              aria-pressed={view === 'cards'}
               onClick={() => setView('cards')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewGrid className='w-4 h-4' />{t('contacts.cards')}</button>
+              <HiViewGrid className='w-4 h-4' aria-hidden='true' />{t('contacts.cards')}</button>
             <button
+              type='button'
+              aria-pressed={view === 'board'}
               onClick={() => setView('board')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'board' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewBoards className='w-4 h-4' />{t('contacts.board')}</button>
+              <HiViewBoards className='w-4 h-4' aria-hidden='true' />{t('contacts.board')}</button>
             <button
+              type='button'
+              aria-pressed={view === 'table'}
               onClick={() => setView('table')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewList className='w-4 h-4' />{t('contacts.table')}</button>
+              <HiViewList className='w-4 h-4' aria-hidden='true' />{t('contacts.table')}</button>
           </div>
 
           <div className='h-6 w-px bg-slate-200 hidden lg:block' />
@@ -336,16 +342,17 @@ export default function ContactsBoard() {
           {/* Search and filters */}
           <div className='flex flex-wrap items-center gap-2 flex-1'>
             <div className='relative flex-1 max-w-xs'>
-              <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' />
+              <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' aria-hidden='true' />
               <input
-                className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all placeholder:text-slate-400'
+                className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 transition-all placeholder:text-slate-500'
                 placeholder={t('contacts.searchClients')}
+                aria-label={t('contacts.searchClients')}
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
               />
               {q && (
-                <button onClick={() => setParam('q', '')} className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'>
-                  <HiX className='w-4 h-4' />
+                <button type='button' onClick={() => setParam('q', '')} aria-label='Clear search' className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'>
+                  <HiX className='w-4 h-4' aria-hidden='true' />
                 </button>
               )}
             </div>
@@ -353,7 +360,8 @@ export default function ContactsBoard() {
             <select
               value={statusFilter}
               onChange={(e) => setParam('status', e.target.value)}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+              aria-label='Filter by status'
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all'
             >
               <option value=''>{t('contacts.allStatuses')}</option>
               {STATUS_ORDER.map((s) => (
@@ -364,7 +372,8 @@ export default function ContactsBoard() {
             <select
               value={temperatureFilter}
               onChange={(e) => setParam('temperature', e.target.value)}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+              aria-label='Filter by temperature'
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all'
             >
               <option value=''>{t('contacts.anyTemperature')}</option>
               <option value='hot'>{t('contacts.hot')}</option>
@@ -375,7 +384,8 @@ export default function ContactsBoard() {
             <select
               value={typeFilter}
               onChange={(e) => setParam('contactType', e.target.value)}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+              aria-label='Filter by contact type'
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all'
             >
               <option value=''>{t('contacts.allTypes')}</option>
               <option value='lead'>{t('contacts.leads')}</option>
@@ -395,12 +405,12 @@ export default function ContactsBoard() {
         {/* Error */}
         {error && (
           <div className='px-4 py-2.5 text-sm bg-rose-50 border-b border-rose-200 text-rose-700 flex items-center gap-2'>
-            <svg className='w-4 h-4 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+            <svg className='w-4 h-4 flex-shrink-0' aria-hidden='true' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' />
             </svg>
             {error}
-            <button onClick={() => setError('')} className='ml-auto text-rose-500 hover:text-rose-700'>
-              <HiX className='w-4 h-4' />
+            <button type='button' onClick={() => setError('')} aria-label='Dismiss error' className='ml-auto text-rose-600 hover:text-rose-700'>
+              <HiX className='w-4 h-4' aria-hidden='true' />
             </button>
           </div>
         )}
@@ -460,7 +470,17 @@ export default function ContactsBoard() {
                           draggable
                           onDragStart={(e) => e.dataTransfer.setData('text/plain', contact._id)}
                           onClick={() => setSelectedContact(contact)}
-                          className='bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all'
+                          role='button'
+                          tabIndex={0}
+                          aria-label={contact.name}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedContact(contact);
+                            }
+                          }}
+                          className='bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
                         >
                           <div className='flex items-start justify-between gap-2'>
                             <span className='text-sm font-medium text-slate-900 truncate'>{contact.name}</span>
@@ -484,14 +504,14 @@ export default function ContactsBoard() {
                               <div className='flex-1 h-1 bg-slate-100 rounded-full overflow-hidden'>
                                 <div className='h-full bg-indigo-400' style={{ width: `${contact.score}%` }} />
                               </div>
-                              <span className='text-[10px] text-slate-400 tabular-nums'>{contact.score}</span>
+                              <span className='text-[10px] text-slate-500 tabular-nums'>{contact.score}</span>
                             </div>
                           )}
                         </div>
                       ))}
 
                       {!items.length && (
-                        <p className='text-xs text-slate-400 text-center py-6'>{t('contacts.dropALeadHere')}</p>
+                        <p className='text-xs text-slate-500 text-center py-6'>{t('contacts.dropALeadHere')}</p>
                       )}
                     </div>
                   </div>
@@ -515,14 +535,16 @@ export default function ContactsBoard() {
                 <div key={status} className='mb-6 last:mb-0'>
                   {/* Group header */}
                   <button
+                    type='button'
+                    aria-expanded={!isCollapsed}
                     onClick={() => toggleGroup(status)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg mb-3 transition-colors ${config.bgLight} hover:opacity-90`}
                   >
                     <div className={`w-1 h-6 rounded-full ${config.color}`} />
                     {isCollapsed ? (
-                      <HiChevronRight className={`w-4 h-4 ${config.textColor}`} />
+                      <HiChevronRight className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                     ) : (
-                      <HiChevronDown className={`w-4 h-4 ${config.textColor}`} />
+                      <HiChevronDown className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                     )}
                     <span className={`font-semibold ${config.textColor}`}>{config.label}</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${config.color} text-white`}>
@@ -548,9 +570,9 @@ export default function ContactsBoard() {
                       {/* Add client card */}
                       <button
                         onClick={() => setShowCreateModal(true)}
-                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/30 transition-colors'
+                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors'
                       >
-                        <HiPlus className='w-6 h-6 mb-2' />
+                        <HiPlus className='w-6 h-6 mb-2' aria-hidden='true' />
                         <span className='text-sm font-medium'>{t('contacts.addClient')}</span>
                       </button>
                     </div>
@@ -562,7 +584,7 @@ export default function ContactsBoard() {
             {contacts.length === 0 && !loading && (
               <div className='flex flex-col items-center justify-center py-20 text-center'>
                 <div className='w-16 h-16 rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 flex items-center justify-center mx-auto mb-5'>
-                  <HiUsers className='w-8 h-8 text-indigo-500' />
+                  <HiUsers className='w-8 h-8 text-indigo-500' aria-hidden='true' />
                 </div>
                 <h3 className='text-lg font-semibold text-slate-900 mb-1.5'>{t('contacts.noClientsYet')}</h3>
                 <p className='text-slate-500 text-sm mb-6 max-w-xs'>{t('contacts.addYourFirstClientToStart')}</p>
@@ -608,16 +630,18 @@ export default function ContactsBoard() {
                       <tr>
                         <td colSpan={7} className='px-0 py-0'>
                           <button
+                            type='button'
+                            aria-expanded={!isCollapsed}
                             onClick={() => toggleGroup(status)}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 ${config.bgLight} border-l-4 ${config.border.replace('border-', 'border-l-')} hover:opacity-90 transition-colors`}
                           >
                             {isCollapsed ? (
-                              <HiChevronRight className={`w-4 h-4 ${config.textColor}`} />
+                              <HiChevronRight className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                             ) : (
-                              <HiChevronDown className={`w-4 h-4 ${config.textColor}`} />
+                              <HiChevronDown className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                             )}
                             <span className={`font-semibold text-sm ${config.textColor}`}>{config.label}</span>
-                            <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full'>
+                            <span className='text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full'>
                               {items.length}
                             </span>
                           </button>
@@ -646,11 +670,16 @@ export default function ContactsBoard() {
                                 {(contact.name?.[0] || '?').toUpperCase()}
                               </div>
                               <div className='min-w-0'>
-                                <div className='font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors'>
+                                {/* A real button: the row's onClick is mouse-only. */}
+                                <button
+                                  type='button'
+                                  onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
+                                  className='block max-w-full text-left font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                                >
                                   {contact.name}
-                                </div>
+                                </button>
                                 {contact.organization && (
-                                  <div className='text-[11px] text-slate-400 truncate'>{contact.organization}</div>
+                                  <div className='text-[11px] text-slate-500 truncate'>{contact.organization}</div>
                                 )}
                                 {contact.tagIds?.length > 0 && (
                                   <div className='flex items-center gap-1 flex-wrap mt-1'>
@@ -672,7 +701,7 @@ export default function ContactsBoard() {
                                 {contact.email}
                               </a>
                             ) : (
-                              <span className='text-slate-400 text-[13px]'>—</span>
+                              <span className='text-slate-500 text-[13px]'>—</span>
                             )}
                           </td>
                           <td className='px-3 py-3' onClick={(e) => e.stopPropagation()}>
@@ -689,7 +718,7 @@ export default function ContactsBoard() {
                                 <WhatsAppButton compact phone={contact.phone} />
                               </span>
                             ) : (
-                              <span className='text-slate-400 text-[13px]'>—</span>
+                              <span className='text-slate-500 text-[13px]'>—</span>
                             )}
                           </td>
                           <td className='px-3 py-3'>
@@ -703,20 +732,24 @@ export default function ContactsBoard() {
                             </span>
                           </td>
                           <td className='px-4 py-3 text-right'>
-                            <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                            <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
                               <button
+                                type='button'
                                 onClick={(e) => { e.stopPropagation(); openEditModal(contact); }}
-                                className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+                                className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
                                 title={t('contacts.edit')}
+                                aria-label={`Edit ${contact.name || 'contact'}`}
                               >
-                                <HiPencil className='w-4 h-4' />
+                                <HiPencil className='w-4 h-4' aria-hidden='true' />
                               </button>
                               <button
+                                type='button'
                                 onClick={(e) => { e.stopPropagation(); setPendingDelete(contact._id); }}
-                                className='p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors'
+                                className='p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors'
                                 title={t('contacts.delete')}
+                                aria-label={`Delete ${contact.name || 'contact'}`}
                               >
-                                <HiTrash className='w-4 h-4' />
+                                <HiTrash className='w-4 h-4' aria-hidden='true' />
                               </button>
                             </div>
                           </td>
@@ -730,7 +763,7 @@ export default function ContactsBoard() {
                     <td colSpan={6} className='px-4 py-16 text-center'>
                       <div className='flex flex-col items-center gap-3'>
                         <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
-                          <HiUser className='w-6 h-6 text-slate-400' />
+                          <HiUser className='w-6 h-6 text-slate-400' aria-hidden='true' />
                         </div>
                         <p className='text-slate-500 text-sm'>{t('contacts.noClientsFound')}</p>
                         <button
@@ -808,6 +841,7 @@ export default function ContactsBoard() {
         {isAdmin && (
           <BulkSelect
             value=''
+            aria-label='Assign selected clients to'
             onChange={(e) => { if (e.target.value) applyBulk('assign', e.target.value); }}
           >
             <option value=''>{t('contacts.assignTo')}</option>
@@ -819,6 +853,7 @@ export default function ContactsBoard() {
 
         <BulkSelect
           value=''
+          aria-label='Change status of selected clients'
           onChange={(e) => { if (e.target.value) applyBulk('status', e.target.value); }}
         >
           <option value=''>{t('contacts.changeStatus')}</option>
@@ -840,8 +875,19 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
 
   return (
     <div
-      className='bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group'
+      className='bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
       onClick={onSelect}
+      role='button'
+      tabIndex={0}
+      aria-label={contact.name}
+      onKeyDown={(e) => {
+        // Only the card itself: Enter/Space on a nested button or link is its own.
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       {/* Header */}
       <div className='flex items-start justify-between mb-3'>
@@ -862,24 +908,28 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
               )}
             </div>
             {contact.organization && (
-              <p className='text-xs text-slate-400 truncate'>{contact.organization}</p>
+              <p className='text-xs text-slate-500 truncate'>{contact.organization}</p>
             )}
           </div>
         </div>
-        <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+        <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
           <button
+            type='button'
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className='p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+            className='p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             title={t('contacts.edit')}
+            aria-label={`Edit ${contact.name || 'contact'}`}
           >
-            <HiPencil className='w-3.5 h-3.5' />
+            <HiPencil className='w-3.5 h-3.5' aria-hidden='true' />
           </button>
           <button
+            type='button'
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className='p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+            className='p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50'
             title={t('contacts.delete')}
+            aria-label={`Delete ${contact.name || 'contact'}`}
           >
-            <HiTrash className='w-3.5 h-3.5' />
+            <HiTrash className='w-3.5 h-3.5' aria-hidden='true' />
           </button>
         </div>
       </div>
@@ -892,7 +942,7 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
             onClick={(e) => e.stopPropagation()}
             className='flex items-center gap-2 text-xs text-slate-600 hover:text-indigo-600 truncate'
           >
-            <HiMail className='w-3.5 h-3.5 text-slate-400 flex-shrink-0' />
+            <HiMail className='w-3.5 h-3.5 text-slate-400 flex-shrink-0' aria-hidden='true' />
             <span className='truncate'>{contact.email}</span>
           </a>
         )}
@@ -902,7 +952,7 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
             onClick={(e) => e.stopPropagation()}
             className='flex items-center gap-2 text-xs text-slate-600 hover:text-indigo-600'
           >
-            <HiPhone className='w-3.5 h-3.5 text-slate-400 flex-shrink-0' />
+            <HiPhone className='w-3.5 h-3.5 text-slate-400 flex-shrink-0' aria-hidden='true' />
             {contact.phone}
           </a>
         )}
@@ -916,14 +966,18 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
       {/* Status badge with dropdown */}
       <div className='relative'>
         <button
+          type='button'
           onClick={(e) => {
             e.stopPropagation();
             setShowStatusDropdown(showStatusDropdown ? null : contact._id);
           }}
+          aria-haspopup='true'
+          aria-expanded={!!showStatusDropdown}
+          aria-label={`Status: ${config.label}. Change status`}
           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${config.color} text-white hover:opacity-90 transition-opacity`}
         >
           {config.label}
-          <HiChevronDown className='w-3 h-3' />
+          <HiChevronDown className='w-3 h-3' aria-hidden='true' />
         </button>
         {showStatusDropdown && (
           <div
@@ -935,6 +989,8 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
               return (
                 <button
                   key={s}
+                  type='button'
+                  aria-current={contact.status === s ? 'true' : undefined}
                   onClick={() => onStatusChange(s)}
                   className={`w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2 ${
                     contact.status === s ? 'bg-slate-50 font-medium' : ''
@@ -942,7 +998,7 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
                 >
                   <div className={`w-2 h-2 rounded-full ${sConfig.color}`} />
                   {sConfig.label}
-                  {contact.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' />}
+                  {contact.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' aria-hidden='true' />}
                 </button>
               );
             })}
@@ -1074,7 +1130,7 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
 
         {/* Requirements section */}
         <div className='border-t border-slate-100 pt-4'>
-          <p className='text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3'>{t('contacts.requirements')}</p>
+          <p className='text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3'>{t('contacts.requirements')}</p>
           <div className='space-y-3'>
             <Select label={t('contacts.propertyType')} value={formData.propertyType} onChange={set('propertyType')}>
               <option value=''>{t('contacts.any')}</option>
@@ -1140,6 +1196,16 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
   const config = STATUS_CONFIG[c.status] || STATUS_CONFIG.lead;
   const [activeTab, setActiveTab] = useState('overview');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const closeRef = useRef(null);
+  const titleId = useId();
+
+  // A modal side panel: focus starts inside it (once, on open) and Escape closes it.
+  useEffect(() => { closeRef.current?.focus(); }, []);
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';
@@ -1151,6 +1217,9 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
       <div
         className='w-full max-w-2xl h-full bg-white shadow-2xl overflow-hidden flex flex-col animate-slide-in-right'
         style={{ animation: 'slideInRight 0.2s ease-out' }}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby={titleId}
       >
         {/* Header */}
         <div className='bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0'>
@@ -1162,7 +1231,7 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
                 {(c.name?.[0] || '?').toUpperCase()}
               </div>
               <div className='min-w-0'>
-                <h2 className='text-xl font-bold text-slate-900 break-words'>{c.name}</h2>
+                <h2 id={titleId} className='text-xl font-bold text-slate-900 break-words'>{c.name}</h2>
                 {c.organization && <p className='text-sm text-slate-500'>{c.organization}</p>}
               </div>
             </div>
@@ -1171,20 +1240,23 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
                 to={`/clients/${c._id}`}
                 className='px-3 py-1.5 rounded-lg bg-slate-900 text-sm text-white hover:bg-slate-800 flex items-center gap-1.5 whitespace-nowrap transition-colors'
               >
-                <HiEye className='w-4 h-4' />{t('contacts.viewDeals')}</Link>
+                <HiEye className='w-4 h-4' aria-hidden='true' />{t('contacts.viewDeals')}</Link>
               <button
+                type='button'
                 onClick={onEdit}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 whitespace-nowrap transition-colors'
               >
-                <HiPencil className='w-4 h-4' />{t('contacts.edit')}</button>
+                <HiPencil className='w-4 h-4' aria-hidden='true' />{t('contacts.edit')}</button>
               <button
+                type='button'
                 onClick={onDelete}
+                aria-label={t('contacts.delete')}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-rose-600 hover:bg-rose-50 hover:border-rose-200 flex items-center gap-1.5 transition-colors'
               >
-                <HiTrash className='w-4 h-4' />
+                <HiTrash className='w-4 h-4' aria-hidden='true' />
               </button>
-              <button onClick={onClose} className='p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors'>
-                <HiX className='w-5 h-5' />
+              <button ref={closeRef} type='button' onClick={onClose} aria-label='Close' className='p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors'>
+                <HiX className='w-5 h-5' aria-hidden='true' />
               </button>
             </div>
           </div>
@@ -1192,11 +1264,15 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
           {/* Status badge */}
           <div className='mt-4 relative inline-block'>
             <button
+              type='button'
               onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              aria-haspopup='true'
+              aria-expanded={showStatusDropdown}
+              aria-label={`Status: ${config.label}. Change status`}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${config.color} text-white hover:opacity-90 transition-opacity`}
             >
               {config.label}
-              <HiChevronDown className='w-4 h-4' />
+              <HiChevronDown className='w-4 h-4' aria-hidden='true' />
             </button>
             {showStatusDropdown && (
               <div className='absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-xl z-30 py-1'>
@@ -1205,6 +1281,8 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
                   return (
                     <button
                       key={s}
+                      type='button'
+                      aria-current={c.status === s ? 'true' : undefined}
                       onClick={() => { onStatusChange(s); setShowStatusDropdown(false); }}
                       className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 ${
                         c.status === s ? 'bg-slate-50 font-medium' : ''
@@ -1212,7 +1290,7 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
                     >
                       <div className={`w-2.5 h-2.5 rounded-full ${sConfig.color}`} />
                       {sConfig.label}
-                      {c.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' />}
+                      {c.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' aria-hidden='true' />}
                     </button>
                   );
                 })}
@@ -1230,6 +1308,8 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
             ].map((tab) => (
               <button
                 key={tab.id}
+                type='button'
+                aria-pressed={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${
                   activeTab === tab.id
@@ -1237,7 +1317,7 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
                     : 'text-slate-500 border-transparent hover:text-slate-700'
                 }`}
               >
-                <tab.icon className='w-4 h-4' />
+                <tab.icon className='w-4 h-4' aria-hidden='true' />
                 {tab.label}
               </button>
             ))}
@@ -1251,34 +1331,34 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
               {/* Contact Details */}
               <div className='bg-slate-50 rounded-xl p-5'>
                 <h3 className='font-semibold text-slate-900 mb-4 flex items-center gap-2'>
-                  <HiUser className='w-5 h-5 text-slate-400' />{t('contacts.contactDetails')}</h3>
+                  <HiUser className='w-5 h-5 text-slate-400' aria-hidden='true' />{t('contacts.contactDetails')}</h3>
                 <div className='grid grid-cols-2 gap-4'>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.email')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.email')}</span>
                     {c.email ? (
                       <a href={`mailto:${c.email}`} className='block text-sm text-indigo-600 hover:underline mt-1 truncate'>
                         {c.email}
                       </a>
                     ) : (
-                      <p className='text-sm text-slate-400 mt-1'>—</p>
+                      <p className='text-sm text-slate-500 mt-1'>—</p>
                     )}
                   </div>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.phone')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.phone')}</span>
                     {c.phone ? (
                       <a href={`tel:${c.phone}`} className='block text-sm text-slate-900 hover:text-indigo-600 mt-1'>
                         {c.phone}
                       </a>
                     ) : (
-                      <p className='text-sm text-slate-400 mt-1'>—</p>
+                      <p className='text-sm text-slate-500 mt-1'>—</p>
                     )}
                   </div>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.organization')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.organization')}</span>
                     <p className='text-sm text-slate-900 mt-1'>{c.organization || '—'}</p>
                   </div>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.source')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.source')}</span>
                     <p className='text-sm text-slate-900 mt-1'>{c.source || '—'}</p>
                   </div>
                 </div>
@@ -1287,25 +1367,25 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
               {/* Notes */}
               <div className='bg-slate-50 rounded-xl p-5'>
                 <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                  <HiChat className='w-5 h-5 text-slate-400' />{t('contacts.notes')}</h3>
+                  <HiChat className='w-5 h-5 text-slate-400' aria-hidden='true' />{t('contacts.notes')}</h3>
                 <p className='text-sm text-slate-700 whitespace-pre-wrap'>{c.notes || 'No notes added yet.'}</p>
               </div>
 
               {/* Timestamps */}
               <div className='bg-slate-50 rounded-xl p-5'>
                 <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                  <HiCalendar className='w-5 h-5 text-slate-400' />{t('contacts.timeline')}</h3>
+                  <HiCalendar className='w-5 h-5 text-slate-400' aria-hidden='true' />{t('contacts.timeline')}</h3>
                 <div className='grid grid-cols-2 gap-4'>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.created')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.created')}</span>
                     <p className='text-sm text-slate-900 mt-1'>{formatDate(c.createdAt)}</p>
                   </div>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.lastUpdated')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.lastUpdated')}</span>
                     <p className='text-sm text-slate-900 mt-1'>{formatDate(c.updatedAt)}</p>
                   </div>
                   <div>
-                    <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.lastContact')}</label>
+                    <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('contacts.lastContact')}</span>
                     <p className='text-sm text-slate-900 mt-1'>{formatDate(c.lastContactAt)}</p>
                   </div>
                 </div>
@@ -1318,14 +1398,14 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
                     href={`mailto:${c.email}`}
                     className='px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition-colors flex items-center gap-2'
                   >
-                    <HiMail className='w-4 h-4' />{t('contacts.sendEmail')}</a>
+                    <HiMail className='w-4 h-4' aria-hidden='true' />{t('contacts.sendEmail')}</a>
                 )}
                 {c.phone && (
                   <a
                     href={`tel:${c.phone}`}
                     className='px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2'
                   >
-                    <HiPhone className='w-4 h-4' />{t('contacts.call')}</a>
+                    <HiPhone className='w-4 h-4' aria-hidden='true' />{t('contacts.call')}</a>
                 )}
               </div>
             </div>
@@ -1334,7 +1414,7 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
           {activeTab === 'activity' && (
             <div className='text-center py-12'>
               <div className='w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4'>
-                <HiCalendar className='w-8 h-8 text-slate-400' />
+                <HiCalendar className='w-8 h-8 text-slate-400' aria-hidden='true' />
               </div>
               <h3 className='text-lg font-semibold text-slate-900 mb-2'>{t('contacts.noActivityYet')}</h3>
               <p className='text-slate-500 text-sm'>{t('contacts.activityHistoryWillAppearHere')}</p>
@@ -1346,7 +1426,7 @@ function ContactDetailPanel({ contact, onClose, onEdit, onDelete, onStatusChange
       {/* Click outside to close. order-first: it sat after the panel, so as
           a flex-1 it took the left of the row and pushed the panel off the
           right edge where justify-end meant to put it. */}
-      <div className='order-first flex-1 h-full' onClick={onClose} />
+      <div className='order-first flex-1 h-full' onClick={onClose} aria-hidden='true' />
     </div>
   );
 }

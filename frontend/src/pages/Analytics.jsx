@@ -214,6 +214,8 @@ export default function Analytics() {
                 return (
                   <button
                     key={range.days}
+                    type="button"
+                    aria-pressed={isActive}
                     onClick={() => setQuickRange(range.days)}
                     className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       isActive ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -225,20 +227,22 @@ export default function Analytics() {
               })}
             </div>
             {/* Date Pickers */}
-            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
-              <HiFilter className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5" role="group" aria-label="Date range">
+              <HiFilter className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
               <input
                 type="date"
                 value={dateRange.startDate}
                 onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                className="text-sm border-none focus:outline-none focus:ring-0 bg-transparent text-slate-700"
+                aria-label="Start date"
+                className="text-sm border-none rounded focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-brand-500 bg-transparent text-slate-700"
               />
-              <span className="text-slate-300 text-sm">–</span>
+              <span className="text-slate-400 text-sm" aria-hidden="true">–</span>
               <input
                 type="date"
                 value={dateRange.endDate}
                 onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                className="text-sm border-none focus:outline-none focus:ring-0 bg-transparent text-slate-700"
+                aria-label="End date"
+                className="text-sm border-none rounded focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-brand-500 bg-transparent text-slate-700"
               />
             </div>
             <Button
@@ -260,6 +264,8 @@ export default function Analytics() {
         {tabs.map(tab => (
           <button
             key={tab.id}
+            type="button"
+            aria-pressed={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
               activeTab === tab.id
@@ -267,7 +273,7 @@ export default function Analytics() {
                 : 'text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/60'
             }`}
           >
-            <tab.icon className="w-4 h-4" />
+            <tab.icon className="w-4 h-4" aria-hidden="true" />
             {tab.label}
           </button>
         ))}
@@ -384,7 +390,7 @@ export default function Analytics() {
                               <div className="text-sm text-slate-500 capitalize">{item.status}</div>
                             </div>
                           </div>
-                          <div className="text-sm text-slate-400">
+                          <div className="text-sm text-slate-500">
                             {formatDate(item.updatedAt, {
                               day: 'numeric',
                               month: 'short',
@@ -698,7 +704,7 @@ export default function Analytics() {
                     disabled={!data.agents?.agents?.length}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <HiDownload className="w-4 h-4" />{t('analytics.export')}</button>
+                    <HiDownload className="w-4 h-4" aria-hidden="true" />{t('analytics.export')}</button>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -716,7 +722,7 @@ export default function Analytics() {
                     <tbody className="divide-y divide-slate-100">
                       {!data.agents.agents?.length && (
                         <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-400">{t('analytics.noAgentActivityInThisDate')}</td>
+                          <td colSpan={6} className="p-8 text-center text-slate-500">{t('analytics.noAgentActivityInThisDate')}</td>
                         </tr>
                       )}
                       {data.agents.agents?.map(agent => (
@@ -785,7 +791,7 @@ function FunnelStep({ label, value, color, highlight }) {
 function FunnelArrow() {
   return (
     <div className="flex-shrink-0 px-1 sm:px-2 hidden sm:block">
-      <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="w-8 h-8 text-slate-300" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
       </svg>
     </div>

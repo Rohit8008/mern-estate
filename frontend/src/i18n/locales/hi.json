@@ -1236,11 +1236,9 @@
   },
   "footer": {
     "2026RealVistaAllRightsReserved": "© 2026 Real Vista. सर्वाधिकार सुरक्षित।",
-    "bathindaPunjab151001": "बठिंडा, पंजाब 151001",
-    "endToEndRealEstatePlatform": "संपूर्ण रियल एस्टेट प्लेटफ़ॉर्म। खरीदारों के लिए सत्यापित लिस्टिंग, और उन्हें बेचने वाली एजेंसियों के लिए पूरा सीआरएम।",
+    "endToEndRealEstatePlatform": "रियल एस्टेट एजेंसियों के लिए सीआरएम: लीड, मालिक, संपत्तियाँ और डील, एक ही वर्कस्पेस में।",
     "forAgencies": "एजेंसियों के लिए",
     "getInTouch": "संपर्क करें",
-    "getNewListingsInYourInbox": "नई लिस्टिंग अपने इनबॉक्स में पाएँ",
     "legal": "कानूनी",
     "platform": "प्लेटफ़ॉर्म",
     "privacyPolicy": "गोपनीयता नीति",
@@ -1248,8 +1246,9 @@
     "registrationsClosed": "पंजीकरण बंद",
     "talkToTheTeam": "टीम से बात करें",
     "termsOfService": "सेवा की शर्तें",
-    "yourEmailCom": "your@email.com",
-    "androidApp": "Android ऐप"
+    "androidApp": "Android ऐप",
+    "cookiePolicy": "कुकी नीति",
+    "refundPolicy": "रिफ़ंड"
   },
   "forgotPassword": {
     "backToSignIn": "साइन इन पर वापस",
@@ -1299,7 +1298,6 @@
     "close": "बंद करें",
     "closeDialog": "संवाद बंद करें",
     "demoRequestConfirmed": "डेमो अनुरोध की पुष्टि हुई",
-    "everyListingIsReviewedBeforeIt": "हर लिस्टिंग लाइव होने से पहले जाँची जाती है, इसलिए जो आप देखते हैं वह अब भी बाज़ार में है।",
     "findTheRightProperty": "सही संपत्ति खोजें,",
     "findYourNextProperty": "अपनी अगली संपत्ति खोजें",
     "fullName": "पूरा नाम *",
@@ -1327,7 +1325,6 @@
     "theQuestionsAgencyOwnersAskOn": "पहली कॉल पर एजेंसी मालिक जो सवाल पूछते हैं।",
     "toConfirmATime": "समय तय करने के लिए।",
     "upAndRunningInThreeSteps": "तीन चरणों में शुरू",
-    "verifiedListingsForBuyersAndA": "खरीदारों के लिए सत्यापित लिस्टिंग, और उन्हें बेचने वाली एजेंसियों के लिए पूरा सीआरएम।",
     "weWillReachOutWithin": "हम संपर्क करेंगे",
     "whatDoYouWantToSee": "आप क्या देखना चाहते हैं?",
     "withoutTheNoise": "बिना शोर के।",
@@ -1335,9 +1332,10 @@
   },
   "legal": {
     "backToHome": "होम पर वापस",
-    "mittalrohit701GmailCom": "mittalrohit701@gmail.com",
     "privacyPolicy": "गोपनीयता नीति",
-    "termsOfService": "सेवा की शर्तें"
+    "termsOfService": "सेवा की शर्तें",
+    "cookiePolicy": "कुकी नीति",
+    "refundPolicy": "रिफ़ंड और रद्दीकरण नीति"
   },
   "listing": {
     "additionalInformation": "अतिरिक्त जानकारी",
@@ -1583,7 +1581,7 @@
     "deleteAccount": "खाता हटाएँ",
     "deleteMyAccount": "मेरा खाता हटाएँ",
     "deleteYourAccount": "अपना खाता हटाएँ?",
-    "deletingYourAccountIsPermanentAnd": "खाता हटाना स्थायी है और इसे पूर्ववत नहीं किया जा सकता।",
+    "deletingYourAccountIsPermanentAnd": "खाता हटाने से आपका नाम, ईमेल, फ़ोन और प्रोफ़ाइल विवरण स्थायी रूप से हट जाते हैं। आपने एजेंसी के लिए जो रिकॉर्ड बनाए, वे एजेंसी के पास “पूर्व टीम सदस्य” के नाम से रहते हैं।",
     "edit": "संपादित करें",
     "email": "ईमेल",
     "employee": "कर्मचारी",
@@ -1616,12 +1614,17 @@
     "state": "राज्य",
     "takePhoto": "फ़ोटो लें",
     "tellUsAboutYourself": "हमें अपने बारे में बताएँ…",
-    "thisActionCannotBeUndoneAll": "इस कार्रवाई को पूर्ववत नहीं किया जा सकता। आपका सारा डेटा स्थायी रूप से हटा दिया जाएगा।",
+    "thisActionCannotBeUndoneAll": "इसे पूर्ववत नहीं किया जा सकता। आपके व्यक्तिगत विवरण हटा दिए जाएँगे और आप साइन आउट हो जाएँगे। आपके बनाए रिकॉर्ड आपके नाम के बिना एजेंसी के पास रहेंगे।",
     "updatePassword": "पासवर्ड अपडेट करें",
     "uploadedSuccessfully": "सफलतापूर्वक अपलोड हुआ!",
     "user": "उपयोगकर्ता",
     "username": "उपयोगकर्ता नाम",
-    "yourListings": "आपकी लिस्टिंग"
+    "yourListings": "आपकी लिस्टिंग",
+    "yourData": "आपका डेटा",
+    "yourDataBody": "अपनी प्रोफ़ाइल और अपने बनाए रिकॉर्ड की एक कॉपी JSON फ़ाइल के रूप में डाउनलोड करें।",
+    "downloadMyData": "मेरा डेटा डाउनलोड करें",
+    "preparingDownload": "डाउनलोड तैयार हो रहा है…",
+    "exportFailed": "डाउनलोड तैयार नहीं हो सका। कृपया फिर से प्रयास करें।"
   },
   "properties": {
     "addAProperty": "संपत्ति जोड़ें",
@@ -1805,7 +1808,6 @@
     "showingResultsFor": "इसके परिणाम दिखा रहे हैं \"",
     "sortResults": "परिणाम क्रमबद्ध करें",
     "tryBroaderSearchTermsLikeApartment": "विशिष्ट पतों के बजाय \"apartment\" जैसे व्यापक शब्द आज़माएँ",
-    "verifiedListings": "सत्यापित लिस्टिंग",
     "propertyCount_one": "{{formatted}} प्रॉपर्टी",
     "propertyCount_other": "{{formatted}} प्रॉपर्टी"
   },
@@ -2332,5 +2334,36 @@
     "signingInTo": "इसमें साइन इन कर रहे हैं",
     "use": "जारी रखें",
     "useDefault": "Real Vista इस्तेमाल करें"
+  },
+  "unsubscribe": {
+    "title": "सदस्यता समाप्त करें",
+    "working": "आपकी सदस्यता समाप्त की जा रही है…",
+    "doneTitle": "आपकी सदस्यता समाप्त हो गई है",
+    "doneBody": "{{agency}} अब आपको कोई स्वचालित फ़ॉलो-अप ईमेल नहीं भेजेगी।",
+    "theAgency": "एजेंसी",
+    "doneNote": "अगर आप किसी एजेंट को लिखते हैं तो वे जवाब दे सकते हैं। फिर से ईमेल पाने के लिए उनसे सीधे कहें।",
+    "failedTitle": "हम आपकी सदस्यता समाप्त नहीं कर सके",
+    "invalid": "यह लिंक मान्य नहीं है। आपको मिले ईमेल का जवाब दें और हटाने के लिए कहें।",
+    "networkError": "सर्वर तक नहीं पहुँच सके। अपना कनेक्शन जाँचें और लिंक फिर से खोलें।"
+  },
+  "emailOptOut": {
+    "stopAction": "इस लीड को स्वचालित फ़ॉलो-अप ईमेल बंद करें",
+    "stopped": "इस पते के लिए स्वचालित फ़ॉलो-अप ईमेल बंद कर दिए गए।",
+    "unsubscribedSelf": "लीड ने स्वचालित ईमेल की सदस्यता समाप्त की",
+    "unsubscribedAgent": "आपकी एजेंसी ने स्वचालित ईमेल बंद किए",
+    "undoAction": "पूर्ववत करें",
+    "undone": "स्वचालित फ़ॉलो-अप ईमेल फिर से चालू किए गए।",
+    "failed": "अपडेट नहीं हो सका। कृपया फिर से प्रयास करें।"
+  },
+  "legalGate": {
+    "title": "कृपया हमारी अद्यतन शर्तें देखें",
+    "body": "आगे बढ़ने से पहले, कृपया सेवा की शर्तें और गोपनीयता नीति पढ़ें और स्वीकार करें। इनमें बताया गया है कि Real Vista आपके डेटा और आपकी एजेंसी के रिकॉर्ड को कैसे संभालता है।",
+    "terms": "सेवा की शर्तें",
+    "privacy": "गोपनीयता नीति",
+    "newTab": "(लिंक नए टैब में खुलते हैं)",
+    "agree": "मैं सेवा की शर्तों से सहमत हूँ और मैंने गोपनीयता नीति पढ़ ली है।",
+    "continue": "स्वीकार करें और जारी रखें",
+    "signOut": "साइन आउट",
+    "failed": "आपकी स्वीकृति सहेजी नहीं जा सकी। कृपया फिर से प्रयास करें।"
   }
 }

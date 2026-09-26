@@ -44,6 +44,18 @@ const refreshCookieOptions = {
   maxAge: durationToMs(config.jwt.refreshTokenExpiry, 30 * 24 * 60 * 60 * 1000),
 };
 
+/**
+ * End the browser session: all three cookies, each cleared with the same
+ * sameSite/secure it was set with. A bare clearCookie('access_token') does not
+ * match a SameSite=None; Secure cookie in production, so the browser keeps it.
+ */
+export function clearSessionCookies(res) {
+  const { maxAge: _a, ...clearAccess } = cookieOptions;
+  const { maxAge: _r, ...clearRefresh } = refreshCookieOptions;
+  clearCsrfToken(res);
+  return res.clearCookie('access_token', clearAccess).clearCookie('refresh_token', clearRefresh);
+}
+
 // Async logging helper — writes to MongoDB SecurityLog + OpenObserve security_logs
 const logSecurityEvent = async (logData) => {
   try {

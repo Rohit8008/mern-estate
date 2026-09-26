@@ -415,15 +415,15 @@ async function main() {
 
   // ── Clients / CRM Leads ───────────────────────────────────────────────────
   const clients = await Client.insertMany([
-    { name: 'Nikhil Joshi',    phone: '9821000001', email: 'nikhil.joshi@gmail.com',    status: 'qualified',   source: 'website',   priority: 'high',   notes: 'Looking for 3 BHK in Bandra or Juhu. Budget ₹3–4 Cr. Pre-approved loan.', assignedTo: emp1Id, createdBy: adminId },
-    { name: 'Pooja Desai',     phone: '9821000002', email: 'pooja.desai@gmail.com',      status: 'contacted',   source: 'referral',  priority: 'high',   notes: '2 BHK rent in Viman Nagar or Kalyani Nagar, budget ₹25–30k/month.', assignedTo: emp2Id, createdBy: adminId },
-    { name: 'Amit Gupta',      phone: '9821000003', email: 'amit.gupta@outlook.com',     status: 'proposal',    source: 'referral',  priority: 'medium', notes: 'Office space in BKC or Lower Parel. 2000–3500 sq ft, purchase preferred.', assignedTo: emp1Id, createdBy: adminId },
-    { name: 'Shreya Kulkarni', phone: '9821000004', email: 'shreya.kulkarni@gmail.com',  status: 'lead',        source: 'portal',    priority: 'medium', notes: 'Plot near Hinjewadi for investment. Budget ₹80L–1.2 Cr.', assignedTo: emp2Id, createdBy: adminId },
-    { name: 'Ranjit Kaur',     phone: '9821000005', email: 'ranjit.kaur@gmail.com',      status: 'lead',        source: 'walk-in',   priority: 'low',    notes: '1 BHK in Thane West, budget up to ₹55L. First-time buyer.', assignedTo: emp1Id, createdBy: adminId },
+    { name: 'Nikhil Joshi',    phone: '9821000001', email: 'nikhil.joshi@example.com',    status: 'qualified',   source: 'website',   priority: 'high',   notes: 'Looking for 3 BHK in Bandra or Juhu. Budget ₹3–4 Cr. Pre-approved loan.', assignedTo: emp1Id, createdBy: adminId },
+    { name: 'Pooja Desai',     phone: '9821000002', email: 'pooja.desai@example.com',      status: 'contacted',   source: 'referral',  priority: 'high',   notes: '2 BHK rent in Viman Nagar or Kalyani Nagar, budget ₹25–30k/month.', assignedTo: emp2Id, createdBy: adminId },
+    { name: 'Amit Gupta',      phone: '9821000003', email: 'amit.gupta@example.com',     status: 'proposal',    source: 'referral',  priority: 'medium', notes: 'Office space in BKC or Lower Parel. 2000–3500 sq ft, purchase preferred.', assignedTo: emp1Id, createdBy: adminId },
+    { name: 'Shreya Kulkarni', phone: '9821000004', email: 'shreya.kulkarni@example.com',  status: 'lead',        source: 'portal',    priority: 'medium', notes: 'Plot near Hinjewadi for investment. Budget ₹80L–1.2 Cr.', assignedTo: emp2Id, createdBy: adminId },
+    { name: 'Ranjit Kaur',     phone: '9821000005', email: 'ranjit.kaur@example.com',      status: 'lead',        source: 'walk-in',   priority: 'low',    notes: '1 BHK in Thane West, budget up to ₹55L. First-time buyer.', assignedTo: emp1Id, createdBy: adminId },
     { name: 'Vikram Nair',     phone: '9821000006', email: 'vikram.nair@company.com',    status: 'won',         source: 'referral',  priority: 'high',   notes: 'Bought 2 BHK in Chembur. Closed successfully.', assignedTo: emp2Id, createdBy: adminId },
-    { name: 'Sonal Thakur',    phone: '9821000007', email: 'sonal.thakur@gmail.com',     status: 'lost',        source: 'website',   priority: 'low',    notes: 'Was looking for 3 BHK. Went with another broker.', assignedTo: emp1Id, createdBy: adminId },
-    { name: 'Farhan Sheikh',   phone: '9821000008', email: 'farhan.sheikh@gmail.com',    status: 'negotiation', source: 'portal',    priority: 'high',   notes: 'Villa in Lonavala or Khandala. Budget ₹2.5–3 Cr. Wants pool.', assignedTo: emp2Id, createdBy: adminId },
-    { name: 'Manisha Roy',     phone: '9821000009', email: 'manisha.roy@gmail.com',      status: 'contacted',   source: 'referral',  priority: 'medium', notes: 'Retail shop near Hinjewadi IT park for lease.', assignedTo: emp1Id, createdBy: adminId },
+    { name: 'Sonal Thakur',    phone: '9821000007', email: 'sonal.thakur@example.com',     status: 'lost',        source: 'website',   priority: 'low',    notes: 'Was looking for 3 BHK. Went with another broker.', assignedTo: emp1Id, createdBy: adminId },
+    { name: 'Farhan Sheikh',   phone: '9821000008', email: 'farhan.sheikh@example.com',    status: 'negotiation', source: 'portal',    priority: 'high',   notes: 'Villa in Lonavala or Khandala. Budget ₹2.5–3 Cr. Wants pool.', assignedTo: emp2Id, createdBy: adminId },
+    { name: 'Manisha Roy',     phone: '9821000009', email: 'manisha.roy@example.com',      status: 'contacted',   source: 'referral',  priority: 'medium', notes: 'Retail shop near Hinjewadi IT park for lease.', assignedTo: emp1Id, createdBy: adminId },
     { name: 'Suresh Iyer',     phone: '9821000010', email: 'suresh.iyer@tech.com',       status: 'proposal',    source: 'corporate', priority: 'high',   notes: 'Company leasing 2 BHK units for employee housing. Needs 5 flats.', assignedTo: emp2Id, createdBy: adminId },
   ]);
   console.log(`✓ Clients: ${clients.length}`);
@@ -433,7 +433,7 @@ async function main() {
   // ── Buyer Requirements ────────────────────────────────────────────────────
   await BuyerRequirement.insertMany([
     {
-      buyerName: 'Nikhil Joshi', buyerPhone: '9821000001', buyerEmail: 'nikhil.joshi@gmail.com',
+      buyerName: 'Nikhil Joshi', buyerPhone: '9821000001', buyerEmail: 'nikhil.joshi@example.com',
       preferredCity: 'Mumbai', preferredLocality: 'Bandra, Juhu, Khar',
       propertyType: 'sale', propertyTypeInterest: 'residential',
       minPrice: 30000000, maxPrice: 40000000,
@@ -443,7 +443,7 @@ async function main() {
       assignedAgent: emp1Id, createdBy: adminId,
     },
     {
-      buyerName: 'Farhan Sheikh', buyerPhone: '9821000008', buyerEmail: 'farhan.sheikh@gmail.com',
+      buyerName: 'Farhan Sheikh', buyerPhone: '9821000008', buyerEmail: 'farhan.sheikh@example.com',
       preferredCity: 'Lonavala', preferredLocality: 'Frichley Hills, Kunegaon',
       propertyType: 'sale', propertyTypeInterest: 'residential',
       minPrice: 25000000, maxPrice: 30000000,
@@ -453,7 +453,7 @@ async function main() {
       assignedAgent: emp2Id, createdBy: adminId,
     },
     {
-      buyerName: 'Shreya Kulkarni', buyerPhone: '9821000004', buyerEmail: 'shreya.kulkarni@gmail.com',
+      buyerName: 'Shreya Kulkarni', buyerPhone: '9821000004', buyerEmail: 'shreya.kulkarni@example.com',
       preferredCity: 'Pune', preferredLocality: 'Hinjewadi, Wakad, Balewadi',
       propertyType: 'sale', propertyTypeInterest: 'land',
       minPrice: 8000000, maxPrice: 12000000,

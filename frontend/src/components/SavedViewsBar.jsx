@@ -88,6 +88,7 @@ export default function SavedViewsBar({ namespace, getCurrentQueryString, onAppl
     <div className='flex flex-col lg:flex-row lg:items-center gap-2'>
       <div className='flex items-center gap-2'>
         <select
+          aria-label='Saved views'
           className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
           value={selectedId}
           onChange={(e) => handleApply(e.target.value)}
@@ -119,7 +120,8 @@ export default function SavedViewsBar({ namespace, getCurrentQueryString, onAppl
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t('savedViewsBar.saveCurrentAs')}
-          className='w-full lg:w-[220px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white'
+          aria-label='Name for the current view'
+          className='w-full lg:w-[220px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white focus-visible:ring-2 focus-visible:ring-brand-500'
         />
         <button
           type='button'

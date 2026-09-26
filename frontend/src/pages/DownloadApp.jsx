@@ -99,12 +99,12 @@ export default function DownloadApp() {
                 </li>
               ))}
             </ol>
-            <p className='mt-6 text-sm text-slate-500'>{t('download.updateNote')}</p>
+            <p className='mt-6 text-sm text-slate-600'>{t('download.updateNote')}</p>
           </div>
         )}
 
         {release && (
-          <details className='mt-8 text-sm text-slate-500'>
+          <details className='mt-8 text-sm text-slate-600'>
             <summary className='cursor-pointer inline-flex items-center gap-1.5 hover:text-slate-700'>
               <HiOutlineShieldCheck className='w-4 h-4' aria-hidden='true' />
               {t('download.verifyTitle')}

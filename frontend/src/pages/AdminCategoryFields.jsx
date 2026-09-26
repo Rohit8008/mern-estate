@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { apiClient, parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { fieldProblem, fieldProblems, suggestKey } from '../utils/categoryFieldRules';
@@ -23,6 +23,24 @@ const FIELD_TYPES = [
   { value: 'textarea', label: 'Long text' },
 ];
 
+// The confirm overlay below gets the keyboard contract the shared Modal has:
+// Escape closes, focus moves into the panel on open and back to the opener on close.
+function useDialog(open, onEscape, panelRef) {
+  const escRef = useRef(onEscape);
+  escRef.current = onEscape;
+  useEffect(() => {
+    if (!open) return undefined;
+    const opener = document.activeElement;
+    const onKey = (e) => { if (e.key === 'Escape') escRef.current?.(); };
+    document.addEventListener('keydown', onKey);
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
+    };
+  }, [open, panelRef]);
+}
+
 export default function AdminCategoryFields() {
   const { t } = useTranslation();
   const { slug } = useParams();
@@ -40,6 +58,8 @@ export default function AdminCategoryFields() {
   const { currentUser } = useSelector((st) => st.user);
   const [locationMessage, setLocationMessage] = useState('');
   const [locationError, setLocationError] = useState('');
+  const dataLossRef = useRef(null);
+  useDialog(!!pendingDataLoss, () => setPendingDataLoss(null), dataLossRef);
 
   useEffect(() => {
     const fetchCategory = async () => {
@@ -228,7 +248,7 @@ export default function AdminCategoryFields() {
             to="/categories"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors"
           >
-            <HiOutlineArrowLeft className="w-4 h-4" />{t('adminCategoryFields.allCategories')}</Link>
+            <HiOutlineArrowLeft className="w-4 h-4" aria-hidden="true" />{t('adminCategoryFields.allCategories')}</Link>
         }
       />
 
@@ -319,7 +339,7 @@ export default function AdminCategoryFields() {
                   onClick={addField}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
                 >
-                  <HiOutlinePlus className="w-4 h-4" />{t('adminCategoryFields.addTheFirstField')}</button>
+                  <HiOutlinePlus className="w-4 h-4" aria-hidden="true" />{t('adminCategoryFields.addTheFirstField')}</button>
               }
             />
           ) : (
@@ -332,6 +352,7 @@ export default function AdminCategoryFields() {
                       <button
                         onClick={() => moveField(index, 'up')}
                         disabled={index === 0}
+                        aria-label={`Move field ${index + 1} up`}
                         className="px-2 py-1 text-xs bg-slate-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         ↑
@@ -339,6 +360,7 @@ export default function AdminCategoryFields() {
                       <button
                         onClick={() => moveField(index, 'down')}
                         disabled={index === fields.length - 1}
+                        aria-label={`Move field ${index + 1} down`}
                         className="px-2 py-1 text-xs bg-slate-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         ↓
@@ -352,15 +374,18 @@ export default function AdminCategoryFields() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.fieldKey')}</label>
+                      <label htmlFor={`acf-${index}-fieldKey`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.fieldKey')}</label>
                       <input
+                        id={`acf-${index}-fieldKey`}
                         type="text"
                         value={field.key}
                         onChange={(e) => updateField(index, 'key', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500/20 ${
+                        aria-invalid={fieldProblem(field, index, fields) ? true : undefined}
+                        aria-describedby={fieldProblem(field, index, fields) ? `acf-${index}-key-error` : undefined}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 ${
                           fieldProblem(field, index, fields)
                             ? 'border-rose-400 bg-rose-50'
-                            : 'border-slate-300 focus:border-indigo-400'
+                            : 'border-slate-300 focus:border-brand-500'
                         }`}
                         placeholder={t('adminCategoryFields.eGPlotsize')}
                       />
@@ -369,30 +394,32 @@ export default function AdminCategoryFields() {
                           an awkward one now costs seconds and catching it later
                           costs a migration. */}
                       {fieldProblem(field, index, fields) && (
-                        <p className="text-xs text-rose-600 mt-1">{fieldProblem(field, index, fields)}</p>
+                        <p id={`acf-${index}-key-error`} className="text-xs text-rose-600 mt-1">{fieldProblem(field, index, fields)}</p>
                       )}
                       {!fieldProblem(field, index, fields) && category?.fields?.some((f) => f.key === field.key) && (
-                        <p className="text-xs text-slate-400 mt-1">{t('adminCategoryFields.savedFieldRenamingTheKeyStarts')}</p>
+                        <p className="text-xs text-slate-500 mt-1">{t('adminCategoryFields.savedFieldRenamingTheKeyStarts')}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.fieldLabel')}</label>
+                      <label htmlFor={`acf-${index}-fieldLabel`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.fieldLabel')}</label>
                       <input
+                        id={`acf-${index}-fieldLabel`}
                         type="text"
                         value={field.label}
                         onChange={(e) => updateField(index, 'label', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         placeholder={t('adminCategoryFields.eGPlotSize')}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.fieldType')}</label>
+                      <label htmlFor={`acf-${index}-fieldType`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.fieldType')}</label>
                       <select
+                        id={`acf-${index}-fieldType`}
                         value={field.type}
                         onChange={(e) => updateField(index, 'type', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                       >
                         {FIELD_TYPES.map(type => (
                           <option key={type.value} value={type.value}>
@@ -403,23 +430,25 @@ export default function AdminCategoryFields() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.placeholder')}</label>
+                      <label htmlFor={`acf-${index}-placeholder`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.placeholder')}</label>
                       <input
+                        id={`acf-${index}-placeholder`}
                         type="text"
                         value={field.placeholder}
                         onChange={(e) => updateField(index, 'placeholder', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         placeholder={t('adminCategoryFields.eGEnterPlotSizeIn')}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.description')}</label>
+                      <label htmlFor={`acf-${index}-description`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.description')}</label>
                       <input
+                        id={`acf-${index}-description`}
                         type="text"
                         value={field.description}
                         onChange={(e) => updateField(index, 'description', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         placeholder={t('adminCategoryFields.optionalDescription')}
                       />
                     </div>
@@ -441,21 +470,23 @@ export default function AdminCategoryFields() {
                   {field.type === 'number' && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.minValue')}</label>
+                        <label htmlFor={`acf-${index}-minValue`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.minValue')}</label>
                         <input
+                          id={`acf-${index}-minValue`}
                           type="number"
                           value={field.min || ''}
                           onChange={(e) => updateField(index, 'min', e.target.value ? Number(e.target.value) : undefined)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.maxValue')}</label>
+                        <label htmlFor={`acf-${index}-maxValue`} className="block text-sm font-medium text-slate-700 mb-1">{t('adminCategoryFields.maxValue')}</label>
                         <input
+                          id={`acf-${index}-maxValue`}
                           type="number"
                           value={field.max || ''}
                           onChange={(e) => updateField(index, 'max', e.target.value ? Number(e.target.value) : undefined)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         />
                       </div>
                     </div>
@@ -465,24 +496,26 @@ export default function AdminCategoryFields() {
                   {field.type === 'select' && (
                     <div className="mt-4">
                       <div className="flex justify-between items-center mb-2">
-                        <label className="block text-sm font-medium text-slate-700">{t('adminCategoryFields.options')}</label>
+                        <span id={`acf-${index}-options`} className="block text-sm font-medium text-slate-700">{t('adminCategoryFields.options')}</span>
                         <button
                           onClick={() => addOption(index)}
                           className="px-3 py-1 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800"
                         >{t('adminCategoryFields.addOption')}</button>
                       </div>
-                      <div className="space-y-2">
+                      <div role="group" aria-labelledby={`acf-${index}-options`} className="space-y-2">
                         {field.options?.map((option, optionIndex) => (
                           <div key={optionIndex} className="flex items-center space-x-2">
                             <input
                               type="text"
                               value={option}
                               onChange={(e) => updateOption(index, optionIndex, e.target.value)}
-                              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                               placeholder={`Option ${optionIndex + 1}`}
+                              aria-label={`Option ${optionIndex + 1}`}
                             />
                             <button
                               onClick={() => removeOption(index, optionIndex)}
+                              aria-label={`Remove option ${optionIndex + 1}`}
                               className="px-2 py-1 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
                             >{t('adminCategoryFields.remove')}</button>
                           </div>
@@ -505,14 +538,15 @@ export default function AdminCategoryFields() {
                   {/* Text field specific options */}
                   {field.type === 'text' && (
                     <div className="mt-4">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                      <label htmlFor={`acf-${index}-pattern`} className="block text-sm font-medium text-slate-700 mb-1">
                         Validation Pattern (Regex)
                       </label>
                       <input
+                        id={`acf-${index}-pattern`}
                         type="text"
                         value={field.pattern}
                         onChange={(e) => updateField(index, 'pattern', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         placeholder="e.g., ^[A-Za-z0-9]+$"
                       />
                     </div>
@@ -551,8 +585,8 @@ export default function AdminCategoryFields() {
             onClick={() => setPendingDataLoss(null)}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
-          <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-base font-semibold text-slate-900">{t('adminCategoryFields.thisWillHideDataYouAlready')}</h2>
+          <div ref={dataLossRef} role="dialog" aria-modal="true" aria-labelledby="acf-data-loss-title" tabIndex={-1} className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 focus:outline-none">
+            <h2 id="acf-data-loss-title" className="text-base font-semibold text-slate-900">{t('adminCategoryFields.thisWillHideDataYouAlready')}</h2>
             <p className="text-sm text-slate-600 mt-2">{pendingDataLoss.message}</p>
 
             <ul className="mt-4 space-y-1.5">

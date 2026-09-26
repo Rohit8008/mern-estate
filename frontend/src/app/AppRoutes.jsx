@@ -19,12 +19,15 @@ const Unauthorized    = lazy(() => import('../pages/Unauthorized'));
 const NotFound        = lazy(() => import('../pages/NotFound'));
 const Privacy         = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Privacy })));
 const Terms           = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Terms })));
+const Cookies         = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Cookies })));
+const Refunds         = lazy(() => import('../pages/Legal').then((m) => ({ default: m.Refunds })));
 const DownloadApp     = lazy(() => import('../pages/DownloadApp'));
 const Listing         = lazy(() => import('../pages/Listing'));
 const UserProfile     = lazy(() => import('../pages/UserProfile'));
 const Search          = lazy(() => import('../pages/Search'));
 const SharedProperties = lazy(() => import('../pages/SharedProperties'));
 const AcceptInvite = lazy(() => import('../pages/AcceptInvite'));
+const Unsubscribe = lazy(() => import('../pages/Unsubscribe'));
 
 // CRM — overview
 const AgencyDashboard    = lazy(() => import('../pages/AgencyDashboard'));
@@ -85,6 +88,8 @@ export default function AppRoutes() {
         <Route path='/forgot-password' element={<ForgotPassword />} />
         <Route path='/privacy' element={<Privacy />} />
         <Route path='/terms' element={<Terms />} />
+        <Route path='/cookies' element={<Cookies />} />
+        <Route path='/refunds' element={<Refunds />} />
         {/* Public: the Android APK, while the app is not on the Play Store. */}
         <Route path='/download' element={<DownloadApp />} />
         {/* Formerly public. The property book is not browsable without a
@@ -98,6 +103,10 @@ export default function AppRoutes() {
             workspace, which is the only reason someone with no account and no
             idea which agency they belong to can get in at all. */}
         <Route path='/invite/:token' element={<AcceptInvite />} />
+
+        {/* A lead with no account, from the link at the foot of a follow-up
+            email. The signed token names the lead; the page does one thing. */}
+        <Route path='/unsubscribe/:token' element={<Unsubscribe />} />
 
         <Route path='/unauthorized' element={<Unauthorized />} />
 

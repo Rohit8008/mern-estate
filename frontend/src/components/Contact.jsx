@@ -25,7 +25,7 @@ export default function Contact({ listing }) {
             <div className='flex items-center gap-3'>
               <img
                 src={landlord.avatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}
-                alt='landlord'
+                alt=''
                 className='w-10 h-10 rounded-full object-cover'
               />
               <div>
@@ -44,7 +44,7 @@ export default function Contact({ listing }) {
           <div className='flex items-center gap-3 border border-slate-200 rounded-xl p-4 bg-slate-50'>
             <img
               src={normalizeImageUrl(listing.imageUrls?.[0]) || 'https://placehold.co/64x64'}
-              alt='listing'
+              alt={listing.name ? `${listing.name} — cover photo` : 'Property cover photo'}
               className='w-16 h-16 rounded object-cover'
             />
             <div className='flex-1 min-w-0'>
@@ -53,6 +53,7 @@ export default function Contact({ listing }) {
             </div>
             <button
               type='button'
+              aria-label='Copy link to this listing'
               className='text-indigo-600 hover:text-indigo-700 text-sm font-medium'
               onClick={() => navigator.clipboard.writeText(`${window.location.origin}/listing/${listing._id}`)}
             >{t('contact.copyLink')}</button>
@@ -77,6 +78,7 @@ export default function Contact({ listing }) {
           <textarea
             name='message'
             id='message'
+            aria-label='Message'
             rows='6'
             value={message}
             onChange={onChange}

@@ -33,7 +33,7 @@ export default function BulkActionBar({ count, onClear, children }) {
           className='p-1.5 text-white/60 hover:text-white transition-colors flex-shrink-0'
           aria-label={t('common.clear')}
         >
-          <HiX className='w-4 h-4' />
+          <HiX className='w-4 h-4' aria-hidden='true' />
         </button>
       </div>
     </div>
@@ -52,7 +52,7 @@ export function BulkSelect({ value, onChange, children, ...rest }) {
     <select
       value={value}
       onChange={onChange}
-      className='px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-white text-sm hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/30 transition-colors [&>option]:text-slate-900'
+      className='px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-white text-sm hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white transition-colors [&>option]:text-slate-900'
       {...rest}
     >
       {children}
@@ -74,8 +74,8 @@ export function BulkButton({ onClick, danger = false, children, ...rest }) {
       onClick={onClick}
       className={
         danger
-          ? 'px-3 py-1.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 text-white text-sm font-medium transition-colors'
-          : 'px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium transition-colors'
+          ? 'px-3 py-1.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 text-white text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white'
+          : 'px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white'
       }
       {...rest}
     >

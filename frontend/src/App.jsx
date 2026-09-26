@@ -14,6 +14,7 @@ import AppRoutes from './app/AppRoutes';
 import AppShell from './app/AppShell';
 import AuthBootstrap from './app/AuthBootstrap';
 import CmdKListener from './app/CmdKListener';
+import LegalAcceptanceGate from './app/LegalAcceptanceGate';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
                   <NotificationFeedProvider>
                   <SearchProvider>
                     <AuthBootstrap />
+                    <LegalAcceptanceGate />
                     <ApiErrorToastListener />
                     <CmdKListener />
                     <GlobalSearch />

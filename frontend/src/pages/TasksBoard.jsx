@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -208,19 +208,23 @@ export default function TasksBoard() {
           {/* View tabs */}
           <div className='flex items-center gap-1 bg-slate-100 p-1 rounded-lg'>
             <button
+              type='button'
+              aria-pressed={view === 'cards'}
               onClick={() => setView('cards')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewGrid className='w-4 h-4' />{t('tasks.cards')}</button>
+              <HiViewGrid className='w-4 h-4' aria-hidden='true' />{t('tasks.cards')}</button>
             <button
+              type='button'
+              aria-pressed={view === 'table'}
               onClick={() => setView('table')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <HiViewList className='w-4 h-4' />{t('tasks.table')}</button>
+              <HiViewList className='w-4 h-4' aria-hidden='true' />{t('tasks.table')}</button>
           </div>
 
           <div className='h-6 w-px bg-slate-200 hidden lg:block' />
@@ -228,16 +232,17 @@ export default function TasksBoard() {
           {/* Search and filters */}
           <div className='flex flex-wrap items-center gap-2 flex-1'>
             <div className='relative flex-1 max-w-xs'>
-              <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' />
+              <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' aria-hidden='true' />
               <input
-                className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition-all placeholder:text-slate-400'
+                className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-slate-300 transition-all placeholder:text-slate-500'
                 placeholder={t('tasks.searchTasks')}
+                aria-label={t('tasks.searchTasks')}
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
               />
               {q && (
-                <button onClick={() => setParam('q', '')} className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'>
-                  <HiX className='w-4 h-4' />
+                <button type='button' onClick={() => setParam('q', '')} aria-label='Clear search' className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'>
+                  <HiX className='w-4 h-4' aria-hidden='true' />
                 </button>
               )}
             </div>
@@ -245,7 +250,8 @@ export default function TasksBoard() {
             <select
               value={statusFilter}
               onChange={(e) => setParam('status', e.target.value)}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none transition-all'
+              aria-label='Filter by status'
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-slate-300 outline-none transition-all'
             >
               <option value=''>{t('tasks.allStatuses')}</option>
               {STATUS_ORDER.map((s) => (
@@ -256,7 +262,8 @@ export default function TasksBoard() {
             <select
               value={priorityFilter}
               onChange={(e) => setParam('priority', e.target.value)}
-              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 outline-none transition-all'
+              aria-label='Filter by priority'
+              className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-slate-300 outline-none transition-all'
             >
               <option value=''>{t('tasks.allPriorities')}</option>
               {PRIORITY_ORDER.map((p) => (
@@ -276,10 +283,10 @@ export default function TasksBoard() {
         {/* Error */}
         {error && (
           <div className='px-4 py-2.5 text-sm bg-rose-50 border-b border-rose-200 text-rose-700 flex items-center gap-2'>
-            <HiExclamation className='w-4 h-4 flex-shrink-0' />
+            <HiExclamation className='w-4 h-4 flex-shrink-0' aria-hidden='true' />
             {error}
-            <button onClick={() => setError('')} className='ml-auto text-rose-500 hover:text-rose-700'>
-              <HiX className='w-4 h-4' />
+            <button type='button' onClick={() => setError('')} aria-label='Dismiss error' className='ml-auto text-rose-600 hover:text-rose-700'>
+              <HiX className='w-4 h-4' aria-hidden='true' />
             </button>
           </div>
         )}
@@ -317,14 +324,16 @@ export default function TasksBoard() {
                 <div key={status} className='mb-6 last:mb-0'>
                   {/* Group header */}
                   <button
+                    type='button'
+                    aria-expanded={!isCollapsed}
                     onClick={() => toggleGroup(status)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg mb-3 transition-colors ${config.bgLight} hover:opacity-90`}
                   >
                     <div className={`w-1 h-6 rounded-full ${config.color}`} />
                     {isCollapsed ? (
-                      <HiChevronRight className={`w-4 h-4 ${config.textColor}`} />
+                      <HiChevronRight className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                     ) : (
-                      <HiChevronDown className={`w-4 h-4 ${config.textColor}`} />
+                      <HiChevronDown className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                     )}
                     <span className={`font-semibold ${config.textColor}`}>{config.label}</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${config.color} text-white`}>
@@ -351,9 +360,9 @@ export default function TasksBoard() {
                       {/* Add task card */}
                       <button
                         onClick={() => setShowCreateModal(true)}
-                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-400 hover:border-amber-300 hover:text-amber-500 hover:bg-amber-50/30 transition-colors'
+                        className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-500 hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50/30 transition-colors'
                       >
-                        <HiPlus className='w-6 h-6 mb-2' />
+                        <HiPlus className='w-6 h-6 mb-2' aria-hidden='true' />
                         <span className='text-sm font-medium'>{t('tasks.addTask')}</span>
                       </button>
                     </div>
@@ -365,7 +374,7 @@ export default function TasksBoard() {
             {tasks.length === 0 && !loading && (
               <div className='flex flex-col items-center justify-center py-20 text-center'>
                 <div className='w-16 h-16 rounded-2xl bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center mx-auto mb-5'>
-                  <HiClipboardList className='w-8 h-8 text-amber-500' />
+                  <HiClipboardList className='w-8 h-8 text-amber-500' aria-hidden='true' />
                 </div>
                 <h3 className='text-lg font-semibold text-slate-900 mb-1.5'>{t('tasks.noTasksYet')}</h3>
                 <p className='text-slate-500 text-sm mb-6 max-w-xs'>{t('tasks.createYourFirstTaskToStart')}</p>
@@ -402,16 +411,18 @@ export default function TasksBoard() {
                       <tr>
                         <td colSpan={6} className='px-0 py-0'>
                           <button
+                            type='button'
+                            aria-expanded={!isCollapsed}
                             onClick={() => toggleGroup(status)}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 ${config.bgLight} border-l-4 ${config.border.replace('border-', 'border-l-')} hover:opacity-90 transition-colors`}
                           >
                             {isCollapsed ? (
-                              <HiChevronRight className={`w-4 h-4 ${config.textColor}`} />
+                              <HiChevronRight className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                             ) : (
-                              <HiChevronDown className={`w-4 h-4 ${config.textColor}`} />
+                              <HiChevronDown className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
                             )}
                             <span className={`font-semibold text-sm ${config.textColor}`}>{config.label}</span>
-                            <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full'>
+                            <span className='text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full'>
                               {items.length}
                             </span>
                           </button>
@@ -431,9 +442,14 @@ export default function TasksBoard() {
                               <div className='flex items-center gap-3'>
                                 <div className={`w-1 h-8 rounded-full ${config.color} flex-shrink-0`} />
                                 <div className='min-w-0'>
-                                  <div className='font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors'>
+                                  {/* A real button: the row's onClick is mouse-only. */}
+                                  <button
+                                    type='button'
+                                    onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                                    className='block max-w-full text-left font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                                  >
                                     {task.title}
-                                  </div>
+                                  </button>
                                 </div>
                               </div>
                             </td>
@@ -444,18 +460,18 @@ export default function TasksBoard() {
                             </td>
                             <td className='px-3 py-3'>
                               <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${priorityConfig.color} text-white`}>
-                                <priorityConfig.icon className='w-3 h-3' />
+                                <priorityConfig.icon className='w-3 h-3' aria-hidden='true' />
                                 {priorityConfig.label}
                               </span>
                             </td>
                             <td className='px-3 py-3'>
                               {due ? (
                                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${due.class}`}>
-                                  <HiClock className='w-3 h-3' />
+                                  <HiClock className='w-3 h-3' aria-hidden='true' />
                                   {due.text}
                                 </span>
                               ) : (
-                                <span className='text-slate-400 text-[13px]'>—</span>
+                                <span className='text-slate-500 text-[13px]'>—</span>
                               )}
                             </td>
                             <td className='px-3 py-3'>
@@ -464,20 +480,24 @@ export default function TasksBoard() {
                               </span>
                             </td>
                             <td className='px-4 py-3 text-right'>
-                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
                                 <button
+                                  type='button'
                                   onClick={(e) => { e.stopPropagation(); openEditModal(task); }}
-                                  className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+                                  className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
                                   title={t('tasks.edit')}
+                                  aria-label={`Edit ${task.title}`}
                                 >
-                                  <HiPencil className='w-4 h-4' />
+                                  <HiPencil className='w-4 h-4' aria-hidden='true' />
                                 </button>
                                 <button
+                                  type='button'
                                   onClick={(e) => { e.stopPropagation(); setPendingDelete(task._id); }}
-                                  className='p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors'
+                                  className='p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors'
                                   title={t('tasks.delete')}
+                                  aria-label={`Delete ${task.title}`}
                                 >
-                                  <HiTrash className='w-4 h-4' />
+                                  <HiTrash className='w-4 h-4' aria-hidden='true' />
                                 </button>
                               </div>
                             </td>
@@ -492,7 +512,7 @@ export default function TasksBoard() {
                     <td colSpan={6} className='px-4 py-16 text-center'>
                       <div className='flex flex-col items-center gap-3'>
                         <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
-                          <HiClipboardList className='w-6 h-6 text-slate-400' />
+                          <HiClipboardList className='w-6 h-6 text-slate-400' aria-hidden='true' />
                         </div>
                         <p className='text-slate-500 text-sm'>{t('tasks.noTasksFound')}</p>
                         <button
@@ -569,8 +589,19 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
 
   return (
     <div
-      className='bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group'
+      className='bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
       onClick={onSelect}
+      role='button'
+      tabIndex={0}
+      aria-label={task.title}
+      onKeyDown={(e) => {
+        // Only the card itself: Enter/Space on a nested button is that button's.
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       {/* Header */}
       <div className='flex items-start justify-between mb-3'>
@@ -580,20 +611,24 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
             {task.title}
           </h3>
         </div>
-        <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+        <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
           <button
+            type='button'
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className='p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+            className='p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             title={t('tasks.edit')}
+            aria-label={`Edit ${task.title}`}
           >
-            <HiPencil className='w-3.5 h-3.5' />
+            <HiPencil className='w-3.5 h-3.5' aria-hidden='true' />
           </button>
           <button
+            type='button'
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className='p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+            className='p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50'
             title={t('tasks.delete')}
+            aria-label={`Delete ${task.title}`}
           >
-            <HiTrash className='w-3.5 h-3.5' />
+            <HiTrash className='w-3.5 h-3.5' aria-hidden='true' />
           </button>
         </div>
       </div>
@@ -607,13 +642,13 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
       <div className='flex flex-wrap items-center gap-2 mb-3'>
         {/* Priority */}
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${priorityConfig.color} text-white`}>
-          <priorityConfig.icon className='w-3 h-3' />
+          <priorityConfig.icon className='w-3 h-3' aria-hidden='true' />
           {priorityConfig.label}
         </span>
         {/* Due date */}
         {due && (
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${due.class}`}>
-            <HiClock className='w-3 h-3' />
+            <HiClock className='w-3 h-3' aria-hidden='true' />
             {due.text}
           </span>
         )}
@@ -622,25 +657,34 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
       {/* Status badge with dropdown */}
       <div className='relative'>
         <button
+          type='button'
           onClick={(e) => {
             e.stopPropagation();
             setShowStatusDropdown(showStatusDropdown ? null : task._id);
           }}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-haspopup='true'
+          aria-expanded={!!showStatusDropdown}
+          aria-label={`Status: ${config.label}. Change status`}
           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${config.color} text-white hover:opacity-90 transition-opacity`}
         >
           {config.label}
-          <HiChevronDown className='w-3 h-3' />
+          <HiChevronDown className='w-3 h-3' aria-hidden='true' />
         </button>
         {showStatusDropdown && (
           <div
             className='absolute bottom-full left-0 mb-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl z-30 py-1'
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role='presentation'
           >
             {STATUS_ORDER.map((s) => {
               const sConfig = STATUS_CONFIG[s];
               return (
                 <button
                   key={s}
+                  type='button'
+                  aria-current={task.status === s ? 'true' : undefined}
                   onClick={() => onStatusChange(s)}
                   className={`w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2 ${
                     task.status === s ? 'bg-slate-50 font-medium' : ''
@@ -648,7 +692,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
                 >
                   <div className={`w-2 h-2 rounded-full ${sConfig.color}`} />
                   {sConfig.label}
-                  {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' />}
+                  {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' aria-hidden='true' />}
                 </button>
               );
             })}
@@ -662,6 +706,8 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
 // TaskFormModal component (for create and edit)
 function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
   const { t } = useTranslation();
+  const uid = useId();
+  const fid = (name) => `${uid}-${name}`;
   const [formData, setFormData] = useState({
     title: task?.title || '',
     description: task?.description || '',
@@ -685,23 +731,25 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
     <Modal open onClose={onClose} title={title} size='lg'>
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div>
-          <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.taskTitle')}</label>
+          <label htmlFor={fid('title')} className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.taskTitle')}</label>
           <input
+            id={fid('title')}
             type='text'
             required
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all'
             placeholder={t('tasks.enterTaskTitle')}
           />
         </div>
         <div className='grid grid-cols-2 gap-4'>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.status')}</label>
+            <label htmlFor={fid('status')} className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.status')}</label>
             <select
+              id={fid('status')}
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all bg-white'
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all bg-white'
             >
               {STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
@@ -709,11 +757,12 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
             </select>
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.priority')}</label>
+            <label htmlFor={fid('priority')} className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.priority')}</label>
             <select
+              id={fid('priority')}
               value={formData.priority}
               onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all bg-white'
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all bg-white'
             >
               {PRIORITY_ORDER.map((p) => (
                 <option key={p} value={p}>{PRIORITY_CONFIG[p]?.label || p}</option>
@@ -722,21 +771,23 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
           </div>
         </div>
         <div>
-          <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.dueDate')}</label>
+          <label htmlFor={fid('due')} className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.dueDate')}</label>
           <input
+            id={fid('due')}
             type='date'
             value={formData.dueAt}
             onChange={(e) => setFormData({ ...formData, dueAt: e.target.value })}
-            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all'
+            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all'
           />
         </div>
         <div>
-          <label className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.description')}</label>
+          <label htmlFor={fid('description')} className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.description')}</label>
           <textarea
+            id={fid('description')}
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={4}
-            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all resize-none'
+            className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all resize-none'
             placeholder={t('tasks.addTaskDescription')}
           />
         </div>
@@ -766,6 +817,11 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const due = formatDueDate(task.dueAt, task.status);
+  const closeRef = useRef(null);
+  const titleId = useId();
+
+  // Focus starts inside the panel, so keyboard users are not left behind it.
+  useEffect(() => { closeRef.current?.focus(); }, []);
 
   useEffect(() => {
     const handleKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -780,30 +836,38 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
 
   return (
     <div className='fixed inset-0 !mt-0 bg-black/30 backdrop-blur-[2px] flex items-start justify-end z-50'>
-      <div className='w-full max-w-xl h-full bg-white shadow-2xl overflow-hidden flex flex-col'>
+      <div
+        className='w-full max-w-xl h-full bg-white shadow-2xl overflow-hidden flex flex-col'
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby={titleId}
+      >
         {/* Header */}
         <div className='bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0'>
           <div className='flex items-start justify-between'>
             <div className='flex items-center gap-3'>
               <div className={`w-2 h-12 rounded-full ${config.color}`} />
               <div>
-                <h2 className='text-lg font-bold text-slate-900'>{task.title}</h2>
+                <h2 id={titleId} className='text-lg font-bold text-slate-900'>{task.title}</h2>
               </div>
             </div>
             <div className='flex items-center gap-2'>
               <button
+                type='button'
                 onClick={onEdit}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 transition-colors'
               >
-                <HiPencil className='w-4 h-4' />{t('tasks.edit')}</button>
+                <HiPencil className='w-4 h-4' aria-hidden='true' />{t('tasks.edit')}</button>
               <button
+                type='button'
                 onClick={onDelete}
+                aria-label={t('tasks.delete')}
                 className='px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-rose-600 hover:bg-rose-50 hover:border-rose-200 flex items-center gap-1.5 transition-colors'
               >
-                <HiTrash className='w-4 h-4' />
+                <HiTrash className='w-4 h-4' aria-hidden='true' />
               </button>
-              <button onClick={onClose} className='p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors'>
-                <HiX className='w-5 h-5' />
+              <button ref={closeRef} type='button' onClick={onClose} aria-label='Close' className='p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors'>
+                <HiX className='w-5 h-5' aria-hidden='true' />
               </button>
             </div>
           </div>
@@ -812,11 +876,15 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
           <div className='mt-4 flex items-center gap-2'>
             <div className='relative'>
               <button
+                type='button'
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                aria-haspopup='true'
+                aria-expanded={showStatusDropdown}
+                aria-label={`Status: ${config.label}. Change status`}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${config.color} text-white hover:opacity-90 transition-opacity`}
               >
                 {config.label}
-                <HiChevronDown className='w-4 h-4' />
+                <HiChevronDown className='w-4 h-4' aria-hidden='true' />
               </button>
               {showStatusDropdown && (
                 <div className='absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-xl z-30 py-1'>
@@ -825,6 +893,8 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
                     return (
                       <button
                         key={s}
+                        type='button'
+                        aria-current={task.status === s ? 'true' : undefined}
                         onClick={() => { onStatusChange(s); setShowStatusDropdown(false); }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 ${
                           task.status === s ? 'bg-slate-50 font-medium' : ''
@@ -832,7 +902,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
                       >
                         <div className={`w-2.5 h-2.5 rounded-full ${sConfig.color}`} />
                         {sConfig.label}
-                        {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' />}
+                        {task.status === s && <HiCheck className='w-4 h-4 ml-auto text-indigo-600' aria-hidden='true' />}
                       </button>
                     );
                   })}
@@ -840,7 +910,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
               )}
             </div>
             <span className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium ${priorityConfig.color} text-white`}>
-              <priorityConfig.icon className='w-3.5 h-3.5' />
+              <priorityConfig.icon className='w-3.5 h-3.5' aria-hidden='true' />
               {priorityConfig.label}
             </span>
           </div>
@@ -852,38 +922,38 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
             {/* Due Date */}
             <div className='bg-slate-50 rounded-xl p-5'>
               <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                <HiCalendar className='w-5 h-5 text-slate-400' />{t('tasks.dueDate')}</h3>
+                <HiCalendar className='w-5 h-5 text-slate-400' aria-hidden='true' />{t('tasks.dueDate')}</h3>
               {due ? (
                 <div className='flex items-center gap-3'>
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${due.class}`}>
-                    <HiClock className='w-4 h-4' />
+                    <HiClock className='w-4 h-4' aria-hidden='true' />
                     {due.text}
                   </span>
                   <span className='text-sm text-slate-500'>{formatFullDate(task.dueAt)}</span>
                 </div>
               ) : (
-                <p className='text-sm text-slate-400'>{t('tasks.noDueDateSet')}</p>
+                <p className='text-sm text-slate-500'>{t('tasks.noDueDateSet')}</p>
               )}
             </div>
 
             {/* Description */}
             <div className='bg-slate-50 rounded-xl p-5'>
               <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                <HiClipboardList className='w-5 h-5 text-slate-400' />{t('tasks.description')}</h3>
+                <HiClipboardList className='w-5 h-5 text-slate-400' aria-hidden='true' />{t('tasks.description')}</h3>
               <p className='text-sm text-slate-700 whitespace-pre-wrap'>{task.description || 'No description added.'}</p>
             </div>
 
             {/* Timestamps */}
             <div className='bg-slate-50 rounded-xl p-5'>
               <h3 className='font-semibold text-slate-900 mb-3 flex items-center gap-2'>
-                <HiClock className='w-5 h-5 text-slate-400' />{t('tasks.timeline')}</h3>
+                <HiClock className='w-5 h-5 text-slate-400' aria-hidden='true' />{t('tasks.timeline')}</h3>
               <div className='grid grid-cols-2 gap-4'>
                 <div>
-                  <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('tasks.created')}</label>
+                  <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('tasks.created')}</span>
                   <p className='text-sm text-slate-900 mt-1'>{formatFullDate(task.createdAt)}</p>
                 </div>
                 <div>
-                  <label className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('tasks.lastUpdated')}</label>
+                  <span className='text-xs font-medium text-slate-500 uppercase tracking-wider'>{t('tasks.lastUpdated')}</span>
                   <p className='text-sm text-slate-900 mt-1'>{formatFullDate(task.updatedAt)}</p>
                 </div>
               </div>
@@ -895,7 +965,7 @@ function TaskDetailPanel({ task, onClose, onEdit, onDelete, onStatusChange, form
       {/* Click outside to close. order-first: it sat after the panel, so as
           a flex-1 it took the left of the row and pushed the panel off the
           right edge where justify-end meant to put it. */}
-      <div className='order-first flex-1 h-full' onClick={onClose} />
+      <div className='order-first flex-1 h-full' onClick={onClose} aria-hidden='true' />
     </div>
   );
 }

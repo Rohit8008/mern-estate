@@ -15,6 +15,25 @@ import {
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 
+// The bespoke overlays in this file get the keyboard contract the shared Modal
+// has: Escape closes, focus moves into the panel on open and back to the opener
+// on close.
+function useDialog(open, onEscape, panelRef) {
+  const escRef = useRef(onEscape);
+  escRef.current = onEscape;
+  useEffect(() => {
+    if (!open) return undefined;
+    const opener = document.activeElement;
+    const onKey = (e) => { if (e.key === 'Escape') escRef.current?.(); };
+    document.addEventListener('keydown', onKey);
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
+    };
+  }, [open, panelRef]);
+}
+
 const REPORT_TYPES = [
   { id: 'property_summary',   label: 'Property Summary',    Component: HiHome,          color: 'text-blue-600 bg-blue-50',    border: 'border-blue-200',    accent: '#2563eb', description: 'Overview of property details and status' },
   { id: 'market_analysis',    label: 'Market Analysis',     Component: HiChartBar,      color: 'text-emerald-600 bg-emerald-50', border: 'border-emerald-200', accent: '#059669', description: 'Comparative market analysis report' },
@@ -410,13 +429,16 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
     setSending(false);
   };
 
+  const panelRef = useRef(null);
+  useDialog(isOpen && !!report, onClose, panelRef);
+
   if (!isOpen || !report) return null;
 
   return (
-    <div className='fixed inset-0 !mt-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
+    <div ref={panelRef} role='dialog' aria-modal='true' aria-labelledby='crt-preview-title' tabIndex={-1} className='fixed inset-0 !mt-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col focus:outline-none'>
       <div className='flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0'>
         <div>
-          <h2 className='text-sm font-semibold text-slate-900'>{t('clientReport.reportPreview')}</h2>
+          <h2 id='crt-preview-title' className='text-sm font-semibold text-slate-900'>{t('clientReport.reportPreview')}</h2>
           <p className='text-xs text-slate-500'>{report.templateName} · {report.clientName} · {report.propertyName}</p>
         </div>
         <div className='flex items-center gap-2'>
@@ -428,16 +450,16 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
                 sent ? 'bg-emerald-100 text-emerald-700 cursor-default' : 'bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-60'
               }`}
             >
-              <HiMail className='w-4 h-4' />
+              <HiMail className='w-4 h-4' aria-hidden='true' />
               {sent ? 'Sent!' : sending ? 'Sending...' : `Email to ${report.clientEmail}`}
             </button>
           )}
           <button onClick={handleDownload} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
-            <HiDownload className='w-4 h-4' />{t('clientReport.download')}</button>
+            <HiDownload className='w-4 h-4' aria-hidden='true' />{t('clientReport.download')}</button>
           <button onClick={handlePrint} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
-            <HiPrinter className='w-4 h-4' />{t('clientReport.printPdf')}</button>
-          <button onClick={onClose} className='p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100'>
-            <HiX className='w-5 h-5' />
+            <HiPrinter className='w-4 h-4' aria-hidden='true' />{t('clientReport.printPdf')}</button>
+          <button onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'>
+            <HiX className='w-5 h-5' aria-hidden='true' />
           </button>
         </div>
       </div>
@@ -469,20 +491,24 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
 
   const handleSubmit = (e) => { e.preventDefault(); onSave(formData); onClose(); };
 
+  const panelRef = useRef(null);
+  useDialog(isOpen, onClose, panelRef);
+
   if (!isOpen) return null;
 
   return (
     <div className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
       <div className='flex items-start justify-center min-h-full p-4'>
-      <div className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto'>
+      <div ref={panelRef} role='dialog' aria-modal='true' aria-labelledby='crt-template-title' tabIndex={-1} className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto focus:outline-none'>
         <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
-          <h2 className='text-lg font-semibold text-slate-900'>{template ? 'Edit Template' : 'Create New Template'}</h2>
-          <button onClick={onClose} className='p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100'><HiX className='w-5 h-5' /></button>
+          <h2 id='crt-template-title' className='text-lg font-semibold text-slate-900'>{template ? 'Edit Template' : 'Create New Template'}</h2>
+          <button onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
         </div>
         <form onSubmit={handleSubmit} className='p-4 space-y-4'>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.templateName')}</label>
+            <label htmlFor='crt-templateName' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.templateName')}</label>
             <input
+              id='crt-templateName'
               type='text'
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -492,8 +518,9 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
             />
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.reportType')}</label>
+            <label htmlFor='crt-reportType' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.reportType')}</label>
             <select
+              id='crt-reportType'
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
@@ -502,8 +529,9 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
             </select>
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.description')}</label>
+            <label htmlFor='crt-description' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.description')}</label>
             <textarea
+              id='crt-description'
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
@@ -512,8 +540,8 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
             />
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-2'>{t('clientReport.includeSections')}</label>
-            <div className='space-y-2'>
+            <span id='crt-template-sections' className='block text-sm font-medium text-slate-700 mb-2'>{t('clientReport.includeSections')}</span>
+            <div role='group' aria-labelledby='crt-template-sections' className='space-y-2'>
               {['Property Details', 'Pricing History', 'Market Comparison', 'Location Analysis', 'Investment Metrics', 'Photos Gallery'].map((section) => (
                 <label key={section} className='flex items-center gap-2 cursor-pointer'>
                   <input
@@ -632,6 +660,10 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
     setListingSearch('');
   };
 
+  const panelRef = useRef(null);
+  // Escape closes the open listing suggestions first, then the dialog.
+  useDialog(isOpen, () => { if (showListingDropdown) setShowListingDropdown(false); else onClose(); }, panelRef);
+
   if (!isOpen) return null;
 
   const fmtCurrency = formatListingPrice;
@@ -639,22 +671,22 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
   return (
     <div className='fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto'>
       <div className='flex items-start justify-center min-h-full p-4'>
-      <div className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto'>
+      <div ref={panelRef} role='dialog' aria-modal='true' aria-labelledby='crt-generate-title' tabIndex={-1} className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto focus:outline-none'>
         <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
           <div>
-            <h2 className='text-lg font-semibold text-slate-900'>{isEdit ? 'Edit & Regenerate Report' : 'Generate Report'}</h2>
+            <h2 id='crt-generate-title' className='text-lg font-semibold text-slate-900'>{isEdit ? 'Edit & Regenerate Report' : 'Generate Report'}</h2>
             {isEdit && <p className='text-xs text-slate-500 mt-0.5'>{t('clientReport.changesWillUpdateTheSavedReport')}</p>}
           </div>
-          <button onClick={onClose} className='p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100'><HiX className='w-5 h-5' /></button>
+          <button onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
         </div>
         <form onSubmit={handleSubmit} className='p-4 space-y-4'>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.template')}</label>
+            <label htmlFor='crt-generate-template' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.template')}</label>
             {templates.length === 0 ? (
               <div className='rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center'>
-                <HiTemplate className='w-8 h-8 text-slate-300 mx-auto mb-2' />
+                <HiTemplate className='w-8 h-8 text-slate-300 mx-auto mb-2' aria-hidden='true' />
                 <p className='text-xs font-medium text-slate-600 mb-1'>{t('clientReport.noTemplatesYet')}</p>
-                <p className='text-xs text-slate-400 mb-3'>{t('clientReport.installThe6ProfessionalStarterTemplates')}</p>
+                <p className='text-xs text-slate-500 mb-3'>{t('clientReport.installThe6ProfessionalStarterTemplates')}</p>
                 <button
                   type='button'
                   disabled={installing}
@@ -667,11 +699,12 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
                 >
                   {installing
                     ? <><div className='w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin' />{t('clientReport.installing')}</>
-                    : <><HiPlus className='w-3.5 h-3.5' />{t('clientReport.install6StarterTemplates')}</>}
+                    : <><HiPlus className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.install6StarterTemplates')}</>}
                 </button>
               </div>
             ) : (
               <select
+                id='crt-generate-template'
                 value={formData.templateId}
                 onChange={(e) => setFormData({ ...formData, templateId: e.target.value })}
                 className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
@@ -688,20 +721,23 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 
           {/* Property picker */}
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.propertyListing')}</label>
+            <label htmlFor='crt-generate-listing' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.propertyListing')}</label>
             <div className='relative' ref={listingRef}>
               <div className='flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm focus-within:ring-2 focus-within:ring-slate-900'>
-                <HiSearch className='w-4 h-4 text-slate-400 shrink-0' />
+                <HiSearch className='w-4 h-4 text-slate-400 shrink-0' aria-hidden='true' />
                 <input
+                  id='crt-generate-listing'
                   type='text'
+                  aria-expanded={showListingDropdown && filteredListings.length > 0}
+                  aria-autocomplete='list'
                   value={listingSearch}
                   onChange={(e) => { setListingSearch(e.target.value); setShowListingDropdown(true); if (!e.target.value) handleClearListing(); }}
                   onFocus={() => setShowListingDropdown(true)}
                   placeholder={loadingListings ? 'Loading listings...' : 'Search by name, city, locality...'}
-                  className='flex-1 bg-transparent outline-none text-slate-700 placeholder:text-slate-400'
+                  className='flex-1 bg-transparent outline-none text-slate-700 placeholder:text-slate-500'
                 />
                 {formData.listing && (
-                  <button type='button' onClick={handleClearListing} className='text-slate-400 hover:text-slate-600'><HiX className='w-4 h-4' /></button>
+                  <button type='button' onClick={handleClearListing} aria-label='Clear selected listing' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
                 )}
               </div>
               {showListingDropdown && filteredListings.length > 0 && (
@@ -739,8 +775,9 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.propertySubject')}</label>
+            <label htmlFor='crt-propertySubject' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.propertySubject')}</label>
             <input
+              id='crt-propertySubject'
               type='text'
               value={formData.propertyName}
               onChange={(e) => setFormData({ ...formData, propertyName: e.target.value })}
@@ -751,8 +788,9 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.client')}</label>
+            <label htmlFor='crt-client' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.client')}</label>
             <select
+              id='crt-client'
               value={formData.clientId}
               onChange={handleClientSelect}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
@@ -765,8 +803,9 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 
           <div className='grid grid-cols-2 gap-3'>
             <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.clientName2')}</label>
+              <label htmlFor='crt-clientName2' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.clientName2')}</label>
               <input
+                id='crt-clientName2'
                 type='text'
                 value={formData.clientName}
                 onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
@@ -776,8 +815,9 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
               />
             </div>
             <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.clientEmail')}</label>
+              <label htmlFor='crt-clientEmail' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.clientEmail')}</label>
               <input
+                id='crt-clientEmail'
                 type='email'
                 value={formData.clientEmail}
                 onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
@@ -788,8 +828,9 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.additionalNotes')}</label>
+            <label htmlFor='crt-additionalNotes' className='block text-sm font-medium text-slate-700 mb-1'>{t('clientReport.additionalNotes')}</label>
             <textarea
+              id='crt-additionalNotes'
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
@@ -800,13 +841,13 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
 
           {!formData.clientEmail && (
             <p className='text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 flex items-center gap-1.5'>
-              <HiExclamationCircle className='w-4 h-4 shrink-0' />{t('clientReport.addAClientEmailToEnable')}</p>
+              <HiExclamationCircle className='w-4 h-4 shrink-0' aria-hidden='true' />{t('clientReport.addAClientEmailToEnable')}</p>
           )}
 
           <div className='flex justify-end gap-2 pt-2'>
             <button type='button' onClick={onClose} className='px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium'>{t('clientReport.cancel')}</button>
             <button type='submit' className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium flex items-center gap-1.5'>
-              {isEdit ? <HiRefresh className='w-4 h-4' /> : <HiDocumentText className='w-4 h-4' />}
+              {isEdit ? <HiRefresh className='w-4 h-4' aria-hidden='true' /> : <HiDocumentText className='w-4 h-4' aria-hidden='true' />}
               {isEdit ? 'Regenerate & Save' : 'Generate Report'}
             </button>
           </div>
@@ -869,6 +910,10 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
     onClose();
   };
 
+  const panelRef = useRef(null);
+  // While the unsaved-changes confirm is up, Escape belongs to it.
+  useDialog(isOpen && !!report, () => { if (!confirmCloseOpen) handleClose(); }, panelRef);
+
   if (!isOpen || !report) return null;
 
   const Divider = () => <div className='w-px h-5 bg-slate-200 mx-0.5 shrink-0' />;
@@ -878,6 +923,7 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
       type='button'
       onMouseDown={(e) => { e.preventDefault(); onClick(); }}
       title={title}
+      aria-label={title}
       className={`px-2 py-1 rounded text-sm transition-colors text-slate-600 hover:bg-slate-100 hover:text-slate-900 shrink-0 ${className}`}
     >
       {children}
@@ -885,12 +931,12 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
   );
 
   return (
-    <div className='fixed inset-0 !mt-0 z-50 flex flex-col bg-slate-100'>
+    <div ref={panelRef} role='dialog' aria-modal='true' aria-labelledby='crt-editor-title' tabIndex={-1} className='fixed inset-0 !mt-0 z-50 flex flex-col bg-slate-100 focus:outline-none'>
       {/* ── Top bar ── */}
       <div className='shrink-0 bg-white border-b border-slate-200 shadow-sm'>
         <div className='flex items-center justify-between px-4 py-2.5 border-b border-slate-100'>
           <div className='min-w-0'>
-            <h2 className='text-sm font-semibold text-slate-900'>{t('clientReport.editReport')}</h2>
+            <h2 id='crt-editor-title' className='text-sm font-semibold text-slate-900'>{t('clientReport.editReport')}</h2>
             <p className='text-xs text-slate-500 truncate'>{report.templateName} · {report.clientName} · {report.propertyName}</p>
           </div>
           <div className='flex items-center gap-2 shrink-0'>
@@ -903,7 +949,7 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
               disabled={saving || !dirty}
               className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors'
             >
-              <HiCheckCircle className='w-3.5 h-3.5' />
+              <HiCheckCircle className='w-3.5 h-3.5' aria-hidden='true' />
               {saving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
@@ -936,7 +982,8 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             onMouseDown={(e) => e.stopPropagation()}
             onChange={(e) => { exec('formatBlock', e.target.value); e.target.value = ''; }}
             defaultValue=''
-            className='text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 shrink-0'
+            aria-label='Block format'
+            className='text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 shrink-0'
           >
             <option value='' disabled>{t('clientReport.format')}</option>
             <option value='h1'>{t('clientReport.heading1')}</option>
@@ -948,7 +995,8 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             onMouseDown={(e) => e.stopPropagation()}
             onChange={(e) => { exec('fontSize', e.target.value); e.target.value = ''; }}
             defaultValue=''
-            className='text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 ml-1 shrink-0'
+            aria-label='Font size'
+            className='text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 ml-1 shrink-0'
           >
             <option value='' disabled>{t('clientReport.size')}</option>
             <option value='1'>{t('clientReport.xsmall')}</option>
@@ -986,7 +1034,7 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             <span className='text-xs'>{t('clientReport.clear')}</span>
           </TBtn>
           <div className='ml-auto pl-4 shrink-0'>
-            <span className='text-xs text-slate-400 italic'>{t('clientReport.clickAnyTextInTheReport')}</span>
+            <span className='text-xs text-slate-500 italic'>{t('clientReport.clickAnyTextInTheReport')}</span>
           </div>
         </div>
       </div>
@@ -1067,19 +1115,22 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
     doc.close();
   }, [isOpen, html]);
 
+  const panelRef = useRef(null);
+  useDialog(isOpen && !!template, onClose, panelRef);
+
   if (!isOpen || !template) return null;
 
   const typeInfo = REPORT_TYPES.find(t => t.id === template.type) || REPORT_TYPES[0];
 
   return (
-    <div className='fixed inset-0 !mt-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col'>
+    <div ref={panelRef} role='dialog' aria-modal='true' aria-labelledby='crt-template-preview-title' tabIndex={-1} className='fixed inset-0 !mt-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col focus:outline-none'>
       {/* Header */}
       <div className='bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shrink-0'>
         <div className={`w-8 h-8 rounded-lg ${typeInfo.color} flex items-center justify-center shrink-0`}>
-          <typeInfo.Component className='w-4 h-4' />
+          <typeInfo.Component className='w-4 h-4' aria-hidden='true' />
         </div>
         <div className='min-w-0 flex-1'>
-          <h2 className='text-sm font-semibold text-slate-900 truncate'>{template.name}</h2>
+          <h2 id='crt-template-preview-title' className='text-sm font-semibold text-slate-900 truncate'>{template.name}</h2>
           <p className='text-xs text-slate-500'>{typeInfo.label} · Preview with sample data</p>
         </div>
         <div className='flex items-center gap-2'>
@@ -1089,14 +1140,14 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
               onClick={() => { onEdit(template); onClose(); }}
               className='flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50'
             >
-              <HiPencil className='w-4 h-4' />{t('clientReport.editTemplate')}</button>
+              <HiPencil className='w-4 h-4' aria-hidden='true' />{t('clientReport.editTemplate')}</button>
           )}
           {isInstalled && onUse && (
             <button
               onClick={() => { onUse(template._id); onClose(); }}
               className='flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800'
             >
-              <HiDocumentText className='w-4 h-4' />{t('clientReport.useTemplate')}</button>
+              <HiDocumentText className='w-4 h-4' aria-hidden='true' />{t('clientReport.useTemplate')}</button>
           )}
           <button
             onClick={() => {
@@ -1105,16 +1156,18 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
               w.document.close();
               w.print();
             }}
-            className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
             title={t('clientReport.print')}
+            aria-label={t('clientReport.print')}
           >
-            <HiPrinter className='w-5 h-5' />
+            <HiPrinter className='w-5 h-5' aria-hidden='true' />
           </button>
           <button
             onClick={onClose}
-            className='p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            aria-label='Close'
+            className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
           >
-            <HiX className='w-5 h-5' />
+            <HiX className='w-5 h-5' aria-hidden='true' />
           </button>
         </div>
       </div>
@@ -1153,7 +1206,7 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
       <div className='flex items-start justify-between gap-2'>
         <div className='flex items-center gap-3 min-w-0'>
           <div className={`w-9 h-9 rounded-xl ${colorClasses} flex items-center justify-center shrink-0`}>
-            <Icon className='w-5 h-5' />
+            <Icon className='w-5 h-5' aria-hidden='true' />
           </div>
           <div className='min-w-0'>
             <p className='text-sm font-semibold text-slate-900 truncate'>{report.templateName}</p>
@@ -1166,31 +1219,34 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               : 'bg-amber-50 text-amber-700 border border-amber-200'
           }`}>
-            {report.status === 'sent' ? <HiCheckCircle className='w-3 h-3' /> : <HiClock className='w-3 h-3' />}
+            {report.status === 'sent' ? <HiCheckCircle className='w-3 h-3' aria-hidden='true' /> : <HiClock className='w-3 h-3' aria-hidden='true' />}
             {report.status === 'sent' ? 'Sent' : 'Draft'}
           </span>
           <div className='relative' ref={menuRef}>
             <button
               onClick={() => setMenuOpen(v => !v)}
-              className='p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600'
+              aria-label='Report actions'
+              aria-haspopup='menu'
+              aria-expanded={menuOpen}
+              className='p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
             >
-              <HiDotsVertical className='w-4 h-4' />
+              <HiDotsVertical className='w-4 h-4' aria-hidden='true' />
             </button>
             {menuOpen && (
               <div className='absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1'>
                 <button onClick={() => { onView(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                  <HiEye className='w-4 h-4' />{t('clientReport.preview')}</button>
+                  <HiEye className='w-4 h-4' aria-hidden='true' />{t('clientReport.preview')}</button>
                 <button onClick={() => { onEditContent(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                  <HiPencil className='w-4 h-4' />{t('clientReport.editContent')}</button>
+                  <HiPencil className='w-4 h-4' aria-hidden='true' />{t('clientReport.editContent')}</button>
                 <button onClick={() => { onEdit(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                  <HiRefresh className='w-4 h-4' />{t('clientReport.regenerate')}</button>
+                  <HiRefresh className='w-4 h-4' aria-hidden='true' />{t('clientReport.regenerate')}</button>
                 {report.clientEmail && (
                   <button onClick={() => { onSend(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
-                    <HiMail className='w-4 h-4' />{t('clientReport.sendByEmail')}</button>
+                    <HiMail className='w-4 h-4' aria-hidden='true' />{t('clientReport.sendByEmail')}</button>
                 )}
                 <div className='h-px bg-slate-100 my-1' />
                 <button onClick={() => { onDelete(report._id); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 flex items-center gap-2 text-rose-600'>
-                  <HiTrash className='w-4 h-4' />{t('clientReport.delete')}</button>
+                  <HiTrash className='w-4 h-4' aria-hidden='true' />{t('clientReport.delete')}</button>
               </div>
             )}
           </div>
@@ -1200,16 +1256,16 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
       {/* Info */}
       <div className='space-y-1.5'>
         <div className='flex items-center gap-2 text-xs text-slate-600'>
-          <HiUser className='w-3.5 h-3.5 text-slate-400 shrink-0' />
+          <HiUser className='w-3.5 h-3.5 text-slate-400 shrink-0' aria-hidden='true' />
           <span className='font-medium truncate'>{report.clientName}</span>
-          {report.clientEmail && <span className='text-slate-400 truncate'>· {report.clientEmail}</span>}
+          {report.clientEmail && <span className='text-slate-500 truncate'>· {report.clientEmail}</span>}
         </div>
         <div className='flex items-center gap-2 text-xs text-slate-600'>
-          <HiHome className='w-3.5 h-3.5 text-slate-400 shrink-0' />
+          <HiHome className='w-3.5 h-3.5 text-slate-400 shrink-0' aria-hidden='true' />
           <span className='truncate'>{report.propertyName}</span>
         </div>
         <div className='flex items-center gap-2 text-xs text-slate-500'>
-          <HiCalendar className='w-3.5 h-3.5 text-slate-400 shrink-0' />
+          <HiCalendar className='w-3.5 h-3.5 text-slate-400 shrink-0' aria-hidden='true' />
           <span>{formatDate(report.createdAt || report.generatedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
           {report.sentAt && <span className='text-emerald-600'>· Sent {formatDate(report.sentAt, { day: 'numeric', month: 'short' })}</span>}
         </div>
@@ -1233,19 +1289,20 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
           onClick={() => onView(report)}
           className='flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5'
         >
-          <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
+          <HiEye className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.preview')}</button>
         <button
           onClick={() => onEditContent(report)}
           className='flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5'
         >
-          <HiPencil className='w-3.5 h-3.5' />{t('clientReport.edit')}</button>
+          <HiPencil className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.edit')}</button>
         {report.clientEmail && (
           <button
             onClick={() => onSend(report)}
             className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors'
             title={`Send to ${report.clientEmail}`}
+            aria-label={`Send to ${report.clientEmail}`}
           >
-            <HiMail className='w-4 h-4' />
+            <HiMail className='w-4 h-4' aria-hidden='true' />
           </button>
         )}
       </div>
@@ -1485,12 +1542,12 @@ export default function ClientReportTemplate() {
               onClick={() => openGenerateModal()}
               className='px-4 py-2 rounded-lg border border-white/10 bg-white/10 hover:bg-white/20 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
-              <HiDocumentText className='w-4 h-4' />{t('clientReport.generateReport')}</button>
+              <HiDocumentText className='w-4 h-4' aria-hidden='true' />{t('clientReport.generateReport')}</button>
             <button
               onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}
               className='px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
-              <HiPlus className='w-4 h-4' />{t('clientReport.newTemplate')}</button>
+              <HiPlus className='w-4 h-4' aria-hidden='true' />{t('clientReport.newTemplate')}</button>
           </div>
         </div>
       </div>
@@ -1502,12 +1559,17 @@ export default function ClientReportTemplate() {
           return (
             <div
               key={type.id}
-              className='bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group'
+              role='button'
+              tabIndex={0}
+              className='bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
               onClick={() => openGenerateModal(null, matchingTemplate?._id || '')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGenerateModal(null, matchingTemplate?._id || ''); }
+              }}
               title={matchingTemplate ? `Generate using "${matchingTemplate.name}"` : 'Generate report (select template in form)'}
             >
               <div className={`w-9 h-9 rounded-xl ${type.color} flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
-                <type.Component className='w-5 h-5' />
+                <type.Component className='w-5 h-5' aria-hidden='true' />
               </div>
               <h3 className='text-sm font-medium text-slate-900 leading-tight'>{type.label}</h3>
               <p className='text-xs text-slate-500 mt-1 line-clamp-2'>{type.description}</p>
@@ -1547,20 +1609,22 @@ export default function ClientReportTemplate() {
                 onClick={() => { fetchTemplates(); fetchReports(); }}
                 className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50'
                 title={t('clientReport.refresh')}
+                aria-label={t('clientReport.refresh')}
               >
-                <HiRefresh className='w-4 h-4' />
+                <HiRefresh className='w-4 h-4' aria-hidden='true' />
               </button>
-              <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white'>
-                <HiSearch className='w-4 h-4 text-slate-400' />
+              <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-brand-500'>
+                <HiSearch className='w-4 h-4 text-slate-400' aria-hidden='true' />
                 <input
                   type='text'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('clientReport.search')}
-                  className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-36'
+                  aria-label='Search templates and reports'
+                  className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-500 w-36'
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className='text-slate-400 hover:text-slate-600'><HiX className='w-4 h-4' /></button>
+                  <button onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
                 )}
               </div>
             </div>
@@ -1584,7 +1648,7 @@ export default function ClientReportTemplate() {
                       <div className='flex items-start justify-between mb-3'>
                         <div className='flex items-center gap-3 min-w-0'>
                           <div className={`w-9 h-9 rounded-xl ${typeInfo.color} flex items-center justify-center shrink-0`}>
-                            <typeInfo.Component className='w-5 h-5' />
+                            <typeInfo.Component className='w-5 h-5' aria-hidden='true' />
                           </div>
                           <div className='min-w-0'>
                             <h3 className='text-sm font-semibold text-slate-900 truncate'>{template.name}</h3>
@@ -1594,9 +1658,12 @@ export default function ClientReportTemplate() {
                         <div className='relative shrink-0' data-tmpl-menu='true'>
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowActionsMenu(showActionsMenu === template._id ? null : template._id); }}
-                            className='p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600'
+                            aria-label={`Actions for ${template.name}`}
+                            aria-haspopup='menu'
+                            aria-expanded={showActionsMenu === template._id}
+                            className='p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
                           >
-                            <HiDotsVertical className='w-5 h-5' />
+                            <HiDotsVertical className='w-5 h-5' aria-hidden='true' />
                           </button>
                           {showActionsMenu === template._id && (
                             <div className='absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1'>
@@ -1604,23 +1671,23 @@ export default function ClientReportTemplate() {
                                 onClick={() => { setPreviewTemplate(template); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
-                                <HiEye className='w-4 h-4' />{t('clientReport.preview')}</button>
+                                <HiEye className='w-4 h-4' aria-hidden='true' />{t('clientReport.preview')}</button>
                               <button
                                 onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
-                                <HiPencil className='w-4 h-4' />{t('clientReport.edit')}</button>
+                                <HiPencil className='w-4 h-4' aria-hidden='true' />{t('clientReport.edit')}</button>
                               <button
                                 onClick={() => handleDuplicateTemplate(template)}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
-                                <HiDuplicate className='w-4 h-4' />{t('clientReport.duplicate')}</button>
+                                <HiDuplicate className='w-4 h-4' aria-hidden='true' />{t('clientReport.duplicate')}</button>
                               <div className='h-px bg-slate-100 my-1' />
                               <button
                                 onClick={() => { setPendingDeleteTemplate(template._id); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2'
                               >
-                                <HiTrash className='w-4 h-4' />{t('clientReport.delete')}</button>
+                                <HiTrash className='w-4 h-4' aria-hidden='true' />{t('clientReport.delete')}</button>
                             </div>
                           )}
                         </div>
@@ -1643,11 +1710,11 @@ export default function ClientReportTemplate() {
 
                       <div className='flex items-center gap-3 text-xs text-slate-500 mb-3'>
                         <span className='flex items-center gap-1'>
-                          <HiCalendar className='w-3.5 h-3.5' />
+                          <HiCalendar className='w-3.5 h-3.5' aria-hidden='true' />
                           {formatDate(template.createdAt, { day: 'numeric', month: 'short' })}
                         </span>
                         <span className='flex items-center gap-1'>
-                          <HiClipboardList className='w-3.5 h-3.5' />
+                          <HiClipboardList className='w-3.5 h-3.5' aria-hidden='true' />
                           Used {template.usageCount || 0}×
                         </span>
                       </div>
@@ -1661,12 +1728,12 @@ export default function ClientReportTemplate() {
                           onClick={() => setPreviewTemplate(template)}
                           className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
                         >
-                          <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
+                          <HiEye className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.preview')}</button>
                         <button
                           onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); }}
                           className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
                         >
-                          <HiPencil className='w-3.5 h-3.5' />{t('clientReport.edit')}</button>
+                          <HiPencil className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.edit')}</button>
                       </div>
                     </div>
                   );
@@ -1675,7 +1742,7 @@ export default function ClientReportTemplate() {
                   <div className='col-span-full py-12'>
                     <div className='max-w-md mx-auto text-center'>
                       <div className='w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4'>
-                        <HiTemplate className='w-7 h-7 text-slate-400' />
+                        <HiTemplate className='w-7 h-7 text-slate-400' aria-hidden='true' />
                       </div>
                       <p className='text-sm font-semibold text-slate-800 mb-1'>{t('clientReport.noTemplatesYet')}</p>
                       <p className='text-xs text-slate-500 mb-6'>{t('clientReport.getStartedInstantlyWith6Professionally')}</p>
@@ -1689,18 +1756,18 @@ export default function ClientReportTemplate() {
                             return (
                               <div key={i} className='flex items-center gap-2.5 group rounded-lg px-2 py-1.5 hover:bg-white hover:shadow-sm transition-all'>
                                 <div className={`w-6 h-6 rounded-lg ${ti?.color || 'text-slate-600 bg-slate-100'} flex items-center justify-center shrink-0`}>
-                                  {ti ? <ti.Component className='w-3.5 h-3.5' /> : null}
+                                  {ti ? <ti.Component className='w-3.5 h-3.5' aria-hidden='true' /> : null}
                                 </div>
                                 <div className='min-w-0 flex-1'>
                                   <p className='text-xs font-semibold text-slate-800 truncate'>{item.name}</p>
-                                  <p className='text-xs text-slate-400 truncate'>{item.sections.slice(0, 3).join(' · ')}{item.sections.length > 3 ? ` +${item.sections.length - 3}` : ''}</p>
+                                  <p className='text-xs text-slate-500 truncate'>{item.sections.slice(0, 3).join(' · ')}{item.sections.length > 3 ? ` +${item.sections.length - 3}` : ''}</p>
                                 </div>
                                 <button
                                   type='button'
                                   onClick={() => setPreviewTemplate(item)}
-                                  className='shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity'
+                                  className='shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity'
                                 >
-                                  <HiEye className='w-3.5 h-3.5' />{t('clientReport.preview')}</button>
+                                  <HiEye className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.preview')}</button>
                               </div>
                             );
                           })}
@@ -1716,7 +1783,7 @@ export default function ClientReportTemplate() {
                           {seedingTemplates ? (
                             <><div className='w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin' />{t('clientReport.installing')}</>
                           ) : (
-                            <><HiPlus className='w-4 h-4' />{t('clientReport.install6StarterTemplates')}</>
+                            <><HiPlus className='w-4 h-4' aria-hidden='true' />{t('clientReport.install6StarterTemplates')}</>
                           )}
                         </button>
                         <button
@@ -1747,7 +1814,7 @@ export default function ClientReportTemplate() {
               </div>
             ) : filteredReports.length === 0 ? (
               <div className='py-16 text-center'>
-                <HiDocumentText className='w-12 h-12 text-slate-300 mx-auto mb-3' />
+                <HiDocumentText className='w-12 h-12 text-slate-300 mx-auto mb-3' aria-hidden='true' />
                 <p className='text-sm font-medium text-slate-700 mb-1'>{t('clientReport.noReportsGeneratedYet')}</p>
                 <p className='text-xs text-slate-500 mb-4'>{t('clientReport.generateAReportFromAnyOf')}</p>
                 <button

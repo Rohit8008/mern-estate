@@ -41,7 +41,7 @@ const CRM_PREFIXES = [
 // them with the public header and footer.
 const STAFF_PREFIXES = ['/listing/'];
 
-const BARE_PREFIXES = ['/s/', '/invite/'];
+const BARE_PREFIXES = ['/s/', '/invite/', '/unsubscribe/'];
 
 export default function AppShell({ children }) {
   const { t } = useTranslation();

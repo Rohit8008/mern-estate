@@ -38,7 +38,7 @@ export function TagChip({ tag, onRemove }) {
           className='opacity-60 hover:opacity-100 transition-opacity'
           aria-label={`Remove ${tag.name}`}
         >
-          <HiX className='w-3 h-3' />
+          <HiX className='w-3 h-3' aria-hidden='true' />
         </button>
       )}
     </span>
@@ -135,9 +135,10 @@ export default function TagPicker({ kind, recordId, value = [], onChange, readOn
           <button
             type='button'
             onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
             className='inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors'
           >
-            <HiPlus className='w-3 h-3' />
+            <HiPlus className='w-3 h-3' aria-hidden='true' />
             {t('tags.add')}
           </button>
 
@@ -147,9 +148,13 @@ export default function TagPicker({ kind, recordId, value = [], onChange, readOn
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !exactExists) createAndAttach(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setOpen(false); return; }
+                  if (e.key === 'Enter' && !exactExists) createAndAttach();
+                }}
                 placeholder={t('tags.placeholder')}
-                className='w-full px-3 py-2 text-sm border-b border-slate-100 focus:outline-none'
+                aria-label='Find or create a tag'
+                className='w-full px-3 py-2 text-sm border-b border-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500'
               />
 
               <div className='max-h-48 overflow-y-auto'>
@@ -172,13 +177,13 @@ export default function TagPicker({ kind, recordId, value = [], onChange, readOn
                     onClick={createAndAttach}
                     className='flex items-center gap-1.5 w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 transition-colors text-left'
                   >
-                    <HiPlus className='w-3.5 h-3.5' />
+                    <HiPlus className='w-3.5 h-3.5' aria-hidden='true' />
                     Create &ldquo;{query.trim()}&rdquo;
                   </button>
                 )}
 
                 {!matches.length && !query.trim() && (
-                  <p className='px-3 py-3 text-xs text-slate-400'>{t('tags.none')}</p>
+                  <p className='px-3 py-3 text-xs text-slate-500'>{t('tags.none')}</p>
                 )}
               </div>
             </div>

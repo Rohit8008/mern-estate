@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -129,6 +129,20 @@ export default function CrmShell() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  // Escape closes whatever is open: the mobile drawer, the profile menu, the
+  // notification panel. Their click-catchers are mouse-only.
+  useEffect(() => {
+    if (!sidebarOpen && !profileOpen && !notifOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      setSidebarOpen(false);
+      setProfileOpen(false);
+      setNotifOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [sidebarOpen, profileOpen, notifOpen]);
+
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
     if (isBuyerViewMode) return false;
@@ -200,9 +214,10 @@ export default function CrmShell() {
           <button
             type='button'
             onClick={closeSidebar}
+            aria-label={t('crmShell.closeSidebar')}
             className='lg:hidden p-1.5 rounded-lg hover:bg-white/10 text-slate-400'
           >
-            <HiX className='w-4 h-4' />
+            <HiX className='w-4 h-4' aria-hidden='true' />
           </button>
         </div>
 
@@ -253,6 +268,7 @@ export default function CrmShell() {
           <div className='relative'>
             <button
               onClick={() => setProfileOpen((o) => !o)}
+              aria-expanded={profileOpen}
               className='w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors group'
             >
               <div className='w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-indigo-600/30 flex items-center justify-center ring-1 ring-white/10'>
@@ -273,7 +289,7 @@ export default function CrmShell() {
 
             {profileOpen && (
               <>
-                <button className='fixed inset-0 !mt-0 z-10' onClick={() => setProfileOpen(false)} />
+                <button type='button' tabIndex={-1} aria-hidden='true' className='fixed inset-0 !mt-0 z-10' onClick={() => setProfileOpen(false)} />
                 <div className='absolute bottom-full left-0 right-0 mb-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-20 overflow-hidden'>
                   <Link
                     to='/profile'
@@ -320,6 +336,7 @@ export default function CrmShell() {
             <button
               type='button'
               onClick={() => setSidebarOpen(true)}
+              aria-expanded={sidebarOpen}
               className='lg:hidden p-2 rounded-lg hover:bg-slate-100 flex-shrink-0'
               aria-label={t('crmShell.openSidebar')}
             >
@@ -360,6 +377,7 @@ export default function CrmShell() {
               <button
                 type='button'
                 onClick={() => { setNotifOpen((o) => !o); ensureLoaded(); }}
+                aria-expanded={notifOpen}
                 className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all relative'
                 aria-label={t('nav.notifications')}
               >
@@ -373,7 +391,7 @@ export default function CrmShell() {
 
               {notifOpen && (
                 <>
-                  <button className='fixed inset-0 !mt-0 z-10' onClick={() => setNotifOpen(false)} aria-hidden='true' />
+                  <button type='button' tabIndex={-1} aria-hidden='true' className='fixed inset-0 !mt-0 z-10' onClick={() => setNotifOpen(false)} />
                   <div className='absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden'>
                     <div className='flex items-center justify-between px-4 py-3 border-b border-slate-100'>
                       <span className='text-sm font-semibold text-slate-800'>{t('nav.notifications')}</span>

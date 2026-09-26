@@ -168,8 +168,36 @@ export const exportContactData = async (req, res, next) => {
   }
 };
 
-/** A value that identifies nobody, but keeps a required field populated. */
-const redacted = (id, field) => `redacted-${field}-${String(id).slice(-6)}`;
+/**
+ * The $set that removes a team member's personal details.
+ *
+ * Shared by admin erasure and self-service account deletion, so the two cannot
+ * drift. Every personal field on the model, by its real name: Mongoose drops
+ * unknown $set keys silently under strict mode, so a wrong name here does not
+ * fail — it just leaves the data in place.
+ */
+export const erasedUserFields = (id) => ({
+  // Both unique per workspace ({tenantId, username}, {tenantId, email}), so
+  // each carries the full id: a constant made every erasure after the first
+  // in a workspace fail with a duplicate-key error, leaving the data in place.
+  username: `Former team member ${String(id)}`,
+  email: `redacted-${String(id)}@removed.invalid`,
+  // null, not '': the phone index is partial on strings, so '' would collide
+  // across erased users the same way.
+  phone: null,
+  avatar: '',
+  firstName: '',
+  lastName: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  postalCode: '',
+  country: '',
+  company: '',
+  website: '',
+  bio: '',
+});
 
 /**
  * Erase a team member's personal details.
@@ -198,10 +226,7 @@ export const eraseUser = async (req, res, next) => {
         { _id: targetId },
         {
           $set: {
-            username: 'Former team member',
-            email: `${redacted(targetId, 'email')}@removed.invalid`,
-            phone: '',
-            avatar: '',
+            ...erasedUserFields(targetId),
             status: 'inactive',
             isDeleted: true,
             deletedAt: new Date(),
@@ -218,7 +243,7 @@ export const eraseUser = async (req, res, next) => {
 
     // Security logs key on the email address, which no longer identifies them.
     await inHomeTenant(req, () =>
-      SecurityLog.updateMany({ email: originalEmail }, { $set: { email: `${redacted(targetId, 'email')}@removed.invalid` } })
+      SecurityLog.updateMany({ email: originalEmail }, { $set: { email: erasedUserFields(targetId).email } })
     );
 
     logFromRequest(req, {
@@ -239,6 +264,52 @@ export const eraseUser = async (req, res, next) => {
 };
 
 /**
+ * What erasing each kind of contact clears. Every key must be a real path on
+ * its model — tests/erasureFields.test.js checks, because an unknown $set key
+ * is dropped without an error and the data it meant to remove stays.
+ */
+export const ERASABLE_CONTACTS = {
+  client: {
+    Model: Client,
+    fields: {
+      name: 'Erased contact',
+      email: '',
+      phone: '',
+      alternatePhone: '',
+      organization: '',
+      requirements: '',
+      preferredLocations: [],
+      tags: [],
+      notes: '',
+      communications: [],
+      followUps: [],
+      photos: [],
+    },
+  },
+  owner: {
+    Model: Owner,
+    fields: {
+      name: 'Erased owner',
+      email: '',
+      phone: '',
+      companyName: '',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      taxId: '',
+      notes: '',
+    },
+  },
+  buyer: {
+    Model: BuyerRequirement,
+    fields: { buyerName: 'Erased buyer', buyerEmail: '', buyerPhone: '', notes: '', additionalRequirements: '' },
+  },
+};
+
+
+/**
  * Erase a contact.
  *
  * Unlike a team member, there is no authorship to preserve — so the personal
@@ -249,31 +320,7 @@ export const eraseContact = async (req, res, next) => {
   try {
     const { kind, id } = req.params;
 
-    const SPECS = {
-      client: {
-        Model: Client,
-        fields: {
-          name: 'Erased contact',
-          email: '',
-          phone: '',
-          altPhone: '',
-          address: '',
-          notes: '',
-          communications: [],
-          followUps: [],
-        },
-      },
-      owner: {
-        Model: Owner,
-        fields: { name: 'Erased owner', email: '', phone: '', altPhone: '', address: '', notes: '' },
-      },
-      buyer: {
-        Model: BuyerRequirement,
-        fields: { buyerName: 'Erased buyer', buyerEmail: '', buyerPhone: '', notes: '', additionalRequirements: '' },
-      },
-    };
-
-    const spec = SPECS[kind];
+    const spec = ERASABLE_CONTACTS[kind];
     if (!spec) return next(errorHandler(400, 'Unknown contact kind'));
 
     const record = await spec.Model.findById(id);

@@ -268,19 +268,19 @@ export default function PortfolioDashboard() {
             onClick={fetchData}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors'
           >
-            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />{t('portfolioDashboard.refresh')}</button>
+            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden='true' />{t('portfolioDashboard.refresh')}</button>
           <button
             onClick={handleExport}
             disabled={loading || !properties.length}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
-            <HiDownload className='w-4 h-4' />{t('portfolioDashboard.export')}</button>
+            <HiDownload className='w-4 h-4' aria-hidden='true' />{t('portfolioDashboard.export')}</button>
           <button
             onClick={handlePrint}
             disabled={loading || !properties.length}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
-            <HiPrinter className='w-4 h-4' />{t('portfolioDashboard.print')}</button>
+            <HiPrinter className='w-4 h-4' aria-hidden='true' />{t('portfolioDashboard.print')}</button>
         </div>
       </div>
 
@@ -317,7 +317,7 @@ export default function PortfolioDashboard() {
               color='blue'
               sub={
                 <span className='flex items-center gap-1 text-emerald-600 font-medium'>
-                  <HiTrendingUp className='w-3.5 h-3.5' />{t('portfolioDashboard.activePortfolio')}</span>
+                  <HiTrendingUp className='w-3.5 h-3.5' aria-hidden='true' />{t('portfolioDashboard.activePortfolio')}</span>
               }
             />
             <KpiCard
@@ -405,11 +405,13 @@ export default function PortfolioDashboard() {
                 <div className='relative'>
                   <button
                     onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                    aria-expanded={showTypeDropdown}
+                    aria-label={`Filter by type: ${selectedType}`}
                     className='px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-600 flex items-center gap-2 hover:bg-slate-50'
                   >
-                    <HiFilter className='w-4 h-4' />
+                    <HiFilter className='w-4 h-4' aria-hidden='true' />
                     {selectedType}
-                    <HiChevronDown className='w-4 h-4' />
+                    <HiChevronDown className='w-4 h-4' aria-hidden='true' />
                   </button>
                   {showTypeDropdown && (
                     <div className='absolute right-0 top-full mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-10'>
@@ -417,6 +419,7 @@ export default function PortfolioDashboard() {
                         <button
                           key={type}
                           onClick={() => { setSelectedType(type); setShowTypeDropdown(false); }}
+                          aria-pressed={selectedType === type}
                           className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${selectedType === type ? 'bg-slate-100 font-medium' : ''}`}
                         >
                           {type}
@@ -450,7 +453,7 @@ export default function PortfolioDashboard() {
                             {property.imageUrls?.[0] ? (
                               <img
                                 src={normalizeImageUrl(property.imageUrls[0])}
-                                alt={property.name}
+                                alt=''
                                 className='w-10 h-10 rounded-lg object-cover flex-shrink-0'
                                 onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
                               />
@@ -458,7 +461,7 @@ export default function PortfolioDashboard() {
                             <div
                               className={`w-10 h-10 rounded-lg bg-slate-100 items-center justify-center flex-shrink-0 ${property.imageUrls?.[0] ? 'hidden' : 'flex'}`}
                             >
-                              <HiOutlinePhotograph className='w-5 h-5 text-slate-300' />
+                              <HiOutlinePhotograph className='w-5 h-5 text-slate-300' aria-hidden='true' />
                             </div>
                             <div>
                               <p className='text-sm font-medium text-slate-900 truncate max-w-[200px]'>{property.name}</p>
@@ -485,9 +488,10 @@ export default function PortfolioDashboard() {
                         <td className='px-4 py-3'>
                           <Link
                             to={`/listing/${property._id}`}
-                            className='text-slate-400 hover:text-slate-600 transition-colors'
+                            aria-label={`View ${property.name}`}
+                            className='text-slate-500 hover:text-slate-700 transition-colors'
                           >
-                            <HiEye className='w-5 h-5' />
+                            <HiEye className='w-5 h-5' aria-hidden='true' />
                           </Link>
                         </td>
                       </tr>

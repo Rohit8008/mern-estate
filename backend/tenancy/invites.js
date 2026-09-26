@@ -22,6 +22,7 @@ import crypto from 'crypto';
 import { config } from '../config/environment.js';
 import { sendMail } from '../utils/mailer.js';
 import { logger } from '../utils/logger.js';
+import { workspaceBaseUrl } from './workspaceUrl.js';
 
 /** Long enough that guessing is not a strategy. */
 const TOKEN_BYTES = 32;
@@ -77,12 +78,7 @@ export function attachInvite(user, { days = DEFAULT_INVITE_DAYS, invitedBy = nul
  * session it creates is resolvable by host afterwards, not just by token.
  */
 export function inviteUrl(token, tenant) {
-  const appDomain = config.tenancy?.appDomain;
-  const base =
-    tenant?.customDomain ? `https://${tenant.customDomain}`
-    : tenant?.slug && appDomain ? `https://${tenant.slug}.${appDomain}`
-    : process.env.FRONTEND_URL || 'http://localhost:5173';
-  return `${String(base).replace(/\/+$/, '')}/invite/${token}`;
+  return `${workspaceBaseUrl(tenant)}/invite/${token}`;
 }
 
 /**

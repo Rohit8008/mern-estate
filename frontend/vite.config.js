@@ -46,7 +46,7 @@ export default defineConfig({
       manifest: {
         name: 'Real Vista',
         short_name: 'Real Vista',
-        description: 'Find your perfect property — buy, rent or sell with Real Vista.',
+        description: 'Real Vista — a CRM for real estate agencies: leads, owners, properties and deals in one workspace.',
         theme_color: '#4f46e5',
         background_color: '#0f172a',
         display: 'standalone',
@@ -76,17 +76,10 @@ export default defineConfig({
         // with the SPA shell.
         navigateFallbackDenylist: [/^\/api\//, /^\/app\//],
         runtimeCaching: [
-          {
-            // Cache GET API responses for 30 minutes; mutations are not cached
-            urlPattern: ({ request, url }) =>
-              /\/api\//.test(url.pathname) && request.method === 'GET',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 200, maxAgeSeconds: 30 * 60 },
-              networkTimeoutSeconds: 8,
-            },
-          },
+          // No rule for /api/. Responses there are personal data — clients,
+          // owners, messages, the signed-in user — and a service-worker cache
+          // outlives sign-out on a shared office computer. They go to the
+          // network every time.
           {
             // Cache uploaded images
             urlPattern: /^https?:\/\/.*\/uploads\/.*/i,
@@ -103,15 +96,6 @@ export default defineConfig({
             options: {
               cacheName: 'cloudinary-images-cache',
               expiration: { maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60 },
-            },
-          },
-          {
-            // Cache Google Fonts
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 365 * 24 * 60 * 60 },
             },
           },
         ],

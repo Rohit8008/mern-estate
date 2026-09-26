@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useCrmAccess } from '../hooks/useCrmAccess';
 import { apiClient } from '../utils/http';
@@ -41,6 +41,7 @@ function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem
   const [loading, setLoading] = useState(false);
   const ref   = useRef(null);
   const timer = useRef(null);
+  const inputId = useId();
 
   useEffect(() => {
     setQuery(value?.name ?? '');
@@ -78,32 +79,36 @@ function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem
 
   return (
     <div className='flex flex-col gap-1' ref={ref}>
-      {label && <label className='text-sm font-medium text-slate-700'>{label}</label>}
+      {label && <label htmlFor={inputId} className='text-sm font-medium text-slate-700'>{label}</label>}
       <div className='relative'>
         <span className='absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none'>
-          <HiSearch className='w-4 h-4' />
+          <HiSearch className='w-4 h-4' aria-hidden='true' />
         </span>
         <input
+          id={inputId}
           type='text'
+          aria-expanded={open && (results.length > 0 || loading)}
+          aria-autocomplete='list'
           value={query}
           onChange={handleInput}
           onFocus={() => { if (query) { setOpen(true); search(query); } }}
           placeholder={placeholder}
-          className='w-full border border-slate-300 rounded-lg text-sm text-slate-900 pl-9 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400'
+          className='w-full border border-slate-300 rounded-lg text-sm text-slate-900 pl-9 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500'
         />
         {value && (
           <button
             type='button'
             onClick={() => { onSelect(null); setQuery(''); setResults([]); }}
-            className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'
+            aria-label={label ? `Clear ${label}` : 'Clear selection'}
+            className='absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'
           >
-            <HiX className='w-3.5 h-3.5' />
+            <HiX className='w-3.5 h-3.5' aria-hidden='true' />
           </button>
         )}
         {open && (results.length > 0 || loading) && (
           <div className='absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto'>
             {loading && (
-              <div className='px-3 py-2 text-sm text-slate-400 flex items-center gap-2'>
+              <div className='px-3 py-2 text-sm text-slate-500 flex items-center gap-2'>
                 <Spinner size='sm' />{t('transactions.searching')}</div>
             )}
             {!loading && results.map((item) => (
@@ -146,6 +151,23 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
   const [form, setForm]   = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
+
+  // The drawer stays mounted so it can slide; while open it behaves as a
+  // dialog — Escape closes it, focus moves in, and returns to the opener.
+  const panelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return undefined;
+    const opener = document.activeElement;
+    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current?.(); };
+    document.addEventListener('keydown', onKey);
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -288,24 +310,32 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
         onClick={onClose}
       />
       {/* Slide-in panel */}
+      {/* invisible when closed takes the off-screen panel out of the tab order
+          and the accessibility tree; transitioning visibility keeps the slide-out. */}
       <div
-        className={`fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        ref={panelRef}
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='tx-drawer-title'
+        tabIndex={-1}
+        className={`fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 flex flex-col transition-[transform,visibility] duration-300 ease-out focus:outline-none ${open ? 'translate-x-0 visible' : 'translate-x-full invisible'}`}
       >
         {/* Header */}
         <div className='flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0'>
           <div>
-            <h2 className='text-base font-semibold text-slate-900'>
+            <h2 id='tx-drawer-title' className='text-base font-semibold text-slate-900'>
               {transaction ? 'Edit Transaction' : 'New Transaction'}
             </h2>
-            <p className='text-xs text-slate-400 mt-0.5'>
+            <p className='text-xs text-slate-500 mt-0.5'>
               {transaction ? 'Update transaction details' : 'Record a property transaction'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600'
+            aria-label='Close'
+            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700'
           >
-            <HiX className='w-5 h-5' />
+            <HiX className='w-5 h-5' aria-hidden='true' />
           </button>
         </div>
 
@@ -325,7 +355,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
               renderItem={(item) => (
                 <span className='flex flex-col'>
                   <span className='font-medium text-slate-800'>{item.name}</span>
-                  {item.address && <span className='text-xs text-slate-400'>{item.address}</span>}
+                  {item.address && <span className='text-xs text-slate-500'>{item.address}</span>}
                 </span>
               )}
             />
@@ -351,7 +381,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
               renderItem={(item) => (
                 <span className='flex flex-col'>
                   <span className='font-medium text-slate-800'>{item.name}</span>
-                  {item.phone && <span className='text-xs text-slate-400'>{item.phone}</span>}
+                  {item.phone && <span className='text-xs text-slate-500'>{item.phone}</span>}
                 </span>
               )}
             />
@@ -427,7 +457,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
 
             {/* Co-Agent */}
             <div className='border-t border-slate-100 pt-4 space-y-3'>
-              <p className='text-xs font-semibold text-slate-400 uppercase tracking-wide'>Co-Agent (optional)</p>
+              <p className='text-xs font-semibold text-slate-500 uppercase tracking-wide'>Co-Agent (optional)</p>
               <EntityPicker
                 label={t('transactions.coAgentBroker')}
                 placeholder={t('transactions.searchCoAgents')}
@@ -437,16 +467,17 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
                 renderItem={(item) => (
                   <span className='flex flex-col'>
                     <span className='font-medium text-slate-800'>{item.name}</span>
-                    {item.organization && <span className='text-xs text-slate-400'>{item.organization}</span>}
-                    {item.phone && !item.organization && <span className='text-xs text-slate-400'>{item.phone}</span>}
+                    {item.organization && <span className='text-xs text-slate-500'>{item.organization}</span>}
+                    {item.phone && !item.organization && <span className='text-xs text-slate-500'>{item.phone}</span>}
                   </span>
                 )}
               />
               {form.coAgent && (
                 <div className='grid grid-cols-2 gap-3'>
                   <div className='flex flex-col gap-1'>
-                    <label className='text-sm font-medium text-slate-700'>{t('transactions.theirCommission')}</label>
+                    <label htmlFor='tx-coagent-percent' className='text-sm font-medium text-slate-700'>{t('transactions.theirCommission')}</label>
                     <input
+                      id='tx-coagent-percent'
                       type='number'
                       min='0'
                       max='100'
@@ -454,18 +485,19 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
                       value={form.coAgentCommissionPercent}
                       onChange={(e) => handleCoAgentPercentChange(e.target.value)}
                       placeholder={t('transactions.eG15')}
-                      className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10'
+                      className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500'
                     />
                   </div>
                   <div className='flex flex-col gap-1'>
-                    <label className='text-sm font-medium text-slate-700'>Their Commission ({currencySymbol()})</label>
+                    <label htmlFor='tx-coagent-amount' className='text-sm font-medium text-slate-700'>Their Commission ({currencySymbol()})</label>
                     <input
+                      id='tx-coagent-amount'
                       type='number'
                       min='0'
                       value={form.coAgentCommission}
                       onChange={(e) => set('coAgentCommission', e.target.value)}
                       placeholder={t('transactions.autoCalculated')}
-                      className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10'
+                      className='px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500'
                     />
                   </div>
                 </div>
@@ -506,6 +538,7 @@ function FilterDropdown({ label, value, options, onChange }) {
     <div className='relative' ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className={`px-3 py-2 rounded-lg border text-sm font-medium flex items-center gap-2 transition-colors ${
           active
             ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
@@ -513,7 +546,7 @@ function FilterDropdown({ label, value, options, onChange }) {
         }`}
       >
         {label}: {value}
-        <HiChevronDown className='w-4 h-4' />
+        <HiChevronDown className='w-4 h-4' aria-hidden='true' />
       </button>
       {open && (
         <div className='absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1'>
@@ -521,6 +554,7 @@ function FilterDropdown({ label, value, options, onChange }) {
             <button
               key={opt}
               onClick={() => { onChange(opt); setOpen(false); }}
+              aria-pressed={value === opt}
               className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${
                 value === opt ? 'bg-slate-100 font-medium text-slate-900' : 'text-slate-700'
               }`}
@@ -685,18 +719,19 @@ export default function Transactions() {
 
       {/* Filters */}
       <div className='bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center gap-3'>
-        <div className='flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 flex-1 min-w-0 max-w-xs'>
-          <HiSearch className='w-4 h-4 text-slate-400 flex-shrink-0' />
+        <div className='flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 flex-1 min-w-0 max-w-xs focus-within:ring-2 focus-within:ring-brand-500'>
+          <HiSearch className='w-4 h-4 text-slate-400 flex-shrink-0' aria-hidden='true' />
           <input
             type='text'
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('transactions.searchByPropertyOrClient')}
-            className='bg-transparent outline-none flex-1 text-sm text-slate-700 placeholder:text-slate-400 min-w-0'
+            aria-label='Search by property or client'
+            className='bg-transparent outline-none flex-1 text-sm text-slate-700 placeholder:text-slate-500 min-w-0'
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className='text-slate-400 hover:text-slate-600 flex-shrink-0'>
-              <HiX className='w-4 h-4' />
+            <button onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700 flex-shrink-0'>
+              <HiX className='w-4 h-4' aria-hidden='true' />
             </button>
           )}
         </div>
@@ -709,7 +744,7 @@ export default function Transactions() {
             onClick={() => { setTypeFilter('All'); setStatusFilter('All'); setSearchQuery(''); }}
             className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-1'
           >
-            <HiX className='w-4 h-4' />{t('transactions.clear')}</button>
+            <HiX className='w-4 h-4' aria-hidden='true' />{t('transactions.clear')}</button>
         )}
       </div>
 
@@ -731,7 +766,7 @@ export default function Transactions() {
                 <tr>
                   {['Property', 'Client', 'Type', 'Amount', 'Commission', 'Status', 'Date', ''].map((h) => (
                     <th key={h} className='text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap'>
-                      {h}
+                      {h || <span className='sr-only'>Actions</span>}
                     </th>
                   ))}
                 </tr>
@@ -744,7 +779,7 @@ export default function Transactions() {
                       <td className='px-4 py-3'>
                         <div className='flex items-center gap-2'>
                           <div className='w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0'>
-                            <HiHome className='w-4 h-4 text-slate-500' />
+                            <HiHome className='w-4 h-4 text-slate-500' aria-hidden='true' />
                           </div>
                           <span className='text-sm font-medium text-slate-900 truncate max-w-[160px]'>
                             {item.propertyName}
@@ -762,7 +797,7 @@ export default function Transactions() {
                             <span className='text-sm text-slate-700'>{item.clientName}</span>
                           </div>
                           {item.coAgentName && (
-                            <span className='text-xs text-slate-400 pl-9'>↗ {item.coAgentName}</span>
+                            <span className='text-xs text-slate-500 pl-9'>↗ {item.coAgentName}</span>
                           )}
                         </div>
                       </td>
@@ -776,7 +811,7 @@ export default function Transactions() {
                         <div className='flex items-center gap-1'>
                           <span className='text-sm font-medium text-emerald-600'>{fmtINR(item.commission)}</span>
                           {item.commissionPercent > 0 && (
-                            <span className='text-xs text-slate-400'>({item.commissionPercent}%)</span>
+                            <span className='text-xs text-slate-500'>({item.commissionPercent}%)</span>
                           )}
                         </div>
                       </td>
@@ -790,17 +825,19 @@ export default function Transactions() {
                         <div className='flex items-center justify-end gap-1'>
                           <button
                             onClick={() => openEdit(item)}
-                            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors'
+                            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors'
                             title={t('transactions.edit')}
+                            aria-label={`Edit transaction for ${item.propertyName}`}
                           >
-                            <HiPencil className='w-4 h-4' />
+                            <HiPencil className='w-4 h-4' aria-hidden='true' />
                           </button>
                           <button
                             onClick={() => setPendingDelete(item._id)}
-                            className='p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors'
+                            className='p-1.5 rounded-lg hover:bg-rose-50 text-slate-500 hover:text-rose-500 transition-colors'
                             title={t('transactions.delete')}
+                            aria-label={`Delete transaction for ${item.propertyName}`}
                           >
-                            <HiTrash className='w-4 h-4' />
+                            <HiTrash className='w-4 h-4' aria-hidden='true' />
                           </button>
                         </div>
                       </td>

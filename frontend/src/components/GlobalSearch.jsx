@@ -41,7 +41,7 @@ const ENTITY_ICONS = {
 
 function EntityIcon({ entity, className = 'w-4 h-4' }) {
   const Icon = ENTITY_ICONS[entity] ?? HiOutlineSearch;
-  return <Icon className={className} />;
+  return <Icon className={className} aria-hidden="true" />;
 }
 
 function AnnotationChips({ annotations }) {
@@ -49,7 +49,7 @@ function AnnotationChips({ annotations }) {
   if (!annotations?.length) return null;
   return (
     <div className="flex items-center gap-1.5 flex-wrap px-4 py-2 border-b border-slate-50 bg-indigo-50/40">
-      <span className="text-xs text-slate-400 mr-1">{t('globalSearch.detected')}</span>
+      <span className="text-xs text-slate-500 mr-1">{t('globalSearch.detected')}</span>
       {annotations.map((ann, i) => (
         <span
           key={i}
@@ -77,13 +77,13 @@ function ResultItem({ item, entity, isActive, onMouseEnter, onClick }) {
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-slate-900 truncate">{item.title}</div>
         {item.subtitle && (
-          <div className="text-xs text-slate-400 truncate mt-0.5">{item.subtitle}</div>
+          <div className="text-xs text-slate-500 truncate mt-0.5">{item.subtitle}</div>
         )}
       </div>
       {item.meta && (
-        <span className="flex-shrink-0 text-xs text-slate-400 ml-2 hidden sm:block">{item.meta}</span>
+        <span className="flex-shrink-0 text-xs text-slate-500 ml-2 hidden sm:block">{item.meta}</span>
       )}
-      <HiChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+      <HiChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" aria-hidden="true" />
     </button>
   );
 }
@@ -93,8 +93,8 @@ function ResultGroup({ group, startIndex, activeIndex, onHover, onSelect }) {
     <div>
       <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
         <EntityIcon entity={group.entity} className="w-3.5 h-3.5 text-slate-400" />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{group.label}</span>
-        <span className="text-xs text-slate-300">({group.items.length})</span>
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{group.label}</span>
+        <span className="text-xs text-slate-500">({group.items.length})</span>
       </div>
       {group.items.map((item, i) => (
         <ResultItem
@@ -114,8 +114,8 @@ function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearA
   const { t } = useTranslation();
   if (query.length >= 2) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-        <HiOutlineSearch className="w-10 h-10 mb-3 opacity-30" />
+      <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+        <HiOutlineSearch className="w-10 h-10 mb-3 opacity-30" aria-hidden="true" />
         <p className="text-sm font-medium text-slate-600">No results for "{query}"</p>
         <p className="text-xs mt-1">{t('globalSearch.tryDifferentKeywordsOrANatural')}</p>
       </div>
@@ -126,10 +126,10 @@ function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearA
     return (
       <div className="p-3">
         <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('globalSearch.recent')}</span>
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('globalSearch.recent')}</span>
           <button
             onClick={onClearAll}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
           >{t('globalSearch.clearAll')}</button>
         </div>
         <div className="space-y-0.5">
@@ -139,15 +139,15 @@ function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearA
                 onClick={() => onHistorySelect(h)}
                 className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-50 text-left transition-colors"
               >
-                <HiOutlineClock className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <HiOutlineClock className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
                 <span className="text-sm text-slate-700">{h}</span>
               </button>
               <button
                 onClick={() => onHistoryRemove(h)}
-                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-slate-100 text-slate-400 transition-all"
+                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-slate-100 text-slate-500 transition-all"
                 aria-label={t('globalSearch.removeFromHistory')}
               >
-                <HiOutlineX className="w-3 h-3" />
+                <HiOutlineX className="w-3 h-3" aria-hidden="true" />
               </button>
             </div>
           ))}
@@ -157,10 +157,10 @@ function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearA
   }
 
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-slate-400 px-6">
-      <HiOutlineLightningBolt className="w-8 h-8 mb-3 opacity-30" />
+    <div className="flex flex-col items-center justify-center py-12 text-slate-500 px-6">
+      <HiOutlineLightningBolt className="w-8 h-8 mb-3 opacity-30" aria-hidden="true" />
       <p className="text-sm text-center text-slate-500 font-medium">{t('globalSearch.searchAcrossYourEntireCrm')}</p>
-      <p className="text-xs text-center mt-2 text-slate-400 leading-relaxed">{t('globalSearch.try')}<span className="font-mono bg-slate-100 px-1 rounded">{t('globalSearch.3BhkInGurgaonUnder2cr')}</span><br />
+      <p className="text-xs text-center mt-2 text-slate-500 leading-relaxed">{t('globalSearch.try')}<span className="font-mono bg-slate-100 px-1 rounded">{t('globalSearch.3BhkInGurgaonUnder2cr')}</span><br />
         or <span className="font-mono bg-slate-100 px-1 rounded">{t('globalSearch.leadsAssignedToAmitThisMonth')}</span>
       </p>
     </div>
@@ -176,7 +176,7 @@ function SaveSearchPrompt({ onSave, onCancel }) {
 
   return (
     <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
-      <HiOutlineBookmark className="w-4 h-4 text-slate-400 flex-shrink-0" />
+      <HiOutlineBookmark className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
       <input
         ref={inputRef}
         value={name}
@@ -186,19 +186,21 @@ function SaveSearchPrompt({ onSave, onCancel }) {
           if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
         }}
         placeholder={t('globalSearch.nameThisSearch')}
-        className="flex-1 text-sm bg-transparent outline-none text-slate-700 placeholder:text-slate-400"
+        aria-label="Name this search"
+        className="flex-1 text-sm bg-transparent outline-none rounded focus-visible:ring-2 focus-visible:ring-brand-500 text-slate-700 placeholder:text-slate-500"
       />
       <button
         onClick={() => name.trim() && onSave(name.trim())}
         disabled={!name.trim()}
         className="flex items-center gap-1 px-2.5 py-1 text-xs bg-slate-900 text-white rounded-lg disabled:opacity-40 hover:bg-slate-700 transition-colors"
       >
-        <HiOutlineCheck className="w-3 h-3" />{t('globalSearch.save')}</button>
+        <HiOutlineCheck className="w-3 h-3" aria-hidden="true" />{t('globalSearch.save')}</button>
       <button
         onClick={onCancel}
-        className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+        className="p-1 text-slate-500 hover:text-slate-700 transition-colors"
+        aria-label="Cancel saving this search"
       >
-        <HiOutlineX className="w-4 h-4" />
+        <HiOutlineX className="w-4 h-4" aria-hidden="true" />
       </button>
     </div>
   );
@@ -216,6 +218,7 @@ export default function GlobalSearch() {
 
   const { results, loading } = useGlobalSearch(query, entity);
   const inputRef  = useRef(null);
+  const panelRef  = useRef(null);
   const [activeIdx,   setActiveIdx]   = useState(-1);
   const [showSave,    setShowSave]    = useState(false);
   const [savedOk,     setSavedOk]     = useState(false);
@@ -292,6 +295,25 @@ export default function GlobalSearch() {
     }
   }, [query, entity]);
 
+  // Dialog-level keys: Escape closes from anywhere in the panel (the input
+  // handles its own Escape first), and Tab stays inside the panel.
+  const handleDialogKeyDown = (e) => {
+    if (e.key === 'Escape' && !e.defaultPrevented) {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (e.key !== 'Tab' || !panelRef.current) return;
+    const focusable = panelRef.current.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
   if (!isOpen) return null;
 
   // Compute group start indices for keyboard nav
@@ -311,6 +333,7 @@ export default function GlobalSearch() {
       role="dialog"
       aria-modal="true"
       aria-label={t('globalSearch.globalSearch')}
+      onKeyDown={handleDialogKeyDown}
     >
       {/* Backdrop */}
       <div
@@ -320,18 +343,19 @@ export default function GlobalSearch() {
       />
 
       {/* Modal panel */}
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col max-h-[72vh]">
+      <div ref={panelRef} className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col max-h-[72vh]">
 
         {/* Input row */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100">
-          <HiOutlineSearch className="w-5 h-5 text-slate-400 flex-shrink-0" />
+          <HiOutlineSearch className="w-5 h-5 text-slate-400 flex-shrink-0" aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
             onChange={e => { setQuery(e.target.value); setShowSave(false); }}
             onKeyDown={handleKeyDown}
             placeholder="Search properties, leads, owners… or try '3 BHK in Gurgaon under 2Cr'"
-            className="flex-1 text-sm text-slate-900 bg-transparent outline-none placeholder:text-slate-400"
+            aria-label="Search"
+            className="flex-1 text-sm text-slate-900 bg-transparent outline-none rounded focus-visible:ring-2 focus-visible:ring-brand-500 placeholder:text-slate-500"
             autoComplete="off"
             spellCheck={false}
           />
@@ -341,27 +365,28 @@ export default function GlobalSearch() {
             )}
             {savedOk && (
               <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-                <HiOutlineCheck className="w-3.5 h-3.5" />{t('globalSearch.saved')}</span>
+                <HiOutlineCheck className="w-3.5 h-3.5" aria-hidden="true" />{t('globalSearch.saved')}</span>
             )}
             {query.length >= 2 && !showSave && !savedOk && (
               <button
                 onClick={() => setShowSave(true)}
                 title={t('globalSearch.saveThisSearch')}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label={t('globalSearch.saveThisSearch')}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
               >
-                <HiOutlineBookmark className="w-4 h-4" />
+                <HiOutlineBookmark className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
             {query && (
               <button
                 onClick={() => { setQuery(''); setShowSave(false); }}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
                 aria-label={t('globalSearch.clear')}
               >
-                <HiOutlineX className="w-4 h-4" />
+                <HiOutlineX className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
-            <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs font-medium text-slate-400 border border-slate-200 rounded bg-slate-50">{t('globalSearch.esc')}</kbd>
+            <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-xs font-medium text-slate-500 border border-slate-200 rounded bg-slate-50">{t('globalSearch.esc')}</kbd>
           </div>
         </div>
 
@@ -377,6 +402,7 @@ export default function GlobalSearch() {
               <button
                 key={tab.key}
                 onClick={() => setEntity(tab.key)}
+                aria-pressed={entity === tab.key}
                 className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                   entity === tab.key
                     ? 'bg-slate-900 text-white'
@@ -424,7 +450,7 @@ export default function GlobalSearch() {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 bg-slate-50">
-          <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 border border-slate-200 rounded bg-white font-mono text-[10px]">↑↓</kbd>
               navigate
@@ -439,7 +465,7 @@ export default function GlobalSearch() {
             )}
           </div>
           {results?.responseTimeMs != null && (
-            <span className="text-xs text-slate-400">{results.responseTimeMs}ms</span>
+            <span className="text-xs text-slate-500">{results.responseTimeMs}ms</span>
           )}
         </div>
       </div>

@@ -117,6 +117,7 @@ export default function ListingImages({ urls = [], onChange, disabled }) {
           type="file"
           accept="image/*"
           multiple
+          aria-label="Add photos"
           className="hidden"
           onChange={(e) => {
             upload(e.target.files);
@@ -145,9 +146,9 @@ export default function ListingImages({ urls = [], onChange, disabled }) {
           }}
           className="rounded-xl border-2 border-dashed border-slate-200 hover:border-slate-300 hover:bg-slate-50 px-6 py-10 text-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
-          <HiOutlinePhotograph className="w-8 h-8 text-slate-300 mx-auto" />
+          <HiOutlinePhotograph className="w-8 h-8 text-slate-300 mx-auto" aria-hidden="true" />
           <p className="text-sm text-slate-600 mt-2">{t('listingImages.dropPhotosHereOrClickTo')}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{t('listingImages.theFirstOneIsUsedAs')}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{t('listingImages.theFirstOneIsUsedAs')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -169,7 +170,7 @@ export default function ListingImages({ urls = [], onChange, disabled }) {
             >
               <img
                 src={normalizeImageUrl(url)}
-                alt={i === 0 ? 'Cover photo' : `Photo ${i + 1}`}
+                alt={i === 0 ? `Property photo 1 of ${urls.length} (cover)` : `Property photo ${i + 1} of ${urls.length}`}
                 className="w-full h-full object-cover"
                 loading="lazy"
               />
@@ -189,7 +190,7 @@ export default function ListingImages({ urls = [], onChange, disabled }) {
                     aria-label={t('listingImages.useAsCover')}
                     className="p-1.5 rounded-lg bg-white/90 hover:bg-white text-slate-700"
                   >
-                    <HiOutlineStar className="w-4 h-4" />
+                    <HiOutlineStar className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
                 <button
@@ -199,7 +200,7 @@ export default function ListingImages({ urls = [], onChange, disabled }) {
                   aria-label={t('listingImages.removePhoto')}
                   className="p-1.5 rounded-lg bg-white/90 hover:bg-white text-rose-600"
                 >
-                  <HiOutlineTrash className="w-4 h-4" />
+                  <HiOutlineTrash className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>

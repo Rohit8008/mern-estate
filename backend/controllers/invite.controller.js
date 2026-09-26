@@ -24,6 +24,7 @@ import { runWithTenant, runWithoutTenantScope } from '../tenancy/tenantContext.j
 import { hashInviteToken } from '../tenancy/invites.js';
 import { validatePassword } from '../middleware/security.js';
 import { reissueSession } from './auth.controller.js';
+import { LEGAL_VERSION } from '../utils/legalVersion.js';
 
 /**
  * Find the user an invite token belongs to.
@@ -139,6 +140,12 @@ export const acceptInvite = asyncHandler(async (req, res) => {
     );
   }
 
+  // Accepting the Terms and Privacy Policy is part of starting an account, and
+  // the record of it has to say which version was accepted and when.
+  if (req.body?.acceptTerms !== true) {
+    throw new ValidationError('Please accept the Terms of Service and Privacy Policy to continue.', 'acceptTerms');
+  }
+
   const tenantId = String(user.tenantId);
 
   await runWithTenant({ tenantId }, async () => {
@@ -149,6 +156,7 @@ export const acceptInvite = asyncHandler(async (req, res) => {
     user.previousInviteTokenHashes = [];
     user.inviteExpiresAt = null;
     user.status = 'active';
+    user.legalAcceptance = { version: LEGAL_VERSION, acceptedAt: new Date() };
     await user.save();
   });
 

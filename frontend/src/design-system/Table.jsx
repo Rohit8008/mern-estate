@@ -39,13 +39,28 @@ export function Tbody({ children }) {
   return <tbody className='divide-y divide-slate-100'>{children}</tbody>;
 }
 
+// A clickable row is reachable by keyboard too: focusable, and Enter/Space
+// act like a click. Keys pressed on a control inside the row (a button, a link,
+// an input) belong to that control, so they are left alone. No role="button":
+// on a <tr> it would strip the row out of the table for a screen reader.
 export function Tr({ children, onClick, className }) {
+  const onKeyDown = onClick
+    ? (e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(e);
+        }
+      }
+    : undefined;
   return (
     <tr
       onClick={onClick}
+      onKeyDown={onKeyDown}
+      tabIndex={onClick ? 0 : undefined}
       className={cx(
         'transition-colors',
-        onClick ? 'cursor-pointer hover:bg-slate-50' : 'hover:bg-slate-50/50',
+        onClick ? 'cursor-pointer hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500' : 'hover:bg-slate-50/50',
         className
       )}
     >
@@ -58,7 +73,7 @@ export function Td({ children, className, right, muted }) {
   return (
     <td className={cx(
       'px-4 py-3 whitespace-nowrap',
-      muted ? 'text-slate-400' : 'text-slate-700',
+      muted ? 'text-slate-500' : 'text-slate-700',
       right && 'text-right',
       className
     )}>

@@ -11,6 +11,9 @@ import { config } from '../config/environment.js';
 import { inHomeTenant } from '../tenancy/tenantContext.js';
 import { logger } from '../utils/logger.js';
 import { attachInvite, sendInviteEmail } from '../tenancy/invites.js';
+import { erasedUserFields } from './dataRights.controller.js';
+import { clearSessionCookies } from './auth.controller.js';
+import { LEGAL_VERSION } from '../utils/legalVersion.js';
 
 export const test = (req, res) => {
   res.json({
@@ -365,23 +368,50 @@ export const putDashboardWidgets = async (req, res, next) => {
   }
 };
 
+/**
+ * Self-service account deletion.
+ *
+ * The confirmation tells the person their personal details are removed, so
+ * they are: the same field set an admin erasure clears. It used to deactivate
+ * the account and leave every personal field in place while saying otherwise.
+ * Records they created belong to the agency and stay, attributed to "Former
+ * team member" — the same rule as admin erasure.
+ */
 export const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(403, 'You can only delete your own account!'));
   try {
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('+isPlatformAdmin'));
+    if (!user) return next(errorHandler(404, 'User not found'));
+    if (user.isPlatformAdmin) {
+      return next(errorHandler(403, 'A platform operator account cannot be deleted from here'));
+    }
+    const originalEmail = user.email;
+
     // BUG-005: Also clear all refresh tokens so existing sessions can't be reused.
-    await User.findByIdAndUpdate(req.params.id, {
-      $set: {
-        status: 'inactive',
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: req.user.id,
-        refreshTokens: [],
-      },
-    });
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
-    res.status(200).json({ success: true, message: 'Account deactivated successfully' });
+    await inHomeTenant(req, () =>
+      User.updateOne(
+        { _id: req.user.id },
+        {
+          $set: {
+            ...erasedUserFields(req.user.id),
+            status: 'inactive',
+            isDeleted: true,
+            deletedAt: new Date(),
+            deletedBy: req.user.id,
+            erasedAt: new Date(),
+            erasedBy: req.user.id,
+            refreshTokens: [],
+          },
+        }
+      )
+    );
+    await inHomeTenant(req, () =>
+      SecurityLog.updateMany({ email: originalEmail }, { $set: { email: erasedUserFields(req.user.id).email } })
+    );
+
+    clearSessionCookies(res);
+    res.status(200).json({ success: true, message: 'Account deleted and personal details removed' });
   } catch (error) {
     next(error);
   }
@@ -514,6 +544,55 @@ export const me = async (req, res, next) => {
     // with one that lacked it — the Platform link vanished on refresh. Telling
     // someone their own status is safe; /api/platform re-checks it anyway.
     res.status(200).json({ ...user.toJSON(), isPlatformAdmin: Boolean(user.isPlatformAdmin) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Whether the caller has accepted the current Terms and Privacy Policy.
+ *
+ * Acceptance is recorded at invitation (invite.controller.js), which left every
+ * account created before that — and every account whenever the documents
+ * change — with no record at all. The web app and the mobile app both ask this
+ * after sign-in and show the acceptance step when `required` is true.
+ */
+export const getLegalAcceptance = async (req, res, next) => {
+  try {
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('+legalAcceptance'));
+    if (!user) return next(errorHandler(404, 'User not found'));
+    const accepted = user.legalAcceptance || null;
+    res.json({
+      success: true,
+      version: LEGAL_VERSION,
+      acceptedVersion: accepted?.version || null,
+      acceptedAt: accepted?.acceptedAt || null,
+      required: accepted?.version !== LEGAL_VERSION,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Record acceptance. The client sends the version it showed; a stale one is
+ * refused, because agreeing to text you were not shown is not agreement.
+ */
+export const acceptLegal = async (req, res, next) => {
+  try {
+    if (req.body?.version !== LEGAL_VERSION) {
+      return res.status(409).json({
+        success: false,
+        code: 'LEGAL_VERSION_CHANGED',
+        version: LEGAL_VERSION,
+        message: 'The Terms or Privacy Policy changed. Please review the current version.',
+      });
+    }
+    const acceptedAt = new Date();
+    await inHomeTenant(req, () =>
+      User.updateOne({ _id: req.user.id }, { $set: { legalAcceptance: { version: LEGAL_VERSION, acceptedAt } } })
+    );
+    res.json({ success: true, version: LEGAL_VERSION, acceptedAt });
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { phoneKeyOf } from '../utils/phoneKey.js';
+import EmailSuppression from './emailSuppression.model.js';
 
 // Deal Pipeline Schema - tracks property deals with clients
 const dealSchema = new mongoose.Schema({
@@ -175,6 +176,23 @@ const clientSchema = new mongoose.Schema(
     },
     /** True once a person has chosen the temperature, pinning it. */
     temperatureManual: { type: Boolean, default: false },
+    /**
+     * Set when this person's address is on the workspace's suppression list
+     * (models/emailSuppression.model.js). For display: the list is what the
+     * sequence runner checks, so a lead imported in bulk without this set is
+     * still never emailed. Not writable through the ordinary update — the
+     * validator strips it — only through utils/unsubscribe.js.
+     */
+    emailOptOut: {
+      type: new mongoose.Schema(
+        {
+          at: { type: Date, required: true },
+          source: { type: String, enum: ['link', 'one_click', 'agent'], required: true },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
 
     score: { type: Number, default: 0, min: 0, max: 100, index: true },
     scoreFactors: {
@@ -256,6 +274,14 @@ export { phoneKeyOf };
 
 // Derived, never set by hand — a stored value that can disagree with the field
 // it came from is worse than no stored value.
+// A new lead, or a changed address, that someone already unsubscribed shows
+// as unsubscribed straight away rather than after the next opt-out.
+clientSchema.pre('save', async function syncEmailOptOut() {
+  if (!(this.isNew || this.isModified('email')) || !this.email) return;
+  const record = await EmailSuppression.findOne({ email: String(this.email).trim().toLowerCase() }).lean();
+  this.emailOptOut = record ? { at: record.createdAt, source: record.source } : null;
+});
+
 clientSchema.pre('save', function syncPhoneKey(next) {
   if (this.isModified('phone') || this.isNew) {
     this.phoneKey = phoneKeyOf(this.phone);

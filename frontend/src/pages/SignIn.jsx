@@ -97,9 +97,9 @@ export default function SignIn() {
 
           {/* Error Message */}
           {error && (
-            <div className='mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl'>
+            <div role='alert' className='mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl'>
               <div className='flex items-start'>
-                <HiOutlineExclamationCircle className='w-5 h-5 text-rose-500 mt-0.5 flex-shrink-0' />
+                <HiOutlineExclamationCircle className='w-5 h-5 text-rose-500 mt-0.5 flex-shrink-0' aria-hidden='true' />
                 <div className='ml-3'>
                   <p className='text-sm font-medium text-rose-800'>{error}</p>
                 </div>

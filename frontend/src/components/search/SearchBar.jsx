@@ -166,11 +166,11 @@ export default function SearchBar({
       case 'city':
       case 'locality':
       case 'area':
-        return <HiLocationMarker className="w-4 h-4 text-indigo-500" />;
+        return <HiLocationMarker className="w-4 h-4 text-indigo-500" aria-hidden="true" />;
       case 'property':
-        return <HiHome className="w-4 h-4 text-emerald-500" />;
+        return <HiHome className="w-4 h-4 text-emerald-500" aria-hidden="true" />;
       default:
-        return <HiSearch className="w-4 h-4 text-slate-400" />;
+        return <HiSearch className="w-4 h-4 text-slate-400" aria-hidden="true" />;
     }
   };
 
@@ -183,10 +183,10 @@ export default function SearchBar({
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Search Input */}
-      <div className={`relative flex items-center bg-white border border-slate-200 rounded-xl shadow-sm transition-all duration-200 ${
-        showSuggestions ? 'ring-2 ring-indigo-500/30 border-indigo-300' : 'hover:border-slate-300'
+      <div className={`relative flex items-center bg-white border border-slate-200 rounded-xl shadow-sm transition-all duration-200 focus-within:ring-2 focus-within:ring-brand-500 ${
+        showSuggestions ? 'ring-2 ring-brand-500 border-brand-300' : 'hover:border-slate-300'
       } ${compact ? 'h-10' : 'h-12'}`}>
-        <div className="flex items-center justify-center w-12 text-slate-400">
+        <div className="flex items-center justify-center w-12 text-slate-400" aria-hidden="true">
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin" />
           ) : (
@@ -208,7 +208,10 @@ export default function SearchBar({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`flex-1 bg-transparent outline-none text-slate-800 placeholder-slate-400 ${
+          aria-label={placeholder}
+          aria-expanded={showSuggestions}
+          aria-autocomplete="list"
+          className={`flex-1 bg-transparent outline-none text-slate-800 placeholder-slate-500 ${
             compact ? 'text-sm' : 'text-base'
           }`}
         />
@@ -216,20 +219,22 @@ export default function SearchBar({
         {query && (
           <button
             onClick={clearSearch}
-            className="flex items-center justify-center w-10 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Clear search"
+            className="flex items-center justify-center w-10 text-slate-500 hover:text-slate-700 transition-colors"
           >
-            <HiX className="w-4 h-4" />
+            <HiX className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
 
         <button
           onClick={() => handleSearch()}
+          aria-label={t('searchBar.search')}
           className={`flex items-center justify-center bg-indigo-600 text-white rounded-r-xl hover:bg-indigo-500 transition-colors ${
             compact ? 'px-4 h-full' : 'px-6 h-full'
           }`}
         >
           <span className={compact ? 'hidden sm:inline' : ''}>{t('searchBar.search')}</span>
-          <HiSearch className={`w-4 h-4 ${compact ? 'sm:hidden' : 'hidden'}`} />
+          <HiSearch className={`w-4 h-4 ${compact ? 'sm:hidden' : 'hidden'}`} aria-hidden="true" />
         </button>
       </div>
 
@@ -250,7 +255,7 @@ export default function SearchBar({
                 >
                   {getIconForType(suggestion.type)}
                   <span className="flex-1 truncate">{suggestion.text}</span>
-                  <span className="text-xs text-slate-400 capitalize">{suggestion.type}</span>
+                  <span className="text-xs text-slate-500 capitalize">{suggestion.type}</span>
                 </button>
               ))}
             </div>
@@ -260,7 +265,7 @@ export default function SearchBar({
           {suggestions.length === 0 && recentSearches.length > 0 && (
             <div className="py-2 border-b border-slate-100">
               <div className="px-4 py-1 text-xs font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <HiClock className="w-3 h-3" />{t('searchBar.recentSearches')}</div>
+                <HiClock className="w-3 h-3" aria-hidden="true" />{t('searchBar.recentSearches')}</div>
               {recentSearches.map((search, index) => (
                 <button
                   key={`recent-${index}`}
@@ -269,7 +274,7 @@ export default function SearchBar({
                     selectedIndex === index ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-700'
                   }`}
                 >
-                  <HiClock className="w-4 h-4 text-slate-400" />
+                  <HiClock className="w-4 h-4 text-slate-400" aria-hidden="true" />
                   <span className="flex-1 truncate">{search}</span>
                 </button>
               ))}
@@ -318,7 +323,7 @@ export default function SearchBar({
           {/* No Results */}
           {suggestions.length === 0 && recentSearches.length === 0 && !popularSearches && (
             <div className="py-8 text-center text-slate-500">
-              <HiSearch className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              <HiSearch className="w-8 h-8 mx-auto mb-2 text-slate-300" aria-hidden="true" />
               <p className="text-sm">{t('searchBar.startTypingToSearchProperties')}</p>
             </div>
           )}

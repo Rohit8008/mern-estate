@@ -275,6 +275,7 @@ export default function PropertyTypeManagement() {
           <button
             key={cat.value}
             onClick={() => setActiveCategory(cat.value)}
+            aria-pressed={activeCategory === cat.value}
             className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
               activeCategory === cat.value
                 ? 'bg-slate-900 text-white'
@@ -319,7 +320,7 @@ export default function PropertyTypeManagement() {
               {/* Card Header */}
               <div className='flex items-center justify-between p-5'>
                 <div className='flex items-center gap-4 min-w-0'>
-                  <span className='text-3xl flex-shrink-0'>{type.icon}</span>
+                  <span className='text-3xl flex-shrink-0' aria-hidden='true'>{type.icon}</span>
                   <div className='min-w-0'>
                     <div className='flex items-center gap-2 flex-wrap'>
                       <h3 className='text-lg font-semibold text-slate-900'>{type.name}</h3>
@@ -360,10 +361,13 @@ export default function PropertyTypeManagement() {
                   )}
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : type._id)}
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? 'Hide' : 'Show'} fields for ${type.name}`}
                     className='p-2 rounded-lg hover:bg-slate-100 transition-colors'
                   >
                     <svg
-                      className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                      aria-hidden='true'
+                      className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                       fill='none' stroke='currentColor' viewBox='0 0 24 24'
                     >
                       <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 9l-7 7-7-7' />
@@ -376,7 +380,7 @@ export default function PropertyTypeManagement() {
               {isExpanded && (
                 <div className='border-t border-slate-100 bg-slate-50/50 p-5'>
                   <div className='flex items-center justify-between mb-4'>
-                    <h4 className='text-sm font-semibold text-slate-700'>{t('propertyType.fields')}<span className='ml-2 text-xs font-normal text-slate-400'>
+                    <h4 className='text-sm font-semibold text-slate-700'>{t('propertyType.fields')}<span className='ml-2 text-xs font-normal text-slate-500'>
                         ({displayFields.length})
                       </span>
                     </h4>
@@ -410,8 +414,9 @@ export default function PropertyTypeManagement() {
                         <div key={idx} className='bg-white rounded-lg border border-slate-200 p-4'>
                           <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.key')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-key`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.key')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-key`}
                                 type='text'
                                 value={field.key}
                                 onChange={(e) => updateLocalField(type._id, idx, { key: e.target.value })}
@@ -420,8 +425,9 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.label')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-label`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.label')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-label`}
                                 type='text'
                                 value={field.label}
                                 onChange={(e) => updateLocalField(type._id, idx, { label: e.target.value })}
@@ -430,8 +436,9 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.type')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-type`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.type')}</label>
                               <select
+                                id={`pt-${type._id}-${idx}-type`}
                                 value={field.type}
                                 onChange={(e) => updateLocalField(type._id, idx, { type: e.target.value })}
                                 className='w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
@@ -442,8 +449,9 @@ export default function PropertyTypeManagement() {
                               </select>
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.group')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-group`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.group')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-group`}
                                 type='text'
                                 value={field.group}
                                 onChange={(e) => updateLocalField(type._id, idx, { group: e.target.value })}
@@ -464,8 +472,9 @@ export default function PropertyTypeManagement() {
                                 />{t('propertyType.required')}</label>
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.min')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-min`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.min')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-min`}
                                 type='number'
                                 value={field.min ?? ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { min: e.target.value ? Number(e.target.value) : null })}
@@ -473,8 +482,9 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.max')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-max`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.max')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-max`}
                                 type='number'
                                 value={field.max ?? ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { max: e.target.value ? Number(e.target.value) : null })}
@@ -482,8 +492,9 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.unit')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-unit`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.unit')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-unit`}
                                 type='text'
                                 value={field.unit || ''}
                                 onChange={(e) => updateLocalField(type._id, idx, { unit: e.target.value })}
@@ -492,8 +503,9 @@ export default function PropertyTypeManagement() {
                               />
                             </div>
                             <div>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.order')}</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-order`} className='block text-xs font-medium text-slate-500 mb-1'>{t('propertyType.order')}</label>
                               <input
+                                id={`pt-${type._id}-${idx}-order`}
                                 type='number'
                                 value={field.order || 0}
                                 onChange={(e) => updateLocalField(type._id, idx, { order: Number(e.target.value) })}
@@ -504,8 +516,9 @@ export default function PropertyTypeManagement() {
 
                           {field.type === 'select' && (
                             <div className='mt-3'>
-                              <label className='block text-xs font-medium text-slate-500 mb-1'>Options (comma-separated)</label>
+                              <label htmlFor={`pt-${type._id}-${idx}-options`} className='block text-xs font-medium text-slate-500 mb-1'>Options (comma-separated)</label>
                               <input
+                                id={`pt-${type._id}-${idx}-options`}
                                 type='text'
                                 value={field.options?.join(', ') || ''}
                                 onChange={(e) => updateLocalField(type._id, idx, {
@@ -527,7 +540,7 @@ export default function PropertyTypeManagement() {
                       ))}
                     </div>
                   ) : (
-                    <div className='text-center py-8 text-sm text-slate-400'>{t('propertyType.noFieldsConfiguredClickAddField')}</div>
+                    <div className='text-center py-8 text-sm text-slate-500'>{t('propertyType.noFieldsConfiguredClickAddField')}</div>
                   )}
 
                   {/* Bottom save bar when dirty */}
@@ -574,8 +587,9 @@ export default function PropertyTypeManagement() {
       >
         <div className='space-y-4'>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.name')}</label>
+            <label htmlFor='pt-create-name' className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.name')}</label>
             <input
+              id='pt-create-name'
               type='text'
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -585,8 +599,9 @@ export default function PropertyTypeManagement() {
             />
           </div>
           <div>
-            <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.description')}</label>
+            <label htmlFor='pt-create-description' className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.description')}</label>
             <textarea
+              id='pt-create-description'
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
@@ -596,8 +611,9 @@ export default function PropertyTypeManagement() {
           </div>
           <div className='grid grid-cols-2 gap-4'>
             <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.icon')}</label>
+              <label htmlFor='pt-create-icon' className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.icon')}</label>
               <input
+                id='pt-create-icon'
                 type='text'
                 value={formData.icon}
                 onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
@@ -605,8 +621,9 @@ export default function PropertyTypeManagement() {
               />
             </div>
             <div>
-              <label className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.category')}</label>
+              <label htmlFor='pt-create-category' className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.category')}</label>
               <select
+                id='pt-create-category'
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'

@@ -371,6 +371,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                   type="checkbox"
                   checked={selectedRows.size === filteredListings.length && filteredListings.length > 0}
                   onChange={toggleSelectAll}
+                  aria-label="Select all listings"
                   className="rounded"
                 />
               </th>
@@ -378,14 +379,18 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                 <th
                   key={field.key}
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort(field.key)}
+                  aria-sort={sortConfig.key === field.key ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
-                  <div className="flex items-center space-x-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSort(field.key)}
+                    className="flex items-center space-x-1 uppercase tracking-wider rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
                     <span>{field.label}</span>
                     {sortConfig.key === field.key && (
-                      <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      <span aria-hidden="true">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                     )}
-                  </div>
+                  </button>
                 </th>
               ))}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -399,6 +404,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                   <input
                     type="text"
                     placeholder={`Filter ${field.label}...`}
+                    aria-label={`Filter by ${field.label}`}
                     value={filterConfig[field.key] || ''}
                     onChange={(e) => handleFilter(field.key, e.target.value)}
                     className="w-full px-2 py-1 text-xs border rounded"
@@ -416,6 +422,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                     type="checkbox"
                     checked={selectedRows.has(listing._id)}
                     onChange={() => toggleSelectRow(listing._id)}
+                    aria-label={`Select ${listing.name || 'listing'}`}
                     className="rounded"
                   />
                 </td>
@@ -432,26 +439,42 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                             type={field.type === 'number' ? 'number' : 'text'}
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); handleCellSave(); }
+                              if (e.key === 'Escape') { e.preventDefault(); handleCellCancel(); }
+                            }}
+                            aria-label={`${field.label} for ${listing.name || 'listing'}`}
                             className="flex-1 px-2 py-1 text-xs border rounded"
                             autoFocus
                           />
                           <button
                             onClick={handleCellSave}
+                            aria-label="Save"
                             className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
                           >
-                            ✓
+                            <span aria-hidden="true">✓</span>
                           </button>
                           <button
                             onClick={handleCellCancel}
+                            aria-label="Cancel"
                             className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
                           >
-                            ✗
+                            <span aria-hidden="true">✗</span>
                           </button>
                         </div>
                       ) : (
                         <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Edit ${field.label} for ${listing.name || 'listing'}`}
                           onClick={() => handleCellEdit(listing._id, fieldKey, value)}
-                          className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleCellEdit(listing._id, fieldKey, value);
+                            }
+                          }}
+                          className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                         >
                           {field.type === 'boolean'
                             ? (value ? 'Yes' : 'No')

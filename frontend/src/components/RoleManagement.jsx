@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import { apiClient } from '../utils/http';
 import { 
@@ -66,6 +66,21 @@ const RoleManagement = () => {
   const [showUserRoleModal, setShowUserRoleModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('');
+  const roleFormCloseRef = useRef(null);
+  const userRoleCloseRef = useRef(null);
+
+  // Both modals: Escape closes, and focus starts inside the dialog.
+  useEffect(() => {
+    if (!showRoleForm && !showUserRoleModal) return undefined;
+    (showRoleForm ? roleFormCloseRef : userRoleCloseRef).current?.focus();
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (showRoleForm) setShowRoleForm(false);
+      else setShowUserRoleModal(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showRoleForm, showUserRoleModal]);
 
   // Only hit API if cache is empty/expired — not on every mount
   useEffect(() => {
@@ -247,8 +262,10 @@ const RoleManagement = () => {
 
         {/* Enhanced Tabs */}
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
+          <nav className="-mb-px flex space-x-8" aria-label="Roles and permissions sections">
             <button
+              type="button"
+              aria-pressed={activeTab === 'roles'}
               onClick={() => setActiveTab('roles')}
               className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                 activeTab === 'roles'
@@ -256,10 +273,12 @@ const RoleManagement = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              <HiOutlineKey className="h-5 w-5" />
+              <HiOutlineKey className="h-5 w-5" aria-hidden="true" />
               <span>Manage Roles</span>
             </button>
             <button
+              type="button"
+              aria-pressed={activeTab === 'users'}
               onClick={() => setActiveTab('users')}
               className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                 activeTab === 'users'
@@ -267,7 +286,7 @@ const RoleManagement = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              <HiOutlineUser className="h-5 w-5" />
+              <HiOutlineUser className="h-5 w-5" aria-hidden="true" />
               <span>Assign Roles</span>
             </button>
           </nav>
@@ -290,7 +309,7 @@ const RoleManagement = () => {
                 }}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                <HiOutlinePlus className="h-4 w-4 mr-2" />
+                <HiOutlinePlus className="h-4 w-4 mr-2" aria-hidden="true" />
                 Create New Role
               </button>
             </div>
@@ -344,7 +363,7 @@ const RoleManagement = () => {
                           onClick={() => openEditRole(role)}
                           className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
-                          <HiOutlinePencil className="h-3 w-3 mr-1" />
+                          <HiOutlinePencil className="h-3 w-3 mr-1" aria-hidden="true" />
                           Edit
                         </button>
                         {!role.isSystem && (
@@ -352,7 +371,7 @@ const RoleManagement = () => {
                             onClick={() => handleDeleteRole(role._id)}
                             className="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           >
-                            <HiOutlineTrash className="h-3 w-3 mr-1" />
+                            <HiOutlineTrash className="h-3 w-3 mr-1" aria-hidden="true" />
                             Delete
                           </button>
                         )}
@@ -368,7 +387,7 @@ const RoleManagement = () => {
               {roles.length === 0 && (
                 <div className="col-span-full">
                   <div className="text-center py-12">
-                    <HiOutlineKey className="mx-auto h-12 w-12 text-gray-400" />
+                    <HiOutlineKey className="mx-auto h-12 w-12 text-gray-400" aria-hidden="true" />
                     <h3 className="mt-2 text-sm font-medium text-gray-900">No roles</h3>
                     <p className="mt-1 text-sm text-gray-500">Get started by creating a new role.</p>
                     <div className="mt-6">
@@ -380,7 +399,7 @@ const RoleManagement = () => {
                         }}
                         className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                       >
-                        <HiOutlinePlus className="h-4 w-4 mr-2" />
+                        <HiOutlinePlus className="h-4 w-4 mr-2" aria-hidden="true" />
                         Create Role
                       </button>
                     </div>
@@ -403,7 +422,6 @@ const RoleManagement = () => {
             {/* Users Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {users.filter(user => {
-                console.log('User role:', user.role, 'User:', user.username); // Debug log
                 return user.role === 'employee';
               }).map((user) => (
                 <div key={user._id} className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -429,7 +447,7 @@ const RoleManagement = () => {
                           {user.assignedRole ? (
                             <div className="flex items-center space-x-2">
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                <HiOutlineShieldCheck className="h-4 w-4 mr-1" />
+                                <HiOutlineShieldCheck className="h-4 w-4 mr-1" aria-hidden="true" />
                                 {user.assignedRole.name}
                               </span>
                               {!user.assignedRole.isActive && (
@@ -440,7 +458,7 @@ const RoleManagement = () => {
                             </div>
                           ) : (
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
-                              <HiOutlineX className="h-4 w-4 mr-1" />
+                              <HiOutlineX className="h-4 w-4 mr-1" aria-hidden="true" />
                               No role assigned
                             </span>
                           )}
@@ -454,7 +472,7 @@ const RoleManagement = () => {
                           onClick={() => openUserRoleModal(user)}
                           className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
-                          <HiOutlineUser className="h-3 w-3 mr-1" />
+                          <HiOutlineUser className="h-3 w-3 mr-1" aria-hidden="true" />
                           {user.assignedRole ? 'Change Role' : 'Assign Role'}
                         </button>
                         {user.assignedRole && (
@@ -462,7 +480,7 @@ const RoleManagement = () => {
                             onClick={() => handleRemoveRole(user._id)}
                             className="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           >
-                            <HiOutlineX className="h-3 w-3 mr-1" />
+                            <HiOutlineX className="h-3 w-3 mr-1" aria-hidden="true" />
                             Remove
                           </button>
                         )}
@@ -478,7 +496,7 @@ const RoleManagement = () => {
               {users.filter(u => u.role === 'employee').length === 0 && (
                 <div className="col-span-full">
                   <div className="text-center py-12">
-                    <HiOutlineUser className="mx-auto h-12 w-12 text-gray-400" />
+                    <HiOutlineUser className="mx-auto h-12 w-12 text-gray-400" aria-hidden="true" />
                     <h3 className="mt-2 text-sm font-medium text-gray-900">No employees</h3>
                     <p className="mt-1 text-sm text-gray-500">Create employee accounts to assign roles.</p>
                   </div>
@@ -493,16 +511,21 @@ const RoleManagement = () => {
       {/* Role Form Modal */}
       {showRoleForm && (
         <div className="fixed inset-0 !mt-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-form-title"
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <HiOutlineKey className="h-5 w-5 text-blue-600" />
+                    <HiOutlineKey className="h-5 w-5 text-blue-600" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 id="role-form-title" className="text-lg font-semibold text-gray-900">
                       {editingRole ? 'Edit Role' : 'Create New Role'}
                     </h3>
                     <p className="text-sm text-gray-600">
@@ -511,10 +534,13 @@ const RoleManagement = () => {
                   </div>
                 </div>
                 <button
+                  ref={roleFormCloseRef}
+                  type="button"
                   onClick={() => setShowRoleForm(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Close"
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
                 >
-                  <HiOutlineX className="h-6 w-6" />
+                  <HiOutlineX className="h-6 w-6" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -531,10 +557,11 @@ const RoleManagement = () => {
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="role-form-name" className="block text-sm font-medium text-gray-700 mb-2">
                       Role Name <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="role-form-name"
                       type="text"
                       value={roleForm.name}
                       onChange={(e) => setRoleForm(prev => ({ ...prev, name: e.target.value }))}
@@ -545,8 +572,9 @@ const RoleManagement = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <label htmlFor="role-form-status" className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                     <select
+                      id="role-form-status"
                       value={roleForm.isActive !== undefined ? roleForm.isActive : true}
                       onChange={(e) => setRoleForm(prev => ({ ...prev, isActive: e.target.value === 'true' }))}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -558,8 +586,9 @@ const RoleManagement = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <label htmlFor="role-form-description" className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                   <textarea
+                    id="role-form-description"
                     value={roleForm.description}
                     onChange={(e) => setRoleForm(prev => ({ ...prev, description: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -571,7 +600,7 @@ const RoleManagement = () => {
                 {/* Permissions Section */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">Permissions</label>
+                    <h4 className="block text-sm font-medium text-gray-700">Permissions</h4>
                     <div className="text-sm text-gray-500">
                       {Object.values(roleForm.permissions).filter(Boolean).length} of {Object.keys(permissions).reduce((acc, cat) => acc + Object.keys(permissions[cat]).length, 0)} selected
                     </div>
@@ -631,7 +660,7 @@ const RoleManagement = () => {
               >
                 {loading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg aria-hidden="true" className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -639,7 +668,7 @@ const RoleManagement = () => {
                   </>
                 ) : (
                   <>
-                    <HiOutlineCheck className="h-4 w-4 mr-2" />
+                    <HiOutlineCheck className="h-4 w-4 mr-2" aria-hidden="true" />
                     {editingRole ? 'Update Role' : 'Create Role'}
                   </>
                 )}
@@ -652,24 +681,32 @@ const RoleManagement = () => {
       {/* User Role Assignment Modal */}
       {showUserRoleModal && (
         <div className="fixed inset-0 !mt-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="user-role-title"
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                    <HiOutlineUser className="h-5 w-5 text-green-600" />
+                    <HiOutlineUser className="h-5 w-5 text-green-600" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Assign Role</h3>
+                    <h3 id="user-role-title" className="text-lg font-semibold text-gray-900">Assign Role</h3>
                     <p className="text-sm text-gray-600">Assign a role to this user</p>
                   </div>
                 </div>
                 <button
+                  ref={userRoleCloseRef}
+                  type="button"
                   onClick={() => setShowUserRoleModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Close"
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
                 >
-                  <HiOutlineX className="h-6 w-6" />
+                  <HiOutlineX className="h-6 w-6" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -694,7 +731,7 @@ const RoleManagement = () => {
                 {selectedUser?.assignedRole && (
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <div className="flex items-center space-x-2">
-                      <HiOutlineShieldCheck className="h-5 w-5 text-blue-600" />
+                      <HiOutlineShieldCheck className="h-5 w-5 text-blue-600" aria-hidden="true" />
                       <span className="text-sm font-medium text-blue-900">Current Role:</span>
                       <span className="text-sm text-blue-800">{selectedUser.assignedRole.name}</span>
                     </div>
@@ -703,10 +740,11 @@ const RoleManagement = () => {
 
                 {/* Role Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="user-role-select" className="block text-sm font-medium text-gray-700 mb-2">
                     Select Role <span className="text-red-500">*</span>
                   </label>
                   <select
+                    id="user-role-select"
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -746,7 +784,7 @@ const RoleManagement = () => {
                 disabled={!selectedRole}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors inline-flex items-center"
               >
-                <HiOutlineCheck className="h-4 w-4 mr-2" />
+                <HiOutlineCheck className="h-4 w-4 mr-2" aria-hidden="true" />
                 Assign Role
               </button>
             </div>

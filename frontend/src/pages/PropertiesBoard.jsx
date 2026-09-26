@@ -645,13 +645,13 @@ export default function PropertiesBoard() {
               to='/create-listing'
               className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors'
             >
-              <HiPlus className='w-4 h-4' />{t('properties.addAProperty')}</Link>
+              <HiPlus className='w-4 h-4' aria-hidden='true' />{t('properties.addAProperty')}</Link>
             {currentUser?.role === 'admin' && (
               <Link
                 to='/admin/import'
                 className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'
               >
-                <HiOutlineUpload className='w-4 h-4' />{t('properties.importASpreadsheet')}</Link>
+                <HiOutlineUpload className='w-4 h-4' aria-hidden='true' />{t('properties.importASpreadsheet')}</Link>
             )}
           </div>
         }
@@ -671,22 +671,22 @@ export default function PropertiesBoard() {
             {currentUser?.role === 'admin' && (
               <Link
                 to='/admin/import'
-                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
               >
-                <HiOutlineUpload className='w-4 h-4' />{t('properties.import')}</Link>
+                <HiOutlineUpload className='w-4 h-4' aria-hidden='true' />{t('properties.import')}</Link>
             )}
             <button
               type='button'
               onClick={() => { setSelectedToShare(selectedItems.length ? selectedItems : items); setShareOpen(true); }}
               disabled={items.length === 0}
               title={selectedItems.length ? `Share the ${selectedItems.length} selected` : 'Choose which properties to share'}
-              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
             >
-              <HiOutlineShare className='w-4 h-4' />{t('properties.share')}</button>
+              <HiOutlineShare className='w-4 h-4' aria-hidden='true' />{t('properties.share')}</button>
             <button
               type='button'
               onClick={() => setLinksOpen(true)}
-              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
             >
               {t('properties.sharedLinks')}
             </button>
@@ -694,7 +694,7 @@ export default function PropertiesBoard() {
               type='button'
               onClick={() => exportCsv(items)}
               disabled={items.length === 0}
-              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
             >
               {t('properties.export')}
             </button>
@@ -702,16 +702,16 @@ export default function PropertiesBoard() {
               <button
                 type='button'
                 onClick={() => setBinOpen(true)}
-                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+                className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
               >
                 {t('properties.deleted')}
               </button>
             )}
             <Link
               to='/create-listing'
-              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
             >
-              <HiPlus className='w-4 h-4' />{t('properties.newProperty')}</Link>
+              <HiPlus className='w-4 h-4' aria-hidden='true' />{t('properties.newProperty')}</Link>
           </>
         }
       />
@@ -781,6 +781,7 @@ export default function PropertiesBoard() {
                 key={t.id}
                 type='button'
                 onClick={() => setParam('view', t.id)}
+                aria-pressed={view === t.id}
                 className={classNames(
                   'px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors',
                   view === t.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
@@ -794,9 +795,10 @@ export default function PropertiesBoard() {
 
           <div className='order-3 basis-full flex flex-col md:flex-row md:flex-wrap md:items-center gap-2'>
             <div className='relative w-full md:w-[280px]'>
-              <svg className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /></svg>
+              <svg aria-hidden='true' className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /></svg>
               <input
-                className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 transition-all placeholder:text-slate-400'
+                className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all placeholder:text-slate-500'
+                aria-label='Search properties'
                 placeholder={t('properties.searchProperties')}
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
@@ -813,7 +815,8 @@ export default function PropertiesBoard() {
               {mobileFiltersOpen ? 'Hide filters' : `Filters${activeFilters?.length ? ` (${activeFilters.length})` : ''}`}
             </button>
             <select
-              className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all`}
+              className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all`}
+              aria-label='Filter by status'
               value={status}
               onChange={(e) => setParam('status', e.target.value)}
             >
@@ -827,7 +830,8 @@ export default function PropertiesBoard() {
 
             {currentUser?.role === 'admin' && (
               <select
-                className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all`}
+                className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all`}
+                aria-label='Filter by agent'
                 value={assignedAgent}
                 onChange={(e) => setParam('assignedAgent', e.target.value)}
               >
@@ -842,7 +846,8 @@ export default function PropertiesBoard() {
             )}
 
             <select
-              className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 outline-none transition-all`}
+              className={`${mobileFiltersOpen ? '' : 'hidden'} md:block w-full md:w-auto px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all`}
+              aria-label='Filter by owner'
               value={ownerId}
               onChange={(e) => setParam('ownerId', e.target.value)}
               disabled={owners.length === 0}
@@ -860,7 +865,7 @@ export default function PropertiesBoard() {
               onClick={() => setFiltersOpen(true)}
               className={`${mobileFiltersOpen ? 'flex' : 'hidden'} md:flex px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium items-center gap-1.5 transition-colors`}
             >
-              <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' /></svg>{t('properties.filters')}</button>
+              <svg aria-hidden='true' className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' /></svg>{t('properties.filters')}</button>
             {(q || status || assignedAgent || ownerId || city || locality || minPrice || maxPrice) && (
               <button
                 type='button'
@@ -892,10 +897,11 @@ export default function PropertiesBoard() {
                 type='button'
                 onClick={() => clearFilter(chip)}
                 title={`Remove this filter`}
+                aria-label={`Remove filter: ${chip.label}`}
                 className='group inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md bg-white border border-slate-200 text-xs text-slate-700 hover:border-rose-300 hover:text-rose-700 transition-colors'
               >
                 {chip.label}
-                <HiX className='w-3 h-3 text-slate-300 group-hover:text-rose-500' />
+                <HiX aria-hidden='true' className='w-3 h-3 text-slate-500 group-hover:text-rose-500' />
               </button>
             ))}
             <button
@@ -908,7 +914,7 @@ export default function PropertiesBoard() {
 
         {error && (
           <div className='px-4 py-2.5 text-sm bg-rose-50 border-b border-rose-200 text-rose-700 flex items-center gap-2'>
-            <svg className='w-4 h-4 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' /></svg>
+            <svg aria-hidden='true' className='w-4 h-4 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' /></svg>
             {error}
           </div>
         )}
@@ -972,8 +978,8 @@ export default function PropertiesBoard() {
                           <div className='flex items-center gap-3 px-4 py-2.5 bg-slate-50/60 border-y border-slate-200'>
                             <div className={`w-1 h-5 rounded-full ${stripe}`} />
                             <span className='text-[13px] font-bold text-slate-800'>{STATUS_LABEL[s] || s}</span>
-                            <span className='text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full'>{rows.length}</span>
-                            {totalLabel && <span className='text-xs text-slate-400 ml-auto'>{totalLabel}</span>}
+                            <span className='text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full'>{rows.length}</span>
+                            {totalLabel && <span className='text-xs text-slate-500 ml-auto'>{totalLabel}</span>}
                           </div>
                         </td>
                       </tr>
@@ -983,12 +989,19 @@ export default function PropertiesBoard() {
                         const ownerName = Array.isArray(x?.ownerIds) && x.ownerIds.length > 0 ? (x.ownerIds[0]?.name || 'Owner') : null;
                         const agentName = x?.assignedAgent?.username;
                         const pill = STATUS_STYLE[x.status || 'available']?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
+                        // The row opens the quick view from the keyboard too; keys pressed
+                        // on the checkbox or an inline editor inside stay with that control.
 
                         return (
                           <tr
                             key={x._id}
-                            className='group hover:bg-indigo-50/40 transition-colors cursor-pointer'
+                            className='group hover:bg-indigo-50/40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500'
                             onClick={() => { setFilesQ(''); setQuickView(x); }}
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.target !== e.currentTarget) return;
+                              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFilesQ(''); setQuickView(x); }
+                            }}
                           >
                             <td className='pl-4 pr-1 py-2.5' onClick={(e) => e.stopPropagation()}>
                               <input
@@ -1006,14 +1019,14 @@ export default function PropertiesBoard() {
                                     <img src={thumb} alt='' className='w-full h-full object-cover' loading='lazy' />
                                   ) : (
                                     <div className='w-full h-full flex items-center justify-center text-slate-300'>
-                                      <svg className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z' /></svg>
+                                      <svg aria-hidden='true' className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z' /></svg>
                                     </div>
                                   )}
                                 </div>
                                 <div className='min-w-0'>
                                   <div className='font-semibold text-slate-900 truncate text-[13px] group-hover:text-indigo-700 transition-colors'>{x.name}</div>
                                   {Boolean(x.bedrooms || x.bathrooms) && (
-                                    <div className='text-[11px] text-slate-400 mt-0.5'>
+                                    <div className='text-[11px] text-slate-500 mt-0.5'>
                                       {x.bedrooms ? `${x.bedrooms} bed` : ''}{x.bedrooms && x.bathrooms ? ' · ' : ''}{x.bathrooms ? `${x.bathrooms} bath` : ''}
                                     </div>
                                   )}
@@ -1022,16 +1035,16 @@ export default function PropertiesBoard() {
                             </td>
                             <td className='px-3 py-2.5'>
                               <div className='text-slate-700 text-[13px] truncate max-w-[200px]'>{x.city || '-'}</div>
-                              {x.locality && <div className='text-[11px] text-slate-400 truncate'>{x.locality}</div>}
+                              {x.locality && <div className='text-[11px] text-slate-500 truncate'>{x.locality}</div>}
                             </td>
                             <td className='px-3 py-2.5'>
                               <span className='text-[12px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-md'>{x.type === 'rent' ? 'Rent' : x.type === 'lease' ? 'Lease' : 'Sale'}</span>
-                              {x.propertyType && <div className='text-[11px] text-slate-400 mt-1 capitalize truncate'>{String(x.propertyType).replace(/[-_]+/g, ' ')}</div>}
+                              {x.propertyType && <div className='text-[11px] text-slate-500 mt-1 capitalize truncate'>{String(x.propertyType).replace(/[-_]+/g, ' ')}</div>}
                             </td>
                             <td className='px-3 py-2.5'>
                               <div className='font-semibold text-slate-900 text-[13px]'>
                                 {formatCurrency(x.regularPrice)}
-                                {x.type === 'rent' && Number(x.regularPrice) > 1 && <span className='font-normal text-slate-400'> / month</span>}
+                                {x.type === 'rent' && Number(x.regularPrice) > 1 && <span className='font-normal text-slate-500'> / month</span>}
                               </div>
                               {x.discountPrice > 0 && x.discountPrice < x.regularPrice && (
                                 <div className='text-[11px] text-emerald-600 font-medium'>{formatCurrency(x.discountPrice)}</div>
@@ -1054,7 +1067,7 @@ export default function PropertiesBoard() {
                                       <span className='text-[13px] text-slate-700 truncate'>{agentName}</span>
                                     </>
                                   ) : (
-                                    <span className='text-[12px] text-slate-400 italic'>{t('properties.assign')}</span>
+                                    <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
                                   )}
                                 </button>
                                 {editingCell?.id === x._id && editingCell?.field === 'agent' && (
@@ -1075,10 +1088,10 @@ export default function PropertiesBoard() {
                                           {(a.username?.[0] || '?').toUpperCase()}
                                         </div>
                                         {a.username}
-                                        {x.assignedAgent?._id === a._id && <svg className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                        {x.assignedAgent?._id === a._id && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                       </button>
                                     ))}
-                                    {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>{t('properties.noAgentsAvailable')}</div>}
+                                    {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-500'>{t('properties.noAgentsAvailable')}</div>}
                                   </div>
                                 )}
                               </div>
@@ -1095,7 +1108,7 @@ export default function PropertiesBoard() {
                                   {ownerName ? (
                                     <span className='text-[13px] text-slate-700 truncate block max-w-[140px]'>{ownerName}</span>
                                   ) : (
-                                    <span className='text-[12px] text-slate-400 italic'>{t('properties.assign')}</span>
+                                    <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
                                   )}
                                 </button>
                                 {editingCell?.id === x._id && editingCell?.field === 'owner' && (
@@ -1115,11 +1128,11 @@ export default function PropertiesBoard() {
                                           className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
                                         >
                                           <span className='truncate'>{o.name || o.email || o._id}</span>
-                                          {isActive && <svg className='w-4 h-4 ml-auto text-indigo-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                          {isActive && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                         </button>
                                       );
                                     })}
-                                    {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-400'>{t('properties.noOwnersAvailable')}</div>}
+                                    {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-500'>{t('properties.noOwnersAvailable')}</div>}
                                   </div>
                                 )}
                               </div>
@@ -1151,7 +1164,7 @@ export default function PropertiesBoard() {
                                         >
                                           <div className={`w-2 h-2 rounded-full ${stStripe}`} />
                                           <span>{listingStatusLabel(st)}</span>
-                                          {x.status === st && <svg className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                          {x.status === st && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
                                         </button>
                                       );
                                     })}
@@ -1160,24 +1173,26 @@ export default function PropertiesBoard() {
                               </div>
                             </td>
                             <td className='px-4 py-2.5 text-right'>
-                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
                                 <button
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setFilesQ(''); setQuickView(x); }}
-                                  className='p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+                                  className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
                                   title={t('properties.quickView')}
+                                  aria-label={t('properties.quickView')}
                                 >
-                                  <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' /></svg>
+                                  <svg aria-hidden='true' className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' /></svg>
                                 </button>
                                 <Link
                                   to={`/listing/${x._id}`}
                                   target='_blank'
                                   rel='noreferrer'
                                   onClick={(e) => e.stopPropagation()}
-                                  className='p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors'
+                                  className='p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
                                   title={t('properties.openInNewTab')}
+                                  aria-label={t('properties.openInNewTab')}
                                 >
-                                  <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14' /></svg>
+                                  <svg aria-hidden='true' className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14' /></svg>
                                 </Link>
                               </div>
                             </td>
@@ -1281,12 +1296,12 @@ export default function PropertiesBoard() {
                             {it.image ? (
                               <img
                                 src={it.image}
-                                alt={it.title}
+                                alt=''
                                 className='w-full h-full object-cover'
                                 loading='lazy'
                               />
                             ) : (
-                              <div className='w-full h-full flex items-center justify-center text-slate-400 text-sm'>{t('properties.noImage')}</div>
+                              <div className='w-full h-full flex items-center justify-center text-slate-600 text-sm'>{t('properties.noImage')}</div>
                             )}
                           </div>
                           <div className='p-3'>
@@ -1329,12 +1344,12 @@ export default function PropertiesBoard() {
                     {Array.isArray(x.imageUrls) && x.imageUrls[0] ? (
                       <img
                         src={normalizeImageUrl(x.imageUrls[0])}
-                        alt={x.name}
+                        alt=''
                         className='w-full h-full object-cover'
                         loading='lazy'
                       />
                     ) : (
-                      <div className='w-full h-full flex items-center justify-center text-slate-400 text-sm'>{t('properties.noImage')}</div>
+                      <div className='w-full h-full flex items-center justify-center text-slate-600 text-sm'>{t('properties.noImage')}</div>
                     )}
                   </div>
                   <div className='p-3'>
@@ -1393,7 +1408,7 @@ export default function PropertiesBoard() {
               <div className='h-[520px]'>
                 <MapContainer center={mapCenter} zoom={11} className='h-full w-full'>
                   <TileLayer
-                    attribution='&copy; OpenStreetMap contributors'
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                   />
                   {mapItems.map((x) => (
@@ -1433,8 +1448,9 @@ export default function PropertiesBoard() {
             <div className='space-y-4'>
               <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.city')}</label>
+                  <label htmlFor='pb-filter-city' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.city')}</label>
                   <input
+                    id='pb-filter-city'
                     value={city}
                     onChange={(e) => setParam('city', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1442,8 +1458,9 @@ export default function PropertiesBoard() {
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.locality')}</label>
+                  <label htmlFor='pb-filter-locality' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.locality')}</label>
                   <input
+                    id='pb-filter-locality'
                     value={locality}
                     onChange={(e) => setParam('locality', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1451,8 +1468,9 @@ export default function PropertiesBoard() {
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.category')}</label>
+                  <label htmlFor='pb-filter-property-category' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.category')}</label>
                   <select
+                    id='pb-filter-property-category'
                     value={propertyCategory}
                     onChange={(e) => setParam('propertyCategory', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1467,8 +1485,9 @@ export default function PropertiesBoard() {
 
               <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minPrice')}</label>
+                  <label htmlFor='pb-filter-min-price' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minPrice')}</label>
                   <input
+                    id='pb-filter-min-price'
                     value={minPrice}
                     onChange={(e) => setParam('minPrice', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1476,8 +1495,9 @@ export default function PropertiesBoard() {
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.maxPrice')}</label>
+                  <label htmlFor='pb-filter-max-price' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.maxPrice')}</label>
                   <input
+                    id='pb-filter-max-price'
                     value={maxPrice}
                     onChange={(e) => setParam('maxPrice', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1485,8 +1505,9 @@ export default function PropertiesBoard() {
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.propertyType')}</label>
+                  <label htmlFor='pb-filter-property-type' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.propertyType')}</label>
                   <select
+                    id='pb-filter-property-type'
                     value={propertyType}
                     onChange={(e) => setParam('propertyType', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1499,8 +1520,9 @@ export default function PropertiesBoard() {
 
               <div className='grid grid-cols-1 md:grid-cols-4 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minBedrooms')}</label>
+                  <label htmlFor='pb-filter-min-bedrooms' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minBedrooms')}</label>
                   <input
+                    id='pb-filter-min-bedrooms'
                     value={minBedrooms}
                     onChange={(e) => setParam('minBedrooms', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1508,8 +1530,9 @@ export default function PropertiesBoard() {
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minBathrooms')}</label>
+                  <label htmlFor='pb-filter-min-bathrooms' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.minBathrooms')}</label>
                   <input
+                    id='pb-filter-min-bathrooms'
                     value={minBathrooms}
                     onChange={(e) => setParam('minBathrooms', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1517,8 +1540,9 @@ export default function PropertiesBoard() {
                   />
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.furnished')}</label>
+                  <label htmlFor='pb-filter-furnished' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.furnished')}</label>
                   <select
+                    id='pb-filter-furnished'
                     value={furnished}
                     onChange={(e) => setParam('furnished', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1529,8 +1553,9 @@ export default function PropertiesBoard() {
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.parking')}</label>
+                  <label htmlFor='pb-filter-parking' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.parking')}</label>
                   <select
+                    id='pb-filter-parking'
                     value={parking}
                     onChange={(e) => setParam('parking', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1544,8 +1569,9 @@ export default function PropertiesBoard() {
 
               <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.offer')}</label>
+                  <label htmlFor='pb-filter-offer' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.offer')}</label>
                   <select
+                    id='pb-filter-offer'
                     value={offer}
                     onChange={(e) => setParam('offer', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1556,8 +1582,9 @@ export default function PropertiesBoard() {
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.listingType')}</label>
+                  <label htmlFor='pb-filter-listing-type' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.listingType')}</label>
                   <select
+                    id='pb-filter-listing-type'
                     value={type}
                     onChange={(e) => setParam('type', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1569,8 +1596,9 @@ export default function PropertiesBoard() {
                   </select>
                 </div>
                 <div>
-                  <label className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.category')}</label>
+                  <label htmlFor='pb-filter-category' className='block text-xs font-semibold text-slate-600 mb-1'>{t('properties.category')}</label>
                   <select
+                    id='pb-filter-category'
                     value={category}
                     onChange={(e) => setParam('category', e.target.value)}
                     className='w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm'
@@ -1598,7 +1626,7 @@ export default function PropertiesBoard() {
                 to={`/listing/${quickView._id}`}
                 target='_blank'
                 rel='noreferrer'
-                className='px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1'
+                className='px-4 py-2 text-sm rounded-lg font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1'
               >{t('properties.open')}</Link>
             </>
           )
@@ -1640,7 +1668,8 @@ export default function PropertiesBoard() {
                       <input
                         value={filesQ}
                         onChange={(e) => setFilesQ(e.target.value)}
-                        className='px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white'
+                        className='px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:bg-white focus-visible:ring-2 focus-visible:ring-brand-500'
+                        aria-label='Search files'
                         placeholder={t('properties.searchFiles')}
                       />
                     </div>

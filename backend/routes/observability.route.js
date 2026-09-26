@@ -1,5 +1,6 @@
 import express from 'express';
-import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
+import { verifyToken } from '../utils/verifyUser.js';
+import { requirePlatformAdmin } from '../middleware/platformAuth.js';
 import { pushFrontendLogs } from '../utils/logger.js';
 import { createRateLimit } from '../middleware/security.js';
 
@@ -22,10 +23,14 @@ router.post('/logs', ingestLimit, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── admin-only below ────────────────────────────────────────────────────────
+// ── platform operators only below ───────────────────────────────────────────
+// These read the log store, which is ONE store for every workspace: request
+// lines carry emails and IPs from all agencies. A workspace admin (`role:
+// 'admin'`) is an admin of one agency and was able to run arbitrary SQL across
+// all of them. Only the vendor's operator may read it.
 
 // POST /api/observability/query — proxy search to OpenObserve
-router.post('/query', verifyToken, requireAdmin, async (req, res, next) => {
+router.post('/query', verifyToken, requirePlatformAdmin, async (req, res, next) => {
   if (!OO_AUTH) return res.status(503).json({ success: false, message: 'OpenObserve not configured' });
   try {
     const { stream = 'backend_logs', sql, start_time, end_time, size = 200 } = req.body;
@@ -48,7 +53,7 @@ router.post('/query', verifyToken, requireAdmin, async (req, res, next) => {
 });
 
 // GET /api/observability/streams — list available streams
-router.get('/streams', verifyToken, requireAdmin, async (req, res, next) => {
+router.get('/streams', verifyToken, requirePlatformAdmin, async (req, res, next) => {
   if (!OO_AUTH) return res.status(503).json({ success: false, message: 'OpenObserve not configured' });
   try {
     const ooRes = await fetch(`${OO_URL}/api/${OO_ORG}/streams`, {

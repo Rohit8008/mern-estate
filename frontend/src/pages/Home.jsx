@@ -82,6 +82,13 @@ export default function Home() {
 
   const dialogRef = useRef(null);
   const openerRef = useRef(null);
+  const successRef = useRef(null);
+
+  // The submit button that had focus is replaced by the confirmation; without
+  // this, focus drops to <body> and a screen reader hears nothing.
+  useEffect(() => {
+    if (submitState === 'success') successRef.current?.focus();
+  }, [submitState]);
 
   const closeModal = useCallback(() => {
     setShowDemo(false);
@@ -163,7 +170,7 @@ export default function Home() {
                 {t('landing.signIn')}
               </Link>
             </div>
-            <p className='mt-6 text-sm text-slate-500 max-w-[46ch] text-pretty'>
+            <p className='mt-6 text-sm text-slate-600 max-w-[46ch] text-pretty'>
               {t('landing.inviteNote')}{' '}
               <Link to='/download' className='font-medium text-brand-700 hover:underline'>{t('landing.getAndroidApp')}</Link>
             </p>
@@ -293,13 +300,13 @@ export default function Home() {
 
             <div className='px-6 py-6'>
               {submitState === 'success' ? (
-                <div className='text-center py-8'>
+                <div className='text-center py-8' role='status'>
                   <div className='w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4'>
                     <HiOutlineCheck className='w-7 h-7 text-emerald-600' aria-hidden='true' />
                   </div>
-                  <h3 className='text-lg font-bold text-slate-900 mb-2'>{t('home.demoRequestConfirmed')}</h3>
-                  <p className='text-slate-500 text-sm mb-6'>{submitMsg}</p>
-                  <div className='text-sm text-slate-500 bg-slate-50 rounded-xl p-4 text-left space-y-1.5'>
+                  <h3 ref={successRef} tabIndex={-1} className='text-lg font-bold text-slate-900 mb-2 focus:outline-none'>{t('home.demoRequestConfirmed')}</h3>
+                  <p className='text-slate-600 text-sm mb-6'>{submitMsg}</p>
+                  <div className='text-sm text-slate-600 bg-slate-50 rounded-xl p-4 text-left space-y-1.5'>
                     <p>{t('home.weWillReachOutWithin')}<strong className='text-slate-700'>{t('home.24Hours')}</strong>{t('home.toConfirmATime')}</p>
                     <p>{t('home.soonerIsFineTooCall')}<strong className='text-slate-700'>{OWNER_PHONE}</strong>.</p>
                   </div>
@@ -327,7 +334,7 @@ export default function Home() {
                       <input
                         id='demo-phone' name='phone' type='tel' autoComplete='tel' inputMode='tel' pattern='[0-9+()\s-]{7,}'
                         title='Digits, spaces and + ( ) - only'
-                        value={form.phone} onChange={handleFormChange} placeholder='+91 98431 77206'
+                        value={form.phone} onChange={handleFormChange} placeholder='+91 XXXXX XXXXX'
                         className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent'
                       />
                     </div>
@@ -385,7 +392,15 @@ export default function Home() {
                     )}
                   </button>
 
-                  <p className='text-xs text-slate-500 text-center'>
+                  {/* The notice belongs where the data is collected (DPDP Act s.5):
+                      what it is for, and where the full policy is. */}
+                  <p className='text-xs text-slate-600 leading-relaxed'>
+                    We use these details only to arrange and follow up on your demo, and never
+                    add you to a mailing list. Ask us and we delete them. See our{' '}
+                    <Link to='/privacy' className='text-brand-700 font-medium underline underline-offset-2'>Privacy Policy</Link>.
+                  </p>
+
+                  <p className='text-xs text-slate-600 text-center'>
                     Or email{' '}
                     <a href={`mailto:${OWNER_EMAIL}`} className='text-brand-700 font-medium hover:underline'>{OWNER_EMAIL}</a>
                   </p>

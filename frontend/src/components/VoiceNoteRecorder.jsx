@@ -94,7 +94,7 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
           disabled={disabled}
           className='flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
         >
-          <HiOutlineMicrophone className='w-4 h-4 text-rose-500' />{t('voiceNoteRecorder.recordVoiceNote')}</button>
+          <HiOutlineMicrophone className='w-4 h-4 text-rose-500' aria-hidden='true' />{t('voiceNoteRecorder.recordVoiceNote')}</button>
         {error && <p className='mt-1.5 text-xs text-rose-600'>{error}</p>}
       </div>
     );
@@ -104,15 +104,15 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
     return (
       <div className='flex items-center gap-3 px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg'>
         <span className='w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0' />
-        <span className='text-sm font-mono font-medium text-rose-700 w-12'>{formatDuration(elapsed)}</span>
+        <span className='text-sm font-mono font-medium text-rose-700 w-12' aria-label='Recording time'>{formatDuration(elapsed)}</span>
         <button
           type='button'
           onClick={stopAndSave}
           className='flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-md transition-colors'
         >
-          <HiOutlineStop className='w-3.5 h-3.5' />{t('voiceNoteRecorder.stopSave')}</button>
-        <button type='button' onClick={cancel} className='p-1 text-slate-400 hover:text-slate-600'>
-          <HiX className='w-4 h-4' />
+          <HiOutlineStop className='w-3.5 h-3.5' aria-hidden='true' />{t('voiceNoteRecorder.stopSave')}</button>
+        <button type='button' onClick={cancel} aria-label='Cancel recording' className='p-1 text-slate-500 hover:text-slate-700'>
+          <HiX className='w-4 h-4' aria-hidden='true' />
         </button>
       </div>
     );
@@ -121,7 +121,7 @@ export default function VoiceNoteRecorder({ onSave, disabled }) {
   // uploading
   return (
     <div className='flex items-center gap-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg'>
-      <HiOutlineUpload className='w-4 h-4 text-indigo-500 flex-shrink-0' />
+      <HiOutlineUpload className='w-4 h-4 text-indigo-500 flex-shrink-0' aria-hidden='true' />
       <div className='flex-1'>
         <div className='flex justify-between text-xs text-slate-500 mb-1'>
           <span>{t('voiceNoteRecorder.uploading')}</span>

@@ -363,6 +363,17 @@ Real measured figures and consenting named customers are welcome when they exist
 source. Until then the objection-handling section on the landing page ("Straight answers") does
 the job social proof would, and says plainly that the product is early.
 
+### Legal pages say what the code does
+`pages/Legal.jsx` renders `/privacy`, `/terms`, `/cookies` and `/refunds`. Every sentence there is
+a claim about behaviour — cookie names, retention periods, who receives data, the export and delete
+buttons — so **a change to any of those changes the policy text in the same commit**. The first
+version promised an export nobody could reach, a deletion that only deactivated, and "one cookie"
+where there were three. `LEGAL_UPDATED` there and `LEGAL_VERSION` in `backend/utils/legalVersion.js`
+move together; the latter is what `acceptInvite` records as accepted. Business identity (legal
+name, address, GSTIN, grievance officer) lives only in `BUSINESS` in `utils/marketingCopy.js`;
+null fields are not printed, so never fill one with a guess. Personal data needs a stated purpose:
+the footer newsletter was removed because nothing ever sent one.
+
 ### Confirmation Pattern
 - **Pages with Leaflet maps** → inline row confirmation (rose-50 strip with Cancel + Delete). See `PropertyDocuments.jsx`.
 - **Other pages** → `ConfirmDialog.jsx` modal.

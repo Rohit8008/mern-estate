@@ -15,6 +15,8 @@ import {
   exportClients,
   addClientPhoto,
   deleteClientPhoto,
+  optOutClientEmail,
+  undoClientEmailOptOut,
 } from '../controllers/client.controller.js';
 
 const router = express.Router();
@@ -44,6 +46,11 @@ router.post('/:id/assign', requirePermission('updateUser'), validateBody(clientV
 
 // Photos. The file goes to Cloudinary from the browser; only the URL arrives here.
 router.post('/:id/photos', requirePermission('updateClient'), addClientPhoto);
+
+// Automated-email opt-out, kept off the generic PATCH so it cannot be cleared
+// by an ordinary edit.
+router.post('/:id/email-opt-out', requirePermission('updateClient'), optOutClientEmail);
+router.delete('/:id/email-opt-out', requirePermission('updateClient'), undoClientEmailOptOut);
 router.delete('/:id/photos/:photoId', requirePermission('updateClient'), deleteClientPhoto);
 
 // Interested listings management

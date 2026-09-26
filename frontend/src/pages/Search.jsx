@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import ListingItem from '../components/ListingItem';
 import { EmptyState } from '../design-system';
@@ -57,6 +57,16 @@ export default function Search() {
   const [searchTime, setSearchTime] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const mobileFiltersCloseRef = useRef(null);
+
+  // The mobile filter drawer is a modal: Escape closes it and focus moves in.
+  useEffect(() => {
+    if (!showMobileFilters) return undefined;
+    mobileFiltersCloseRef.current?.focus();
+    const onKey = (e) => { if (e.key === 'Escape') setShowMobileFilters(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showMobileFilters]);
 
   // Listen for listing changes to refresh search results
   useEffect(() => {
@@ -357,7 +367,7 @@ export default function Search() {
                     key={filter.key}
                     className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium'
                   >
-                    {filter.icon && <filter.icon className='w-4 h-4' />}
+                    {filter.icon && <filter.icon className='w-4 h-4' aria-hidden='true' />}
                     {filter.label}
                     <button
                       onClick={() => {
@@ -369,8 +379,9 @@ export default function Search() {
                         }
                       }}
                       className='ml-1 hover:bg-indigo-200 rounded-full p-0.5 transition-colors'
+                      aria-label={`Remove filter: ${filter.label}`}
                     >
-                      <HiX className='w-3.5 h-3.5' />
+                      <HiX className='w-3.5 h-3.5' aria-hidden='true' />
                     </button>
                   </span>
                 ))}
@@ -386,12 +397,12 @@ export default function Search() {
         {/* Error Message */}
         {error && (
           <div className='mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-3'>
-            <svg className='w-5 h-5 flex-shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <svg className='w-5 h-5 flex-shrink-0' aria-hidden='true' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
             </svg>
             <span>{error}</span>
             <button onClick={() => setRefreshKey(prev => prev + 1)} className='ml-auto text-rose-600 hover:text-rose-800' aria-label={t('search.retrySearch')}>
-              <HiRefresh className='w-5 h-5' />
+              <HiRefresh className='w-5 h-5' aria-hidden='true' />
             </button>
           </div>
         )}
@@ -400,9 +411,10 @@ export default function Search() {
           {/* Mobile Filter Button */}
           <button
             onClick={() => setShowMobileFilters(true)}
+            aria-expanded={showMobileFilters}
             className='lg:hidden flex items-center justify-center gap-2 w-full py-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium shadow-sm'
           >
-            <HiAdjustments className='w-5 h-5' />
+            <HiAdjustments className='w-5 h-5' aria-hidden='true' />
             Filters
             {activeFilters.length > 0 && (
               <span className='px-2 py-0.5 bg-indigo-600 text-white text-xs rounded-full'>
@@ -414,12 +426,23 @@ export default function Search() {
           {/* Mobile Filter Overlay */}
           {showMobileFilters && (
             <div className='fixed inset-0 !mt-0 z-50 lg:hidden'>
-              <div className='absolute inset-0 bg-black/50' onClick={() => setShowMobileFilters(false)} />
-              <div className='absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl overflow-y-auto'>
+              <div className='absolute inset-0 bg-black/50' onClick={() => setShowMobileFilters(false)} aria-hidden='true' />
+              <div
+                className='absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl overflow-y-auto'
+                role='dialog'
+                aria-modal='true'
+                aria-labelledby='mobile-filters-title'
+              >
                 <div className='sticky top-0 bg-white border-b border-slate-200 p-4 flex items-center justify-between'>
-                  <h3 className='font-semibold text-slate-800'>{t('search.filters')}</h3>
-                  <button onClick={() => setShowMobileFilters(false)} className='p-2 hover:bg-slate-100 rounded-lg'>
-                    <HiX className='w-5 h-5' />
+                  <h3 id='mobile-filters-title' className='font-semibold text-slate-800'>{t('search.filters')}</h3>
+                  <button
+                    ref={mobileFiltersCloseRef}
+                    type='button'
+                    onClick={() => setShowMobileFilters(false)}
+                    aria-label='Close filters'
+                    className='p-2 hover:bg-slate-100 rounded-lg'
+                  >
+                    <HiX className='w-5 h-5' aria-hidden='true' />
                   </button>
                 </div>
                 <div className='p-4'>
@@ -490,8 +513,10 @@ export default function Search() {
                             : 'text-slate-500 hover:text-slate-700'
                           }`}
                         title={t('search.gridView')}
+                        aria-label={t('search.gridView')}
+                        aria-pressed={view === 'grid'}
                       >
-                        <HiViewGrid className='w-5 h-5' />
+                        <HiViewGrid className='w-5 h-5' aria-hidden='true' />
                       </button>
                       <button
                         onClick={() => setViewAndSyncUrl('list')}
@@ -500,8 +525,10 @@ export default function Search() {
                             : 'text-slate-500 hover:text-slate-700'
                           }`}
                         title={t('search.listView')}
+                        aria-label={t('search.listView')}
+                        aria-pressed={view === 'list'}
                       >
-                        <HiViewList className='w-5 h-5' />
+                        <HiViewList className='w-5 h-5' aria-hidden='true' />
                       </button>
                     </div>
 
@@ -522,7 +549,7 @@ export default function Search() {
                         <option value="regularPrice-asc">{t('search.priceLowToHigh')}</option>
                         <option value="regularPrice-desc">{t('search.priceHighToLow')}</option>
                       </select>
-                      <HiChevronDown className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none' />
+                      <HiChevronDown className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none' aria-hidden='true' />
                     </div>
                   </div>
                 </div>

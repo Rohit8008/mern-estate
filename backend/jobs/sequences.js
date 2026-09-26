@@ -6,6 +6,9 @@ import { notify } from '../utils/notify.js';
 import { sendMail } from '../utils/mailer.js';
 import { renderTemplate, templateValues } from '../utils/emailTemplates.js';
 import { logger } from '../utils/logger.js';
+import Tenant from '../models/tenant.model.js';
+import { getTenantId, runWithoutTenantScope } from '../tenancy/tenantContext.js';
+import { isSuppressed, signUnsubscribeToken, unsubscribeUrls } from '../utils/unsubscribe.js';
 
 /**
  * Firing the steps that have come due.
@@ -19,6 +22,11 @@ import { logger } from '../utils/logger.js';
  *    like this can do.
  *  - **A failing step does not wedge the enrollment.** It advances anyway, with
  *    the failure recorded, so one bad address does not freeze the rest.
+ *  - **An unsubscribed address gets no email.** The workspace suppression list
+ *    is checked at send time, every time, and every email carries a working
+ *    unsubscribe link plus the List-Unsubscribe headers mail providers require
+ *    for one-click unsubscribe. Task and reminder steps still fire: they go to
+ *    the agent, not the lead.
  */
 
 /** Merge fields available to a step's subject and body. */
@@ -33,20 +41,46 @@ function valuesForClient(client) {
   });
 }
 
+/**
+ * The lines every automated email ends with: who is writing and why, and how
+ * to stop it. Plain text, like the body.
+ */
+function emailFooter(workspace, urls) {
+  const sender = workspace?.name || 'the agency';
+  return `\n\n--\nYou are receiving this because you enquired with ${sender}.\nTo stop these emails: ${urls.page}`;
+}
+
+/** The message a sequence email step sends. Exported for tests. */
+export function buildFollowUpEmail({ client, workspace, subject, body, tenantId }) {
+  const token = signUnsubscribeToken({ tenantId, clientId: client._id });
+  const urls = unsubscribeUrls(workspace, token);
+  return {
+    to: client.email,
+    subject: subject || `A message about your property search`,
+    text: `${body}${emailFooter(workspace, urls)}`,
+    headers: {
+      // RFC 2369 + RFC 8058: the mail client's own Unsubscribe button, which
+      // POSTs here without opening a page. Gmail and Yahoo require both
+      // headers from bulk senders.
+      'List-Unsubscribe': `<${urls.oneClick}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  };
+}
+
 /** Do what one step says. Returns a short outcome for the history. */
-async function fireStep(step, { client, enrollment }) {
+async function fireStep(step, { client, enrollment, workspace }) {
   const values = valuesForClient(client);
   const subject = renderTemplate(step.subject || '', values);
   const body = renderTemplate(step.body || '', values);
 
   if (step.action === 'email') {
     if (!client.email) return 'skipped: no email address';
+    if (await isSuppressed(client.email)) return 'skipped: unsubscribed';
 
-    const result = await sendMail({
-      to: client.email,
-      subject: subject || `A message about your property search`,
-      text: body,
-    });
+    const result = await sendMail(
+      buildFollowUpEmail({ client, workspace, subject, body, tenantId: getTenantId() })
+    );
 
     return result.sent ? 'email sent' : `email failed: ${result.reason || 'unknown'}`;
   }
@@ -89,6 +123,16 @@ export async function runDueSequenceSteps({ batchSize = 100, now = new Date() } 
   const sequences = await Sequence.find({ _id: { $in: sequenceIds } }).lean();
   const byId = new Map(sequences.map((s) => [String(s._id), s]));
 
+  // Once per run, for the footer and the unsubscribe links.
+  const tenantId = getTenantId();
+  const tenant = tenantId
+    ? await runWithoutTenantScope('addressing sequence emails', () =>
+        Tenant.findById(tenantId).select('name slug customDomain branding').lean())
+    : null;
+  const workspace = tenant
+    ? { name: tenant.branding?.productName || tenant.name, slug: tenant.slug, customDomain: tenant.customDomain }
+    : null;
+
   let fired = 0;
 
   for (const enrollment of due) {
@@ -122,7 +166,7 @@ export async function runDueSequenceSteps({ batchSize = 100, now = new Date() } 
 
     let outcome;
     try {
-      outcome = await fireStep(step, { client, enrollment });
+      outcome = await fireStep(step, { client, enrollment, workspace });
     } catch (err) {
       // Record and move on: one bad step must not freeze the enrollment.
       outcome = `failed: ${err.message}`;

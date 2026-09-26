@@ -13,6 +13,7 @@ import SequenceEnrollments from '../components/SequenceEnrollments';
 import ClientPhotos from '../components/ClientPhotos';
 import WhatsAppButton from '../components/WhatsAppButton';
 import { useTranslation } from 'react-i18next';
+import EmailOptOut from '../components/EmailOptOut';
 
 // The workspace's own pipeline (tenant.dealStages) drives these, so the
 // names match the pipeline board. This list only backs a workspace config that
@@ -495,6 +496,13 @@ export default function ClientDetail() {
               <h3 className="font-semibold mb-3">{t('clientDetail.contactInformation')}</h3>
               <div className="space-y-2 text-sm">
                 <div><span className="text-slate-500">{t('clientDetail.email')}</span> {client.email || '—'}</div>
+                {client.email && (
+                  <EmailOptOut
+                    client={client}
+                    isAdmin={currentUser?.role === 'admin'}
+                    onChange={(emailOptOut) => setClient((c) => ({ ...c, emailOptOut }))}
+                  />
+                )}
                 <div><span className="text-slate-500">{t('clientDetail.phone')}</span> {client.phone || '—'}</div>
                 <div><span className="text-slate-500">{t('clientDetail.altPhone')}</span> {client.alternatePhone || '—'}</div>
                 <div><span className="text-slate-500">{t('clientDetail.organization')}</span> {client.organization || '—'}</div>

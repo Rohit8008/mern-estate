@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 import { HiPhotograph, HiPlus, HiTrash, HiX } from 'react-icons/hi';
@@ -20,6 +20,16 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
   const [uploading, setUploading] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const lightboxCloseRef = useRef(null);
+
+  // The lightbox is a modal: Escape closes it and focus starts on its close button.
+  useEffect(() => {
+    if (!lightbox) return undefined;
+    lightboxCloseRef.current?.focus();
+    const onKey = (e) => { if (e.key === 'Escape') setLightbox(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   const upload = async (files) => {
     const list = [...files].filter((file) => file.type?.startsWith('image/'));
@@ -61,7 +71,7 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
             disabled={uploading}
             className='inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50'
           >
-            <HiPlus className='w-3.5 h-3.5' />
+            <HiPlus className='w-3.5 h-3.5' aria-hidden='true' />
             {uploading ? 'Uploading…' : t('common.add')}
           </button>
         )}
@@ -70,6 +80,7 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
       <input
         ref={inputRef}
         type='file'
+        aria-label='Add photos'
         accept='image/*'
         multiple
         hidden
@@ -81,9 +92,9 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
           type='button'
           onClick={() => !readOnly && inputRef.current?.click()}
           disabled={readOnly}
-          className='w-full flex flex-col items-center justify-center py-8 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-slate-300 transition-colors disabled:hover:border-slate-200'
+          className='w-full flex flex-col items-center justify-center py-8 border-2 border-dashed border-slate-200 rounded-xl text-slate-500 hover:border-slate-300 transition-colors disabled:hover:border-slate-200'
         >
-          <HiPhotograph className='w-7 h-7 mb-1.5' />
+          <HiPhotograph className='w-7 h-7 mb-1.5 text-slate-400' aria-hidden='true' />
           <span className='text-xs'>{readOnly ? 'No photos' : 'Add a photo'}</span>
         </button>
       ) : (
@@ -107,10 +118,10 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
                 <button
                   type='button'
                   onClick={() => setPendingDelete(photo._id)}
-                  className='absolute top-1 right-1 p-1 rounded-md bg-white/90 text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity'
+                  className='absolute top-1 right-1 p-1 rounded-md bg-white/90 text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity'
                   aria-label={t('clientPhotos.removePhoto')}
                 >
-                  <HiTrash className='w-3.5 h-3.5' />
+                  <HiTrash className='w-3.5 h-3.5' aria-hidden='true' />
                 </button>
               )}
 
@@ -142,15 +153,18 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
         <div
           className='fixed inset-0 !mt-0 z-50 bg-slate-900/80 flex items-center justify-center p-6'
           onClick={() => setLightbox(null)}
-          role='presentation'
+          role='dialog'
+          aria-modal='true'
+          aria-label={lightbox.caption || 'Client photo'}
         >
           <button
+            ref={lightboxCloseRef}
             type='button'
             onClick={() => setLightbox(null)}
             className='absolute top-4 right-4 p-2 text-white/80 hover:text-white'
             aria-label={t('common.close')}
           >
-            <HiX className='w-6 h-6' />
+            <HiX className='w-6 h-6' aria-hidden='true' />
           </button>
           <img
             src={normalizeImageUrl(lightbox.url)}
