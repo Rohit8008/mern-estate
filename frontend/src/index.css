@@ -477,6 +477,42 @@ html {
     background: #8fa8bd;
 }
 
+/* ═══════════════════════════════════════════
+   TOUCH & SMALL SCREENS
+═══════════════════════════════════════════ */
+
+/* Row and card actions that appear on hover. A phone has no hover, so there
+   they are simply shown; only a real mouse gets the tidy reveal. Keyboard
+   focus inside the row reveals them too. */
+@media (hover: hover) and (pointer: fine) {
+    .hover-reveal { opacity: 0; }
+    .group:hover .hover-reveal,
+    .group:focus-within .hover-reveal,
+    .hover-reveal:focus,
+    .hover-reveal:focus-within { opacity: 1; }
+}
+
+/* iOS Safari zooms the page into any field whose text is under 16px, and
+   does not zoom back out. Every form here uses text-sm, so on phones the
+   fields get 16px instead of each call site having to remember. */
+@media (max-width: 639px) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+    select,
+    textarea {
+        font-size: 16px;
+    }
+}
+
+/* Notched phones in standalone (home-screen) mode: keep fixed bars and the
+   last row of content clear of the home indicator. Zero everywhere else. */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pb-safe-6 { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+.bottom-safe-6 { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+
+/* No grey flash over every tapped link on mobile WebKit; pressed states are
+   styled explicitly. */
+a, button, [role='button'] { -webkit-tap-highlight-color: transparent; }
+
 /* Focus — visible only for keyboard navigation */
 *:focus-visible {
     outline: 2px solid hsl(var(--ring));

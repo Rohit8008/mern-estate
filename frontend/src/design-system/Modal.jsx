@@ -110,7 +110,7 @@ export default function Modal({ open, onClose, title, description, children, foo
                 type='button'
                 onClick={onClose}
                 aria-label='Close'
-                className='flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                className='flex-shrink-0 p-2.5 sm:p-1.5 -m-1 sm:m-0 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
               >
                 <HiX className='w-4 h-4' aria-hidden='true' />
               </button>

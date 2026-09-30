@@ -95,7 +95,9 @@ function NavItem({ item, isActive, onNavigate }) {
       to={item.route}
       onClick={onNavigate}
       className={cx(
-        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 group',
+        // py-2.5 below lg: the drawer is a touch surface, and 36px rows were
+        // easy to mis-tap. The desktop sidebar keeps its denser rhythm.
+        'flex items-center gap-2.5 px-3 py-2.5 lg:py-2 rounded-lg text-sm font-medium transition-all duration-150 group',
         active
           ? 'crm-nav-active text-white'
           : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
@@ -143,6 +145,24 @@ export default function CrmShell() {
     return () => document.removeEventListener('keydown', onKey);
   }, [sidebarOpen, profileOpen, notifOpen]);
 
+  // Anything that navigates — browser back, a notification link, a link inside
+  // the page — closes the drawer and popovers. Relying on each link's onClick
+  // left the drawer covering the new page on a phone.
+  useEffect(() => {
+    setSidebarOpen(false);
+    setProfileOpen(false);
+    setNotifOpen(false);
+  }, [location.pathname]);
+
+  // The drawer only opens below lg; while it is open the page behind it must
+  // not scroll under the user's thumb.
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [sidebarOpen]);
+
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
     if (isBuyerViewMode) return false;
@@ -188,7 +208,9 @@ export default function CrmShell() {
 
       {/* ── Sidebar ── */}
       <aside className={cx(
-        'fixed top-0 left-0 h-full w-64 z-50 lg:z-30 flex flex-col',
+        // 100dvh, not h-full: on iOS the collapsing toolbar otherwise hides
+        // the user footer at the bottom of the drawer.
+        'fixed top-0 left-0 h-[100dvh] w-64 max-w-[85vw] z-50 lg:z-30 flex flex-col pb-safe',
         'bg-slate-900 border-r border-white/5 crm-sidebar-dots',
         'transform transition-transform duration-200 ease-in-out',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -215,9 +237,9 @@ export default function CrmShell() {
             type='button'
             onClick={closeSidebar}
             aria-label={t('crmShell.closeSidebar')}
-            className='lg:hidden p-1.5 rounded-lg hover:bg-white/10 text-slate-400'
+            className='lg:hidden w-10 h-10 -mr-2 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-400'
           >
-            <HiX className='w-4 h-4' aria-hidden='true' />
+            <HiX className='w-5 h-5' aria-hidden='true' />
           </button>
         </div>
 
@@ -332,18 +354,19 @@ export default function CrmShell() {
           'h-12 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 sticky z-20 gap-4 flex-shrink-0',
           isActing ? 'top-10' : 'top-0'
         )}>
-          <div className='flex items-center gap-4 min-w-0'>
+          <div className='flex items-center gap-2 sm:gap-4 min-w-0'>
             <button
               type='button'
               onClick={() => setSidebarOpen(true)}
               aria-expanded={sidebarOpen}
-              className='lg:hidden p-2 rounded-lg hover:bg-slate-100 flex-shrink-0'
+              className='lg:hidden w-10 h-10 -ml-2 flex items-center justify-center rounded-lg hover:bg-slate-100 flex-shrink-0'
               aria-label={t('crmShell.openSidebar')}
             >
               <HiMenuAlt2 className='w-5 h-5 text-slate-600' />
             </button>
 
-            <h1 className='text-sm font-semibold text-slate-800 hidden sm:block tracking-tight'>{pageTitle}</h1>
+            {/* Shown on phones too — without it nothing says which screen you are on. */}
+            <h1 className='text-sm font-semibold text-slate-800 truncate tracking-tight'>{pageTitle}</h1>
 
             {/* Global search trigger */}
             <button
@@ -357,12 +380,23 @@ export default function CrmShell() {
             </button>
           </div>
 
-          <div className='flex items-center gap-2 flex-shrink-0'>
+          <div className='flex items-center gap-1.5 sm:gap-2 flex-shrink-0'>
+            {/* Phones have no ⌘K and no room for the search bar, so search
+                gets an icon of its own rather than disappearing. */}
+            <button
+              type='button'
+              onClick={() => openSearch()}
+              className='md:hidden w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
+              aria-label={t('nav.search')}
+            >
+              <HiOutlineSearch className='w-4 h-4' />
+            </button>
+
             {/* Dark mode toggle */}
             <button
               type='button'
               onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
+              className='w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
               aria-label={t('crmShell.toggleDarkMode')}
               title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
@@ -378,7 +412,7 @@ export default function CrmShell() {
                 type='button'
                 onClick={() => { setNotifOpen((o) => !o); ensureLoaded(); }}
                 aria-expanded={notifOpen}
-                className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all relative'
+                className='w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all relative'
                 aria-label={t('nav.notifications')}
               >
                 <HiOutlineBell className='w-4 h-4' />
@@ -392,19 +426,25 @@ export default function CrmShell() {
               {notifOpen && (
                 <>
                   <button type='button' tabIndex={-1} aria-hidden='true' className='fixed inset-0 !mt-0 z-10' onClick={() => setNotifOpen(false)} />
-                  <div className='absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden'>
+                  {/* On a phone the bell is not at the screen edge, so a 320px
+                      panel anchored to it ran off the left side. Below sm it
+                      pins to the viewport instead. */}
+                  <div className={cx(
+                    'fixed inset-x-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden',
+                    isActing ? 'top-[6.5rem]' : 'top-14'
+                  )}>
                     <div className='flex items-center justify-between px-4 py-3 border-b border-slate-100'>
                       <span className='text-sm font-semibold text-slate-800'>{t('nav.notifications')}</span>
                       {unread > 0 && (
                         <button
                           onClick={() => markAllRead()}
-                          className='text-xs text-slate-400 hover:text-slate-600 transition-colors'
+                          className='text-xs text-slate-400 hover:text-slate-600 transition-colors py-1.5 -my-1.5'
                         >
                           {t('notifications.markAllRead')}
                         </button>
                       )}
                     </div>
-                    <div className='max-h-72 overflow-y-auto'>
+                    <div className='max-h-[60dvh] sm:max-h-72 overflow-y-auto overscroll-contain'>
                       {notifications.length === 0 ? (
                         <div className='px-4 py-8 text-center'>
                           <HiOutlineBell className='w-8 h-8 text-slate-300 mx-auto mb-2' />
@@ -440,7 +480,7 @@ export default function CrmShell() {
                     <Link
                       to='/notifications'
                       onClick={() => setNotifOpen(false)}
-                      className='block px-4 py-2.5 text-center text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 border-t border-slate-100 transition-colors'
+                      className='block px-4 py-3 sm:py-2.5 text-center text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 border-t border-slate-100 transition-colors'
                     >
                       {t('common.viewAll')}
                     </Link>
@@ -461,9 +501,10 @@ export default function CrmShell() {
             {/* Profile button */}
             <Link
               to='/profile'
-              className='flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-slate-200 hover:bg-slate-50 transition-all'
+              aria-label={t('crmShell.viewProfile')}
+              className='flex items-center gap-2 p-1 sm:pl-1 sm:pr-3 rounded-full border border-slate-200 hover:bg-slate-50 transition-all'
             >
-              <div className='w-6 h-6 rounded-md overflow-hidden bg-indigo-100 flex items-center justify-center flex-shrink-0'>
+              <div className='w-8 h-8 sm:w-7 sm:h-7 rounded-full sm:rounded-md overflow-hidden bg-indigo-100 flex items-center justify-center flex-shrink-0'>
                 {currentUser?.avatar ? (
                   <img src={normalizeImageUrl(currentUser.avatar)} alt={username} className='w-full h-full object-cover' />
                 ) : (
@@ -476,7 +517,7 @@ export default function CrmShell() {
         </header>
 
         {/* Page content */}
-        <main className='flex-1 px-4 lg:px-6 py-6'>
+        <main className='flex-1 px-4 lg:px-6 pt-4 sm:pt-6 pb-safe-6'>
           <Outlet />
         </main>
       </div>

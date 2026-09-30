@@ -480,7 +480,7 @@ export default function TasksBoard() {
                               </span>
                             </td>
                             <td className='px-4 py-3 text-right'>
-                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
+                              <div className='flex items-center justify-end gap-1 hover-reveal transition-opacity'>
                                 <button
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); openEditModal(task); }}
@@ -611,11 +611,11 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
             {task.title}
           </h3>
         </div>
-        <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
+        <div className='flex items-center gap-1 hover-reveal transition-opacity'>
           <button
             type='button'
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className='p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            className='p-2.5 sm:p-1 rounded-lg sm:rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             title={t('tasks.edit')}
             aria-label={`Edit ${task.title}`}
           >
@@ -624,7 +624,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
           <button
             type='button'
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className='p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50'
+            className='p-2.5 sm:p-1 rounded-lg sm:rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50'
             title={t('tasks.delete')}
             aria-label={`Delete ${task.title}`}
           >

@@ -60,7 +60,13 @@ export default function PropertiesBoard() {
   const { isBuyerViewMode } = useBuyerView();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const view = searchParams.get('view') || 'table';
+  // A phone opens on cards: the table's first column alone is 280px, so as a
+  // default it meant scrolling sideways to read a single row. An explicit
+  // ?view= (every toggle sets one) still wins.
+  const [defaultView] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches ? 'cards' : 'table'
+  ));
+  const view = searchParams.get('view') || defaultView;
   const q = searchParams.get('q') || '';
   const status = searchParams.get('status') || '';
   const assignedAgent = searchParams.get('assignedAgent') || '';
@@ -898,7 +904,7 @@ export default function PropertiesBoard() {
                 onClick={() => clearFilter(chip)}
                 title={`Remove this filter`}
                 aria-label={`Remove filter: ${chip.label}`}
-                className='group inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md bg-white border border-slate-200 text-xs text-slate-700 hover:border-rose-300 hover:text-rose-700 transition-colors'
+                className='group inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 sm:pl-2 sm:pr-1 sm:py-0.5 rounded-md bg-white border border-slate-200 text-xs text-slate-700 hover:border-rose-300 hover:text-rose-700 transition-colors'
               >
                 {chip.label}
                 <HiX aria-hidden='true' className='w-3 h-3 text-slate-500 group-hover:text-rose-500' />
@@ -907,7 +913,7 @@ export default function PropertiesBoard() {
             <button
               type='button'
               onClick={clearAllFilters}
-              className='text-xs text-slate-500 hover:text-rose-600 underline ml-1'
+              className='text-xs text-slate-500 hover:text-rose-600 underline ml-1 py-1.5 sm:py-0'
             >{t('properties.clearAll')}</button>
           </div>
         )}
@@ -1173,7 +1179,7 @@ export default function PropertiesBoard() {
                               </div>
                             </td>
                             <td className='px-4 py-2.5 text-right'>
-                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
+                              <div className='flex items-center justify-end gap-1 hover-reveal transition-opacity'>
                                 <button
                                   type='button'
                                   onClick={(e) => { e.stopPropagation(); setFilesQ(''); setQuickView(x); }}
@@ -1254,7 +1260,7 @@ export default function PropertiesBoard() {
 
         {view === 'pipeline' && (items.length > 0 || loading) && (
           <div className='overflow-x-auto'>
-            <div className='min-w-[1100px] grid grid-cols-12 gap-3 p-4 bg-slate-50'>
+            <div className='lg:min-w-[1100px] grid grid-cols-12 gap-3 p-3 sm:p-4 bg-slate-50'>
               {columns.map((col) => (
                 <div key={col.id} className='col-span-12 sm:col-span-6 lg:col-span-4 xl:col-span-3'>
                   <div className='rounded-2xl border border-slate-200 bg-white overflow-hidden'>

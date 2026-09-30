@@ -17,7 +17,7 @@ export default function BulkActionBar({ count, onClear, children }) {
   if (!count) return null;
 
   return (
-    <div className='fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-3xl'>
+    <div className='fixed bottom-safe-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-3xl'>
       <div className='flex items-center gap-3 px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl flex-wrap'>
         <span className='text-sm font-medium whitespace-nowrap'>
           {t('common.selected', { count })}

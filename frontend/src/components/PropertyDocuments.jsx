@@ -240,7 +240,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                         {mime.label} · {fmtSize(doc.size)} · {fmtDate(doc.createdAt)}
                       </p>
                     </div>
-                    <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity'>
+                    <div className='flex items-center gap-1 hover-reveal transition-opacity'>
                       <a
                         href={doc.url}
                         target='_blank'

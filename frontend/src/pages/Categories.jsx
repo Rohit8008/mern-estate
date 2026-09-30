@@ -92,7 +92,7 @@ function CategoryCard({ category, hasPerm, onDelete, onRename, deleting }) {
                     type="button"
                     onClick={() => setRenaming(true)}
                     aria-label={`Rename ${category.name}`}
-                    className="text-slate-300 hover:text-slate-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+                    className="text-slate-300 hover:text-slate-600 hover-reveal transition-opacity flex-shrink-0"
                   >
                     <HiOutlinePencil className="w-3.5 h-3.5" />
                   </button>

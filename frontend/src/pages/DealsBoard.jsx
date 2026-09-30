@@ -235,10 +235,10 @@ export default function DealsBoard() {
         )}
 
         {/* print-stack: the columns run across on screen and stack on paper. */}
-        <div className='print-stack overflow-x-auto pb-2'>
+        <div className='print-stack overflow-x-auto pb-2 snap-x snap-mandatory sm:snap-none scroll-px-1'>
           <div className='flex gap-3' style={{ minWidth: `${columns.length * 272}px` }}>
             {columns.map((col) => (
-              <div key={col.id} style={{ minWidth: '256px', width: '256px' }}>
+              <div key={col.id} className='snap-start' style={{ minWidth: '256px', width: '256px' }}>
                 {/* Column header */}
                 <div className='flex items-center gap-2 px-1 py-2 mb-2'>
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${col.dot || 'bg-slate-400'}`} />
@@ -291,6 +291,32 @@ export default function DealsBoard() {
                           )}
 
                           {/*
+                            * Drag-and-drop does not exist on most phone
+                            * browsers, nor for a keyboard, so the stage is also
+                            * a plain choice on the card. Same moveDeal as a drop.
+                            */}
+                          <label className='mt-2 flex items-center gap-2 text-[11px] text-slate-400'>
+                            <span className='flex-shrink-0'>Stage</span>
+                            <select
+                              value={col.id}
+                              disabled={updating}
+                              onChange={(e) => {
+                                const toStage = e.target.value;
+                                if (toStage && toStage !== col.id) {
+                                  moveDeal({ clientId: d.clientId, dealId: d.dealId, toStage });
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Move ${d.clientName || 'deal'} to stage`}
+                              className='min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 sm:py-1 text-xs text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50'
+                            >
+                              {columns.map((c) => (
+                                <option key={c.id} value={c.id}>{c.label}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          {/*
                             * Collapsed by default: a board is for scanning, and
                             * an always-open history on every card would bury
                             * the numbers people come here to read.
@@ -301,7 +327,7 @@ export default function DealsBoard() {
                               e.stopPropagation();
                               setOpenHistory((id) => (id === String(d.dealId) ? null : String(d.dealId)));
                             }}
-                            className='mt-2 text-[11px] text-slate-400 hover:text-slate-600 transition-colors'
+                            className='mt-2 py-1 text-[11px] text-slate-400 hover:text-slate-600 transition-colors'
                           >
                             {openHistory === String(d.dealId) ? 'Hide history' : 'History'}
                           </button>
