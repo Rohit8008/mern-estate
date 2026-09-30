@@ -68,12 +68,14 @@ Future<void> showQuickActionSheet(BuildContext context) {
     backgroundColor: Colors.transparent,
     builder: (context) {
       return SafeArea(
-        child: Container(
-          margin: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor == AppColors.slate950 ? AppColors.slate900 : AppColors.white,
-            borderRadius: BorderRadius.circular(20),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          // A Material, not a coloured Container: ListTile ripples paint on
+          // the nearest Material and were hidden under the opaque box.
+          child: Material(
+          color: Theme.of(context).brightness == Brightness.dark ? AppColors.slate900 : AppColors.white,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -99,6 +101,7 @@ Future<void> showQuickActionSheet(BuildContext context) {
                 ),
               const SizedBox(height: AppSpacing.sm),
             ],
+          ),
           ),
         ),
       );

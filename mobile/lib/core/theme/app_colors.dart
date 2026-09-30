@@ -57,6 +57,10 @@ abstract final class AppColors {
   static const rose700 = Color(0xFFBE123C);
   static const rose800 = Color(0xFF9F1239);
 
+  /// rose500 at 15% — the error tint on dark surfaces, where rose50 glares.
+  /// A const rather than withOpacity() so it builds on every supported SDK.
+  static const roseTintDark = Color(0x26F43F5E);
+
   // Blue — info.
   static const blue50 = Color(0xFFEFF6FF);
   static const blue100 = Color(0xFFDBEAFE);

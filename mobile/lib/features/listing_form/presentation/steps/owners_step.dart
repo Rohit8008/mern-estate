@@ -118,7 +118,7 @@ class _OwnersStepState extends ConsumerState<OwnersStep> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('New owner', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                    IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: () => setState(() => _showCreateForm = false)),
+                    IconButton(icon: const Icon(Icons.close_rounded, size: 18), tooltip: 'Close', onPressed: () => setState(() => _showCreateForm = false)),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),

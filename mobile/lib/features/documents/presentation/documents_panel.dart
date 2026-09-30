@@ -115,7 +115,7 @@ class _DocumentRow extends ConsumerWidget {
                 ],
               ),
             ),
-            IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.rose500), onPressed: () => _delete(context, ref)),
+            IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.rose500), tooltip: 'Delete document', onPressed: () => _delete(context, ref)),
           ],
         ),
       ),

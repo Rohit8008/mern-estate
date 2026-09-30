@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/listing.dart';
+import '../domain/listing_filters.dart';
 import '../properties_providers.dart';
 import 'properties_filter_sheet.dart';
 import 'properties_map_view.dart';
@@ -63,10 +64,22 @@ class _PropertiesListScreenState extends ConsumerState<PropertiesListScreen> {
     if (result != null) ref.read(listingFiltersProvider.notifier).state = result;
   }
 
+  /// Resets the search box and every sheet filter in one go.
+  void _clearFilters() {
+    _debounce?.cancel();
+    _searchController.clear();
+    ref.read(listingFiltersProvider.notifier).state = const ListingFilters();
+  }
+
+  Future<void> _refresh() => ref.read(listingsControllerProvider.notifier).refresh();
+
   @override
   Widget build(BuildContext context) {
     final listingsAsync = ref.watch(listingsControllerProvider);
     final filters = ref.watch(listingFiltersProvider);
+    // Not `filters.isEmpty`: clearing the search box leaves searchTerm as ''
+    // rather than null, which is no filter at all.
+    final filtering = filters.toQueryParams().isNotEmpty;
 
     return Column(
       children: [
@@ -79,18 +92,21 @@ class _PropertiesListScreenState extends ConsumerState<PropertiesListScreen> {
                   hint: 'Search properties…',
                   prefixIcon: Icons.search_rounded,
                   controller: _searchController,
+                  textInputAction: TextInputAction.search,
                   onChanged: _onSearchChanged,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               _IconToggleButton(
                 icon: Icons.tune_rounded,
-                active: !filters.isEmpty,
+                tooltip: 'Filters',
+                active: filtering,
                 onTap: _openFilters,
               ),
               const SizedBox(width: AppSpacing.sm),
               _IconToggleButton(
                 icon: _mode == _ViewMode.list ? Icons.map_outlined : Icons.view_list_rounded,
+                tooltip: _mode == _ViewMode.list ? 'Show map' : 'Show list',
                 active: false,
                 onTap: () => setState(() => _mode = _mode == _ViewMode.list ? _ViewMode.map : _ViewMode.list),
               ),
@@ -104,11 +120,26 @@ class _PropertiesListScreenState extends ConsumerState<PropertiesListScreen> {
             error: (error, _) => AppErrorState(
               title: 'Unable to load properties',
               message: 'Check your internet connection and try again.',
-              onRetry: () => ref.read(listingsControllerProvider.notifier).refresh(),
+              onRetry: _refresh,
+              onRefresh: _refresh,
             ),
             data: (state) {
               if (state.listings.isEmpty) {
-                return const AppEmptyState(icon: Icons.apartment_outlined, title: 'No properties found', message: 'Try adjusting your search or filters.');
+                return filtering
+                    ? AppEmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: 'No matching properties',
+                        message: 'Nothing matches your search or filters.',
+                        actionLabel: 'Clear filters',
+                        onAction: _clearFilters,
+                        onRefresh: _refresh,
+                      )
+                    : AppEmptyState(
+                        icon: Icons.apartment_outlined,
+                        title: 'No properties yet',
+                        message: 'Properties you add or are assigned will show up here.',
+                        onRefresh: _refresh,
+                      );
               }
               if (_mode == _ViewMode.map) {
                 return PropertiesMapView(listings: state.listings, onOpenListing: _openDetail);
@@ -121,7 +152,7 @@ class _PropertiesListScreenState extends ConsumerState<PropertiesListScreen> {
               final textBlock = MediaQuery.textScalerOf(context).scale(100);
               final cellHeight = cellWidth * 10 / 16 + AppSpacing.md * 2 + textBlock + 4;
               return RefreshIndicator(
-                onRefresh: () => ref.read(listingsControllerProvider.notifier).refresh(),
+                onRefresh: _refresh,
                 child: GridView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
@@ -154,15 +185,18 @@ class _PropertiesListScreenState extends ConsumerState<PropertiesListScreen> {
 }
 
 class _IconToggleButton extends StatelessWidget {
-  const _IconToggleButton({required this.icon, required this.active, required this.onTap});
+  const _IconToggleButton({required this.icon, required this.tooltip, required this.active, required this.onTap});
   final IconData icon;
+  final String tooltip;
   final bool active;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Material(
+    return Tooltip(
+      message: tooltip,
+      child: Material(
       color: active ? AppColors.indigo600 : (dark ? AppColors.slate900 : AppColors.white),
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
@@ -174,6 +208,7 @@ class _IconToggleButton extends StatelessWidget {
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? AppColors.indigo600 : (dark ? AppColors.slate700 : AppColors.slate200))),
           child: Icon(icon, size: 20, color: active ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600)),
         ),
+      ),
       ),
     );
   }

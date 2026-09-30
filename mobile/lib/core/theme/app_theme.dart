@@ -27,6 +27,10 @@ abstract final class AppTheme {
       textTheme: AppTypography.textTheme(ink, inkSoft),
       dividerColor: AppColors.slate200,
       splashFactory: InkRipple.splashFactory,
+      // Pinned rather than platform-adaptive so desktop/web builds don't
+      // compact buttons below the 48dp touch target phones get.
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.white,
         foregroundColor: ink,
@@ -62,6 +66,12 @@ abstract final class AppTheme {
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.rose500),
+        ),
+        // Without this a focused invalid field falls back to M3's default
+        // error outline, which doesn't match the rest of the field styling.
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppColors.rose500, width: 1.5),
         ),
         hintStyle: const TextStyle(color: AppColors.slate400),
         labelStyle: const TextStyle(color: AppColors.slate600),
@@ -106,6 +116,10 @@ abstract final class AppTheme {
       textTheme: AppTypography.textTheme(ink, inkSoft),
       dividerColor: AppColors.slate800,
       splashFactory: InkRipple.splashFactory,
+      // Pinned rather than platform-adaptive so desktop/web builds don't
+      // compact buttons below the 48dp touch target phones get.
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
       appBarTheme: const AppBarTheme(
         backgroundColor: surface,
         foregroundColor: ink,
@@ -136,6 +150,14 @@ abstract final class AppTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.indigo400, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppColors.rose300),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppColors.rose300, width: 1.5),
         ),
         hintStyle: const TextStyle(color: AppColors.slate500),
         labelStyle: const TextStyle(color: AppColors.slate400),

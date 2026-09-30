@@ -158,10 +158,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: AppTextField(hint: 'Message…', controller: _inputController, onSubmitted: (_) => _send()),
+                    child: AppTextField(
+                        hint: 'Message…',
+                        controller: _inputController,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send()),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   IconButton.filled(
+                    tooltip: 'Send',
                     onPressed: _sending ? null : _send,
                     style: IconButton.styleFrom(backgroundColor: AppColors.indigo600),
                     icon: const Icon(Icons.send_rounded, color: AppColors.white, size: 18),

@@ -22,7 +22,7 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final content = Container(
+    return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.slate900 : AppColors.white,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -37,14 +37,19 @@ class AppCard extends StatelessWidget {
               border: Border(top: BorderSide(color: topAccent!, width: 2)),
               borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
-      child: Padding(padding: padding, child: child),
-    );
-
-    if (onTap == null) return content;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: InkWell(borderRadius: BorderRadius.circular(AppRadius.lg), onTap: onTap, child: content),
+      // Ink paints on the nearest Material; with that Material *under* the
+      // opaque card colour, the card's own tap ripple and any ListTile inside
+      // were invisible. A transparent Material inside the decoration fixes both.
+      child: Material(
+        type: MaterialType.transparency,
+        child: onTap == null
+            ? Padding(padding: padding, child: child)
+            : InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                onTap: onTap,
+                child: Padding(padding: padding, child: child),
+              ),
+      ),
     );
   }
 }

@@ -34,6 +34,9 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
 
   bool _submitting = false;
   String? _error;
+  String? _propertyError;
+  String? _clientError;
+  String? _amountError;
 
   bool get _isEditing => widget.existing != null;
 
@@ -68,6 +71,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       setState(() {
         _propertyId = picked.id;
         _propertyName = picked.name;
+        _propertyError = null;
       });
     }
   }
@@ -80,6 +84,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       setState(() {
         _clientId = picked.id;
         _clientName = picked.name;
+        _clientError = null;
       });
     }
   }
@@ -113,13 +118,25 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   }
 
   Future<void> _submit() async {
-    if (_propertyName.trim().isEmpty || _clientName.trim().isEmpty || _amountController.text.trim().isEmpty) {
-      setState(() => _error = 'Property, client, and amount are required.');
+    // Each missing field says so on itself; the box below is for the server.
+    final propertyError = _propertyName.trim().isEmpty ? 'Select a property.' : null;
+    final clientError = _clientName.trim().isEmpty ? 'Select a client.' : null;
+    final amountError = _amountController.text.trim().isEmpty ? 'Amount is required.' : null;
+    if (propertyError != null || clientError != null || amountError != null) {
+      setState(() {
+        _propertyError = propertyError;
+        _clientError = clientError;
+        _amountError = amountError;
+        _error = null;
+      });
       return;
     }
     setState(() {
       _submitting = true;
       _error = null;
+      _propertyError = null;
+      _clientError = null;
+      _amountError = null;
     });
 
     final payload = {
@@ -157,15 +174,33 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          _PickerField(label: 'Property', value: _propertyName, onTap: _pickProperty),
+          _PickerField(label: 'Property', value: _propertyName, errorText: _propertyError, onTap: _pickProperty),
           const SizedBox(height: AppSpacing.lg),
-          _PickerField(label: 'Client', value: _clientName, onTap: _pickClient),
+          _PickerField(label: 'Client', value: _clientName, errorText: _clientError, onTap: _pickClient),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
-              Expanded(child: AppTextField(label: 'Amount (₹)', controller: _amountController, keyboardType: TextInputType.number)),
+              Expanded(
+                child: AppTextField(
+                  label: 'Amount (₹)',
+                  controller: _amountController,
+                  errorText: _amountError,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) {
+                    if (_amountError != null) setState(() => _amountError = null);
+                  },
+                ),
+              ),
               const SizedBox(width: AppSpacing.md),
-              Expanded(child: AppTextField(label: 'Commission %', controller: _commissionPercentController, keyboardType: TextInputType.number)),
+              // Commission is routinely fractional (2.5%); a digits-only
+              // keypad has no decimal point on some phones.
+              Expanded(
+                child: AppTextField(
+                  label: 'Commission %',
+                  controller: _commissionPercentController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -178,7 +213,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: const TextStyle(color: AppColors.rose600, fontSize: 13)),
+            FormErrorBox(_error!),
           ],
           const SizedBox(height: AppSpacing.xl),
           AppButton(label: _isEditing ? 'Save changes' : 'Create transaction', onPressed: _submitting ? null : _submit, loading: _submitting, variant: AppButtonVariant.brand, expand: true),
@@ -189,36 +224,55 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
 }
 
 class _PickerField extends StatelessWidget {
-  const _PickerField({required this.label, required this.value, required this.onTap});
+  const _PickerField({required this.label, required this.value, required this.onTap, this.errorText});
   final String label;
   final String value;
   final VoidCallback onTap;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final hasError = errorText != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
         const SizedBox(height: 6),
         Material(
-          color: AppColors.white,
+          color: dark ? AppColors.slate900 : AppColors.white,
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: onTap,
             child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.slate200)),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: hasError ? theme.colorScheme.error : (dark ? AppColors.slate800 : AppColors.slate200)),
+              ),
               child: Row(
                 children: [
-                  Expanded(child: Text(value.isEmpty ? 'Tap to select' : value, style: TextStyle(color: value.isEmpty ? AppColors.slate400 : AppColors.slate900))),
+                  Expanded(
+                      child: Text(value.isEmpty ? 'Tap to select' : value,
+                          style: TextStyle(
+                              color: value.isEmpty ? AppColors.slate400 : theme.colorScheme.onSurface))),
                   const Icon(Icons.chevron_right_rounded, color: AppColors.slate300),
                 ],
               ),
             ),
           ),
         ),
+        if (hasError) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(errorText!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
+          ),
+        ],
       ],
     );
   }

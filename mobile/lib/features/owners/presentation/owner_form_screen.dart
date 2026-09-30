@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/owner.dart';
 import '../owners_providers.dart';
@@ -24,8 +24,13 @@ class _OwnerFormScreenState extends ConsumerState<OwnerFormScreen> {
   late final _cityController = TextEditingController(text: widget.existing?.city);
   late final _notesController = TextEditingController(text: widget.existing?.notes);
 
+  late final _snapshot = TextSnapshot(
+      [_nameController, _emailController, _phoneController, _companyController, _cityController, _notesController]);
+
   bool _submitting = false;
   String? _error;
+  String? _nameError;
+  String? _emailError;
 
   bool get _isEditing => widget.existing != null;
 
@@ -42,13 +47,22 @@ class _OwnerFormScreenState extends ConsumerState<OwnerFormScreen> {
 
   Future<void> _submit() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'Name is required.');
+    // Field problems show on the field; _error is for the server.
+    final nameError = name.isEmpty ? 'Name is required.' : null;
+    final emailErr = emailError(_emailController.text);
+    if (nameError != null || emailErr != null) {
+      setState(() {
+        _nameError = nameError;
+        _emailError = emailErr;
+        _error = null;
+      });
       return;
     }
     setState(() {
       _submitting = true;
       _error = null;
+      _nameError = null;
+      _emailError = null;
     });
 
     final payload = {
@@ -78,33 +92,84 @@ class _OwnerFormScreenState extends ConsumerState<OwnerFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit Owner' : 'New Owner')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          AppTextField(label: 'Name *', controller: _nameController),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
+    return DiscardGuard(
+      isDirty: () => _snapshot.changed,
+      listenable: _snapshot.listenable,
+      child: Scaffold(
+        appBar: AppBar(title: Text(_isEditing ? 'Edit Owner' : 'New Owner')),
+        body: AutofillGroup(
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
-              Expanded(child: AppTextField(label: 'Phone', controller: _phoneController, keyboardType: TextInputType.phone)),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(child: AppTextField(label: 'Email', controller: _emailController, keyboardType: TextInputType.emailAddress)),
+              AppTextField(
+                label: 'Name *',
+                controller: _nameController,
+                errorText: _nameError,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
+                onChanged: (_) {
+                  if (_nameError != null) setState(() => _nameError = null);
+                },
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                label: 'Phone',
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.telephoneNumber],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                label: 'Email',
+                controller: _emailController,
+                errorText: _emailError,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                onChanged: (_) {
+                  if (_emailError != null) setState(() => _emailError = null);
+                },
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                label: 'Company',
+                controller: _companyController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.organizationName],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                label: 'City',
+                controller: _cityController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.addressCity],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                label: 'Notes',
+                controller: _notesController,
+                textCapitalization: TextCapitalization.sentences,
+                maxLines: 4,
+                minLines: 2,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                FormErrorBox(_error!),
+              ],
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                  label: _isEditing ? 'Save changes' : 'Create owner',
+                  onPressed: _submitting ? null : _submit,
+                  loading: _submitting,
+                  variant: AppButtonVariant.brand,
+                  expand: true),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(label: 'Company', controller: _companyController),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(label: 'City', controller: _cityController),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(label: 'Notes', controller: _notesController),
-          if (_error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: const TextStyle(color: AppColors.rose600, fontSize: 13)),
-          ],
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(label: _isEditing ? 'Save changes' : 'Create owner', onPressed: _submitting ? null : _submit, loading: _submitting, variant: AppButtonVariant.brand, expand: true),
-        ],
+        ),
       ),
     );
   }

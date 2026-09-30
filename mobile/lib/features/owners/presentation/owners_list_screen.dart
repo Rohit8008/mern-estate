@@ -37,9 +37,19 @@ class _OwnersListScreenState extends ConsumerState<OwnersListScreen> {
     });
   }
 
+  /// Clears the box and the debounced query it feeds, not just the text.
+  void _clearSearch() {
+    _debounce?.cancel();
+    _searchController.clear();
+    ref.read(ownersSearchProvider.notifier).state = '';
+  }
+
+  Future<void> _refresh() => ref.read(ownersControllerProvider.notifier).refresh();
+
   @override
   Widget build(BuildContext context) {
     final ownersAsync = ref.watch(ownersControllerProvider);
+    final searching = ref.watch(ownersSearchProvider).isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -47,6 +57,7 @@ class _OwnersListScreenState extends ConsumerState<OwnersListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_rounded),
+            tooltip: 'Add owner',
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OwnerFormScreen())),
           ),
         ],
@@ -55,21 +66,37 @@ class _OwnersListScreenState extends ConsumerState<OwnersListScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-            child: AppTextField(hint: 'Search owners…', prefixIcon: Icons.search_rounded, controller: _searchController, onChanged: _onSearchChanged),
+            child: AppTextField(
+              hint: 'Search owners…',
+              prefixIcon: Icons.search_rounded,
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onChanged: _onSearchChanged,
+            ),
           ),
           Expanded(
             child: ownersAsync.when(
               loading: () => const AppPageLoader(),
-              error: (error, _) => AppErrorState(title: 'Unable to load owners', onRetry: () => ref.read(ownersControllerProvider.notifier).refresh()),
+              error: (error, _) => AppErrorState(title: 'Unable to load owners', onRetry: _refresh, onRefresh: _refresh),
               data: (owners) => owners.isEmpty
-                  ? AppEmptyState(
-                      icon: Icons.groups_2_outlined,
-                      title: 'No property owners yet',
-                      actionLabel: 'Add owner',
-                      onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OwnerFormScreen())),
-                    )
+                  ? (searching
+                      ? AppEmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: 'No matching owners',
+                          message: 'Nothing matches your search.',
+                          actionLabel: 'Clear filters',
+                          onAction: _clearSearch,
+                          onRefresh: _refresh,
+                        )
+                      : AppEmptyState(
+                          icon: Icons.groups_2_outlined,
+                          title: 'No property owners yet',
+                          actionLabel: 'Add owner',
+                          onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OwnerFormScreen())),
+                          onRefresh: _refresh,
+                        ))
                   : RefreshIndicator(
-                      onRefresh: () => ref.read(ownersControllerProvider.notifier).refresh(),
+                      onRefresh: _refresh,
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
                         itemCount: owners.length,
@@ -114,9 +141,10 @@ class _OwnerRow extends ConsumerWidget {
             ),
           ),
           if (owner.phone != null && owner.phone!.isNotEmpty)
-            IconButton(icon: const Icon(Icons.call_outlined, size: 18), onPressed: () => ContactLauncher.call(owner.phone!)),
+            IconButton(icon: const Icon(Icons.call_outlined, size: 18), tooltip: 'Call', onPressed: () => ContactLauncher.call(owner.phone!)),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.rose500),
+            tooltip: 'Delete owner',
             onPressed: () => _delete(context, ref),
           ),
         ],

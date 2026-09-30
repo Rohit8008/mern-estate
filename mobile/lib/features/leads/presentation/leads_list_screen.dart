@@ -37,10 +37,22 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
     });
   }
 
+  /// Resets both the box and the providers it feeds — clearing only the
+  /// text would leave the debounced query (and the status chip) applied.
+  void _clearFilters() {
+    _debounce?.cancel();
+    _searchController.clear();
+    ref.read(leadSearchQueryProvider.notifier).state = '';
+    ref.read(leadStatusFilterProvider.notifier).state = null;
+  }
+
+  Future<void> _refresh() => ref.read(leadsListControllerProvider.notifier).refresh();
+
   @override
   Widget build(BuildContext context) {
     final leadsAsync = ref.watch(leadsListControllerProvider);
     final statusFilter = ref.watch(leadStatusFilterProvider);
+    final filtering = statusFilter != null || ref.watch(leadSearchQueryProvider).isNotEmpty;
 
     return Column(
       children: [
@@ -50,12 +62,13 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
             hint: 'Search leads by name, email, phone…',
             prefixIcon: Icons.search_rounded,
             controller: _searchController,
+            textInputAction: TextInputAction.search,
             onChanged: _onSearchChanged,
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         SizedBox(
-          height: 40,
+          height: filterChipRowHeight(context),
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -80,18 +93,29 @@ class _LeadsListScreenState extends ConsumerState<LeadsListScreen> {
             error: (error, _) => AppErrorState(
               title: 'Unable to load your leads',
               message: 'Check your internet connection and try again.',
-              onRetry: () => ref.read(leadsListControllerProvider.notifier).refresh(),
+              onRetry: _refresh,
+              onRefresh: _refresh,
             ),
             data: (leads) => leads.isEmpty
-                ? AppEmptyState(
-                    icon: Icons.person_search_rounded,
-                    title: 'No leads yet',
-                    message: 'New leads assigned to you will show up here.',
-                    actionLabel: 'Add lead',
-                    onAction: () => _openCreate(context),
-                  )
+                ? (filtering
+                    ? AppEmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: 'No matching leads',
+                        message: 'Nothing matches your search or status filter.',
+                        actionLabel: 'Clear filters',
+                        onAction: _clearFilters,
+                        onRefresh: _refresh,
+                      )
+                    : AppEmptyState(
+                        icon: Icons.person_search_rounded,
+                        title: 'No leads yet',
+                        message: 'New leads assigned to you will show up here.',
+                        actionLabel: 'Add lead',
+                        onAction: () => _openCreate(context),
+                        onRefresh: _refresh,
+                      ))
                 : RefreshIndicator(
-                    onRefresh: () => ref.read(leadsListControllerProvider.notifier).refresh(),
+                    onRefresh: _refresh,
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
                       itemCount: leads.length,
@@ -140,6 +164,7 @@ class _FilterChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: selected ? chipColor : (dark ? AppColors.slate700 : AppColors.slate200)),
           ),
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),

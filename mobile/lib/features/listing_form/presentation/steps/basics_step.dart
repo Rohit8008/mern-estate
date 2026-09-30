@@ -145,9 +145,9 @@ class _Stepper extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(icon: const Icon(Icons.remove_rounded, size: 18), onPressed: value > 0 ? () => onChanged(value - 1) : null),
+              IconButton(icon: const Icon(Icons.remove_rounded, size: 18), tooltip: 'Decrease', onPressed: value > 0 ? () => onChanged(value - 1) : null),
               Text('$value', style: const TextStyle(fontWeight: FontWeight.w700)),
-              IconButton(icon: const Icon(Icons.add_rounded, size: 18), onPressed: () => onChanged(value + 1)),
+              IconButton(icon: const Icon(Icons.add_rounded, size: 18), tooltip: 'Increase', onPressed: () => onChanged(value + 1)),
             ],
           ),
         ),
