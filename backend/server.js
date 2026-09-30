@@ -13,6 +13,7 @@ import { encryptMessageWithKey, decryptMessageWithKey } from './utils/encryption
 import { runWithTenant } from './tenancy/tenantContext.js';
 import { forEachTenant } from './tenancy/resolveTenant.js';
 import { notify } from './utils/notify.js';
+import { logger } from './utils/logger.js';
 
 export const app = createApp();
 export const server = http.createServer(app);
@@ -35,7 +36,7 @@ async function seedPropertyTypesIfEmpty() {
       seedPropertyTypesForTenant(tenant)
     );
   } catch (error) {
-    console.error('[seed] Failed to seed property types:', error.message);
+    logger.error('Seed: property types failed', { error });
   }
 }
 
@@ -44,7 +45,7 @@ async function seedPropertyTypesForTenant(tenant) {
     const count = await PropertyType.countDocuments();
     if (count > 0) return;
 
-    console.log(`[seed] No property types for "${tenant.slug}", seeding defaults...`);
+    logger.info('Seed: default property types', { tenant_slug: tenant.slug });
     const defaultTypes = [
       { name: 'House', slug: 'house', description: 'Independent house or villa', icon: '🏠', category: 'residential', isSystem: true, order: 1, fields: [
         { key: 'bedrooms', label: 'Bedrooms', type: 'number', required: true, min: 1, max: 20, defaultValue: 1, order: 1, group: 'rooms' },
@@ -108,9 +109,9 @@ async function seedPropertyTypesForTenant(tenant) {
     ];
 
     await PropertyType.insertMany(defaultTypes);
-    console.log(`[seed] Seeded ${defaultTypes.length} default property types`);
+    logger.info('Seed: property types seeded', { tenant_slug: tenant.slug, count: defaultTypes.length });
   } catch (error) {
-    console.error('[seed] Failed to seed property types:', error.message);
+    logger.error('Seed: property types failed', { error });
   }
 }
 
@@ -159,6 +160,7 @@ export function setupSocket() {
     socket.join(tenantRoom);
 
     markOnline(socket.tenantId, userId);
+    logger.debug('Socket connected', { user_id: String(userId), tenant_id: String(socket.tenantId), socket_id: socket.id });
     io.to(tenantRoom).emit('presence:update', { userId, online: true });
     try {
       // Only this workspace's people. This used to send the process-global set,
@@ -232,9 +234,10 @@ export function setupSocket() {
           body: finalContent.length > 120 ? `${finalContent.slice(0, 120)}…` : finalContent,
           link: '/messages',
           actorId: userId,
-        }).catch(() => {});
+        }).catch((err) => logger.warn('Message notification failed', { error: err }));
         cb({ success: true, message: decrypted });
-      } catch (_) {
+      } catch (err) {
+        logger.error('Socket message send failed', { user_id: String(userId), tenant_id: String(socket.tenantId), error: err });
         cb({ error: 'Failed to send message' });
       }
       });
@@ -252,7 +255,8 @@ export function setupSocket() {
       if (to && isOnline(socket.tenantId, to)) io.to(`user:${to}`).emit('stop_typing', { from: userId });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      logger.debug('Socket disconnected', { user_id: String(userId), tenant_id: String(socket.tenantId), reason });
       markOffline(socket.tenantId, userId);
       io.to(tenantRoom).emit('presence:update', { userId, online: false });
     });

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,13 +9,26 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app/realtime_overlay.dart';
 import 'app/router/app_router.dart';
 import 'core/config/env.dart';
+import 'core/logging/app_logger.dart';
+import 'core/logging/provider_logging_observer.dart';
 import 'core/network/api_client.dart';
 import 'core/network/providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/root_messenger.dart';
 
-Future<void> main() async {
+void main() {
+  final launchedAt = DateTime.now();
+  // The binding is initialised INSIDE the zone, so framework callbacks and
+  // runApp share it (a mismatch is what Flutter warns about).
+  runZonedGuarded(
+    () => _run(launchedAt),
+    (error, stack) => appLog.error('uncaught zone error', error: error, stack: stack),
+  );
+}
+
+Future<void> _run(DateTime launchedAt) async {
   WidgetsFlutterBinding.ensureInitialized();
+  _captureGlobalErrors();
 
   // Fonts come from assets/google_fonts/ only. Left on, google_fonts would
   // download any missing weight from fonts.gstatic.com at runtime — handing
@@ -26,11 +41,37 @@ Future<void> main() async {
   });
 
   final apiClient = await ApiClient.create(baseUrl: Env.apiBaseUrl);
+  appLog.start(sender: dioLogSender(apiClient.dio));
 
   runApp(ProviderScope(
     overrides: [apiClientProvider.overrideWithValue(apiClient)],
+    observers: [ProviderLoggingObserver()],
     child: const RealVistaCrmApp(),
   ));
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    appLog.info('app start', fields: {'cold_start_ms': DateTime.now().difference(launchedAt).inMilliseconds});
+  });
+}
+
+/// Framework errors (build/layout/paint) and uncaught async errors both go
+/// to the logger. The previous FlutterError handler still runs, so debug
+/// builds keep the red screen and console dump.
+void _captureGlobalErrors() {
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    appLog.error(
+      'flutter error: ${details.exceptionAsString()}',
+      error: details.exception,
+      stack: details.stack,
+      fields: {'library': details.library, 'context': details.context?.toDescription()},
+    );
+    previous?.call(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    appLog.error('uncaught platform error', error: error, stack: stack);
+    return true;
+  };
 }
 
 class RealVistaCrmApp extends ConsumerWidget {

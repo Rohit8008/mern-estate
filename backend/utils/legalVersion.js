@@ -6,4 +6,4 @@
  * either document changes in substance: an acceptance is only evidence of what
  * the person agreed to if it names the text they saw.
  */
-export const LEGAL_VERSION = '2026-09-26';
+export const LEGAL_VERSION = '2026-09-30';

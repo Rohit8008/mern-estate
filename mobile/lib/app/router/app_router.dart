@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/logging/route_logging.dart';
 import '../../features/activities/presentation/activities_tab.dart';
 import '../../features/auth/application/auth_state.dart';
 import '../../features/auth/auth_providers.dart';
@@ -20,7 +21,7 @@ const _publicPaths = ['/login', '/forgot-password'];
 const _legalAcceptancePath = '/legal-acceptance';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: '/splash',
     refreshListenable: GoRouterRefreshNotifier(ref),
     redirect: (context, state) {
@@ -82,4 +83,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  ref.onDispose(attachRouteLogging(router));
+  return router;
 });

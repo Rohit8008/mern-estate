@@ -1,6 +1,7 @@
 import os from 'node:os';
 import JobLock from '../models/jobLock.model.js';
 import { logger } from '../utils/logger.js';
+import { runWithLogContext } from '../utils/logContext.js';
 
 /**
  * The application's scheduler.
@@ -190,7 +191,9 @@ export async function tick(now = new Date()) {
     const started = Date.now();
     const renewal = startLeaseRenewal(job);
     try {
-      const result = await job.handler();
+      // Its own log context: every line the job writes, in every workspace it
+      // visits, shares one request_id and carries the job name.
+      const result = await runWithLogContext({ job: job.name }, () => job.handler());
       await releaseLock(job, result, now);
       ran.push({ name: job.name, ms: Date.now() - started, result });
       logger.info('Job finished', { job: job.name, ms: Date.now() - started, result: String(result ?? '') });

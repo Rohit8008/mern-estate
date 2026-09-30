@@ -1,4 +1,4 @@
-import { logger } from './logger.js';
+import { logger, sanitizeUrl } from './logger.js';
 
 // Custom error classes
 export class AppError extends Error {
@@ -126,17 +126,23 @@ export const globalErrorHandler = (err, req, res, next) => {
     return { message: raw };
   };
 
-  // Log error
-  logger.error('Error occurred:', {
-    message: err.message,
-    stack: err.stack,
-    url: req.originalUrl,
+  // Log error. A 5xx is ours to fix: full stack in backend_logs. A 4xx is the
+  // caller's (validation, not found, forbidden) and the access line already
+  // records it, so it stays at debug rather than paging anyone.
+  const status = err.statusCode || (err.name === 'ValidationError' || err.name === 'CastError' ? 400 : err.code === 11000 ? 409 : 500);
+  const errorFields = {
+    error_name: err.name,
+    error_message: err.message,
+    error_code: err.code,
+    status,
+    url: sanitizeUrl(req.originalUrl),
     method: req.method,
     ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    userId: req.user?.id,
-    timestamp: new Date().toISOString(),
-  });
+    user_agent: req.get('User-Agent'),
+    user_id: req.user?.id,
+  };
+  if (status >= 500) logger.error('Unhandled error', { ...errorFields, stack: err.stack });
+  else logger.debug('Request error', errorFields);
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
@@ -197,6 +203,8 @@ export const globalErrorHandler = (err, req, res, next) => {
     }),
     timestamp: new Date().toISOString(),
     path: req.originalUrl,
+    // Quote this in a support request and the exact log lines are one search away.
+    ...(req.id && { requestId: req.id }),
   });
 };
 

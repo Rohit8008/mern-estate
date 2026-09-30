@@ -247,6 +247,10 @@ export async function deliverDueWebhooks({ batchSize = 50 } = {}) {
       logger.warn('Webhook disabled after repeated failures', { webhook: String(hook._id), url: hook.url });
     }
 
+    logger.warn('Webhook delivery failed', {
+      webhook: String(hook._id), delivery: String(delivery._id), event: delivery.event,
+      attempt, status: result.status ?? null, error: result.error, will_retry: delivery.status !== 'failed',
+    });
     await Webhook.updateOne({ _id: hook._id }, { $set: update });
   }
 

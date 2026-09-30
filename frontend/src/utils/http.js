@@ -1,4 +1,5 @@
 import { getWorkspace } from './workspace';
+import { logApiFailure } from './sentry.js';
 // API base URL - empty for same-origin (dev), full URL for production
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -130,6 +131,8 @@ export async function handleApiResponse(response, silent = false) {
 
   if (!response.ok) {
     const error = handleApiError(new Error('API Error'), data, response.status);
+    // The server's id for this request; shown to support, and in the log line.
+    error.requestId = response.headers?.get?.('X-Request-Id') || data?.requestId || null;
     if (!silent) {
       try {
         window.dispatchEvent(new CustomEvent('api-error', {
@@ -294,6 +297,7 @@ export class ApiClient {
     // into the fetch RequestInit and cause unexpected behaviour.
     const { silent, ...fetchOptions } = options;
     const url = `${this.baseURL}${endpoint}`;
+    const started = performance.now();
 
     try {
       const response = await fetchWithRefresh(url, {
@@ -303,8 +307,18 @@ export class ApiClient {
           ...fetchOptions.headers,
         },
       }, silent);
+      if (!response.ok) {
+        logApiFailure({
+          method: fetchOptions.method || 'GET', url, status: response.status,
+          requestId: response.headers.get('X-Request-Id'), durationMs: Math.round(performance.now() - started),
+        });
+      }
       return await handleApiResponse(response, silent);
     } catch (error) {
+      // fetch() itself rejecting (offline, DNS, CORS) never reached the server.
+      if (error instanceof TypeError) {
+        logApiFailure({ method: fetchOptions.method || 'GET', url, status: 0, message: error.message, durationMs: Math.round(performance.now() - started) });
+      }
       // An aborted request is the caller superseding itself — a search box
       // cancelling the previous keystroke. Logging it would fill the console
       // with noise that looks like failures.
@@ -357,8 +371,12 @@ export class ApiClient {
         body: formData,
         // Don't set Content-Type header - browser sets it with boundary for FormData
       }, silent);
+      if (!response.ok) {
+        logApiFailure({ method: 'POST', url, status: response.status, requestId: response.headers.get('X-Request-Id') });
+      }
       return await handleApiResponse(response, silent);
     } catch (error) {
+      if (error instanceof TypeError) logApiFailure({ method: 'POST', url, status: 0, message: error.message });
       console.error('Upload request failed:', error);
       throw error;
     }

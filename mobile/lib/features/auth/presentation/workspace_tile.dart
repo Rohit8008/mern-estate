@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/network/providers.dart';
 import '../../../core/network/workspace_store.dart';
 import '../../../core/theme/app_colors.dart';
@@ -56,6 +57,9 @@ class _WorkspaceTileState extends ConsumerState<WorkspaceTile> {
     );
     if (picked == null || !mounted) return;
     await ref.read(apiClientProvider).workspace.set(picked.slug);
+    // The slug is not personal data, and before sign-in the server has no
+    // session to attribute the workspace from.
+    appLog.info('workspace switched', fields: {'workspace': picked.slug});
     setState(() => _current = picked);
     widget.onChanged?.call();
   }

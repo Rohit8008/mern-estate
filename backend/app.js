@@ -57,6 +57,7 @@ import {
 
 import { config } from './config/environment.js';
 import { globalErrorHandler } from './utils/error.js';
+import { requestContext } from './utils/logContext.js';
 import { encryptResponse } from './middleware/encryptResponse.js';
 import { resolveTenant } from './tenancy/resolveTenant.js';
 import { readOnlyWhileActing } from './tenancy/readOnlyWhileActing.js';
@@ -85,6 +86,9 @@ export function createApp() {
     app.set('trust proxy', 1);
   }
 
+  // First, so every log line from here on — access, errors, audit — carries
+  // the same request id, echoed back to the client as X-Request-Id.
+  app.use(requestContext);
   app.use(securityHeaders);
   // Protect against HTTP Parameter Pollution (e.g. ?role=user&role=admin)
   app.use(hpp());
@@ -100,7 +104,10 @@ export function createApp() {
   app.use(compression());
 
   app.use(cors(config.cors));
-  app.use(morgan(config.server.isProduction ? 'combined' : 'dev'));
+  // Development only: in production the structured access line from
+  // requestLogger is the request log, and a second unstructured copy just
+  // doubled stdout volume.
+  if (!config.server.isProduction && process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
   if (config.security.enableRateLimiting) {
     app.use('/api/upload', strictRateLimit);

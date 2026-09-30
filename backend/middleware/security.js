@@ -216,28 +216,6 @@ export const validatePassword = (password) => {
 };
 
 // Request logging middleware
-export const requestLogger = (req, res, next) => {
-  const start = Date.now();
-
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const accessData = {
-      method:      req.method,
-      url:         req.originalUrl,
-      status:      res.statusCode,
-      duration_ms: duration,
-      ip:          req.ip,
-      user_agent:  req.get('User-Agent'),
-      user_id:     req.user?.id ?? null,
-      content_length: parseInt(res.get('Content-Length') || '0', 10) || 0,
-    };
-    // All HTTP requests → access_logs (used by dashboard HTTP panels)
-    logger.access(accessData);
-    // Errors also land in backend_logs for error-level alerting
-    if (res.statusCode >= 500) logger.error('Request Error', accessData);
-    else if (res.statusCode >= 400) logger.warn('Request Warning', accessData);
-  });
-
-  next();
-};
+// Moved to middleware/requestLogger.js; re-exported so app.js is unchanged.
+export { requestLogger } from './requestLogger.js';
 
