@@ -31,6 +31,7 @@ export const NAV = [
   ] },
   { section: 'Operations', pages: [
     ['operations', 'Deploy and operate'],
+    ['aws', 'Running on AWS'],
     ['mobile', 'Mobile app'],
     ['faq', 'FAQ and troubleshooting'],
   ] },

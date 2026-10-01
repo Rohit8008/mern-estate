@@ -112,7 +112,12 @@ export const NotificationFeedProvider = ({ children }) => {
     }
 
     refreshCount();
-    const timer = setInterval(refreshCount, POLL_MS);
+    // Skip ticks while the tab is hidden; the visibilitychange listener below
+    // refreshes as soon as it is shown again.
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      refreshCount();
+    }, POLL_MS);
     return () => clearInterval(timer);
   }, [userId, refreshCount, reset]);
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 
@@ -97,8 +97,13 @@ export function PermissionsProvider({ children }) {
       .finally(() => setReady(true));
   }, []);
 
+  const value = useMemo(
+    () => ({ permissions, can, canAct, ready, refresh }),
+    [permissions, can, canAct, ready, refresh]
+  );
+
   return (
-    <PermissionsContext.Provider value={{ permissions, can, canAct, ready, refresh }}>
+    <PermissionsContext.Provider value={value}>
       {children}
     </PermissionsContext.Provider>
   );

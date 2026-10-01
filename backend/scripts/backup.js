@@ -13,16 +13,29 @@
  * - This script is for additional local backups or self-hosted MongoDB
  */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, '../../backups');
 const RETENTION_COUNT = parseInt(process.env.BACKUP_RETENTION_COUNT) || 7;
+
+/**
+ * argv for mongodump. A pure function so a test can pin it down.
+ *
+ * Each value is ONE argv element handed to execFile, never interpolated into a
+ * shell string: a `$`, backtick, quote or `;` in the password cannot be
+ * interpreted by a shell, and the URI does not appear in a shell command line.
+ * (It is still visible in the process list as mongodump's argument, like any
+ * --uri; mongodump has no env-var form for it.)
+ */
+export function buildMongodumpArgs(mongoUri, backupPath) {
+  return [`--uri=${mongoUri}`, `--out=${backupPath}`, '--gzip'];
+}
 
 async function createBackup() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -47,7 +60,7 @@ async function createBackup() {
 
   // Check if mongodump is available
   try {
-    await execAsync('mongodump --version');
+    await execFileAsync('mongodump', ['--version']);
   } catch (error) {
     console.error('ERROR: mongodump is not installed or not in PATH');
     console.error('Install MongoDB Database Tools: https://www.mongodb.com/docs/database-tools/installation/');
@@ -58,13 +71,13 @@ async function createBackup() {
   try {
     const startTime = Date.now();
 
-    // Build mongodump command
-    // Note: For Atlas connections, mongodump handles authentication automatically via the URI
-    const command = `mongodump --uri="${mongoUri}" --out="${backupPath}" --gzip`;
-
+    // For Atlas connections, mongodump handles authentication via the URI.
     console.log('Running mongodump...');
-    const { stdout, stderr } = await execAsync(command, { maxBuffer: 50 * 1024 * 1024 });
-
+    const { stdout, stderr } = await execFileAsync(
+      'mongodump',
+      buildMongodumpArgs(mongoUri, backupPath),
+      { maxBuffer: 50 * 1024 * 1024 }
+    );
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     if (stdout) console.log(stdout);
@@ -79,7 +92,11 @@ async function createBackup() {
 
     return backupPath;
   } catch (error) {
-    console.error('Backup failed:', error.message);
+    // error.message from execFile embeds the full command line, i.e. the URI
+    // with its password. Print only the tool's own stderr / a redacted message.
+    const redact = (t) => String(t || '').split(mongoUri).join('<MONGO_URI>');
+    console.error('Backup failed:', redact(error.stderr || error.message));
+    error.message = redact(error.message);
     // Clean up failed backup
     if (fs.existsSync(backupPath)) {
       fs.rmSync(backupPath, { recursive: true, force: true });
@@ -157,8 +174,9 @@ async function listBackups() {
   }
 }
 
-// Main execution
-(async () => {
+// Main execution (skipped when imported by a test)
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) (async () => {
   console.log('='.repeat(50));
   console.log('MERN Estate Database Backup');
   console.log('='.repeat(50));

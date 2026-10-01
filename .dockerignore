@@ -1,32 +1,57 @@
-# Dependencies
+# Build context hygiene. Anything listed here is never sent to the daemon and
+# can never be COPYed into an image layer (layers are forever, even if a later
+# step deletes the file).
+#
+# The Dockerfile COPYs only: frontend/package*.json, frontend/ (build stage),
+# backend/package*.json, backend/ and the root VERSION file. Nothing below is
+# needed by any of those at runtime. VERSION is intentionally NOT ignored.
+
+# Dependencies (installed inside the image)
 node_modules
-frontend/node_modules
-backend/node_modules
+**/node_modules
 
 # Build output (built inside Docker)
 frontend/dist
 
-# Git
+# Git and tooling
 .git
 .gitignore
+.gstack
+.claude
+.idea
+.vscode
+*.swp
+.DS_Store
+
+# Secrets and local config. Pass secrets via env_file / --env-file / the
+# orchestrator, never via the image.
+**/.env*
+**/*.local
+backend/.env*
+
+# Database dumps and uploads: data, not code. Mount volumes instead.
+backend/backups
+backend/scripts/backups
+backups
+backend/uploads
 
 # Logs
 backend/logs
+logs
 *.log
 
-# Local env files — pass secrets via docker-compose env_file or --env-file
-backend/.env
-frontend/.env.local
-
-# Uploaded files — mount a volume instead
-backend/uploads
-
-# Dev / test only
+# Tests, reports, coverage
 backend/tests
+coverage
 backend/coverage
 frontend/coverage
+e2e
+playwright-report
+test-results
 
-# Editor / OS
-.DS_Store
-.vscode
-*.swp
+# Docs, mobile app and audit artefacts (none read at runtime)
+docs
+mobile
+schema-audit.html
+*.md
+**/*.md

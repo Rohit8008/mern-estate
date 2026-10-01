@@ -1,0 +1,53 @@
+{
+  "family": "estate-api",
+  "requiresCompatibilities": ["FARGATE"],
+  "networkMode": "awsvpc",
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/<EXECUTION_ROLE_PLACEHOLDER>",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/<TASK_ROLE_PLACEHOLDER>",
+  "runtimePlatform": { "cpuArchitecture": "X86_64", "operatingSystemFamily": "LINUX" },
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/estate-api:<TAG>",
+      "essential": true,
+      "portMappings": [{ "containerPort": 3000, "protocol": "tcp" }],
+      "stopTimeout": 30,
+      "linuxParameters": { "initProcessEnabled": true },
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "HOST", "value": "0.0.0.0" },
+        { "name": "FRONTEND_URL", "value": "https://<YOUR_DOMAIN_PLACEHOLDER>" },
+        { "name": "APP_DOMAIN", "value": "<YOUR_DOMAIN_PLACEHOLDER>" },
+        { "name": "TRUST_PROXY_HOPS", "value": "2" },
+        { "name": "NODE_OPTIONS", "value": "--max-old-space-size=700" }
+      ],
+      "secrets": [
+        { "name": "MONGO_URI", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:<PREFIX>/MONGO_URI-<SUFFIX>" },
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:<PREFIX>/JWT_SECRET-<SUFFIX>" },
+        { "name": "REFRESH_SECRET", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:<PREFIX>/REFRESH_SECRET-<SUFFIX>" },
+        { "name": "API_RESPONSE_SECRET", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:<PREFIX>/API_RESPONSE_SECRET-<SUFFIX>" },
+        { "name": "MESSAGE_ENCRYPTION_KEY", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:<PREFIX>/MESSAGE_ENCRYPTION_KEY-<SUFFIX>" },
+        { "name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:<PREFIX>/REDIS_URL-<SUFFIX>" },
+        { "name": "SMTP_PASS", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/<PREFIX>/SMTP_PASS" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health/live || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 40
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/estate-api",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}

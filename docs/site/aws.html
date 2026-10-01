@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Running on AWS — Real Vista Docs</title>
+<meta name="description" content="Example nginx, CloudFront and ECS files, the blockers to running more than one instance, and a staged path from one EC2 box to Fargate. Unverified; nothing was deployed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="aws.html" class="active">Running on AWS</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Running on AWS</h1>
+<p class="lede">Example nginx, CloudFront and ECS files, the blockers to running more than one instance, and a staged path from one EC2 box to Fargate. Unverified; nothing was deployed.</p>
+
+<div class="note"><p><strong>Unverified.</strong> The files in <code>deploy/aws/</code> are examples. Nothing was deployed to AWS, run through nginx or executed in CloudFront or ECS. Cost figures are rough estimates to re-check in the AWS pricing calculator.</p></div>
+
+<h2 id="files">What is in deploy/aws</h2>
+<ul>
+<li><code>nginx.realvista.conf.example</code>: the current single-EC2 server block. SPA fallback <code>try_files $uri $uri/ /index.html</code>, immutable cache for <code>/assets</code> and <code>/fonts</code>, no-cache for <code>index.html</code>, <code>sw.js</code>, <code>workbox-*</code>, manifest, sitemap and robots, websocket proxying for <code>/socket.io</code>, forwarded client IP, security headers. See also <a href="operations.html#deploy">Deploy and operate</a>.</li>
+<li><code>cloudfront-function.js</code>: viewer-request rewrite so an S3-hosted SPA serves prerendered pages (<code>/privacy</code>, <code>/terms</code>, <code>/cookies</code>, <code>/refunds</code>, <code>/download</code>) and falls back to <code>/index.html</code> for client routes.</li>
+<li><code>ecs-task-definition.example.json</code>: Fargate, 0.5 vCPU and 1 GB, secrets by reference, healthcheck on <code>/api/health/live</code>, <code>stopTimeout</code> 30, init process, awslogs.</li>
+<li>The <code>Dockerfile</code> has an API-only target: <code>docker build --target api</code>. The default target is the full image and is unchanged.</li>
+</ul>
+
+<h2 id="stages">Staged path</h2>
+<ol>
+<li><strong>Single EC2, hardened.</strong> nginx, PM2 or Docker, Atlas. One instance, so the in-process limits are correct.</li>
+<li><strong>ECS Fargate, ALB, CloudFront, S3, ElastiCache.</strong> SPA in S3 behind CloudFront; <code>/api/*</code>, <code>/socket.io/*</code> and <code>/uploads/*</code> to the ALB; Redis for shared state; Atlas over PrivateLink.</li>
+<li><strong>Autoscaling</strong>, only once the blockers below are cleared.</li>
+</ol>
+
+<h2 id="blockers">Blockers for two or more instances</h2>
+<ul>
+<li>Uploads are on local disk; move them to S3 first (<a href="operations.html#scaling">Scaling</a>).</li>
+<li>Socket.IO has no adapter installed; add the Redis adapter, and use websocket-only transport or sticky sessions.</li>
+<li>Set the trust-proxy hop count to 2 behind CloudFront plus ALB (1 behind a single nginx). A wrong value makes rate limits and security logs trust a spoofable address.</li>
+<li>Restrict the ALB security group to the CloudFront origin-facing prefix list and require a secret header from CloudFront.</li>
+<li>Set <code>REDIS_URL</code> so the rate limiter and cache invalidation are shared.</li>
+</ul>
+
+<h2 id="secrets">Secrets mapping</h2>
+<table>
+<thead><tr><th>Kind</th><th>Variables</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Secret</td><td><code>MONGO_URI</code>, <code>JWT_SECRET</code>, <code>REFRESH_SECRET</code>, <code>MESSAGE_ENCRYPTION_KEY</code>, <code>API_RESPONSE_SECRET</code>, <code>REDIS_URL</code>, <code>SMTP_PASS</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>METRICS_TOKEN</code></td><td>Secrets Manager or SSM SecureString, task <code>secrets.valueFrom</code></td></tr>
+<tr><td>Plain</td><td><code>NODE_ENV</code>, <code>PORT</code>, <code>FRONTEND_URL</code>, <code>APP_DOMAIN</code>, <code>JOBS_ENABLED</code>, <code>NODE_OPTIONS</code></td><td>Task <code>environment</code></td></tr>
+<tr><td>Build time</td><td><code>VITE_*</code></td><td>Docker build args; public in the bundle</td></tr>
+</tbody>
+</table>
+
+<h2 id="cost">Rough monthly cost (estimates to verify)</h2>
+<table>
+<thead><tr><th>Stage</th><th>Main items</th><th>Order of magnitude</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>One small EC2, Atlas</td><td>tens of USD plus Atlas</td></tr>
+<tr><td>2</td><td>2 Fargate tasks, ALB, small ElastiCache, NAT gateway, CloudFront, S3, Atlas M10+</td><td>roughly 150 to 350 USD plus data transfer</td></tr>
+</tbody>
+</table>
+
+<h2 id="alarms">Alarms</h2>
+<p>ALB target 5xx and unhealthy hosts, p95 response time, ECS CPU and memory above 80%, running tasks below desired, stopped or OOM tasks, CloudFront 5xx rate, ElastiCache evictions and memory, Atlas connections and lag, error-level log filter, backup freshness (no new object for 26 hours), and a budget alarm.</p>
+
+<h2 id="data">Database and backups</h2>
+<p>Stay on Atlas: listing search uses <code>$text</code> and <code>$facet</code>, which DocumentDB does not fully support. Use a PrivateLink endpoint. Back up with Atlas Cloud Backup (M10 and up) plus a scheduled <code>mongodump</code> copied to S3 in another region, and rehearse a restore (<a href="operations.html#backups">Backups</a>).</p>
+
+<div class="pager"><a href="operations.html"><small>Previous</small>Deploy and operate</a><a href="mobile.html"><small>Next</small>Mobile app</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#files">What is in deploy/aws</a><a class="h2" href="#stages">Staged path</a><a class="h2" href="#blockers">Blockers for two or more instances</a><a class="h2" href="#secrets">Secrets mapping</a><a class="h2" href="#cost">Rough monthly cost (estimates to verify)</a><a class="h2" href="#alarms">Alarms</a><a class="h2" href="#data">Database and backups</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

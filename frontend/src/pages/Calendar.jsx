@@ -170,8 +170,22 @@ export default function Calendar() {
       });
     };
     fire();
-    const id = setInterval(fire, 30_000);
-    return () => clearInterval(id);
+    // Reminders are desktop notifications, so a hidden tab must keep ticking
+    // when permission is granted (otherwise the 2-minute fire window is missed).
+    // Without permission there is nothing to deliver, so pause while hidden and
+    // catch up as soon as the tab is shown.
+    const canNotifyInBackground = () =>
+      typeof Notification !== 'undefined' && Notification.permission === 'granted';
+    const id = setInterval(() => {
+      if (document.visibilityState === 'hidden' && !canNotifyInBackground()) return;
+      fire();
+    }, 30_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') fire(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [events]);
 
   /* access guard */

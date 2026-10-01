@@ -40,10 +40,33 @@ jobs:
       - name: Backend lint
         run: npm run lint
         working-directory: backend
+      # mongodb-memory-server downloads a mongod binary on first use (~70 MB).
+      # Cache it, and pin the version so the cache key is meaningful and a new
+      # default upstream cannot change what the tests run against. 6.0.14 is
+      # what the suite has been run with locally.
+      - name: Cache mongod binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-6.0.14-${{ runner.os }}
       # Uses mongodb-memory-server, so no service container is needed.
       - name: Backend tests
         run: npm test
         working-directory: backend
+        env:
+          MONGOMS_VERSION: "6.0.14"
+      # Coverage run. Advisory: at the time of writing global branch coverage is
+      # 35.94% against the 40% threshold in jest.config.js (statements 44.6,
+      # functions 46.5, lines 46.4 pass), so this step exits non-zero even
+      # though all 816 tests pass. `npm test` above is the blocking gate. Raise
+      # coverage (or consciously lower the threshold), then remove
+      # continue-on-error to make this blocking.
+      - name: Backend tests with coverage thresholds
+        run: npm run test:ci
+        working-directory: backend
+        continue-on-error: true
+        env:
+          MONGOMS_VERSION: "6.0.14"
 
   frontend:
     runs-on: ubuntu-latest

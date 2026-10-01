@@ -75,6 +75,8 @@ export function clearSearchCache() {
   // Clears this instance AND tells the others, so a second instance
   // cannot keep answering from a cache the write just invalidated.
   invalidateEverywhere({ prefix: 'listing:' });
+  // Dashboard figures are derived from the same listings.
+  invalidateEverywhere({ prefix: 'dashboard:' });
   logger.info('Search cache cleared');
 }
 

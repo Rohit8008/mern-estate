@@ -205,6 +205,7 @@ npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm</code></pre></
 <li><strong>With <code>REDIS_URL</code></strong>: limits use a Redis store (key prefix <code>rl:</code>) and cache invalidation publishes to every instance. Call <code>invalidateEverywhere({ prefix })</code> from <code>utils/cache.js</code>, not <code>cache.clearByPrefix()</code>. Redis being down degrades to per-process behaviour and does not fail readiness.</li>
 <li>Scheduled jobs need nothing extra (Mongo leases). Socket.IO needs an adapter, which is not installed; the PM2 config therefore runs a single process (see above).</li>
 <li>Uploads are on local disk (<code>uploads/</code>), so multiple hosts need a shared volume.</li>
+<li>Moving to AWS (example, unverified files and the list of blockers for 2+ instances): <a href="aws.html">Running on AWS</a>.</li>
 </ul>
 
 <h2 id="seo">SEO build outputs</h2>

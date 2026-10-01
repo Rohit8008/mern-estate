@@ -45,7 +45,7 @@ export function diffFields(before = {}, after = {}, fields) {
 /** Best-effort client IP, trusting the proxy headers the app already sets up. */
 export function requestIp(req) {
   if (!req) return '';
-  return String(req.ip || req.headers?.['x-forwarded-for'] || '').split(',')[0].trim().slice(0, 64);
+  return String(req.ip || req.socket?.remoteAddress || '').split(',')[0].trim().slice(0, 64);
 }
 
 export async function logActivity({

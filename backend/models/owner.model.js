@@ -47,6 +47,9 @@ ownerSchema.index(
   { unique: true, partialFilterExpression: { email: { $type: 'string', $gt: '' } } }
 );
 
+// isDeleted is filtered with $ne:true (two ranges), so it cannot lead an index that must also order rows.
+ownerSchema.index({ tenantId: 1, createdAt: -1 }); // the Owners list default sort
+
 const Owner = mongoose.model('Owner', ownerSchema);
 
 export default Owner;

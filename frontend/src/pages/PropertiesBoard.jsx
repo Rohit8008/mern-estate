@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient, normalizeImageUrl } from '../utils/http';
@@ -88,7 +88,44 @@ export default function PropertiesBoard() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [page, setPage] = useState(0);
+  // Page is stored with the filter signature it belongs to, so changing any
+  // filter reads as page 0 in the same render (no reset effect, no throwaway fetch).
+  const filterKey = [
+    assignedAgent, category, city, furnished, locality, maxPrice, minBathrooms, minBedrooms,
+    minPrice, offer, ownerId, parking, propertyCategory, propertyType, q, status, type,
+  ].join('\u0001');
+  const [pageState, setPageState] = useState({ key: filterKey, page: 0 });
+  const page = pageState.key === filterKey ? pageState.page : 0;
+  const setPage = useCallback((next) => {
+    setPageState((prev) => {
+      const cur = prev.key === filterKey ? prev.page : 0;
+      return { key: filterKey, page: typeof next === 'function' ? next(cur) : next };
+    });
+  }, [filterKey]);
+
+  // Search box: type into local state, write ?q= to the URL after a pause.
+  const [qInput, setQInput] = useState(q);
+  const lastWrittenQ = useRef(q);
+  useEffect(() => {
+    // URL changed from elsewhere (clear filters, saved view, back button).
+    if (q !== lastWrittenQ.current) {
+      lastWrittenQ.current = q;
+      setQInput(q);
+    }
+  }, [q]);
+  useEffect(() => {
+    if (qInput === lastWrittenQ.current) return undefined;
+    const timer = setTimeout(() => {
+      lastWrittenQ.current = qInput;
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (qInput) next.set('q', qInput);
+        else next.delete('q');
+        return next;
+      }, { replace: true });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [qInput, setSearchParams]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
@@ -276,29 +313,6 @@ export default function PropertiesBoard() {
     type,
   ]);
 
-  // Reset to the first page whenever filters change (not on page changes themselves)
-  useEffect(() => {
-    setPage(0);
-  }, [
-    assignedAgent,
-    category,
-    city,
-    furnished,
-    locality,
-    maxPrice,
-    minBathrooms,
-    minBedrooms,
-    minPrice,
-    offer,
-    ownerId,
-    parking,
-    propertyCategory,
-    propertyType,
-    q,
-    status,
-    type,
-  ]);
-
   const adminQuery = useMemo(() => {
     const params = new URLSearchParams(query.replace(/^\?/, ''));
     if (q) params.set('searchTerm', q);
@@ -309,6 +323,7 @@ export default function PropertiesBoard() {
     if (!canAccess) return;
 
     let mounted = true;
+    const controller = new AbortController();
     (async () => {
       setLoading(true);
       setError('');
@@ -317,7 +332,7 @@ export default function PropertiesBoard() {
         // Admin: show all (can still filter by assignedAgent etc later)
         const isEmployee = currentUser?.role === 'employee';
         const endpoint = isEmployee ? `/listing/my-assigned${adminQuery}` : `/listing/get${adminQuery}`;
-        const data = await apiClient.get(endpoint);
+        const data = await apiClient.get(endpoint, { signal: controller.signal });
 
         // sendSuccessResponse returns: { success, message, data }
         const listings = data?.data?.listings || [];
@@ -333,7 +348,7 @@ export default function PropertiesBoard() {
         const facetQs = new URLSearchParams(adminQuery.replace(/^\?/, ''));
         ['limit', 'startIndex', 'populate'].forEach((k) => facetQs.delete(k));
         apiClient
-          .get(`/listing/facets?${facetQs}`, { silent: true })
+          .get(`/listing/facets?${facetQs}`, { silent: true, signal: controller.signal })
           .then((res) => { if (mounted) setFacets(res?.data || null); })
           .catch(() => { if (mounted) setFacets(null); });
       } catch (e) {
@@ -349,6 +364,7 @@ export default function PropertiesBoard() {
 
     return () => {
       mounted = false;
+      controller.abort();
     };
   }, [adminQuery, canAccess, currentUser?.role]);
 
@@ -496,48 +512,30 @@ export default function PropertiesBoard() {
     if (!canAccess) return;
 
     let mounted = true;
-    (async () => {
-      try {
-        if (currentUser?.role === 'admin') {
-          const userList = await apiClient.get('/user/list');
-          const people = Array.isArray(userList) ? userList : [];
-          if (mounted) {
-            setAgents(
-              people
-                .filter((u) => u && (u.role === 'admin' || u.role === 'employee'))
-                .map((u) => ({
-                  _id: u._id,
-                  username: u.username,
-                  avatar: u.avatar,
-                  role: u.role,
-                }))
-            );
-          }
-        } else {
-          setAgents([]);
-        }
-      } catch (_) {
-        if (mounted) setAgents([]);
-      }
+    const mapAgents = (userList) =>
+      (Array.isArray(userList) ? userList : [])
+        .filter((u) => u && (u.role === 'admin' || u.role === 'employee'))
+        .map((u) => ({ _id: u._id, username: u.username, avatar: u.avatar, role: u.role }));
+    const mapOwners = (ownerList) =>
+      (Array.isArray(ownerList) ? ownerList : []).map((o) => ({
+        _id: o._id,
+        name: o.name,
+        email: o.email,
+        phone: o.phone,
+        companyName: o.companyName,
+      }));
 
-      try {
-        const ownerList = await apiClient.get('/owner/list');
-        const list = Array.isArray(ownerList) ? ownerList : [];
-        if (mounted) {
-          setOwners(
-            list.map((o) => ({
-              _id: o._id,
-              name: o.name,
-              email: o.email,
-              phone: o.phone,
-              companyName: o.companyName,
-            }))
-          );
-        }
-      } catch (_) {
-        if (mounted) setOwners([]);
-      }
-    })();
+    // Independent lookups: run together, each failing on its own.
+    Promise.all([
+      currentUser?.role === 'admin'
+        ? apiClient.get('/user/list').then(mapAgents).catch(() => [])
+        : Promise.resolve([]),
+      apiClient.get('/owner/list').then(mapOwners).catch(() => []),
+    ]).then(([agentList, ownerList]) => {
+      if (!mounted) return;
+      setAgents(agentList);
+      setOwners(ownerList);
+    });
 
     return () => {
       mounted = false;
@@ -806,8 +804,8 @@ export default function PropertiesBoard() {
                 className='w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all placeholder:text-slate-500'
                 aria-label='Search properties'
                 placeholder={t('properties.searchProperties')}
-                value={q}
-                onChange={(e) => setParam('q', e.target.value)}
+                value={qInput}
+                onChange={(e) => setQInput(e.target.value)}
               />
             </div>
             {/* Phones: the selects filled the whole first screen, so they sit
@@ -1022,7 +1020,7 @@ export default function PropertiesBoard() {
                               <div className='flex items-center gap-3'>
                                 <div className='w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200'>
                                   {thumb ? (
-                                    <img src={thumb} alt='' className='w-full h-full object-cover' loading='lazy' />
+                                    <img src={thumb} alt='' className='w-full h-full object-cover' loading='lazy' decoding='async' />
                                   ) : (
                                     <div className='w-full h-full flex items-center justify-center text-slate-300'>
                                       <svg aria-hidden='true' className='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1.5} d='M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z' /></svg>
@@ -1305,6 +1303,7 @@ export default function PropertiesBoard() {
                                 alt=''
                                 className='w-full h-full object-cover'
                                 loading='lazy'
+                                decoding='async'
                               />
                             ) : (
                               <div className='w-full h-full flex items-center justify-center text-slate-600 text-sm'>{t('properties.noImage')}</div>
@@ -1353,6 +1352,7 @@ export default function PropertiesBoard() {
                         alt=''
                         className='w-full h-full object-cover'
                         loading='lazy'
+                        decoding='async'
                       />
                     ) : (
                       <div className='w-full h-full flex items-center justify-center text-slate-600 text-sm'>{t('properties.noImage')}</div>
@@ -1691,7 +1691,7 @@ export default function PropertiesBoard() {
                           >
                             <div className='aspect-[16/10] bg-slate-100'>
                               {f.kind === 'image' ? (
-                                <img src={f.url} alt={f.name} className='w-full h-full object-cover' loading='lazy' />
+                                <img src={f.url} alt={f.name} className='w-full h-full object-cover' loading='lazy' decoding='async' />
                               ) : (
                                 <div className='w-full h-full flex items-center justify-center text-slate-500 text-sm font-semibold'>{t('properties.file')}</div>
                               )}

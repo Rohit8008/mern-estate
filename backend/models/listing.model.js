@@ -310,6 +310,21 @@ listingSchema.index({ tenantId: 1, propertyCategory: 1, regularPrice: 1, created
 listingSchema.index({ tenantId: 1, isDeleted: 1, createdAt: -1 }); // The board's default shape
 listingSchema.index({ tenantId: 1, assignedAgent: 1, city: 1, locality: 1, status: 1 });
 
+// Sort-serving indexes for search/listingSearch.js sortStage, which always sorts
+// `{ <field>: dir, _id: -1 }`. Each ends in _id so the sort is fully covered and
+// the query can stop after `limit` rows instead of sorting the whole workspace
+// in memory. They deliberately omit isDeleted: the search filters it with
+// `$ne: true`, a two-range predicate that would break index order if it led.
+// Only the directions the product actually sorts in are indexed (desc for
+// recency/area, both for price, asc for name/status) to keep write cost down.
+listingSchema.index({ tenantId: 1, createdAt: -1, _id: -1 });
+listingSchema.index({ tenantId: 1, updatedAt: -1, _id: -1 });
+listingSchema.index({ tenantId: 1, regularPrice: -1, _id: -1 });
+listingSchema.index({ tenantId: 1, regularPrice: 1, _id: -1 });
+listingSchema.index({ tenantId: 1, areaSqFt: -1, _id: -1 });
+listingSchema.index({ tenantId: 1, name: 1, _id: -1 });
+listingSchema.index({ tenantId: 1, status: 1, _id: -1 });
+
 // Compound indexes for common query patterns
 listingSchema.index({
   tenantId: 1,

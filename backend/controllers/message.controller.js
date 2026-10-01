@@ -18,17 +18,19 @@ import { logger } from '../utils/logger.js';
  * @returns {Object} - The message object with decrypted content
  */
 function decryptMessageContent(message) {
-  if (message.isEncrypted && message.content) {
+  // Accepts a hydrated document or a lean/aggregated plain object.
+  const plain = typeof message.toObject === 'function' ? message.toObject() : message;
+  if (plain.isEncrypted && plain.content) {
     try {
-      const decryptedContent = decryptMessageWithKey(message.content);
-      return { ...message.toObject(), content: decryptedContent };
+      const decryptedContent = decryptMessageWithKey(plain.content);
+      return { ...plain, content: decryptedContent };
     } catch (error) {
-      logger.error('Message decryption failed', { message_id: String(message?._id || ''), error });
+      logger.error('Message decryption failed', { message_id: String(plain?._id || ''), error });
       // Return the message with an error indicator
-      return { ...message.toObject(), content: '[Encrypted - Decryption Failed]' };
+      return { ...plain, content: '[Encrypted - Decryption Failed]' };
     }
   }
-  return message.toObject ? message.toObject() : message;
+  return plain;
 }
 
 /**
@@ -146,12 +148,12 @@ const UNPAGED_MAILBOX_CAP = 500;
 
 async function mailbox(req, res, filter) {
   if (req.query.page === undefined) {
-    const msgs = await Message.find(filter).sort({ createdAt: -1, _id: -1 }).limit(UNPAGED_MAILBOX_CAP);
+    const msgs = await Message.find(filter).sort({ createdAt: -1, _id: -1 }).limit(UNPAGED_MAILBOX_CAP).lean();
     return res.status(200).json(decryptMessages(msgs));
   }
   const { page, limit, skip } = parsePaging(req.query);
   const [msgs, total] = await Promise.all([
-    Message.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
+    Message.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
     Message.countDocuments(filter),
   ]);
   return res.status(200).json({ success: true, data: decryptMessages(msgs), page, limit, total });
@@ -173,18 +175,39 @@ export const getSent = async (req, res, next) => {
   }
 };
 
+const THREAD_DEFAULT_LIMIT = 500; // no screen pages older messages yet, so the default stays at the cap
+const THREAD_MAX_LIMIT = 500;
+
+/**
+ * One conversation, oldest first — the newest `limit` messages (default 500),
+ * not the whole history. The shape is unchanged (a bare array in reading
+ * order), so existing clients keep working; they simply stop receiving years of
+ * chat on open. To load older messages pass `before=<createdAt of the oldest
+ * message you hold>`.
+ */
 export const getThread = async (req, res, next) => {
   try {
     const otherId = req.params.otherId;
     const userId = req.user.id;
-    const msgs = await Message.find({
+
+    const requested = parseInt(req.query.limit, 10);
+    const limit = Math.min(Math.max(Number.isFinite(requested) ? requested : THREAD_DEFAULT_LIMIT, 1), THREAD_MAX_LIMIT);
+
+    const filter = {
       $or: [
         { senderId: userId, receiverId: otherId },
         { senderId: otherId, receiverId: userId },
       ],
-    }).sort({ createdAt: 1 });
-    const decryptedMsgs = decryptMessages(msgs);
-    res.status(200).json(decryptedMsgs);
+    };
+
+    if (req.query.before !== undefined && req.query.before !== '') {
+      const before = new Date(String(req.query.before));
+      if (Number.isNaN(before.getTime())) return next(errorHandler(400, 'before must be a date.'));
+      filter.createdAt = { $lt: before };
+    }
+
+    const newestFirst = await Message.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit).lean();
+    res.status(200).json(decryptMessages(newestFirst.reverse()));
   } catch (error) {
     next(error);
   }
@@ -212,31 +235,52 @@ export const markRead = async (req, res, next) => {
   }
 };
 
+/** How much of the latest message a conversation row carries. */
+const PREVIEW_CHARS = 200;
+/** Newest messages considered when building the list — unchanged from before. */
+const CONVERSATION_WINDOW = 500;
+
 export const getConversations = async (req, res, next) => {
   try {
     const userId = String(req.user.id);
-    const msgs = await Message.find({
-      $or: [{ senderId: userId }, { receiverId: userId }],
-    })
-      .sort({ createdAt: -1 })
-      .limit(500);
+    const me = new mongoose.Types.ObjectId(userId);
 
-    // senderId/receiverId are ObjectIds since the model changed, and this
-    // compared them to the string id with ===, which is never true. Every
-    // message became its own "conversation" keyed by an ObjectId instance, no
-    // name could be looked up ("Unknown user" everywhere), and unread was
-    // always 0. Compare and key as strings.
-    const map = new Map();
-    for (const m of msgs) {
-      const sender = String(m.senderId);
-      const receiver = String(m.receiverId);
-      const otherId = sender === userId ? receiver : sender;
-      if (!map.has(otherId)) {
-        map.set(otherId, { otherId, lastMessage: decryptMessageContent(m), unread: 0 });
-      }
-      if (!m.read && receiver === userId) map.get(otherId).unread++;
-    }
-    const list = Array.from(map.values());
+    // Grouped in the database: one row per counterpart with their latest message
+    // and unread count, instead of up to 500 hydrated documents folded in Node.
+    // senderId/receiverId are ObjectIds, so the comparison below is on ObjectIds
+    // (the earlier string-vs-ObjectId bug made every message its own thread).
+    const rows = await Message.aggregate([
+      { $match: { $or: [{ senderId: me }, { receiverId: me }] } },
+      { $sort: { createdAt: -1 } },
+      { $limit: CONVERSATION_WINDOW },
+      {
+        $group: {
+          _id: { $cond: [{ $eq: ['$senderId', me] }, '$receiverId', '$senderId'] },
+          lastMessage: { $first: '$$ROOT' },
+          lastAt: { $first: '$createdAt' },
+          unread: {
+            $sum: { $cond: [{ $and: [{ $eq: ['$receiverId', me] }, { $ne: ['$read', true] }] }, 1, 0] },
+          },
+        },
+      },
+      { $sort: { lastAt: -1 } },
+    ]);
+
+    const list = rows.map((r) => {
+      const last = decryptMessageContent(r.lastMessage);
+      const content = String(last.content || '');
+      return {
+        otherId: String(r._id),
+        // Truncated after decryption: a row shows a one-line preview, and the
+        // full text (with an appended listing block) is in the thread.
+        lastMessage: {
+          ...last,
+          content: content.length > PREVIEW_CHARS ? `${content.slice(0, PREVIEW_CHARS)}…` : content,
+        },
+        unread: r.unread,
+      };
+    });
+
     const users = await User.find({ _id: { $in: list.map((e) => e.otherId) } })
       .select('username firstName lastName avatar _id')
       .lean();

@@ -77,10 +77,11 @@ export const usePerformance = () => {
     measureMemory();
 
     // Set up periodic memory monitoring
-    const memoryInterval = setInterval(measureMemory, 30000); // Every 30 seconds
+    // Dev-only: never poll in production builds.
+    const memoryInterval = import.meta.env.DEV ? setInterval(measureMemory, 30000) : null;
 
     return () => {
-      clearInterval(memoryInterval);
+      if (memoryInterval) clearInterval(memoryInterval);
     };
   }, []);
 

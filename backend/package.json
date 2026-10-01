@@ -24,6 +24,7 @@
     "db:seed-demo": "node scripts/seedDemo.js",
     "db:seed-categories": "node scripts/seedCategories.js",
     "db:seed-roles": "node scripts/seedRoles.js",
+    "db:sync-indexes": "node scripts/syncIndexes.js",
     "db:backup": "node scripts/backup.js",
     "health:check": "curl -f http://localhost:3000/api/health/health",
     "pm2:start": "pm2 start ecosystem.config.js",

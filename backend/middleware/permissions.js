@@ -4,16 +4,21 @@ import { MemoryCache } from '../utils/cache.js';
 import { isPermissionKey } from '../utils/permissionCatalogue.js';
 
 // B-007: Cache role documents for 60s to avoid a DB hit on every permission check.
-const roleCache = new MemoryCache({ ttlMs: 60_000, maxSize: 200 });
+const roleCache = new MemoryCache({ ttlMs: 60_000, maxSize: 2000 });
 
 async function getCachedRole(roleId) {
   const key = String(roleId);
   const cached = roleCache.get(key);
   if (cached) return cached;
-  const role = await Role.findById(roleId);
+  // lean(): a cached plain object is cheaper to hold and to read than a hydrated
+  // document, and nothing here needs Mongoose behaviour — see roleAllows().
+  const role = await Role.findById(roleId).lean();
   if (role) roleCache.set(key, role);
   return role;
 }
+
+/** Plain-object equivalent of Role#hasPermission (a lean role has no methods). */
+const roleAllows = (role, permission) => role?.permissions?.[permission] === true;
 
 // Middleware to check if user has specific permission
 export const requirePermission = (permission) => {
@@ -47,7 +52,7 @@ export const requirePermission = (permission) => {
       }
 
       // Check if role has the required permission
-      if (!userRole.hasPermission(permission)) {
+      if (!roleAllows(userRole, permission)) {
         return next(errorHandler(403, `Permission denied. Required permission: ${permission}`));
       }
 
@@ -91,7 +96,7 @@ export async function staffHasPermission(user, permission) {
   if (!user.assignedRole) return true; // LEGACY_STAFF_FALLBACK
   const role = await getCachedRole(user.assignedRole);
   if (!role || !role.isActive) return true; // LEGACY_STAFF_FALLBACK
-  return role.hasPermission(permission);
+  return roleAllows(role, permission);
 }
 
 /**

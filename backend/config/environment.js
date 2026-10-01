@@ -29,6 +29,14 @@ if (missingVars.length > 0) {
 }
 
 // Environment configuration
+/** Integer env var where 0 is a meaningful value (parseInt || default would eat it). */
+function intEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 export const config = {
   // Server configuration
   server: {
@@ -38,13 +46,21 @@ export const config = {
     isDevelopment: process.env.NODE_ENV === 'development',
     isProduction: process.env.NODE_ENV === 'production',
     isTest: process.env.NODE_ENV === 'test',
+    // Reverse proxies in front of the API; drives `trust proxy`. 0 disables.
+    trustProxyHops: intEnv('TRUST_PROXY_HOPS', 1),
   },
 
   // Database configuration
   database: {
     uri: process.env.MONGO_URI,
     options: {
-      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
+      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 30,
+      minPoolSize: intEnv('DB_MIN_POOL_SIZE', 5),
+      maxIdleTimeMS: intEnv('DB_MAX_IDLE_TIME_MS', 60000),
+      waitQueueTimeoutMS: intEnv('DB_WAIT_QUEUE_TIMEOUT_MS', 10000),
+      // Server-side cap on any single find/aggregate issued by the API process,
+      // so one runaway query cannot hold a pool connection forever. 0 disables.
+      maxTimeMS: intEnv('DB_MAX_TIME_MS', 30000),
       serverSelectionTimeoutMS: parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 5000,
       socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 45000,
     },
@@ -125,7 +141,7 @@ export const config = {
   // Cache configuration
   cache: {
     ttl: parseInt(process.env.CACHE_TTL) || 300, // 5 minutes
-    maxSize: parseInt(process.env.CACHE_MAX_SIZE) || 100,
+    maxSize: parseInt(process.env.CACHE_MAX_SIZE) || 1000,
   },
 };
 

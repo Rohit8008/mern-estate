@@ -6,6 +6,7 @@ import { useBuyerView } from '../contexts/BuyerViewContext';
 import { Badge } from '../design-system';
 import { cn } from '../utils/cn';
 import { normalizeImageUrl } from '../utils/http';
+import { cloudinaryUrl, cloudinarySrcSet } from '../utils/cloudinaryUrl';
 import { formatDate, formatListingPrice, isPlaceholderPrice } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
 
@@ -29,8 +30,14 @@ export default function ListingItem({ listing, layout = 'grid' }) {
         <div className={cn('relative overflow-hidden bg-slate-100', layout === 'list' ? 'md:w-80 md:flex-shrink-0' : '')}>
           {listing.imageUrls?.[0] ? (
             <img
-              src={normalizeImageUrl(listing.imageUrls[0])}
-              alt={listing.name}
+              src={cloudinaryUrl(normalizeImageUrl(listing.imageUrls[0]), { w: 800 })}
+              srcSet={cloudinarySrcSet(normalizeImageUrl(listing.imageUrls[0]), [400, 800])}
+              sizes={layout === 'list' ? '(min-width: 768px) 320px, 100vw' : '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'}
+              width={800}
+              height={448}
+              loading='lazy'
+              decoding='async'
+              alt={listing.name ? `Photo of ${listing.name}` : 'Property photo'}
               className={cn(
                 'w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]',
                 layout === 'list' ? 'h-56 md:h-full' : 'h-56'

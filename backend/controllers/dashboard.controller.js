@@ -5,6 +5,33 @@ import { asyncHandler, sendSuccessResponse, AuthorizationError } from '../utils/
 import { logger } from '../utils/logger.js';
 import mongoose from 'mongoose';
 import { listingScopeFor } from '../utils/analyticsScope.js';
+import { getTenantScopedCache } from '../utils/cache.js';
+
+// Dashboards are refreshed on every page open and by every open tab; the same
+// numbers do not change second to second. Per workspace (tenant-scoped cache),
+// per role/user, per query. Listing writes drop it (clearSearchCache), so the
+// 30 s only bounds staleness from writes that do not (buyers, users).
+const DASHBOARD_TTL_MS = 30_000;
+const cache = getTenantScopedCache();
+
+function dashboardCacheKey(name, req) {
+  const q = req.query || {};
+  const sortedQuery = Object.keys(q).sort().map((k) => `${k}=${String(q[k])}`).join('&');
+  // Admins share an entry; everyone else sees their own scope.
+  const who = req.user?.role === 'admin' ? 'admin' : `${req.user?.role || 'anon'}:${req.user?.id}`;
+  return `dashboard:${name}:${who}:${sortedQuery}`;
+}
+
+/** Fold `[{_id: status, count}]` into `{ status: count, total }`. */
+function statusCounts(rows) {
+  const byStatus = {};
+  let total = 0;
+  for (const r of rows) {
+    byStatus[r._id] = (byStatus[r._id] || 0) + r.count;
+    total += r.count;
+  }
+  return { byStatus, total };
+}
 
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
 
@@ -37,20 +64,17 @@ function dashboardBuyerQuery(req) {
 export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
   const isAdmin = req.user?.role === 'admin';
 
+  const cacheKey = dashboardCacheKey('analytics', req);
+  const cached = cache.get(cacheKey);
+  if (cached) return sendSuccessResponse(res, cached, 'Dashboard analytics retrieved successfully');
+
   const listingQuery = dashboardListingQuery(req);
   const buyerQuery = dashboardBuyerQuery(req);
 
   // Parallel queries for better performance
   const [
-    totalProperties,
-    availableProperties,
-    soldProperties,
-    rentedProperties,
-    underNegotiationProperties,
-    totalBuyers,
-    activeBuyers,
-    matchedBuyers,
-    closedBuyers,
+    listingStatusRows,
+    buyerStatusRows,
     totalEmployees,
     activeEmployees,
     recentListings,
@@ -58,16 +82,11 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
     propertiesByCategory,
     propertiesByCity,
   ] = await Promise.all([
-    Listing.countDocuments(listingQuery),
-    Listing.countDocuments({ ...listingQuery, status: 'available' }),
-    // Sold and rented are counted apart: they were summed and shown as "sold".
-    Listing.countDocuments({ ...listingQuery, status: 'sold' }),
-    Listing.countDocuments({ ...listingQuery, status: 'rented' }),
-    Listing.countDocuments({ ...listingQuery, status: 'under_negotiation' }),
-    BuyerRequirement.countDocuments(buyerQuery),
-    BuyerRequirement.countDocuments({ ...buyerQuery, status: 'active' }),
-    BuyerRequirement.countDocuments({ ...buyerQuery, status: 'matched' }),
-    BuyerRequirement.countDocuments({ ...buyerQuery, status: 'closed' }),
+    // One pass per collection instead of five / four countDocuments that each
+    // rescanned the same set. Sold and rented stay apart: they were once summed
+    // and shown as "sold".
+    Listing.aggregate([{ $match: listingQuery }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
+    BuyerRequirement.aggregate([{ $match: buyerQuery }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
     // The whole team (admins and agents), matching the People list.
     isAdmin ? User.countDocuments({ role: { $in: ['admin', 'employee'] }, isDeleted: { $ne: true } }) : Promise.resolve(0),
     isAdmin ? User.countDocuments({ role: { $in: ['admin', 'employee'] }, status: 'active', isDeleted: { $ne: true } }) : Promise.resolve(0),
@@ -99,21 +118,24 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
     ]),
   ]);
 
+  const listingCounts = statusCounts(listingStatusRows);
+  const buyerCounts = statusCounts(buyerStatusRows);
+
   const analytics = {
     properties: {
-      total: totalProperties,
-      available: availableProperties,
-      sold: soldProperties,
-      rented: rentedProperties,
-      underNegotiation: underNegotiationProperties,
+      total: listingCounts.total,
+      available: listingCounts.byStatus.available || 0,
+      sold: listingCounts.byStatus.sold || 0,
+      rented: listingCounts.byStatus.rented || 0,
+      underNegotiation: listingCounts.byStatus.under_negotiation || 0,
       byCategory: propertiesByCategory,
       byCity: propertiesByCity,
     },
     buyers: {
-      total: totalBuyers,
-      active: activeBuyers,
-      matched: matchedBuyers,
-      closed: closedBuyers,
+      total: buyerCounts.total,
+      active: buyerCounts.byStatus.active || 0,
+      matched: buyerCounts.byStatus.matched || 0,
+      closed: buyerCounts.byStatus.closed || 0,
     },
     employees: isAdmin
       ? {
@@ -127,6 +149,8 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
     },
   };
 
+  cache.set(cacheKey, analytics, { ttlMs: DASHBOARD_TTL_MS });
+
   logger.info('Dashboard analytics retrieved', {
     userId: req.user.id,
     role: req.user.role,
@@ -137,6 +161,9 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
 
 // Get property statistics
 export const getPropertyStats = asyncHandler(async (req, res, next) => {
+  const cacheKey = dashboardCacheKey('property-stats', req);
+  const cached = cache.get(cacheKey);
+  if (cached) return sendSuccessResponse(res, cached, 'Property statistics retrieved successfully');
 
   const listingQuery = dashboardListingQuery(req);
 
@@ -197,6 +224,7 @@ export const getPropertyStats = asyncHandler(async (req, res, next) => {
     monthlyTrend,
   };
 
+  cache.set(cacheKey, stats, { ttlMs: DASHBOARD_TTL_MS });
   sendSuccessResponse(res, stats, 'Property statistics retrieved successfully');
 });
 
@@ -268,35 +296,62 @@ export const getEmployeePerformance = asyncHandler(async (req, res, next) => {
     throw new AuthorizationError('Only admins can view employee performance');
   }
 
-  const employees = await User.find({ role: 'employee', isDeleted: { $ne: true } }).select('_id username email firstName lastName');
+  const employees = await User.find({ role: 'employee', isDeleted: { $ne: true } })
+    .select('_id username email firstName lastName')
+    .lean();
+  const ids = employees.map((e) => e._id);
 
-  const performanceData = await Promise.all(
-    employees.map(async (employee) => {
-      const [assignedListings, soldListings, assignedBuyers, closedBuyers] = await Promise.all([
-        Listing.countDocuments({ assignedAgent: employee._id, isDeleted: { $ne: true } }),
-        // Closed = sold or rented; named as such where it is shown.
-        Listing.countDocuments({ assignedAgent: employee._id, status: { $in: ['sold', 'rented'] }, isDeleted: { $ne: true } }),
-        BuyerRequirement.countDocuments({ assignedAgent: employee._id, isDeleted: { $ne: true } }),
-        BuyerRequirement.countDocuments({ assignedAgent: employee._id, status: 'closed', isDeleted: { $ne: true } }),
-      ]);
+  // Two grouped passes (one per collection) instead of four queries per
+  // employee. Closed listings = sold or rented; named as such where shown.
+  const [listingRows, buyerRows] = ids.length
+    ? await Promise.all([
+        Listing.aggregate([
+          { $match: { assignedAgent: { $in: ids }, isDeleted: { $ne: true } } },
+          {
+            $group: {
+              _id: '$assignedAgent',
+              assigned: { $sum: 1 },
+              sold: { $sum: { $cond: [{ $in: ['$status', ['sold', 'rented']] }, 1, 0] } },
+            },
+          },
+        ]),
+        BuyerRequirement.aggregate([
+          { $match: { assignedAgent: { $in: ids }, isDeleted: { $ne: true } } },
+          {
+            $group: {
+              _id: '$assignedAgent',
+              assigned: { $sum: 1 },
+              closed: { $sum: { $cond: [{ $eq: ['$status', 'closed'] }, 1, 0] } },
+            },
+          },
+        ]),
+      ])
+    : [[], []];
 
-      return {
-        employee: {
-          id: employee._id,
-          username: employee.username,
-          email: employee.email,
-          name: `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username,
-        },
-        stats: {
-          assignedListings,
-          soldListings,
-          assignedBuyers,
-          closedBuyers,
-          conversionRate: assignedListings > 0 ? ((soldListings / assignedListings) * 100).toFixed(2) : 0,
-        },
-      };
-    })
-  );
+  const listingBy = new Map(listingRows.map((r) => [String(r._id), r]));
+  const buyerBy = new Map(buyerRows.map((r) => [String(r._id), r]));
+
+  const performanceData = employees.map((employee) => {
+    const l = listingBy.get(String(employee._id));
+    const b = buyerBy.get(String(employee._id));
+    const assignedListings = l?.assigned || 0;
+    const soldListings = l?.sold || 0;
+    return {
+      employee: {
+        id: employee._id,
+        username: employee.username,
+        email: employee.email,
+        name: `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username,
+      },
+      stats: {
+        assignedListings,
+        soldListings,
+        assignedBuyers: b?.assigned || 0,
+        closedBuyers: b?.closed || 0,
+        conversionRate: assignedListings > 0 ? ((soldListings / assignedListings) * 100).toFixed(2) : 0,
+      },
+    };
+  });
 
   sendSuccessResponse(res, performanceData, 'Employee performance retrieved successfully');
 });

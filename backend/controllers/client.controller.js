@@ -176,6 +176,9 @@ const CLIENT_SORTS = {
   updatedAt: 'updatedAt',
 };
 
+/** Heavy per-lead arrays left out of LIST rows; present on the detail endpoint. */
+const LIST_EXCLUDE = '-communications -followUps -scoreFactors -deals.stageHistory';
+
 // List clients with filters; non-admins only see their own
 export const getClients = async (req, res, next) => {
   try {
@@ -187,6 +190,11 @@ export const getClients = async (req, res, next) => {
       // tagIds is populated so the list can render chips without a second
       // request per row.
       Client.find(filter)
+        // The unbounded arrays are what make a list row heavy, and no list
+        // consumer (ContactsBoard, pickers, the report modal, mobile list) reads
+        // them: the detail screens load a lead through GET /clients/:id, which
+        // still returns everything. Verified by grepping web + mobile readers.
+        .select(LIST_EXCLUDE)
         .sort(sort)
         .skip(skip)
         .limit(limit)

@@ -28,13 +28,22 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
-          'vendor-redux':    ['@reduxjs/toolkit', 'react-redux', 'redux-persist'],
-          'vendor-maps':     ['leaflet', 'react-leaflet'],
-          'vendor-charts':   ['apexcharts', 'react-apexcharts'],
-          'vendor-xlsx':     ['xlsx'],
-          'vendor-ui':       ['swiper', 'socket.io-client'],
+        manualChunks(id) {
+          // Rollup's CJS interop helpers are needed everywhere; pinning them to the
+          // always-loaded chunk stops a lazy vendor chunk (maps) being pulled in eagerly.
+          if (id.includes('commonjsHelpers') || id.includes('commonjs-')) return 'vendor-react';
+          if (!id.includes('node_modules')) return undefined;
+          const has = (...pkgs) => pkgs.some((p) => id.includes(`/node_modules/${p}/`));
+          // prop-types is imported by react-apexcharts AND by the entry graph; if it
+          // lands in vendor-charts the entry statically imports 580 KB of charts.
+          if (has('react', 'react-dom', 'react-router-dom', 'react-router', '@remix-run', 'scheduler', 'prop-types', 'react-is', 'object-assign')) return 'vendor-react';
+          if (has('@reduxjs/toolkit', 'react-redux', 'redux-persist', 'redux', 'redux-thunk', 'immer', 'reselect', 'use-sync-external-store')) return 'vendor-redux';
+          if (has('leaflet', 'react-leaflet', '@react-leaflet')) return 'vendor-maps';
+          if (has('apexcharts', 'react-apexcharts')) return 'vendor-charts';
+          if (has('xlsx')) return 'vendor-xlsx';
+          if (has('socket.io-client', 'socket.io-parser', 'engine.io-client', 'engine.io-parser', '@socket.io', 'xmlhttprequest-ssl')) return 'vendor-socket';
+          // swiper is left to Rollup: it follows the Listing page chunk.
+          return undefined;
         },
       },
     },
@@ -44,6 +53,8 @@ export default defineConfig({
     seoPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Inline the registration so there is no render-blocking registerSW.js request.
+      injectRegister: 'inline',
       includeAssets: ['favicon.svg', 'apple-touch-icon.svg'],
       manifest: {
         name: 'Real Vista',
@@ -71,7 +82,17 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,svg,png,woff2}'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 1.5 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
+        // Heavy, rarely-used chunks are fetched on demand and cached at runtime
+        // (StaleWhileRevalidate below) instead of being downloaded on SW install.
+        globIgnores: [
+          '**/vendor-xlsx*.js',
+          '**/vendor-charts*.js',
+          '**/vendor-maps*.js',
+          '**/PlatformConsole*.js',
+          '**/Admin*.js',
+        ],
         // Fall back to cached index.html for all SPA navigation when offline
         navigateFallback: 'index.html',
         // /app/ holds the Android APK and its latest.json: never answer those
@@ -82,6 +103,16 @@ export default defineConfig({
           // owners, messages, the signed-in user — and a service-worker cache
           // outlives sign-out on a shared office computer. They go to the
           // network every time.
+          {
+            // Heavy lazy chunks left out of the precache
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin && /\/assets\/(vendor-xlsx|vendor-charts|vendor-maps|PlatformConsole|Admin)[^/]*\.js$/.test(url.pathname),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'heavy-chunks-cache',
+              expiration: { maxEntries: 30, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
+          },
           {
             // Cache uploaded images
             urlPattern: /^https?:\/\/.*\/uploads\/.*/i,

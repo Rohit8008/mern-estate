@@ -117,7 +117,7 @@ export const updateUser = async (req, res, next) => {
           method: 'other',
           status: 'success',
           reason: `phone_changed:${mask(oldPhone)}->${mask(updatedUser.phone)}`,
-          ip: (req.headers['x-forwarded-for'] || '').split(',')[0]?.trim() || req.socket?.remoteAddress || '',
+          ip: req.ip || req.socket?.remoteAddress || '',
           userAgent: req.headers['user-agent'] || '',
           path: req.originalUrl || '',
         });
@@ -951,7 +951,7 @@ export const adminSetEmployeePassword = async (req, res, next) => {
         method: 'password',
         status: 'success',
         reason: 'admin_password_reset',
-        ip: (req.headers['x-forwarded-for'] || '').split(',')[0]?.trim() || req.socket?.remoteAddress || '',
+        ip: req.ip || req.socket?.remoteAddress || '',
         userAgent: req.headers['user-agent'] || '',
         path: req.originalUrl || '',
       });

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 
 const BuyerViewContext = createContext();
@@ -27,15 +27,14 @@ export const BuyerViewProvider = ({ children }) => {
     }
   }, [isBuyerViewMode]);
 
-  const toggleBuyerViewMode = () => {
+  const toggleBuyerViewMode = useCallback(() => {
     setIsBuyerViewMode((prev) => !prev);
-  };
+  }, []);
 
-  const value = {
-    isBuyerViewMode,
-    setIsBuyerViewMode,
-    toggleBuyerViewMode,
-  };
+  const value = useMemo(
+    () => ({ isBuyerViewMode, setIsBuyerViewMode, toggleBuyerViewMode }),
+    [isBuyerViewMode, toggleBuyerViewMode]
+  );
 
   return (
     <BuyerViewContext.Provider value={value}>

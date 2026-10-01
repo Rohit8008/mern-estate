@@ -12,6 +12,11 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Inbox, thread and unread-count shapes. Tenant leads every one (see tenancy).
+messageSchema.index({ tenantId: 1, receiverId: 1, createdAt: -1 });
+messageSchema.index({ tenantId: 1, senderId: 1, createdAt: -1 });
+messageSchema.index({ tenantId: 1, receiverId: 1, read: 1 });
+
 const Message = mongoose.model('Message', messageSchema);
 
 export default Message;

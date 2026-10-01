@@ -18,10 +18,20 @@ class DatabaseConnection {
 
       // Set mongoose options
       mongoose.set('strictQuery', false);
+
+      // Global per-operation time cap (find + aggregate; Mongoose 7 applies it
+      // to both). Set only here, on the API process, so CLI scripts, backups and
+      // migrations — which legitimately run long — are unaffected. A caller can
+      // still pass its own .maxTimeMS() / { maxTimeMS } to override.
+      const maxTimeMS = config.database.options.maxTimeMS;
+      if (maxTimeMS > 0) mongoose.set('maxTimeMS', maxTimeMS);
       
       // Connection options
       const options = {
         maxPoolSize: config.database.options.maxPoolSize,
+        minPoolSize: config.database.options.minPoolSize,
+        maxIdleTimeMS: config.database.options.maxIdleTimeMS,
+        waitQueueTimeoutMS: config.database.options.waitQueueTimeoutMS,
         serverSelectionTimeoutMS: config.database.options.serverSelectionTimeoutMS,
         socketTimeoutMS: config.database.options.socketTimeoutMS,
         // Emits command timings, read by watchSlowQueries().

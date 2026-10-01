@@ -70,6 +70,29 @@ import shareRouter from './routes/share.route.js';
 
 const __dirname = path.resolve();
 
+const DEFAULT_BODY_LIMIT = '1mb';
+const LARGE_BODY_LIMIT = '10mb';
+/** Bulk-import and upload endpoints: the only ones that may carry a large body. */
+export const LARGE_BODY_PATHS =
+  /^\/api\/(listing\/(import\/|bulk-import$)|lead-import\/|upload\/|clients\/bulk$|buyer-requirements\/bulk$)/;
+
+const ONE_YEAR_S = 60 * 60 * 24 * 365;
+
+/**
+ * Cache policy for the built frontend. Vite content-hashes everything under
+ * /assets, so those files can never change under the same URL and may be cached
+ * forever; the HTML shell and the service worker must be revalidated every time
+ * or a deploy would not reach returning visitors.
+ */
+export function setDistHeaders(res, filePath) {
+  const rel = filePath.split(path.sep).join('/');
+  if (/\/assets\//.test(rel)) {
+    res.setHeader('Cache-Control', `public, max-age=${ONE_YEAR_S}, immutable`);
+  } else if (/(index\.html|sw\.js|service-worker\.js|manifest\.webmanifest)$/.test(rel)) {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+}
+
 // SEC-003: Escape characters that have special meaning in HTML so that
 // req.originalUrl cannot inject executable content into the 404 response.
 function escapeHtml(str) {
@@ -84,8 +107,13 @@ function escapeHtml(str) {
 export function createApp() {
   const app = express();
 
-  if (config.server.isProduction) {
-    app.set('trust proxy', 1);
+  // How many reverse proxies sit in front of this process (load balancer, nginx,
+  // CDN...). req.ip, and therefore every rate-limit bucket, is only correct when
+  // this matches reality: too low and everyone shares the proxy's IP, too high
+  // and a client can spoof X-Forwarded-For. 0 turns it off.
+  if (config.server.isProduction || process.env.TRUST_PROXY_HOPS !== undefined) {
+    const hops = config.server.trustProxyHops;
+    app.set('trust proxy', hops > 0 ? hops : false);
   }
 
   // First, so every log line from here on — access, errors, audit — carries
@@ -93,18 +121,6 @@ export function createApp() {
   app.use(requestContext);
   app.use(securityHeaders);
   app.use(requestLogger);
-
-  // Parse BEFORE sanitising. The sanitisers used to run first, when req.body
-  // was still undefined — so `{"email": {"$ne": null}}` reached the
-  // controllers untouched and only query strings were ever cleaned.
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-  app.use(cookieParser());
-
-  // Protect against HTTP Parameter Pollution (e.g. ?role=user&role=admin)
-  app.use(hpp());
-  app.use(mongoSanitization);
-  app.use(xssProtection);
 
   // Compress responses (safe to apply globally; keeps SSE/ws unaffected)
   app.use(compression());
@@ -115,10 +131,36 @@ export function createApp() {
   // doubled stdout volume.
   if (!config.server.isProduction && process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
+  // The access cookie is read by the limiter to key a bucket by user, so the
+  // (cheap) cookie parser has to run first.
+  app.use(cookieParser());
+
+  // Rate limiting runs BEFORE the body is read, so a flood is refused without
+  // paying to buffer, parse and sanitise a payload for every rejected request.
+  // CORS is already applied, so the browser can read the 429.
   if (config.security.enableRateLimiting) {
     app.use('/api/upload', strictRateLimit);
     app.use('/api/', apiRateLimit);
   }
+
+  // Parse BEFORE sanitising. The sanitisers used to run first, when req.body
+  // was still undefined — so `{"email": {"$ne": null}}` reached the
+  // controllers untouched and only query strings were ever cleaned.
+  //
+  // 1 MB everywhere except the routes that legitimately carry a spreadsheet's
+  // worth of rows; the other 10 MB was an open invitation to buffer large
+  // junk on every endpoint.
+  const smallJson = express.json({ limit: DEFAULT_BODY_LIMIT });
+  const smallForm = express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT });
+  const bigJson = express.json({ limit: LARGE_BODY_LIMIT });
+  const bigForm = express.urlencoded({ extended: true, limit: LARGE_BODY_LIMIT });
+  app.use((req, res, next) => (LARGE_BODY_PATHS.test(req.path) ? bigJson : smallJson)(req, res, next));
+  app.use((req, res, next) => (LARGE_BODY_PATHS.test(req.path) ? bigForm : smallForm)(req, res, next));
+
+  // Protect against HTTP Parameter Pollution (e.g. ?role=user&role=admin)
+  app.use(hpp());
+  app.use(mongoSanitization);
+  app.use(xssProtection);
 
   app.use('/api', encryptResponse);
   // After encryptResponse on purpose: each wraps res.json and the last one
@@ -191,7 +233,7 @@ export function createApp() {
   app.use('/api/observability', observabilityRouter);
   app.use('/api/transactions', transactionRouter);
 
-  app.use(express.static(path.join(__dirname, '/frontend/dist')));
+  app.use(express.static(path.join(__dirname, '/frontend/dist'), { setHeaders: setDistHeaders }));
   // Documents are NOT public. This directory holds client contracts, RERA
   // certificates and layout plans, and the static mount below sits outside
   // `/api`, so nothing resolved a tenant or checked a session on the way past.
@@ -208,7 +250,9 @@ export function createApp() {
 
   // Listing photographs and avatars only. These are referenced by <img> from
   // share pages, which have no session by design.
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  // Filenames are unique per upload, so an hour of caching is safe and spares the
+  // server every repeat image fetch.
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '1h' }));
 
   app.use('/api', (req, res) => {
     const acceptsHtml = String(req.headers['accept'] || '').includes('text/html');
@@ -255,6 +299,7 @@ export function createApp() {
   app.get('*', (req, res) => {
     const indexPath = path.join(__dirname, 'frontend', 'dist', 'index.html');
     if (fs.existsSync(indexPath)) {
+      res.setHeader('Cache-Control', 'no-cache');
       return res.sendFile(indexPath);
     }
     res.status(404).send(`<!doctype html>

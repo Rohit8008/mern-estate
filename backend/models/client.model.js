@@ -267,6 +267,8 @@ clientSchema.index({ tenantId: 1, temperature: 1, status: 1 });
 clientSchema.index({ tenantId: 1, phoneKey: 1 });
 clientSchema.index({ tenantId: 1, createdAt: -1 });
 clientSchema.index({ tenantId: 1, assignedTo: 1, createdAt: -1 }); // the non-admin list shape
+clientSchema.index({ tenantId: 1, updatedAt: -1, _id: -1 }); // the default list sort (admin)
+clientSchema.index({ tenantId: 1, assignedTo: 1, updatedAt: -1 }); // the default list sort (non-admin)
 
 // Re-exported so `import Client, { phoneKeyOf }` keeps working; the rule itself
 // lives in utils/phoneKey.js so the importer can share it without importing a model.

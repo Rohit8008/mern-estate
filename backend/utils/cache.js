@@ -4,11 +4,43 @@ import {
   isTenantScopeBypassed,
 } from '../tenancy/tenantContext.js';
 
+const DEFAULT_MAX_SIZE = 1000;
+const DEFAULT_SWEEP_MS = 60_000;
+
 export class MemoryCache {
-  constructor({ ttlMs = 300000, maxSize = 100 } = {}) {
+  constructor({ ttlMs = 300000, maxSize = DEFAULT_MAX_SIZE, sweepMs = DEFAULT_SWEEP_MS } = {}) {
     this.ttlMs = ttlMs;
     this.maxSize = maxSize;
     this.store = new Map();
+    this._sweeper = null;
+    if (sweepMs > 0) this._startSweeper(sweepMs);
+  }
+
+  /**
+   * Expired entries used to sit in memory until the same key was read again;
+   * with many distinct query keys that is an unbounded-until-LRU leak. The
+   * timer is unref()'d so it never keeps a process (or a test run) alive.
+   */
+  _startSweeper(sweepMs) {
+    this._sweeper = setInterval(() => this.sweep(), sweepMs);
+    this._sweeper.unref?.();
+  }
+
+  /** Drop every expired entry. Returns how many were removed. */
+  sweep() {
+    let removed = 0;
+    for (const [key, entry] of this.store) {
+      if (!this._isFresh(entry)) {
+        this.store.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  stopSweeper() {
+    if (this._sweeper) clearInterval(this._sweeper);
+    this._sweeper = null;
   }
 
   _isFresh(entry) {
@@ -48,10 +80,16 @@ export class MemoryCache {
     this.store.clear();
   }
 
-  clearByPrefix(prefix) {
+  /**
+   * Delete every key starting with `prefix`. With `suffix`, only keys that also
+   * end with it — which is how one workspace's entries are cleared without
+   * touching another's (tenant scope is a `::t=<id>` suffix).
+   */
+  clearByPrefix(prefix, { suffix } = {}) {
     if (!prefix) return;
     for (const key of this.store.keys()) {
-      if (String(key).startsWith(prefix)) this.store.delete(key);
+      const k = String(key);
+      if (k.startsWith(prefix) && (!suffix || k.endsWith(suffix))) this.store.delete(key);
     }
   }
 }
@@ -77,29 +115,41 @@ export function getCache({ ttlMs, maxSize } = {}) {
  *
  * Scoping is applied here rather than at each call site so a new cached
  * endpoint is safe by default instead of by remembering. The tenant goes in a
- * SUFFIX so existing `clearByPrefix('listing:')` invalidation still matches
- * across tenants.
+ * SUFFIX, so a
+ * workspace's `clearByPrefix('listing:')` drops only that workspace's keys.
  *
  * Genuinely global data — geocoding results, exchange rates, anything from an
  * external API that does not depend on who asked — should use `getCache()`
  * directly. That is a deliberate choice each time, not a default.
  */
+/** The id the current scope resolves to: a tenant id, 'unscoped' or 'none'. */
+function scopeId() {
+  if (!hasTenantContext()) return 'none';
+  if (isTenantScopeBypassed()) return 'unscoped';
+  return getTenantId() || 'none';
+}
+
+const tenantSuffix = () => `::t=${scopeId()}`;
+
+/** Suffix to restrict invalidation to the caller's workspace, or undefined for all. */
+function currentTenantSuffix() {
+  const id = scopeId();
+  return id === 'none' || id === 'unscoped' ? undefined : `::t=${id}`;
+}
+
 export function getTenantScopedCache(options = {}) {
   const base = getCache(options);
 
-  const scopeSuffix = () => {
-    if (!hasTenantContext()) return 'none';
-    if (isTenantScopeBypassed()) return 'unscoped';
-    return getTenantId() || 'none';
-  };
-
-  const scoped = (key) => `${key}::t=${scopeSuffix()}`;
+  const scoped = (key) => `${key}${tenantSuffix()}`;
 
   return {
     get: (key) => base.get(scoped(key)),
     set: (key, value, opts) => base.set(scoped(key), value, opts),
     del: (key) => base.del(scoped(key)),
-    clearByPrefix: (prefix) => base.clearByPrefix(prefix),
+    // Inside a workspace, clears only THAT workspace's keys. With no tenant
+    // context (a platform job) or an explicit bypass it clears the prefix for
+    // everyone, which is the safe superset.
+    clearByPrefix: (prefix) => base.clearByPrefix(prefix, { suffix: currentTenantSuffix() }),
     clear: () => base.clear(),
   };
 }
@@ -150,12 +200,12 @@ export async function startCacheInvalidationListener() {
   await subscriber.subscribe(INVALIDATION_CHANNEL);
   subscriber.on('message', (_channel, raw) => {
     try {
-      const { from, prefix, key, all } = JSON.parse(raw);
+      const { from, prefix, key, all, suffix } = JSON.parse(raw);
       if (from === INSTANCE_ID) return; // we already cleared it locally
 
       const cache = getCache();
       if (all) cache.clear();
-      else if (prefix) cache.clearByPrefix(prefix);
+      else if (prefix) cache.clearByPrefix(prefix, { suffix });
       else if (key) cache.del(key);
     } catch { /* a malformed message must not take the listener down */ }
   });
@@ -179,8 +229,11 @@ export async function stopCacheInvalidationListener() {
  */
 export function invalidateEverywhere({ prefix, key, all = false } = {}) {
   const cache = getCache();
+  // Inside a workspace request only that workspace's entries are dropped, here
+  // and on every other instance (the suffix travels in the payload).
+  const suffix = prefix ? currentTenantSuffix() : undefined;
   if (all) cache.clear();
-  else if (prefix) cache.clearByPrefix(prefix);
+  else if (prefix) cache.clearByPrefix(prefix, { suffix });
   else if (key) cache.del(key);
 
   // Fire-and-forget: a failed publish costs one stale window elsewhere, and
@@ -191,7 +244,7 @@ export function invalidateEverywhere({ prefix, key, all = false } = {}) {
       if (!redis) return;
       return redis.publish(
         INVALIDATION_CHANNEL,
-        JSON.stringify({ from: INSTANCE_ID, prefix, key, all })
+        JSON.stringify({ from: INSTANCE_ID, prefix, key, all, suffix })
       );
     })
     .catch(() => {});

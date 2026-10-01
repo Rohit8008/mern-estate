@@ -166,34 +166,35 @@ function sortStage(sort, order, hasTextScore) {
 /**
  * Run one tier and return its page plus a true total.
  *
- * `$facet` gives both from a single pass, so the count always describes exactly
- * the rows returned — the two cannot drift the way a separate countDocuments
- * can when the filters are built twice.
+ * The page and the count run in parallel as an ordinary indexed
+ * `find().sort().skip().limit()` and a `countDocuments` over the SAME filter
+ * object, so the two still cannot drift. This replaced a single `$facet`, which
+ * had two costs: a `$sort` inside `$facet` can never use an index (it sorts the
+ * whole matched set in memory, then slices it), and every matched document was
+ * materialised into one result document capped at 16MB. With a
+ * tenant-leading sort index the page now reads `skip + limit` index entries.
+ *
+ * Text tier: `$text` still has to be in the first `$match` of the count's
+ * pipeline (countDocuments builds `[{$match: filter}, …]`) and the tenant
+ * plugin merges into the filter rather than wrapping it, which keeps that true.
+ * The relevance score is projected for sorting and removed from the output so
+ * the response shape is unchanged.
  */
 async function runTier({ filter, sort, order, limit, skip, projection, useText }) {
-  const pipeline = [{ $match: filter }];
+  const sortSpec = sortStage(sort, order, useText);
+
+  const select = useText ? { ...projection, score: { $meta: 'textScore' } } : projection;
+
+  const [listings, total] = await Promise.all([
+    Listing.find(filter).select(select).sort(sortSpec).skip(skip).limit(limit).lean(),
+    Listing.countDocuments(filter),
+  ]);
 
   if (useText) {
-    pipeline.push({ $addFields: { score: { $meta: 'textScore' } } });
+    for (const row of listings) delete row.score;
   }
 
-  pipeline.push({
-    $facet: {
-      rows: [
-        { $sort: sortStage(sort, order, useText) },
-        { $skip: skip },
-        { $limit: limit },
-        { $project: projection },
-      ],
-      total: [{ $count: 'value' }],
-    },
-  });
-
-  const [result] = await Listing.aggregate(pipeline);
-  return {
-    listings: result?.rows || [],
-    total: result?.total?.[0]?.value || 0,
-  };
+  return { listings, total };
 }
 
 /** Mongo projection object from the space-separated field list. */

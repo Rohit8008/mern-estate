@@ -11,7 +11,7 @@
  * needs its own boundary.
  */
 
-import { getTenantScopedCache, getCache } from '../utils/cache.js';
+import { getTenantScopedCache, getCache, invalidateEverywhere, MemoryCache } from '../utils/cache.js';
 import { runWithTenant, runWithoutTenantScope } from '../tenancy/tenantContext.js';
 
 const A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
@@ -59,15 +59,40 @@ describe('getTenantScopedCache', () => {
     expect(asB(() => cache.get('k'))).toBe(2);
   });
 
-  it('still supports prefix invalidation across workspaces', () => {
-    // Writing a listing clears the search cache. Clearing more than strictly
-    // necessary costs a little performance; clearing less would serve stale
-    // results, so the prefix deliberately spans tenants.
+  it('clears only the calling workspace on a prefix invalidation', () => {
+    // Workspace A saving a listing used to wipe workspace B's search cache too,
+    // so one busy agency kept every other agency's cache permanently cold.
+    asA(() => cache.set('listing:search:x', 1));
+    asB(() => cache.set('listing:search:x', 2));
+    asA(() => cache.clearByPrefix('listing:'));
+    expect(asA(() => cache.get('listing:search:x'))).toBeNull();
+    expect(asB(() => cache.get('listing:search:x'))).toBe(2);
+  });
+
+  it('still clears every workspace when there is no workspace context', () => {
+    // A platform job has no tenant; clearing more than needed is the safe side.
     asA(() => cache.set('listing:search:x', 1));
     asB(() => cache.set('listing:search:x', 2));
     cache.clearByPrefix('listing:');
     expect(asA(() => cache.get('listing:search:x'))).toBeNull();
     expect(asB(() => cache.get('listing:search:x'))).toBeNull();
+  });
+
+  it('invalidateEverywhere drops only the current workspace\'s keys', () => {
+    asA(() => cache.set('listing:search:y', 1));
+    asB(() => cache.set('listing:search:y', 2));
+    asA(() => invalidateEverywhere({ prefix: 'listing:' }));
+    expect(asA(() => cache.get('listing:search:y'))).toBeNull();
+    expect(asB(() => cache.get('listing:search:y'))).toBe(2);
+  });
+
+  it('does not let a tenant id that is a prefix of another match it', () => {
+    const base = getCache();
+    base.set('listing:z::t=abc', 'short');
+    base.set('listing:z::t=abcdef', 'long');
+    base.clearByPrefix('listing:', { suffix: '::t=abc' });
+    expect(base.get('listing:z::t=abc')).toBeNull();
+    expect(base.get('listing:z::t=abcdef')).toBe('long');
   });
 
   it('leaves the unscoped cache alone, for genuinely global data', () => {
@@ -77,5 +102,31 @@ describe('getTenantScopedCache', () => {
     global.set('reverse:28.4:77.0', 'Gurugram');
     expect(asA(() => global.get('reverse:28.4:77.0'))).toBe('Gurugram');
     expect(asB(() => global.get('reverse:28.4:77.0'))).toBe('Gurugram');
+  });
+});
+
+describe('MemoryCache housekeeping', () => {
+  it('defaults to room for 1000 entries', () => {
+    const c = new MemoryCache({ sweepMs: 0 });
+    expect(c.maxSize).toBe(1000);
+  });
+
+  it('sweeps expired entries without waiting for them to be read', async () => {
+    const c = new MemoryCache({ ttlMs: 5, sweepMs: 0 });
+    c.set('a', 1);
+    c.set('b', 2, { ttlMs: 60_000 });
+    await new Promise((r) => setTimeout(r, 15));
+    expect(c.store.size).toBe(2);
+    expect(c.sweep()).toBe(1);
+    expect(c.store.has('a')).toBe(false);
+    expect(c.get('b')).toBe(2);
+  });
+
+  it('runs the sweep on a timer that does not keep the process alive', () => {
+    const c = new MemoryCache({ sweepMs: 1000 });
+    expect(c._sweeper).toBeTruthy();
+    expect(c._sweeper.hasRef()).toBe(false);
+    c.stopSweeper();
+    expect(c._sweeper).toBeNull();
   });
 });

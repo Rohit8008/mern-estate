@@ -27,6 +27,8 @@ const taskSchema = new mongoose.Schema(
 
 taskSchema.index({ tenantId: 1, title: 'text', description: 'text' });
 taskSchema.index({ tenantId: 1, assignedTo: 1, isDeleted: 1, dueAt: 1 }); // the palette + board shape
+// jobs/reminders.js: reminders: { $elemMatch: { at: { $lte }, sent: false } }
+taskSchema.index({ tenantId: 1, 'reminders.at': 1, 'reminders.sent': 1 });
 
 const Task = mongoose.model('Task', taskSchema);
 export default Task;

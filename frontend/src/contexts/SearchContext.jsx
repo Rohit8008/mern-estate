@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useReducer } from 'react';
+import { createContext, useContext, useCallback, useMemo, useReducer } from 'react';
 
 const HISTORY_KEY = 'crm_search_history';
 const MAX_HISTORY = 8;
@@ -54,8 +54,13 @@ export function SearchProvider({ children }) {
   const removeHistory = useCallback((q)  => dispatch({ type: 'REMOVE_HISTORY', query: q }), []);
   const clearHistory  = useCallback(()   => dispatch({ type: 'CLEAR_HISTORY' }), []);
 
+  const value = useMemo(
+    () => ({ ...state, open, close, setQuery, setEntity, addHistory, removeHistory, clearHistory }),
+    [state, open, close, setQuery, setEntity, addHistory, removeHistory, clearHistory]
+  );
+
   return (
-    <SearchContext.Provider value={{ ...state, open, close, setQuery, setEntity, addHistory, removeHistory, clearHistory }}>
+    <SearchContext.Provider value={value}>
       {children}
     </SearchContext.Provider>
   );
