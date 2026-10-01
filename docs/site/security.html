@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security and data protection — Real Vista Docs</title>
+<meta name="description" content="The controls the code actually enforces (tenant isolation, route guards, validation, rate limits, uploads, sharing, data rights), why each exists, and the limits that are not covered.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html" class="active">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Security and data protection</h1>
+<p class="lede">The controls the code actually enforces (tenant isolation, route guards, validation, rate limits, uploads, sharing, data rights), why each exists, and the limits that are not covered.</p>
+
+<h2 id="posture">How to read this page</h2>
+<p>Everything here was checked against the code. Where a rule exists because of a bug that already happened, the bug is named, since the rule is easier to keep when the reason is known. The final section, <a href="#limits">What is not protected</a>, is as important as the rest. Sign-in, cookies and CSRF are on their own page: <a href="authentication.html">Authentication and sessions</a>.</p>
+
+<h2 id="tenancy">Tenant isolation</h2>
+<p>All agencies share one database; every document carries a <code>tenantId</code>. Isolation is enforced <strong>by code, not by the database</strong>, in a global Mongoose plugin (<code>backend/tenancy/tenantPlugin.js</code>, registered in <code>index.js</code> before any model is imported):</p>
+<ul>
+<li>A query with no tenant context <strong>throws</strong>. It does not silently run unscoped.</li>
+<li>A query that names a different tenant than the context throws. An operation the plugin cannot scope (<code>estimatedDocumentCount</code>) throws.</li>
+<li>Only the <code>Tenant</code> model is global. Everything else is scoped by existing, not by remembering to opt in.</li>
+<li>Deliberate cross-tenant work is spelled <code>runWithoutTenantScope('why')</code> and is greppable. Examples: opening a share link, accepting an invite, resolving which tenant a request belongs to.</li>
+<li>Uniqueness is <code>{ tenantId, field }</code>; a bare <code>unique: true</code> would let one agency's email block another's.</li>
+</ul>
+<p>Other places the boundary has to hold, all in code:</p>
+<ul>
+<li><strong>Response caches.</strong> A cache sits in front of the database, so query scoping cannot protect it. <code>getTenantScopedCache()</code> (<code>utils/cache.js</code>) suffixes every key with the current tenant id (or <code>none</code> / <code>unscoped</code>); plain <code>getCache()</code> is only for genuinely global data such as geocoding. The tenant record itself is cached in process for 60 seconds, so suspending a workspace takes effect within a minute.</li>
+<li><strong>Sockets.</strong> Rooms are <code>tenant:&lt;id&gt;</code> and <code>user:&lt;id&gt;</code>. A bare <code>io.emit()</code> reaches every agency, so controllers use <code>emitToTenant()</code> / <code>emitToUser()</code> only. A <code>message:send</code> to a user id from another workspace is refused ("That person is not in this workspace.") because the recipient lookup runs in the sender's tenant. Presence lists and typing pings are scoped the same way.</li>
+<li><strong>Scripts, jobs and socket handlers</strong> must enter a tenant explicitly (<code>runWithTenant</code>, <code>withTenantBySlug</code>, <code>forEachTenant</code>). CLI scripts load models through <code>scripts/_bootstrap.js</code>; a hoisted <code>import</code> of a model compiles its schema before the plugin and writes records with no <code>tenantId</code> that the app can never see.</li>
+<li><strong>Platform vs workspace admin.</strong> <code>role: 'admin'</code> administers one agency. <code>isPlatformAdmin</code> is a separate, <code>select: false</code> flag that guards <code>/api/platform/*</code> and the log-query endpoints. <code>requirePlatformAdmin</code> re-reads it from the database on each call and never trusts the token. See <a href="multi-tenancy.html">Multi-tenancy</a>.</li>
+</ul>
+
+<h2 id="access">Who can reach what</h2>
+<ul>
+<li><strong>Every mounted route is guarded or declared public.</strong> <code>backend/security/publicRoutes.js</code> lists the endpoints that are public on purpose, each with a reason. <code>tests/routeAccess.test.js</code> walks the live Express router and fails the build for any route that is neither guarded (<code>verifyToken</code>, <code>tryVerifyToken</code>, <code>requireAdmin</code>, <code>requirePermission</code>, <code>requirePlatformAdmin</code>, <code>canCreateListing</code>) nor listed. If it fails, add the missing guard; do not add the route to the allowlist. The CSRF exemptions are derived from the same list.</li>
+<li><strong>Permissions come from one catalogue.</strong> <code>utils/permissionCatalogue.js</code> (35 permissions) generates the role schema, and <code>requirePermission()</code> throws at module load on an unknown key. <code>tests/permissionCatalogue.test.js</code> walks the route files. This exists because one route asked for <code>manage_settings</code>, which was never a permission, so every non-admin was denied forever. See <a href="team-roles-permissions.html">Team, roles and permissions</a>.</li>
+<li><strong>The property book is not public.</strong> Nothing about a listing, category or property type is reachable without a session. Sharing outside the agency goes through share links (below).</li>
+<li><strong>Object-level checks.</strong> Single-item handlers check ownership or staff status. A 2026-08 review found one missing check (<code>GET /api/buyer-requirements/:id</code>, an IDOR); <code>buyerRequirement.controller.js</code> now applies one <code>isStaff(user)</code> helper (admin and employee are org-wide) consistently across its single-item handlers.</li>
+<li><strong>Documents are not public.</strong> Files under <code>/uploads/docs/</code> redirect (307) to <code>/api/documents/file/:filename</code>, which goes through <code>verifyToken</code> and the ownership check, and responds with <code>X-Content-Type-Options: nosniff</code> and <code>Content-Disposition: attachment</code> so a document never renders inside the app's origin.</li>
+</ul>
+
+<h2 id="validation">Validation and injection</h2>
+<ul>
+<li><strong>Every POST/PUT/PATCH needs <code>validateBody(schema)</code>.</strong> It runs Joi with <code>abortEarly</code> and <code>stripUnknown: true</code> and replaces <code>req.body</code> with the cleaned value. <code>tests/validationCoverage.test.js</code> fails a new write route that has none unless it is allowlisted with a reason. Because unknown fields are dropped, a field the controller reads but the schema omits is silently lost, which is also what blocks mass assignment (for example, nobody can send <code>isPlatformAdmin</code> or <code>tenantId</code>).</li>
+<li><strong>Operator injection.</strong> The body is parsed <em>before</em> <code>express-mongo-sanitize</code> runs (<code>$ne</code>, <code>$where</code> and similar keys are replaced with <code>_</code>, logged as an injection attempt). Earlier, sanitizing ran while <code>req.body</code> was still undefined, so <code>{"email":{"$ne":null}}</code> reached controllers. Dotted keys are allowed (<code>allowDots</code>) because an import's column mapping is keyed by header text like "Phone no.". <code>hpp</code> collapses duplicate query parameters (<code>?role=user&amp;role=admin</code>). <code>tests/requestPipeline.test.js</code> pins this order.</li>
+<li><strong>XSS on input.</strong> The <code>xss</code> rewrite is applied to <strong>query and params only</strong>. Bodies legitimately carry markup (email templates up to 100 KB, notes such as "&lt;3 BHK") and escaping on the way in would corrupt what the user saved. Escaping is done on output: React escapes what it renders, mail templates render through <code>utils/emailTemplates.js</code>, and the API's 404 page escapes the URL it echoes.</li>
+<li><strong>Regexes.</strong> User text never goes into a regex raw: use <code>utils/escapeRegex.js</code> (<code>containsInsensitive</code>, <code>equalsInsensitive</code>), which also coerces query objects to strings. Category field patterns are screened for ReDoS-prone shapes (<code>utils/categoryFields.js</code>).</li>
+<li><strong>Paging and sorting</strong> are clamped (<code>limit</code> max 500) and sort keys are an allowlist (<code>utils/listQuery.js</code>), so a caller cannot force a scan of an unindexed field or learn the order of a field they cannot read.</li>
+<li><strong>CSV exports</strong> defuse spreadsheet formula injection: a cell starting with <code>=</code>, <code>+</code>, <code>-</code>, <code>@</code> or a control character is neutralised (<code>utils/csvExport.js</code>).</li>
+<li>Body size limit is 10 MB for JSON and urlencoded; larger gets <code>413</code>.</li>
+</ul>
+
+<h2 id="headers">Headers, CORS and rate limits</h2>
+<h3 id="helmet">Helmet and CSP (<code>middleware/security.js</code>)</h3>
+<table>
+<thead><tr><th>Setting</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>default-src</code></td><td><code>'self'</code></td></tr>
+<tr><td><code>script-src</code></td><td><code>'self'</code> (plus <code>'unsafe-eval'</code> only when <code>NODE_ENV=development</code>, for Vite)</td></tr>
+<tr><td><code>style-src</code></td><td><code>'self' 'unsafe-inline'</code> and Google Fonts</td></tr>
+<tr><td><code>img-src</code></td><td><code>'self' data: https: blob:</code></td></tr>
+<tr><td><code>connect-src</code></td><td><code>'self' ws: wss:</code>, <code>api.cloudinary.com</code>, <code>res.cloudinary.com</code>, <code>fonts.googleapis.com</code></td></tr>
+<tr><td><code>frame-src</code>, <code>object-src</code></td><td><code>'none'</code></td></tr>
+<tr><td>Also</td><td><code>font-src</code> self/data:/gstatic, <code>worker-src</code> self/blob:, <code>manifest-src</code> self, <code>upgrade-insecure-requests</code></td></tr>
+<tr><td>HSTS</td><td>1 year, <code>includeSubDomains</code>, <code>preload</code></td></tr>
+<tr><td>COEP</td><td>disabled</td></tr>
+</tbody></table>
+<p>The CSP is what the Express process sends. If nginx serves the built frontend directly, the static pages do not carry it unless the proxy adds it.</p>
+<h3 id="cors">CORS (<code>config/environment.js</code>)</h3>
+<ul>
+<li>Production allows only <code>FRONTEND_URL</code> and <code>ADMIN_URL</code>. Development allows <code>http://localhost:5173</code>, <code>http://localhost:3000</code> and anything in <code>EXTRA_CORS_ORIGINS</code> (comma-separated).</li>
+<li><code>credentials: true</code>; methods GET, POST, PUT, DELETE, PATCH, OPTIONS; allowed headers include <code>X-CSRF-Token</code> and <code>X-Request-Id</code>. The same origin list guards Socket.IO.</li>
+<li>CORS is a browser control. A native app or <code>curl</code> sends no <code>Origin</code> and is not stopped by it; that is why state-changing safety rests on the session cookie plus the CSRF token, not on CORS.</li>
+</ul>
+<h3 id="rate-limits">Rate limits</h3>
+<table>
+<thead><tr><th>Limiter</th><th>Default (production)</th><th>Applies to</th></tr></thead>
+<tbody>
+<tr><td><code>apiRateLimit</code></td><td>1000 / 15 min (<code>RATE_LIMIT_MAX_REQUESTS</code>, <code>RATE_LIMIT_WINDOW_MS</code>)</td><td>All of <code>/api</code>. Keyed by user id (read from the access cookie; an invalid token falls back to IP), so an office behind one IP does not share a quota. Skips <code>/api/auth/refresh</code> and health.</td></tr>
+<tr><td><code>authRateLimit</code></td><td>20 / 15 min (<code>AUTH_RATE_LIMIT_MAX</code>)</td><td>Sign-in, invite get/accept, tenant lookup, password OTP, reset and change.</td></tr>
+<tr><td><code>refreshRateLimit</code></td><td>max(auth x 5, 500) / window</td><td><code>/api/auth/refresh</code></td></tr>
+<tr><td><code>strictRateLimit</code></td><td>30 / minute (<code>STRICT_RATE_LIMIT_MAX</code>)</td><td><code>/api/upload</code></td></tr>
+<tr><td><code>shareRateLimit</code></td><td>60 / 15 min</td><td><code>/api/share/open/:token</code></td></tr>
+<tr><td>Log ingest</td><td>120 / minute</td><td><code>POST /api/observability/logs</code></td></tr>
+<tr><td>Socket messages</td><td>30 / minute per user, in process</td><td><code>message:send</code></td></tr>
+</tbody></table>
+<p>A 429 returns <code>code: "RATE_LIMITED"</code> and the request id, plus the standard <code>RateLimit-*</code> and <code>Retry-After</code> headers from <code>express-rate-limit</code> (<code>standardHeaders: true</code>). In development the ceilings are raised (1000 / 5000). <code>ENABLE_RATE_LIMITING=false</code> switches off only the app-level <code>/api</code> and <code>/api/upload</code> limiters; the per-route auth, refresh and share limiters stay on. With <code>REDIS_URL</code> set the counters live in Redis (prefix <code>rl:</code>); without it they are per process, so on N instances every limit is N times looser. Behind a proxy, production sets <code>trust proxy</code> to 1, which is correct for one hop (nginx) and wrong for two (CDN plus nginx): the limiter would then see the proxy's address.</p>
+
+<h2 id="uploads">Uploads</h2>
+<p>The stored-XSS fix (found in a 2026-08 review) is the model for every upload path:</p>
+<ul>
+<li>Uploads are buffered in memory (multer <code>memoryStorage</code>) and inspected by <strong>magic bytes</strong> (<code>file-type</code>, <code>utils/fileValidation.js</code>) before anything touches disk. The client's declared <code>Content-Type</code> and filename are untrusted.</li>
+<li>The stored extension comes <strong>only from the detected type</strong>. Previously a spoofed multipart type of <code>image/png</code> on a <code>.html</code> file got saved with its real extension and served by <code>express.static</code> as executable HTML or JS, which satisfied <code>script-src 'self'</code> without any CSP bypass.</li>
+<li>Stored name: <code>&lt;timestamp&gt;_&lt;4 random bytes hex&gt;_&lt;sanitised base name&gt;&lt;ext&gt;</code>.</li>
+</ul>
+<table>
+<thead><tr><th>Endpoint</th><th>Field</th><th>Limit</th><th>Allowed (detected) types</th></tr></thead>
+<tbody>
+<tr><td><code>POST /api/upload/single</code></td><td><code>image</code></td><td>10 MB</td><td>JPEG, PNG, GIF, WebP</td></tr>
+<tr><td><code>POST /api/upload/multiple</code></td><td><code>images</code> (max 6)</td><td>10 MB each</td><td>JPEG, PNG, GIF, WebP</td></tr>
+<tr><td><code>POST /api/upload/audio</code></td><td><code>audio</code></td><td>25 MB</td><td>webm, ogg, m4a/mp4, mp3, wav, aac</td></tr>
+<tr><td><code>/api/documents</code></td><td>file</td><td>per route</td><td>PDF, DOCX, XLSX, PPTX, ZIP, JPEG, PNG; legacy <code>.doc/.xls/.ppt</code> accepted by claimed extension only within that trio, since their container magic bytes are identical</td></tr>
+</tbody></table>
+<p>Every upload is weighed against the plan's storage cap first and answers <code>402</code> when exceeded (<code>assertStorageAvailable</code>). Images and voice notes saved here leave no size record, so they are checked per upload but not counted in "used" storage. In the web app, listing photos and voice notes are uploaded straight from the browser to Cloudinary with an unsigned preset (<code>frontend/src/utils/cloudinary.js</code>) and never pass through these checks.</p>
+
+<h2 id="sharing">Share links</h2>
+<p>Share links replaced anonymous browsing (<code>/api/share</code>, opened at <code>/s/:token</code>). The token is the credential, and everything is built around that:</p>
+<ul>
+<li>32 random bytes, URL-safe, unique-indexed. Stored in the clear (it must be resolvable from the URL alone); protection is entropy plus expiry.</li>
+<li>Expires by default 30 days after creation (explicit <code>null</code> means never). Revoked links stay in the database with <code>revokedAt</code>/<code>revokedBy</code>, so "who did we send this to and when did we stop it" stays answerable. Expired or revoked links answer <code>410</code>.</li>
+<li>Optional passcode (min 4 characters), stored as a bcrypt hash and sent as <code>x-share-passcode</code> (or <code>?passcode=</code>). Missing returns <code>401</code> with <code>passcodeRequired: true</code>; wrong ones are logged (<code>share_passcode_failed</code>, token truncated to 8 characters).</li>
+<li>Unknown tokens answer <code>404</code> "This link is not valid." so the endpoint cannot enumerate tokens. Every open increments <code>viewCount</code> and <code>lastViewedAt</code>.</li>
+<li><code>forRecipient()</code> is an <strong>allowlist</strong> of fields: owner contacts, internal notes, assignment and commission are never included, and a new Listing column does not become public by being added.</li>
+<li><code>createShare</code> re-reads listings through <code>listingScope</code>, so you cannot share what you cannot see. At most 50 listings per share.</li>
+</ul>
+
+<h2 id="webhooks">Outbound webhooks</h2>
+<p>Admin-only (<code>/api/webhooks</code>). A URL the server fetches is an SSRF vector, so <code>validateWebhookUrl</code> rejects non-http(s), <code>localhost</code>, <code>.local</code>/<code>.internal</code> hosts and the literal private, loopback and link-local ranges (<code>10/8</code>, <code>127/8</code>, <code>169.254/16</code> which covers cloud metadata, <code>172.16/12</code>, <code>192.168/16</code>, <code>fc00::/fd</code>, <code>fe80::</code>); in production it requires <code>https</code>. Redirects are refused at delivery (<code>redirect: 'error'</code>), and each delivery has a 10-second timeout. Payloads are HMAC-signed with a per-webhook secret; a verification example is on <a href="api-overview.html#webhooks">API conventions</a>.</p>
+
+<h2 id="secrets">Secrets and configuration</h2>
+<ul>
+<li>The process exits at boot if <code>JWT_SECRET</code>, <code>REFRESH_SECRET</code>, <code>MONGO_URI</code>, <code>NODE_ENV</code> or <code>MESSAGE_ENCRYPTION_KEY</code> is missing. <code>validateConfig()</code> additionally requires both JWT secrets to be at least 32 characters, rejects the placeholder defaults in production, and requires <code>APP_DOMAIN</code> or <code>DEFAULT_TENANT_SLUG</code> in production (without one, every query throws and the API is down rather than degraded).</li>
+<li>Keep the two JWT secrets different. A review found them identical; fixing it invalidated all refresh tokens once. The same applies to any rotation: users sign in again.</li>
+<li>Chat messages are encrypted at rest with AES-256-GCM (key derived once with scrypt from <code>MESSAGE_ENCRYPTION_KEY</code>; stored as <code>v2:</code> + hex; legacy format still decryptable).</li>
+<li>Optional API response encryption (<code>ENCRYPT_API_RESPONSES</code>) is described under <a href="api-overview.html#encryption">API conventions</a>. It is obfuscation of a body that already travels over TLS, and its key is baked into the public JS bundle; do not count it as a confidentiality control.</li>
+<li>Unsubscribe links are signed with <code>UNSUBSCRIBE_SECRET</code> (falls back to a key derived from <code>JWT_SECRET</code>). Set it once and never rotate: rotating breaks every link already sent.</li>
+<li>Production Docker image runs as the non-root <code>node</code> user, so a path traversal or RCE does not write as root.</li>
+<li>Errors: in production an unexpected 500 never shows its message; the client gets a generic sentence and the request id (<code>globalErrorHandler</code>). Stack traces appear only when <code>NODE_ENV=development</code>.</li>
+</ul>
+
+<h2 id="audit">Logs and audit trail</h2>
+<ul>
+<li><strong>SecurityLog</strong> collection: sign-in outcomes, refresh, logout. 180-day TTL (<code>SECURITY_LOG_RETENTION_SECONDS</code>), chosen as the floor CERT-In's April 2022 directions set for ICT logs. Changing it is a compliance decision.</li>
+<li><strong>Structured logger</strong> (<code>utils/logger.js</code>) ships to OpenObserve streams <code>backend_logs</code>, <code>security_logs</code>, <code>audit_logs</code>, <code>access_logs</code>, <code>frontend_logs</code> when <code>OPENOBSERVE_USERNAME</code>/<code>PASSWORD</code> are set; otherwise it writes to stdout and drops the rest. Every line is stamped with the request id and tenant.</li>
+<li>Security events logged include <code>tenant_host_mismatch</code>, <code>acting_as_started</code>/<code>acting_as_ended</code>, <code>acting_write_blocked</code>, <code>platform_access_denied</code>, <code>password_reset_*</code>, <code>password_changed</code>, <code>share_passcode_failed</code> and the Mongo-injection warning.</li>
+<li>The log store is one store for every workspace, so reading it (<code>/api/observability/query</code> and <code>/streams</code>) requires a platform operator. A workspace admin used to be able to run arbitrary queries across all agencies.</li>
+<li>The workspace audit trail (<code>ActivityLog</code>) records who did what to a record. An acting operator cannot write to it because the session is read-only.</li>
+</ul>
+
+<h2 id="data-rights">Data rights, retention and the legal pages</h2>
+<table>
+<thead><tr><th>Right or rule</th><th>How the code does it</th></tr></thead>
+<tbody>
+<tr><td>Export yourself</td><td><code>GET /api/data-rights/export/me</code> (Profile page, "Download my data"). Any user, own record. Sent as a JSON attachment.</td></tr>
+<tr><td>Export another user or a contact</td><td><code>GET /api/data-rights/export/user/:id</code> and <code>/export/:kind/:id</code>, behind the <code>exportData</code> permission.</td></tr>
+<tr><td>Delete your own account</td><td><code>DELETE /api/user/delete/:id</code> (own id only). Profile fields are overwritten with anonymised values (<code>erasedUserFields</code>), the account is closed, refresh tokens are emptied, cookies cleared, and security-log rows keyed on the old email are rewritten. Records the person created stay, attributed to "Former team member".</td></tr>
+<tr><td>Erase a team member or a contact</td><td><code>DELETE /api/data-rights/erase/user/:id</code> and <code>/erase/:kind/:id</code>: <strong>admin only</strong>, never self-service for contacts. An admin cannot erase themselves or a platform operator. Contacts keep a shell so counts and pipeline history stay correct.</td></tr>
+<tr><td>Erasure field names are real</td><td>An unknown <code>$set</code> key is dropped silently under Mongoose strict mode, so a wrong name would leave the data in place. <code>tests/erasureFields.test.js</code> checks each key is a real path.</td></tr>
+<tr><td>Retention</td><td>Security logs 180 days; notifications 90 days; search history 90 days; webhook delivery rows 30 days (all TTL indexes). Refresh tokens have no TTL index (see the note under Operations); their lifetime is the refresh JWT's own 30-day expiry.</td></tr>
+<tr><td>Email opt-out</td><td>Signed unsubscribe links, one-click POST (RFC 8058) honoured even for a suspended workspace; a suppression list stops automated sequences.</td></tr>
+</tbody></table>
+<div class="warn"><p><strong>Policy text changes with the code.</strong> <code>frontend/src/pages/Legal.jsx</code> (privacy, terms, cookies, refunds) makes factual claims: cookie names, retention periods, who receives data, the export and delete buttons. A change to any of those changes the policy text in the same commit. <code>LEGAL_UPDATED</code> in <code>Legal.jsx</code> and <code>LEGAL_VERSION</code> in <code>backend/utils/legalVersion.js</code> (currently <code>2026-09-26</code>) move together; the latter is what an accepted invite records, so an acceptance names the text the person actually saw. Business identity (legal name, address, GSTIN, grievance officer) lives only in <code>BUSINESS</code> in <code>frontend/src/utils/marketingCopy.js</code>; null fields are not printed, so never fill one with a guess.</p></div>
+<p>Verified against code: the three cookies and their lifetimes; 180-day security records; 90-day notifications and search history; password storage as salted hashes; message encryption; profile deletion removing name, email, phone and address immediately; the Profile "Download my data" button. The workspace-closure promise ("deleted within 90 days of the request") and the backups sentence are operational commitments with no code behind them.</p>
+
+<h2 id="limits">What is not protected</h2>
+<div class="danger"><p>Read this list before relying on a control above.</p></div>
+<ul>
+<li><strong>Password change does not end other sessions.</strong> Neither reset nor change clears stored refresh tokens, and <code>/refresh</code> does not compare with <code>passwordChangedAt</code>. An existing refresh cookie keeps working. Use <code>signout-all</code> after a suspected compromise.</li>
+<li><strong>Isolation is application-level.</strong> There is no per-tenant database, row-level policy or encryption key. A bug that bypasses the plugin (a raw driver call, an aggregation stage the plugin cannot scope) is cross-tenant. The tests and the "throw rather than guess" design reduce this; they do not remove it.</li>
+<li><strong>Share and upload URLs are bearer credentials.</strong> Anyone with a share token sees the shared properties until it expires or is revoked. Passcode guesses are limited only by the per-IP <code>shareRateLimit</code> (60 per 15 minutes). Listing photographs and avatars under <code>/uploads/</code> are served statically with no session (share pages need them); their names are not guessable in practice but they are not access-controlled.</li>
+<li><strong>Webhook SSRF is a guard, not a guarantee.</strong> Literal private addresses are blocked; a public hostname that resolves to a private address is not.</li>
+<li><strong>Cloudinary uploads bypass server validation.</strong> The unsigned preset accepts what Cloudinary accepts. Restrict the preset's folders and formats in Cloudinary.</li>
+<li><strong>Sockets are authenticated at connect time only.</strong> A connection stays up after its access token expires, and a user disabled mid-connection keeps the open socket until it drops.</li>
+<li><strong>Single-instance defaults.</strong> Without <code>REDIS_URL</code>, rate limits and caches are per process (see above). The scheduler is safe on many instances (it takes Mongo leases), the limiter is not.</li>
+<li><strong>Dev-only helpers.</strong> <code>/api/auth/clear-rate-limit</code> exists only when <code>NODE_ENV=development</code> (and only returns a message; it does not reset anything).</li>
+<li><strong>No MFA, no SSO, no IP allowlists</strong> are implemented. Login protection is the password policy, lockout and rate limiting.</li>
+<li><strong>Backups hold personal data.</strong> Erased records remain in older dumps until the retention count rolls them off (<code>BACKUP_RETENTION_COUNT</code>, default 7).</li>
+<li><strong>A public contact form</strong> (<code>POST /api/contact</code>) and client log ingest (<code>POST /api/observability/logs</code>) accept anonymous input; both are rate limited and neither is CSRF-protected by design.</li>
+<li><strong>Dependencies</strong> are audited in CI with <code>npm audit --omit=dev --audit-level=high</code>, advisory only (<code>continue-on-error</code>), so a new advisory is visible but does not block a merge.</li>
+</ul>
+
+<div class="pager"><a href="authentication.html"><small>Previous</small>Authentication and sessions</a><a href="api-overview.html"><small>Next</small>API conventions</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#posture">How to read this page</a><a class="h2" href="#tenancy">Tenant isolation</a><a class="h2" href="#access">Who can reach what</a><a class="h2" href="#validation">Validation and injection</a><a class="h2" href="#headers">Headers, CORS and rate limits</a><a class="h3" href="#helmet">Helmet and CSP ( middleware/security.js )</a><a class="h3" href="#cors">CORS ( config/environment.js )</a><a class="h3" href="#rate-limits">Rate limits</a><a class="h2" href="#uploads">Uploads</a><a class="h2" href="#sharing">Share links</a><a class="h2" href="#webhooks">Outbound webhooks</a><a class="h2" href="#secrets">Secrets and configuration</a><a class="h2" href="#audit">Logs and audit trail</a><a class="h2" href="#data-rights">Data rights, retention and the legal pages</a><a class="h2" href="#limits">What is not protected</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

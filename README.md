@@ -1,257 +1,63 @@
-# MERN Estate
+# Real Vista (mern-estate)
 
-A production-ready **Real Estate Management & Listing Platform** built on the MERN stack.
+A multi-tenant CRM for real estate agencies: leads, property owners, listings, deals and paperwork in one workspace, with share links an agency controls. One deployment serves many agencies; each gets an isolated workspace.
 
-This project is designed for teams (admins + employees/agents) who need a modern internal system to manage listings, owners, clients, buyer requirements, assignments, and reporting—backed by secure authentication, role-based access control, and scalable infrastructure.
+**Documentation:** open [`docs/site/index.html`](docs/site/index.html) (or serve the folder: `npx serve docs/site`). Start with *Getting started*, *Architecture* and *Multi-tenancy*. Rebuild it with `npm run docs:site`; the API reference regenerates from the code with `cd backend && npm run docs:openapi`.
 
----
+For the rules that came out of real bugs (tenant scoping, identity pinning while acting-as, catalogues, validation, script bootstrapping), read [`CLAUDE.md`](CLAUDE.md).
 
-## Tech Stack
+## Stack
 
-- **Frontend**: React + Vite, TailwindCSS, modern UI components
-- **Backend**: Node.js, Express
-- **Database**: MongoDB (local or Atlas)
-- **Auth**: JWT access tokens + refresh token flow (httpOnly cookies)
-- **Real-time**: Socket.IO (live updates/messaging)
-- **Storage**: Cloudinary for images and voice notes (client-side unsigned upload)
-- **Observability**: structured logging + health endpoints (+ optional Sentry)
-
----
-
-## Product Highlights
-
-### Listings (Core)
-
-- Create / update / delete listings
-- Advanced filtering + sorting + pagination
-- Professional search endpoints:
-  - `/api/listing/search`
-  - `/api/listing/suggestions`
-  - `/api/listing/popular-searches`
-- Soft delete + restore (admin-only)
-- Bulk import (admin-only)
-
-### Categories with Dynamic Fields
-
-- Categories are configurable
-- Each category can define dynamic fields (`required`, `select`, `number`, validations)
-- Listing creation/update validates category fields server-side
-
-### Owners, Clients, Messages
-
-- Owner management
-- Client pipeline pages & dashboards
-- Messaging system (real-time ready)
-
-### Buyer Requirements
-
-- Track buyer requirements with follow-ups
-- Filtering by city/locality/interest/status/assigned agent
-
-### Dashboards & Metrics
-
-- Admin dashboard + team dashboard
-- Metrics endpoints for “my work” and pipeline snapshots
-
-### Security & Production Readiness
-
-- Rate limiting for auth/refresh endpoints
-- Secure cookies, CORS configuration, common hardening middleware
-- Health check endpoints for liveness/readiness/startup
-
----
-
-## Roles & Permissions (RBAC)
-
-This codebase supports **configurable roles** with granular permissions.
-
-- **Admin**
-  - Full access
-  - Can manage users and roles
-  - Can assign/unassign agents
-  - Can soft-delete/restore listings, bulk import
-
-- **Employee (Agent)**
-  - Access is scoped by:
-    - **Role permissions** (RBAC)
-    - **Assigned categories** (category-level access)
-  - **Default behavior**: employees can create listings *by default* in categories assigned to them.
-
-Important behavior:
-
-- Missing permissions should return **403 Forbidden** (user stays logged in)
-- Invalid/expired sessions return **401 Unauthorized** (client may refresh token)
-
----
-
-## Documentation
-
-| Guide | Description |
+| Layer | Technology |
 |---|---|
-| [COMMANDS.md](COMMANDS.md) | All dev, test, seed, and deployment commands |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Deploy to Render (PaaS) step-by-step |
-| [SETUP_GUIDE.md](SETUP_GUIDE.md) | Local environment setup |
-| [docs/AUTH.md](docs/AUTH.md) | JWT auth, token lifecycle, session security |
-| [docs/LISTINGS.md](docs/LISTINGS.md) | Property listings CRUD, search, dynamic fields |
-| [docs/CRM.md](docs/CRM.md) | Clients, deal pipeline, lead scoring |
-| [docs/MESSAGING.md](docs/MESSAGING.md) | Real-time encrypted messaging (Socket.IO) |
-| [docs/ROLES.md](docs/ROLES.md) | RBAC roles, permissions, ABAC |
-| [docs/OWNERS.md](docs/OWNERS.md) | Property owner management |
-| [docs/BUYERS.md](docs/BUYERS.md) | Buyer requirements and property matching |
-| [docs/TASKS.md](docs/TASKS.md) | Task management |
-| [docs/DOCUMENTS.md](docs/DOCUMENTS.md) | File uploads (polymorphic — client or listing) |
-| [docs/ANALYTICS.md](docs/ANALYTICS.md) | Dashboard, analytics, agent performance |
-| [docs/SEARCH.md](docs/SEARCH.md) | Global cross-entity search |
-| [docs/REPORTS.md](docs/REPORTS.md) | Client report templates and generation |
+| Frontend | React 18, Vite, Tailwind, Redux Toolkit, react-router 6, i18next, Leaflet |
+| Backend | Node 20, Express, Mongoose |
+| Database | MongoDB (one database, `tenantId` on every document) |
+| Auth | JWT in httpOnly cookies (15 min access, 30 day refresh), CSRF token on writes |
+| Realtime | Socket.IO |
+| Media | Cloudinary, uploaded from the browser |
+| Mobile | Flutter app in `mobile/` |
 
----
-
-## Repository Structure
-
-```
-mern-estate/
-  backend/      # Express API + Mongo models + controllers
-  frontend/     # React client
-  docs/         # Feature documentation
-  render.yaml   # Render blueprint
-  COMMANDS.md   # Developer commands reference
-  DEPLOYMENT.md
-  SETUP_GUIDE.md
-```
-
----
-
-## Getting Started (Local Dev)
-
-### Prerequisites
-
-- Node.js **20 LTS** (Node 25 removed `SlowBuffer`, which `jsonwebtoken`'s dependency chain still uses — the backend crashes on require under it)
-- MongoDB **5+** (local or Atlas)
-- Cloudinary account with an unsigned upload preset (for image/voice-note storage)
-
-### Install
+## Quick start
 
 ```bash
-# Backend
-a) cd backend
-b) npm install
+# Backend (Node 20)
+cd backend && npm install
+cp .env.example .env        # MONGO_URI, JWT_SECRET, REFRESH_SECRET, FRONTEND_URL
+npm run dev                 # http://localhost:3000
 
 # Frontend
-a) cd ../frontend
-b) npm install
+cd frontend && npm install
+npm run dev                 # http://localhost:5173 (proxies /api and /uploads)
+
+# First admin and sample data
+cd backend && npm run make-admin && npm run db:seed-demo
 ```
 
-### Environment Variables
+Full setup, environment tables and troubleshooting are in the docs site.
 
-#### Backend
+## Common commands
 
-Create `backend/.env` (start from `backend/.env.example`).
+| Task | Command |
+|---|---|
+| Backend tests | `cd backend && npm test` |
+| Frontend tests | `cd frontend && npm test` |
+| Lint | `npm run lint` in either package |
+| Regenerate OpenAPI | `cd backend && npm run docs:openapi` |
+| Build the docs site | `npm run docs:site` |
+| End-to-end | `npm run e2e` |
+| Back up / restore | `cd backend && npm run db:backup` / `npm run db:restore -- --list` |
 
-Minimum required:
+## Repository layout
 
-- `MONGO_URI`
-- `JWT_SECRET`
-- `REFRESH_SECRET`
-- `FRONTEND_URL`
-
-#### Frontend
-
-Create `frontend/.env.local` (start from `frontend/.env.example`).
-
-Common:
-
-- `VITE_API_URL` (leave empty in dev when using proxy)
-- `VITE_CLOUDINARY_CLOUD_NAME`, `VITE_CLOUDINARY_UPLOAD_PRESET` (Cloudinary uploads)
-- `VITE_API_RESPONSE_SECRET` (response decryption), `VITE_SOCKET_URL` (Socket.IO)
-
----
-
-## Run
-
-### Option A: run from repo root
-
-```bash
-npm run dev
 ```
-
-This runs the backend dev script via the root `package.json`.
-
-### Option B: run both apps separately
-
-```bash
-# Terminal 1
-npm run dev --prefix backend
-
-# Terminal 2
-npm run dev --prefix frontend
+backend/    Express API, Mongoose models, tenancy, jobs, scripts, tests
+frontend/   React app, design system, i18n, SEO build (frontend/seo)
+mobile/     Flutter app
+docs/       openapi.json, site-src (docs source), site (built docs)
+e2e/        Playwright specs
 ```
-
-Frontend:
-
-- http://localhost:5173
-
-Backend:
-
-- http://localhost:3000/api
-
----
-
-## Scripts
-
-From repo root:
-
-- `npm run dev` — starts backend dev server
-- `npm run start` — starts backend in production mode
-- `npm run build` — installs dependencies + builds frontend
-- `npm run test` — backend tests
-- `npm run test:client` — frontend tests
-
----
-
-## Initial Admin Setup
-
-**Signup is disabled** (by design). Create the first admin user via MongoDB.
-
-See:
-
-- `SETUP_GUIDE.md` → “Initial Admin Setup”
-
----
-
-## Deployment
-
-Render is supported out-of-the-box via `render.yaml`.
-
-- Full deployment guide: `DEPLOYMENT.md`
-
-High-level:
-
-- Backend: Node web service
-- Frontend: static site (Vite build)
-- MongoDB: Atlas recommended
-
----
-
-## Troubleshooting
-
-### Frontend can’t reach backend
-
-- Check backend is running on port `3000`
-- Confirm CORS config (`FRONTEND_URL`) for the frontend origin
-- If you’re using a hosted frontend, set `VITE_API_URL`
-
-### Auth / permission issues
-
-- `401` means: session/token invalid/expired
-- `403` means: logged in, but not allowed (RBAC / category restrictions)
-
-### Mongo connection fails
-
-- Verify `MONGO_URI`
-- Ensure MongoDB is running
-
----
 
 ## License
 
-ISC (see `package.json`).
+ISC, as declared in `package.json`.

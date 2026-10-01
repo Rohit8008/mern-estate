@@ -4,6 +4,7 @@ import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
 import { validateBody, userRouteValidation, legalValidation } from '../middleware/validation.js';
 import { authRateLimit } from '../middleware/security.js';
+import { containsInsensitive } from '../utils/escapeRegex.js';
 
 
 const router = express.Router();
@@ -22,7 +23,7 @@ router.get('/security/logs', verifyToken, requireAdmin, async (req, res) => {
     const query = {};
     if (method && ['password','google','signup','other'].includes(method)) query.method = method;
     if (status && ['blocked','invalid','success'].includes(status)) query.status = status;
-    if (email && String(email).trim()) query.email = { $regex: String(email).trim(), $options: 'i' };
+    if (email && String(email).trim()) query.email = containsInsensitive(email);
     if (since || until) {
       query.createdAt = {};
       if (since) {

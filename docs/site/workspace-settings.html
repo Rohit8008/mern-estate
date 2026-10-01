@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workspace settings — Real Vista Docs</title>
+<meta name="description" content="What each Settings tab changes, who can see it, and the limits and gotchas behind branding, screens, locale, pipeline, rules, email, webhooks and system tools.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html" class="active">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Workspace settings</h1>
+<p class="lede">What each Settings tab changes, who can see it, and the limits and gotchas behind branding, screens, locale, pipeline, rules, email, webhooks and system tools.</p>
+
+<h2 id="overview">How Settings is organised</h2>
+<p><strong>Settings</strong> (<code>/settings</code>) is a tabbed page. The URL is the state: <code>?tab=&lt;group&gt;&amp;section=&lt;id&gt;</code>, so a tab is linkable (the onboarding checklist links to <code>/settings?section=branding</code>). A group with nothing visible to you is not shown at all, and a person with only one group sees no tab strip.</p>
+<table>
+<thead><tr><th>Tab (group)</th><th>Sections</th><th>Who sees it</th></tr></thead>
+<tbody>
+<tr><td>Account</td><td>Notifications, Privacy, Security, Appearance, Language &amp; region</td><td>Every signed-in user. These affect only your own account.</td></tr>
+<tr><td>Workspace</td><td>Workspace (branding, units, plan usage), Menu &amp; screens, Rules</td><td>Workspace admin only</td></tr>
+<tr><td>Sales</td><td>Sales pipeline, Lead sources, Tags, Follow-up sequences, Email templates</td><td>Workspace admin only</td></tr>
+<tr><td>Integrations</td><td>Email, Webhooks</td><td>Workspace admin only</td></tr>
+<tr><td>System</td><td>System, Search insights, Data requests</td><td>Workspace admin only</td></tr>
+</tbody></table>
+<p>"Admin" here means <code>role: 'admin'</code> of this workspace. Each write endpoint behind these panels checks the admin role itself ("Only a workspace admin can …"), so hiding a tab is a convenience, not the protection. Anything that belongs to the vendor (plan, feature switches on the plan, limits, slug, status, custom domain) is <em>platform-only</em> and is rejected with a clear message if sent to <code>PATCH /api/tenant/config</code>. See <a href="multi-tenancy.html">Multi-tenancy and platform admin</a>.</p>
+
+<h2 id="account">Account tab (everyone)</h2>
+<ul>
+<li><strong>Notifications.</strong> Per event type, choose "In app" and "Email". Defaults come from <code>utils/notificationTypes.js</code>. Email is on by default for: lead assigned, deal stage changed, task assigned, task due, follow-up due, system alerts. Off by default: new buyer match, new message, import finished, shared property viewed, listing updates. Notifications go through one entry point (<code>utils/notify.js</code>): it honours these preferences, stores a notification, pushes it over the socket and mails through the workspace's template if one exists.</li>
+<li><strong>Privacy.</strong> Profile visibility (show email, phone, online status, allow direct messages) and "Account closure and data requests" including Close Account.</li>
+<li><strong>Security.</strong> Change password, active sessions (this device) and <em>Sign out all devices</em>, which revokes every refresh token.</li>
+<li><strong>Appearance.</strong> Theme (light, dark or system) and compact mode.</li>
+<li><strong>Language &amp; region.</strong> Your own language, overriding the workspace default, which an admin sets in the same panel. Shipped languages are the files in <code>frontend/src/i18n/locales/</code> (currently English and Hindi); a new language is one dropped-in JSON file. Clearing your override falls back to the workspace default.</li>
+</ul>
+
+<h2 id="workspace">Workspace section: branding, units and plan</h2>
+<p>Settings, Workspace, "Workspace" section (id <code>branding</code>). Saved with <code>PATCH /api/tenant/config</code>; the fields in the body are merged into the stored document, so sending only one colour does not wipe the logo. An unsaved-changes bar appears at the bottom with <em>Discard</em> and <em>Save changes</em>.</p>
+<h3 id="branding">Branding tokens</h3>
+<table>
+<thead><tr><th>Token</th><th>Used for</th><th>Frontend fallback</th></tr></thead>
+<tbody>
+<tr><td><code>brand</code> (Primary)</td><td>Buttons, links, highlights</td><td><code>#2b6faa</code></td></tr>
+<tr><td><code>brandContrast</code> (On primary)</td><td>Text on the primary colour</td><td><code>#ffffff</code></td></tr>
+<tr><td><code>accent</code> (Accent)</td><td>The active menu item</td><td><code>#0ea5e9</code></td></tr>
+<tr><td><code>sidebar</code> (Sidebar)</td><td>Menu background</td><td><code>#0f172a</code></td></tr>
+<tr><td><code>sidebarText</code> (Sidebar text)</td><td>Menu labels</td><td><code>#e2e8f0</code></td></tr>
+</tbody></table>
+<p>Colours are six-digit hex values (the field turns red otherwise). The panel has a live preview and a contrast check, and <em>Reset to default</em>. The tokens are written onto <code>:root</code> as CSS variables, so Tailwind classes such as <code>bg-workspace</code> follow the agency's colour with one build serving every workspace. Other fields: agency name (up to 120), product name (shown instead of "Real Vista", up to 60), logo URL, square mark URL (collapsed menu and favicon), support email. Support phone and a login background URL exist in the schema but this panel has no field for them. The product name, logo and support contacts also dress share links and the invite page.</p>
+<div class="note"><p>Schema defaults versus the app fallback differ: the backend branding schema defaults <code>tokens.brand</code> to <code>#4f46e5</code> and <code>tokens.accent</code> to <code>#0ea5e9</code>, while the frontend fallback (used before config loads) is <code>#2b6faa</code>. A workspace that has never saved its colours stores whichever default the schema applied at creation, so its primary colour can differ from the product's petrol blue until an admin saves branding.</p></div>
+
+<h3 id="locale">Units and formats</h3>
+<table>
+<thead><tr><th>Setting</th><th>Options and default</th></tr></thead>
+<tbody>
+<tr><td>Land area unit</td><td><code>sqyard</code> (Square yards, gaj; default), <code>sqft</code>, <code>sqm</code>, <code>acre</code>, <code>cent</code>, <code>guntha</code>. All six work everywhere; nothing hardcodes square feet.</td></tr>
+<tr><td>Number format</td><td><code>en-IN</code> (12,34,567, lakh/crore; default) or <code>en-US</code> (1,234,567)</td></tr>
+<tr><td>Currency</td><td>Three-letter code, default <code>INR</code></td></tr>
+<tr><td>Time zone</td><td>Default <code>Asia/Kolkata</code>. Also decides the month boundary for the import allowance and the audit-log date filters.</td></tr>
+</tbody></table>
+<p>Date format, dial code and language exist on the workspace locale (defaults <code>dd/MM/yyyy</code>, <code>91</code>, <code>en</code>); only the language has a UI (Language &amp; region). Formatting is done with the helpers in <code>frontend/src/utils/currency.js</code>, which <code>TenantProvider</code> feeds from this config; never construct <code>Intl.NumberFormat</code> at a call site.</p>
+
+<h3 id="plan-usage">Plan and usage</h3>
+<p>A "Your plan" card on the same panel shows the plan and its usage against the limits (<code>GET /api/tenant/usage</code>, admin only). What each plan includes lives in <code>backend/tenancy/plans.js</code>; limits gate <em>creation</em>, never reads, and answer 402:</p>
+<table>
+<thead><tr><th>Plan</th><th>Seats</th><th>Listings</th><th>Storage</th><th>Import rows / month</th><th>Price per month</th></tr></thead>
+<tbody>
+<tr><td>Trial (14 days)</td><td>3</td><td>250</td><td>512 MB</td><td>2,000</td><td>free</td></tr>
+<tr><td>Starter</td><td>10</td><td>2,500</td><td>2,048 MB</td><td>20,000</td><td>INR 2,499</td></tr>
+<tr><td>Growth</td><td>40</td><td>25,000</td><td>10,240 MB</td><td>100,000</td><td>INR 7,499</td></tr>
+<tr><td>Enterprise</td><td colspan="4">unlimited (0 means unlimited)</td><td>negotiated</td></tr>
+</tbody></table>
+<p>A plan's figures are re-applied to every workspace on it, preserving any cap an operator set by hand; plans are changed by the platform operator, not by the workspace. Billing is a manual ledger of invoices. The overdue sweep only flags the workspace's billing state; it never suspends it.</p>
+
+<h2 id="screens">Menu and screens</h2>
+<p>Settings, Workspace, "Menu &amp; screens". The sidebar is built from <code>backend/tenancy/screenCatalogue.js</code> (id, label, section, permission) and <code>frontend/src/app/screenRegistry.js</code> (icon, route), intersected with the workspace's switches and the user's permissions. Two things you can do per screen:</p>
+<ol>
+<li><strong>Switch it off or on.</strong> A screen not mentioned is on (a stored override exists only when it differs from the default). Turning one off hides it and makes its URL unreachable for the workspace.</li>
+<li><strong>Rename it</strong> (up to 40 characters), for example "Clients" to "Leads". A workspace's own rename beats a translation. A rename equal to the default label is not stored.</li>
+</ol>
+<table>
+<thead><tr><th>Section</th><th>Screen id</th><th>Default label</th><th>Needs permission</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Overview</td><td><code>dashboard</code></td><td>Dashboard</td><td><code>viewAnalytics</code></td><td>core</td></tr>
+<tr><td>Overview</td><td><code>analytics</code></td><td>Analytics</td><td><code>viewAnalytics</code></td><td></td></tr>
+<tr><td>Properties</td><td><code>properties</code></td><td>All Properties</td><td><code>viewListings</code></td><td>core</td></tr>
+<tr><td>Properties</td><td><code>categories</code></td><td>Categories</td><td><code>viewCategories</code></td><td></td></tr>
+<tr><td>Properties</td><td><code>createListing</code></td><td>Add Property</td><td><code>createListing</code></td><td>core</td></tr>
+<tr><td>Properties</td><td><code>import</code></td><td>Import from Excel</td><td>admin only</td><td></td></tr>
+<tr><td>CRM</td><td><code>clients</code></td><td>Clients</td><td><code>viewClients</code></td><td></td></tr>
+<tr><td>CRM</td><td><code>owners</code></td><td>Property Owners</td><td><code>viewOwners</code></td><td></td></tr>
+<tr><td>CRM</td><td><code>pipeline</code></td><td>Sales Pipeline</td><td><code>viewClients</code></td><td></td></tr>
+<tr><td>CRM</td><td><code>buyers</code></td><td>Buyer Requirements</td><td><code>viewBuyerRequirements</code></td><td></td></tr>
+<tr><td>CRM</td><td><code>tasks</code></td><td>Tasks</td><td>none</td><td></td></tr>
+<tr><td>CRM</td><td><code>calendar</code></td><td>Calendar</td><td>none</td><td></td></tr>
+<tr><td>Finance &amp; Reports</td><td><code>transactions</code></td><td>Transactions</td><td><code>viewAnalytics</code></td><td></td></tr>
+<tr><td>Finance &amp; Reports</td><td><code>reports</code></td><td>Client Reports</td><td><code>exportData</code></td><td></td></tr>
+<tr><td>Admin</td><td><code>adminPanel</code></td><td>Admin Panel</td><td>admin only</td><td>core</td></tr>
+<tr><td>Admin</td><td><code>settings</code></td><td>Settings</td><td>admin only</td><td>core</td></tr>
+</tbody></table>
+<ul>
+<li><strong>Core screens cannot be switched off</strong>; the API answers 400 "… is part of the core product and cannot be switched off".</li>
+<li><strong>Screen ids are a contract with stored workspace settings. Never rename one.</strong> Adding a screen means an entry in both files plus a route.</li>
+<li>Switching a screen off does not remove anyone's permission, it only hides the screen. Permissions are covered in <a href="team-roles-permissions.html#catalogue">Team, roles and permissions</a>.</li>
+</ul>
+
+<h2 id="rules">Rules</h2>
+<p>Settings, Workspace, Rules (admin only; <code>GET /api/rules</code> lists what exists, enabling writes <code>workflow.rules</code> through <code>PATCH /api/tenant/config</code>). A rule is a <strong>named implementation shipped with the deployment</strong> (<code>backend/plugins/builtin.js</code>); the workspace config only selects which are on and their options and never carries code, so an admin cannot introduce behaviour the deployment did not ship.</p>
+<table>
+<thead><tr><th>Rule</th><th>Runs</th><th>What it does</th><th>Options</th></tr></thead>
+<tbody>
+<tr><td><code>normaliseLocality</code></td><td>when a property is saved</td><td>Trims and title-cases the locality so "whitefield " and "Whitefield" group together</td><td>none</td></tr>
+<tr><td><code>requirePriceOnPublish</code></td><td>when a property is saved</td><td>Refuses (veto) an <code>available</code> property whose price is not above 1: "This property needs a price before it can be published"</td><td>none</td></tr>
+<tr><td><code>defaultCityFromWorkspace</code></td><td>when a property is saved</td><td>Fills an empty city with a default</td><td><strong>Default city</strong> (up to 80 characters)</td></tr>
+<tr><td><code>requireNoteOnLoss</code></td><td>when a deal changes stage</td><td>Refuses moving to Lost without a note: "Add a note explaining why this deal was lost"</td><td>none</td></tr>
+<tr><td><code>blockSkippingToWon</code></td><td>when a deal changes stage</td><td>Refuses moving straight to Won from New Lead or Contacted: "Move the deal through negotiation before closing it as won"</td><td>none</td></tr>
+<tr><td><code>tagLeadBySource</code></td><td>when a lead is created</td><td>Sets the lead's priority from its source</td><td>Source name to priority (low, medium, high, urgent) pairs; source names are lowercased</td></tr>
+<tr><td><code>skipRowsWithoutPrice</code></td><td>before a property import</td><td>Would skip imported rows with no price</td><td>none</td></tr>
+</tbody></table>
+<ul>
+<li>A rule that calls <code>veto('…')</code> refuses the operation and the user sees its message as a 400. Any other error inside a rule is logged and the rule is skipped. The two are deliberately distinct; catching both once made every veto rule silently do nothing.</li>
+<li>Toggling a rule keeps its saved options. Option drafts are sent only when you press that rule's Save.</li>
+<li>Hooks defined: <code>listing.beforeSave</code>, <code>listing.afterSave</code>, <code>listing.beforeImport</code>, <code>deal.beforeStageChange</code>, <code>lead.onCreate</code>.</li>
+</ul>
+<div class="warn"><p><strong>Where hooks actually fire today:</strong> <code>listing.beforeSave</code> and <code>listing.afterSave</code> run when a property is <em>created</em> through the API; editing an existing property does not run them. <code>listing.beforeImport</code> is declared and one rule is registered for it, but no import code calls it, so <code>skipRowsWithoutPrice</code> has no effect. <code>deal.beforeStageChange</code> and <code>lead.onCreate</code> do run where described.</p></div>
+
+<h2 id="pipeline">Sales pipeline</h2>
+<p>Settings, Sales, "Sales pipeline" (<code>GET</code> / <code>PATCH /api/tenant/pipeline</code>, admin only). The stage vocabulary is fixed in <code>backend/tenancy/stageCatalogue.js</code>; the workspace chooses which stages to use, their order, their label (up to 60 characters) and their colour. Nine stages are on by default; three legacy stages are offered as "Older stage".</p>
+<table>
+<thead><tr><th>Key</th><th>Default label</th></tr></thead>
+<tbody>
+<tr><td><code>new_lead</code></td><td>New Lead</td></tr>
+<tr><td><code>contacted</code></td><td>Contacted</td></tr>
+<tr><td><code>qualified</code></td><td>Qualified</td></tr>
+<tr><td><code>site_visit_scheduled</code></td><td>Site Visit</td></tr>
+<tr><td><code>negotiation</code></td><td>Negotiation</td></tr>
+<tr><td><code>booking_token</code></td><td>Booking / Token</td></tr>
+<tr><td><code>documentation</code></td><td>Documentation</td></tr>
+<tr><td><code>closed_won</code></td><td>Won (required)</td></tr>
+<tr><td><code>closed_lost</code></td><td>Lost (required)</td></tr>
+<tr><td><code>initial_contact</code>, <code>site_visit_done</code>, <code>payment_pending</code></td><td>Initial Contact, Site Visit Done, Payment Pending (legacy)</td></tr>
+</tbody></table>
+<ul>
+<li>A pipeline needs at least one stage and must include both Won and Lost; otherwise 400 ("without an end state, deals never leave the board and every conversion figure is wrong"). A stage can appear only once, and unknown keys are rejected.</li>
+<li>Unlike screens, an unselected stage is <strong>off</strong>: a pipeline is an explicit ordered list. Until you save one, the workspace uses the default nine.</li>
+<li>Order is the order you arrange them in; the server stores it as 10, 20, 30, and so on.</li>
+<li>Deals sitting in a stage you remove <strong>stay where they are</strong> (the panel warns about this). The board only draws the enabled columns.</li>
+<li>Won and Lost carry meaning in code (auto-created transaction, listing status, sequences stopped). See <a href="leads-and-pipeline.html#deals">Deals, stages and commission</a>.</li>
+</ul>
+
+<h2 id="sales-config">Lead sources, tags, sequences</h2>
+<p>These three sections are admin-only in Settings; their mechanics are in <a href="leads-and-pipeline.html">Leads and pipeline</a>.</p>
+<ul>
+<li><strong>Lead sources</strong>: name, monthly cost, description, active. Seeded with 11 defaults on first read. Deleting a source in use answers 409 with a count, and the panel offers <code>?force=true</code>. Editing the cost changes the ROI report immediately.</li>
+<li><strong>Tags</strong>: name (40 characters), one of nine colours, description. Rename and recolour apply everywhere because records reference the tag by id.</li>
+<li><strong>Follow-up sequences</strong>: ordered steps (task, email, reminder) with a delay in days. Deleting one with leads part-way through answers 409 with the count; forcing stops those enrollments.</li>
+</ul>
+
+<h2 id="templates">Email templates</h2>
+<p>Settings, Sales, Email templates (<code>/api/email-templates</code>, admin only). Each notification type, plus <code>user.invited</code>, <code>user.welcome</code> and <code>report.shared</code>, can have a workspace override of the subject and HTML body. Types: lead assigned, deal stage changed, task assigned, task due, follow-up due, new buyer match, new message, import finished, shared property viewed, listing updates, system alerts.</p>
+<ul>
+<li>Variables are written <code>{{name}}</code> and resolved from a closed list: <code>recipientName</code>, <code>workspaceName</code>, <code>title</code>, <code>body</code>, <code>link</code>, <code>actorName</code>, <code>date</code>. There is no expression syntax, so a template cannot reach into a document or call anything. Substituted values are HTML-escaped. An unknown name is left as written so a typo is visible.</li>
+<li>The HTML is <strong>sanitised when saved</strong> against an allowlist (links, paragraphs, headings, tables, images, basic formatting and inline <code>style</code>). Scripts and event handlers are stripped.</li>
+<li>Buttons: <strong>Preview</strong>, <strong>Send test</strong> (to yourself), <strong>Save</strong> and <strong>Revert</strong> (deletes the override and returns to the built-in wording).</li>
+<li>If a template is saved but the user's own notification preference has email off, no mail is sent. Templates change wording, not recipients.</li>
+</ul>
+
+<h2 id="email">Email (SMTP)</h2>
+<p>Settings, Integrations, Email (<code>GET</code> / <code>PATCH /api/tenant/mail</code>, <code>POST /api/tenant/mail/verify</code>, admin only). By default every workspace's mail uses the deployment's SMTP credentials (<code>SMTP_*</code> in <code>.env</code>), so it arrives from the vendor's address. A workspace that fills this in sends as itself.</p>
+<table>
+<thead><tr><th>Field</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Enabled</td><td>When on, a host, username and password must all be present (400 otherwise).</td></tr>
+<tr><td>Host, port, secure</td><td>Port defaults to 587.</td></tr>
+<tr><td>Username, password</td><td>The password is encrypted at rest and <strong>never returned</strong>; the screen shows only whether one is stored. Leaving it blank keeps the stored one, so editing the port does not require retyping it.</td></tr>
+<tr><td>From address, from name</td><td>Sender shown to recipients.</td></tr>
+</tbody></table>
+<p><strong>Verify</strong> opens the connection and authenticates without sending anything, which tells a wrong password apart from "sent, check spam". Saving drops the cached transport for the workspace, and the change is written to the activity log. The System tab shows which source mail is currently using.</p>
+
+<h2 id="webhooks">Webhooks</h2>
+<p>Settings, Integrations, Webhooks (<code>/api/webhooks</code>, admin only) forward events to Zapier, Make, n8n or your own service.</p>
+<h3 id="webhook-setup">Setting one up</h3>
+<ul>
+<li>Add an endpoint: name, URL and events (choose individual events or "All events", stored as <code>*</code>, which keeps receiving event types added later).</li>
+<li>The URL must be http or https, must not be a private or internal address, and in production must be https. This blocks literal private ranges; it cannot stop a public hostname that resolves to a private address, so it is a guard, not a guarantee.</li>
+<li>Each endpoint has a <strong>signing secret</strong> shown on screen. <strong>Rotate secret</strong> issues a new one and the old one stops verifying immediately, so update the receiver first or accept a gap. <strong>Send test</strong> queues a test event. Deleting an endpoint discards queued deliveries.</li>
+</ul>
+<h3 id="webhook-events">Events</h3>
+<p>The vocabulary is <code>WEBHOOK_EVENTS</code> in <code>models/webhook.model.js</code>:</p>
+<table>
+<thead><tr><th>Event</th><th>Meaning</th><th>Emitted by the code today?</th></tr></thead>
+<tbody>
+<tr><td><code>lead.created</code></td><td>A lead or client was created</td><td>yes (also up to 50 per lead import)</td></tr>
+<tr><td><code>lead.updated</code></td><td>A lead was changed</td><td>yes</td></tr>
+<tr><td><code>lead.assigned</code></td><td>A lead was assigned to an agent</td><td>yes</td></tr>
+<tr><td><code>lead.deleted</code></td><td>A lead was deleted</td><td>yes</td></tr>
+<tr><td><code>deal.created</code></td><td>A deal was added</td><td>no</td></tr>
+<tr><td><code>deal.stage_changed</code></td><td>A deal moved to a new stage</td><td>yes</td></tr>
+<tr><td><code>listing.created</code></td><td>A property was added</td><td>yes</td></tr>
+<tr><td><code>listing.updated</code></td><td>A property was changed</td><td>no</td></tr>
+<tr><td><code>task.created</code></td><td>A task was created</td><td>no</td></tr>
+<tr><td><code>task.completed</code></td><td>A task was completed</td><td>no</td></tr>
+<tr><td><code>buyer.created</code></td><td>A buyer requirement was added</td><td>no</td></tr>
+<tr><td><code>share.viewed</code></td><td>Someone opened a share link</td><td>no</td></tr>
+</tbody></table>
+<p>"Emitted" was determined by searching for <code>emitEvent(</code> calls in <code>controllers/</code>, <code>utils/</code>, <code>jobs/</code> and <code>tenancy/</code>. You can subscribe to the "no" events, but nothing will be sent until code emits them.</p>
+<h3 id="webhook-delivery">Delivery, signing and the deliveries log</h3>
+<ul>
+<li>The body is JSON: <code>{ "event", "sentAt", "data" }</code>. Headers: <code>X-Webhook-Event</code>, <code>X-Webhook-Delivery</code> (the delivery id), <code>X-Webhook-Timestamp</code> and <code>X-Webhook-Signature: sha256=&lt;hex&gt;</code>.</li>
+<li>The signature is HMAC-SHA256, keyed with the endpoint secret, over the string <code>&lt;timestamp&gt;.&lt;raw body&gt;</code>. The timestamp is inside the signed string, so a captured delivery cannot be replayed against a receiver that checks it. This is the same scheme Stripe and GitHub use.</li>
+<li>Deliveries are queued when the event happens and sent by the <code>webhook-delivery</code> job, which runs <strong>every minute</strong>. Each attempt times out after 10 seconds.</li>
+<li><strong>Retries:</strong> up to 5 attempts in all, with waits of 10 seconds, 1 minute, 5 minutes and 30 minutes between them. After that the delivery is marked <code>failed</code>.</li>
+<li><strong>Auto-disable:</strong> after 10 consecutive failed attempts the endpoint is switched off ("Disabled automatically after repeated failures") and its queued deliveries become <code>abandoned</code>. A success resets the counter. Re-enable it with the toggle once the receiver is fixed.</li>
+<li><strong>Deliveries log:</strong> expand an endpoint to see its latest deliveries (15 shown in the panel; the API allows up to 100) with status <code>pending</code> (waiting for its next attempt), <code>delivered</code>, <code>failed</code> or <code>abandoned</code>, plus last status code and error. Use it before assuming the receiver is broken.</li>
+<li>Receivers should be idempotent: the same delivery can arrive more than once if your server timed out after processing.</li>
+</ul>
+
+<h2 id="system">System tab</h2>
+<h3 id="system-status">System</h3>
+<p><code>GET /api/metrics/system</code> (admin only) renders as: version, environment, uptime, database state and latency, mail source, Node runtime (version, platform, memory), the <strong>scheduler</strong> and <strong>integrations</strong>. The scheduler lists every registered job with its cadence (for example "daily at 03:00 UTC" or "every 15 min"), when it last ran and whether its last result starts with <code>failed:</code> (shown as Failing). Integrations are booleans only (SMTP, SMS, observability, Cloudinary, response encryption), never the values. The panel links to the machine-readable <strong>API reference</strong> (<code>/api/docs/openapi.json</code>, admin only). It is generated from the router and its validation schemas and is also written by <code>npm run docs:openapi</code>; do not edit it by hand.</p>
+<p>A job that reports healthy but has never run on this host usually means scheduling is switched off (<code>JOBS_ENABLED=false</code>) or another instance holds the lease. See <a href="background-jobs.html">Background jobs</a>.</p>
+<h3 id="search-insights">Search insights</h3>
+<p><code>GET /api/search/analytics</code> (admin only): the most frequent queries, how results split across record types, the average response time, and queries that returned nothing, which is the most useful list: it shows what your team looked for and could not find (a missing category, a locality spelled differently).</p>
+<h3 id="data-requests">Data requests</h3>
+<p>Search for a team member, client, owner or buyer, then <strong>export</strong> everything held about them as JSON or <strong>erase</strong> their personal details (irreversible; admin only). The rules, what is retained and who may export are in <a href="sharing-and-imports.html#data-rights">Data export and erasure</a>.</p>
+
+<h2 id="unused">Config that exists but nothing reads</h2>
+<p>The workspace workflow schema also holds <code>listingStatuses</code>, <code>requireApprovalToPublish</code> and <code>requireApprovalOverPrice</code>. They are accepted in <code>PATCH /api/tenant/config</code> and returned in the public config, but no screen edits them and no code outside the model reads them, so setting them has no effect today. Listing statuses are the fixed four (<code>available</code>, <code>sold</code>, <code>rented</code>, <code>under_negotiation</code>).</p>
+
+<h2 id="quick">Quick reference: where do I change X?</h2>
+<table>
+<thead><tr><th>I want to…</th><th>Go to</th></tr></thead>
+<tbody>
+<tr><td>Change colours or the logo</td><td>Settings, Workspace, Workspace</td></tr>
+<tr><td>Switch area unit or currency</td><td>Settings, Workspace, Workspace, Units &amp; formats</td></tr>
+<tr><td>Hide a screen or rename "Clients" to "Leads"</td><td>Settings, Workspace, Menu &amp; screens</td></tr>
+<tr><td>Force a note when a deal is lost</td><td>Settings, Workspace, Rules (<code>requireNoteOnLoss</code>)</td></tr>
+<tr><td>Rename, reorder or drop pipeline stages</td><td>Settings, Sales, Sales pipeline</td></tr>
+<tr><td>Record what a lead channel costs</td><td>Settings, Sales, Lead sources</td></tr>
+<tr><td>Send mail from my own address</td><td>Settings, Integrations, Email</td></tr>
+<tr><td>Push new leads to Zapier</td><td>Settings, Integrations, Webhooks (<code>lead.created</code>)</td></tr>
+<tr><td>Check whether jobs are running</td><td>Settings, System, System</td></tr>
+<tr><td>Change a person's access</td><td><a href="team-roles-permissions.html">Admin Panel, Roles &amp; Permissions</a></td></tr>
+<tr><td>Change plan or limits</td><td>The platform operator (not available in the workspace)</td></tr>
+</tbody></table>
+<p>API references: <a href="api/tenant.html">Tenant</a>.</p>
+
+<div class="pager"><a href="team-roles-permissions.html"><small>Previous</small>Team, roles and permissions</a><a href="architecture.html"><small>Next</small>System architecture</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#overview">How Settings is organised</a><a class="h2" href="#account">Account tab (everyone)</a><a class="h2" href="#workspace">Workspace section: branding, units and plan</a><a class="h3" href="#branding">Branding tokens</a><a class="h3" href="#locale">Units and formats</a><a class="h3" href="#plan-usage">Plan and usage</a><a class="h2" href="#screens">Menu and screens</a><a class="h2" href="#rules">Rules</a><a class="h2" href="#pipeline">Sales pipeline</a><a class="h2" href="#sales-config">Lead sources, tags, sequences</a><a class="h2" href="#templates">Email templates</a><a class="h2" href="#email">Email (SMTP)</a><a class="h2" href="#webhooks">Webhooks</a><a class="h3" href="#webhook-setup">Setting one up</a><a class="h3" href="#webhook-events">Events</a><a class="h3" href="#webhook-delivery">Delivery, signing and the deliveries log</a><a class="h2" href="#system">System tab</a><a class="h3" href="#system-status">System</a><a class="h3" href="#search-insights">Search insights</a><a class="h3" href="#data-requests">Data requests</a><a class="h2" href="#unused">Config that exists but nothing reads</a><a class="h2" href="#quick">Quick reference: where do I change X?</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

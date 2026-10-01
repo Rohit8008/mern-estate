@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>platform — Real Vista Docs</title>
+<meta name="description" content="17 endpoints under /api/platform.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>platform</h1>
+<p class="lede"><a href="index.html">API reference</a> › platform. 17 endpoints under /api/platform.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="get-api-platform-summary">
+<h3 id="get-api-platform-summarysession"><span class="method get">GET</span>/api/platform/summary<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-platform-tenants-check-slug">
+<h3 id="get-api-platform-tenants-check-slugsession"><span class="method get">GET</span>/api/platform/tenants/check-slug<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-platform-tenants">
+<h3 id="get-api-platform-tenantssession"><span class="method get">GET</span>/api/platform/tenants<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-platform-tenants">
+<h3 id="post-api-platform-tenantssession"><span class="method post">POST</span>/api/platform/tenants<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td></td><td>max 120</td></tr><tr><td><code>slug</code></td><td>string</td><td></td><td>max 63</td></tr><tr><td><code>adminEmail</code></td><td>string</td><td></td><td>email; max 254</td></tr><tr><td><code>adminName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>adminPassword</code></td><td>any</td><td></td><td></td></tr><tr><td><code>plan</code></td><td>string</td><td></td><td>max 40</td></tr><tr><td><code>trialDays</code></td><td>any</td><td></td><td></td></tr><tr><td><code>branding</code></td><td>object</td><td></td><td></td></tr><tr><td><code>locale</code></td><td>object</td><td></td><td></td></tr><tr><td><code>features</code></td><td>object</td><td></td><td></td></tr><tr><td><code>seedSampleData</code></td><td>boolean</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-platform-tenants-id">
+<h3 id="get-api-platform-tenants-id-session"><span class="method get">GET</span>/api/platform/tenants/{id}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="patch-api-platform-tenants-id">
+<h3 id="patch-api-platform-tenants-id-session"><span class="method patch">PATCH</span>/api/platform/tenants/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td></td><td>max 120</td></tr><tr><td><code>plan</code></td><td>string</td><td></td><td>max 40</td></tr><tr><td><code>status</code></td><td>string</td><td></td><td>max 40</td></tr><tr><td><code>trialEndsAt</code></td><td>any</td><td></td><td></td></tr><tr><td><code>limits</code></td><td>object</td><td></td><td></td></tr><tr><td><code>features</code></td><td>object</td><td></td><td></td></tr><tr><td><code>customDomain</code></td><td>any</td><td></td><td></td></tr><tr><td><code>billingEmail</code></td><td>any</td><td></td><td></td></tr><tr><td><code>internalNotes</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-platform-tenants-id-suspend">
+<h3 id="post-api-platform-tenants-id-suspendsession"><span class="method post">POST</span>/api/platform/tenants/{id}/suspend<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>reason</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-platform-tenants-id-resume">
+<h3 id="post-api-platform-tenants-id-resumesession"><span class="method post">POST</span>/api/platform/tenants/{id}/resume<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>reason</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-platform-tenants-id-invite">
+<h3 id="post-api-platform-tenants-id-invitesession"><span class="method post">POST</span>/api/platform/tenants/{id}/invite<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
+</section>
+<section class="endpoint" id="get-api-platform-plans">
+<h3 id="get-api-platform-planssession"><span class="method get">GET</span>/api/platform/plans<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-platform-tenants-id-billing">
+<h3 id="get-api-platform-tenants-id-billingsession"><span class="method get">GET</span>/api/platform/tenants/{id}/billing<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-platform-tenants-id-plan">
+<h3 id="post-api-platform-tenants-id-plansession"><span class="method post">POST</span>/api/platform/tenants/{id}/plan<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>plan</code></td><td>string</td><td>yes</td><td>max 40</td></tr><tr><td><code>keepOverrides</code></td><td>boolean</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-platform-tenants-id-invoices">
+<h3 id="post-api-platform-tenants-id-invoicessession"><span class="method post">POST</span>/api/platform/tenants/{id}/invoices<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
+</section>
+<section class="endpoint" id="post-api-platform-invoices-invoiceid-pay">
+<h3 id="post-api-platform-invoices-invoiceid-paysession"><span class="method post">POST</span>/api/platform/invoices/{invoiceId}/pay<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>invoiceId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>reference</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-platform-invoices-invoiceid-void">
+<h3 id="post-api-platform-invoices-invoiceid-voidsession"><span class="method post">POST</span>/api/platform/invoices/{invoiceId}/void<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>invoiceId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>reason</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-platform-act-as-id">
+<h3 id="post-api-platform-act-as-id-session"><span class="method post">POST</span>/api/platform/act-as/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
+</section>
+<section class="endpoint" id="post-api-platform-stop-acting">
+<h3 id="post-api-platform-stop-actingsession"><span class="method post">POST</span>/api/platform/stop-acting<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#get-api-platform-summarysession">GET /api/platform/summary</a><a class="h3" href="#get-api-platform-tenants-check-slugsession">GET /api/platform/tenants/check-slug</a><a class="h3" href="#get-api-platform-tenantssession">GET /api/platform/tenants</a><a class="h3" href="#post-api-platform-tenantssession">POST /api/platform/tenants</a><a class="h3" href="#get-api-platform-tenants-id-session">GET /api/platform/tenants/{id}</a><a class="h3" href="#patch-api-platform-tenants-id-session">PATCH /api/platform/tenants/{id}</a><a class="h3" href="#post-api-platform-tenants-id-suspendsession">POST /api/platform/tenants/{id}/suspend</a><a class="h3" href="#post-api-platform-tenants-id-resumesession">POST /api/platform/tenants/{id}/resume</a><a class="h3" href="#post-api-platform-tenants-id-invitesession">POST /api/platform/tenants/{id}/invite</a><a class="h3" href="#get-api-platform-planssession">GET /api/platform/plans</a><a class="h3" href="#get-api-platform-tenants-id-billingsession">GET /api/platform/tenants/{id}/billing</a><a class="h3" href="#post-api-platform-tenants-id-plansession">POST /api/platform/tenants/{id}/plan</a><a class="h3" href="#post-api-platform-tenants-id-invoicessession">POST /api/platform/tenants/{id}/invoices</a><a class="h3" href="#post-api-platform-invoices-invoiceid-paysession">POST /api/platform/invoices/{invoiceId}/pay</a><a class="h3" href="#post-api-platform-invoices-invoiceid-voidsession">POST /api/platform/invoices/{invoiceId}/void</a><a class="h3" href="#post-api-platform-act-as-id-session">POST /api/platform/act-as/{id}</a><a class="h3" href="#post-api-platform-stop-actingsession">POST /api/platform/stop-acting</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

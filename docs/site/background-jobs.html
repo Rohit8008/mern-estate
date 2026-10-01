@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Background jobs and automation — Real Vista Docs</title>
+<meta name="description" content="The lease-based scheduler and its jobs, lead scoring, follow-up sequences, outbound webhooks, workspace rules, imports, data rights and notification types.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html" class="active">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Background jobs and automation</h1>
+<p class="lede">The lease-based scheduler and its jobs, lead scoring, follow-up sequences, outbound webhooks, workspace rules, imports, data rights and notification types.</p>
+
+<h2 id="scheduler">The scheduler</h2>
+<p><code>backend/jobs/scheduler.js</code> is deliberately dependency-free. Jobs here run every N minutes or once a day at a given hour, so a cron parser would buy expressiveness the app does not need and add a dependency to keep current. Before it existed there was no scheduler at all, which is why a set of schema fields never did anything: <code>task.reminders[].sent</code>, <code>followUp.reminderSent</code>, and <code>tenant.trialEndsAt</code> (only checked lazily, when somebody happened to make a request).</p>
+<p>Two properties matter:</p>
+<ul>
+<li><strong>Single-firing across instances.</strong> The app ships under PM2 cluster mode and on hosts where more than one instance is normal. Each run takes a <em>lease</em> in Mongo (<code>models/jobLock.model.js</code>: <code>name</code> unique, <code>lockedUntil</code>, <code>owner</code>, <code>lastRunAt</code>, <code>lastResult</code>), so N instances still produce one run. It is a lease rather than a flag because a process can die mid-job: <code>lockedUntil</code> expires on its own, so a crash costs one cycle rather than wedging the job. <code>JobLock</code> is not tenant-scoped: the scheduler is infrastructure.</li>
+<li><strong>Non-overlapping.</strong> A run that is still going holds its lease, so a slow job is skipped rather than stacked on itself. The in-process tick also refuses to overlap itself.</li>
+</ul>
+
+<h3 id="claim">How a job is claimed</h3>
+<div class="flow">
+<div class="step">setInterval every 60 s (unref'd)</div><div class="arrow">→</div>
+<div class="step">tick(now): for each job, one atomic findOneAndUpdate</div><div class="arrow">→</div>
+<div class="step">lease free AND due? owner = this instance</div><div class="arrow">→</div>
+<div class="step">run handler, renewing lease</div><div class="arrow">→</div>
+<div class="step">release: lastRunAt = now, lockedUntil = epoch</div>
+</div>
+<ul>
+<li>The decision is one atomic <code>findOneAndUpdate</code> with <code>upsert</code>. Read-then-write would let two instances both see a free lock and both take it. If two instances create the lock in the same instant, one gets a duplicate-key error (code 11000), which is treated as "lost the race", not as a failure.</li>
+<li><strong>Due</strong> means: for <code>dailyAt: 'HH:MM'</code> (always <strong>UTC</strong>), today's slot has passed and <code>lastRunAt</code> is before it; for <code>everyMs</code>, <code>lastRunAt</code> is at or before <code>now - everyMs</code>. Register with <code>registerJob(name, { everyMs | dailyAt, leaseMs = 5 min }, handler)</code>. The <code>name</code> is the lock key, so never rename one casually. <code>dailyAt</code> wins if both are given.</li>
+<li><strong>Lease heartbeat.</strong> While a handler is running the lease is renewed every <code>max(10 s, leaseMs / 3)</code>. A fixed lease is a bet on how long a job takes, and the bet is wrong the moment the work grows: reminder jobs send email, mail costs seconds per message, and when the lease expired mid-run another instance claimed it and the same reminders went out twice. The lease stays short, so a process that dies still frees the job within one interval.</li>
+<li>A failing handler is logged, its <code>lastResult</code> is set to <code>failed: &lt;message&gt;</code>, and the lock is released; it does not crash the scheduler.</li>
+</ul>
+<div class="warn"><p><strong><code>tick(now)</code> takes the time as an argument. Never read the clock inside a job's cadence logic.</strong> The cadence decision and the stored <code>lastRunAt</code> must agree on what time it is. Reading the clock inside made a daily job stamp wall-clock time while <code>tick</code> reasoned about the time it was given, so the two disagreed and the job never became due again. This is also what lets <code>tests/scheduler.test.js</code> drive the scheduler with a fake time.</p></div>
+
+<h2 id="jobs">The registered jobs</h2>
+<p>All jobs are registered in one place, <code>backend/jobs/index.js</code> (<code>registerAllJobs()</code>, called once by <code>startJobs()</code> after the server is listening). Each job body runs inside <code>forEachTenant()</code> (<code>tenancy/tenantContext.js</code>), because a query with no tenant context throws by design: a sweep has to enter each workspace rather than querying across all of them. One workspace failing is recorded in the job's log line and does not stop the rest.</p>
+<table>
+<thead><tr><th>Job (lock name)</th><th>Cadence</th><th>Lease</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>task-reminders</code></td><td>every 5 min</td><td>5 min</td><td>For tasks not done with a <code>reminders[]</code> entry due and unsent: marks it sent, then raises a <code>task.due</code> notification to the assignee. Up to 500 tasks per workspace per run.</td></tr>
+<tr><td><code>followup-reminders</code></td><td>every 5 min</td><td>5 min</td><td>For client follow-ups that are due, not completed and not yet reminded: marks <code>reminderSent</code>, notifies the lead's <code>assignedTo</code> with <code>followup.due</code>. Up to 500 clients per workspace per run.</td></tr>
+<tr><td><code>webhook-delivery</code></td><td>every 60 s</td><td>2 min</td><td><code>deliverDueWebhooks()</code>: up to 50 due deliveries per workspace per run. See <a href="#webhooks">webhooks</a>.</td></tr>
+<tr><td><code>sequence-steps</code></td><td>every 15 min</td><td>10 min</td><td><code>runDueSequenceSteps()</code>: up to 100 due enrollments per workspace per run. See <a href="#sequences">sequences</a>.</td></tr>
+<tr><td><code>import-usage-reset</code></td><td>daily 02:10 UTC</td><td>5 min</td><td>Rolls the legacy <code>tenant.importUsage</code> counter into a new UTC month (all workspaces, including suspended: <code>serviceableOnly: false</code>). See the note under <a href="#imports">imports</a>.</td></tr>
+<tr><td><code>lead-rescore</code></td><td>daily 03:00 UTC</td><td>15 min</td><td>Recomputes score and temperature of open leads. See <a href="#scoring">lead scoring</a>.</td></tr>
+<tr><td><code>overdue-invoice-sweep</code></td><td>daily 07:30 UTC</td><td>5 min</td><td>Not per workspace (invoices are vendor-side): sets <code>billing.state = 'past_due'</code> on workspaces with an <code>issued</code> invoice past its due date. Only flags; never suspends. See <a href="multi-tenancy.html#billing">Billing</a>.</td></tr>
+<tr><td><code>trial-expiry-sweep</code></td><td>daily 08:00 UTC</td><td>5 min</td><td>Warns workspace admins with a <code>system.alert</code> notification when a trial has 7, 3 or 1 days left, and once it has lapsed (while within a day of the end). Includes workspaces that just became unserviceable.</td></tr>
+</tbody>
+</table>
+<p>Reminders and webhooks are idempotent by construction: the reminder flag is set <em>before</em> the notification is sent ("if it fails we would rather drop one reminder than risk a loop that re-sends it every minute"), and webhook deliveries move to a terminal status.</p>
+
+<h3 id="jobs-enabled"><code>JOBS_ENABLED</code></h3>
+<p><code>JOBS_ENABLED=false</code> makes an instance serve traffic but take no leases (the scheduler is never started), useful when you want jobs confined to one host. Any other value, including unset, enables them. Because leases make firing single, you normally do not need this on a small cluster. On shutdown <code>stopScheduler()</code> clears the interval; note that a lease held by a run still in flight is not released by shutdown and simply expires.</p>
+
+<h2 id="scoring">Lead scoring and temperature</h2>
+<p><code>client.calculateScore()</code> (<code>models/client.model.js</code>) is the <strong>only</strong> place the score is computed. It sums five factors and caps at 100 (the schema caps it too, so an over-100 total must not fail validation on a lead that is doing well):</p>
+<table>
+<thead><tr><th>Factor</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td><code>engagement</code></td><td>10 per communication in the last 30 days, max 30</td></tr>
+<tr><td><code>budget</code></td><td>20 if <code>budget.max &gt; 0</code></td></tr>
+<tr><td><code>urgency</code></td><td>priority low 5, medium 10, high 20, urgent 30 (default 10)</td></tr>
+<tr><td><code>fit</code></td><td>5 per interested listing, max 20</td></tr>
+<tr><td><code>recency</code></td><td>days since last touch (<code>lastContactAt</code>, else <code>updatedAt</code>, else <code>createdAt</code>): 7 days or fewer 20, 30 or fewer 12, 90 or fewer 5, otherwise 0</td></tr>
+</tbody>
+</table>
+<p><code>temperature</code> follows the score (60 and up <code>hot</code>, 30 and up <code>warm</code>, else <code>cold</code>) <strong>unless someone set it by hand</strong>, which sets <code>temperatureManual</code> and pins it. Every recomputation honours the pin, including the nightly job.</p>
+<p>It runs on lead creation, on a client update, on a deal stage change, when communications or follow-ups change (several <code>crm.controller.js</code> paths), in lead import, and nightly. The recency factor is why: the score <em>decays</em>, and nothing else would recompute it on a timer, so a lead that was busy last month would keep the score it earned while warm.</p>
+<ul>
+<li>The nightly job (<code>jobs/leadScoring.js</code>) skips <strong>won and lost</strong> leads: their score is history, and rewriting it would quietly change what past reports say.</li>
+<li>It writes only <code>score</code>, <code>scoreFactors</code> and <code>temperature</code> through <code>updateOne</code>, skipping validation and middleware so an unrelated, already-invalid field cannot make it fail.</li>
+<li>It loads at most 1000 open leads per workspace per night (<code>batchSize = 1000</code>, with no sort or cursor). A workspace with more open leads than that is not fully rescored by a single run.</li>
+</ul>
+
+<h2 id="sequences">Follow-up sequences</h2>
+<p>A sequence (<code>models/sequence.model.js</code>) is an ordered list of steps, each with an <code>action</code> (<code>email</code>, <code>task</code> or <code>reminder</code>), a <code>delayDays</code> from the previous step (0 to 365; from enrollment for the first), a <code>subject</code> and a <code>body</code> (up to 5000 characters) that support the same <code>{{name}}</code> merge fields as email templates, resolved against the lead (<code>recipientName</code>, <code>firstName</code>, <code>lastName</code>, <code>phone</code>, <code>email</code>). Delays rather than absolute dates mean a sequence can be enrolled at any time. Admins create, edit and delete sequences; admins and employees enroll a lead with <code>POST /api/sequences/:id/enroll</code> (re-enrolling restarts it). Enrollment statuses: <code>active</code>, <code>completed</code>, <code>stopped</code>.</p>
+<p><code>jobs/sequences.js</code> fires due steps per workspace. The rules it exists to guarantee:</p>
+<ul>
+<li><strong>A step fires exactly once.</strong> The enrollment advances (<code>currentStep</code>, <code>nextStepAt</code>, a history entry) in the same pass, so a retry or a second instance cannot send the same email twice.</li>
+<li><strong>It never chases a closed lead.</strong> Continuing to chase someone who already bought or said no is the worst thing an automation like this can do. <code>stopSequencesForClient()</code> is called synchronously from <code>updateDealStage</code> when a deal becomes <code>closed_won</code> or <code>closed_lost</code>, so the gap between "marked won" and "sent another chase email" does not exist. As a backstop, every due enrollment is re-checked when the job reaches it and stopped if the lead is won, lost or deleted (<code>stoppedReason</code> such as "lead marked won" or "lead removed"), if the sequence was deleted, or if the sequence is paused (<code>isActive = false</code>). Deleting a lead does not call <code>stopSequencesForClient</code>; that case is caught by the job's own check at the next tick.</li>
+<li><strong>A failing step does not wedge the enrollment.</strong> It advances anyway with <code>failed: &lt;message&gt;</code> recorded in the history, so one bad address cannot freeze an enrollment.</li>
+<li><strong>An unsubscribed address gets no email.</strong> The workspace suppression list (<code>EmailSuppression</code>) is checked at send time, every time. Every sequence email ends with who is writing and a working unsubscribe link, and carries <code>List-Unsubscribe</code> and <code>List-Unsubscribe-Post: List-Unsubscribe=One-Click</code> headers (RFC 2369 and RFC 8058, required by Gmail and Yahoo from bulk senders). Task and reminder steps still fire since they go to the agent, not the lead.</li>
+</ul>
+<p>Step outcomes recorded in history include <code>email sent</code>, <code>skipped: no email address</code>, <code>skipped: unsubscribed</code>, <code>email failed: &lt;reason&gt;</code>, <code>task created</code> and <code>reminder sent</code>. The unsubscribe endpoints (<code>GET/POST /api/unsubscribe/:token</code>) are public, rate limited, and answer before tenant resolution because the signed token names the workspace and lead.</p>
+
+<h2 id="webhooks">Outbound webhooks</h2>
+<p>A workspace admin subscribes endpoints (<code>/api/webhooks</code>, <a href="api/webhooks.html">reference</a>) so the CRM can feed Zapier, Make, n8n or the agency's own scripts. The design separates two halves so a slow or dead customer endpoint can never slow down, or fail, the user's action:</p>
+<pre><code>request (e.g. create lead)             scheduler, every 60 s
+  emitEvent(event, payload)     --&gt;      deliverDueWebhooks()
+  inserts WebhookDelivery rows           POST each due row, sign it,
+  (never throws, never waits             record the result, retry or give up
+   on the network)</code></pre>
+<ul>
+<li><code>emitEvent</code> finds this workspace's active webhooks subscribed to the event (or to <code>*</code>) and inserts one <code>WebhookDelivery</code> per hook. It never throws.</li>
+<li>The queue lives in Mongo, not in memory, because the process that raised the event may not be the one that delivers it and a restart must not lose deliveries. It doubles as the delivery log; rows expire after 30 days (TTL index).</li>
+</ul>
+
+<h3 id="webhook-events">Events (<code>WEBHOOK_EVENTS</code>)</h3>
+<p>A closed catalogue in <code>models/webhook.model.js</code>: a subscription is stored config, so an event name is a contract, and renaming one silently breaks customers' automations. A subscription may use <code>*</code>, which is stored as-is (not expanded) so new event types reach existing subscribers.</p>
+<table>
+<thead><tr><th>Event</th><th>Meaning</th><th>Emitted by code today?</th></tr></thead>
+<tbody>
+<tr><td><code>lead.created</code></td><td>A lead or client was created</td><td>Yes (<code>client.controller.js</code>; each lead from lead import)</td></tr>
+<tr><td><code>lead.updated</code></td><td>A lead was changed</td><td>Yes</td></tr>
+<tr><td><code>lead.assigned</code></td><td>A lead was assigned to an agent</td><td>Yes</td></tr>
+<tr><td><code>lead.deleted</code></td><td>A lead was deleted</td><td>Yes</td></tr>
+<tr><td><code>deal.stage_changed</code></td><td>A deal moved to a new stage</td><td>Yes (<code>crm.controller.js</code>)</td></tr>
+<tr><td><code>listing.created</code></td><td>A property was added</td><td>Yes (<code>listing.controller.js</code>)</td></tr>
+<tr><td><code>deal.created</code></td><td>A deal was added</td><td>No <code>emitEvent</code> call found</td></tr>
+<tr><td><code>listing.updated</code></td><td>A property was changed</td><td>No <code>emitEvent</code> call found</td></tr>
+<tr><td><code>task.created</code></td><td>A task was created</td><td>No <code>emitEvent</code> call found</td></tr>
+<tr><td><code>task.completed</code></td><td>A task was completed</td><td>No <code>emitEvent</code> call found</td></tr>
+<tr><td><code>buyer.created</code></td><td>A buyer requirement was added</td><td>No <code>emitEvent</code> call found</td></tr>
+<tr><td><code>share.viewed</code></td><td>Someone opened a share link</td><td>No <code>emitEvent</code> call found</td></tr>
+</tbody>
+</table>
+<div class="note"><p>The last six events are in the catalogue (and so selectable in the UI) but no controller calls <code>emitEvent</code> for them yet; a subscriber to only those will never receive a delivery. The payload is <code>{ event, sentAt, data }</code> where <code>data</code> is the small object each call site passes (for example <code>{ id, name, phone, source }</code> for a lead).</p></div>
+
+<h3 id="webhook-signing">Delivery and signing</h3>
+<p>Each attempt is a <code>POST</code> with a 10 s timeout, <code>redirect: 'error'</code> (a redirect to somewhere else is not a delivery), and these headers:</p>
+<table>
+<thead><tr><th>Header</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+<tr><td><code>User-Agent</code></td><td><code>RealVista-Webhooks/1</code></td></tr>
+<tr><td><code>X-Webhook-Event</code></td><td>The event name</td></tr>
+<tr><td><code>X-Webhook-Delivery</code></td><td>The delivery id</td></tr>
+<tr><td><code>X-Webhook-Timestamp</code></td><td>Unix seconds</td></tr>
+<tr><td><code>X-Webhook-Signature</code></td><td><code>sha256=</code> + hex HMAC-SHA256 of <code>&lt;timestamp&gt;.&lt;raw body&gt;</code> using the endpoint secret</td></tr>
+</tbody>
+</table>
+<p>The timestamp is inside the signed string, so a captured delivery cannot be replayed later against a receiver that checks it. This is the same scheme Stripe and GitHub use. The secret (<code>whsec_</code> followed by 48 hex characters) is stored in the clear by design: the receiver needs the same value, so an admin has to be able to read it back. It is a signing key, not a credential to anything of ours. <code>POST /api/webhooks/:id/rotate-secret</code> replaces it.</p>
+<pre><code>// Receiver (Node): verify before trusting the body
+const signed = `${req.headers['x-webhook-timestamp']}.${rawBody}`;
+const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(signed).digest('hex');
+const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers['x-webhook-signature']));</code></pre>
+
+<h3 id="webhook-retries">Retries, failure and disabling</h3>
+<ul>
+<li>5 attempts maximum. After a failed attempt the next is scheduled after <code>10 s</code>, <code>1 min</code>, <code>5 min</code>, then <code>30 min</code>; after the fifth failure the delivery is <code>failed</code>.</li>
+<li>Delivery statuses: <code>pending</code>, <code>delivered</code> (any 2xx), <code>failed</code>, <code>abandoned</code> (the endpoint was deleted or switched off after the row was queued).</li>
+<li>The endpoint tracks <code>failureCount</code>, reset on any success. At <strong>10 consecutive failures</strong> it sets <code>isActive = false</code> with <code>disabledReason</code>, so a dead endpoint stops consuming retries.</li>
+<li>The response body is truncated to 2000 characters in the log, so a receiver returning megabytes cannot fill the collection.</li>
+<li><code>validateWebhookUrl</code> guards against server-side request forgery: http or https only; literal private and loopback ranges, link-local (including cloud metadata at 169.254.x), <code>.local</code>, <code>.internal</code> and <code>.localhost</code> are refused; in production the URL must be https. It is a guard rather than a guarantee, since a public hostname that resolves to a private address is not caught (which is also why redirects are refused at fetch time).</li>
+<li>Admin endpoints: <code>GET/POST /api/webhooks</code>, <code>PATCH/DELETE /api/webhooks/:id</code>, <code>POST /:id/rotate-secret</code>, <code>POST /:id/test</code>, <code>GET /:id/deliveries</code>.</li>
+</ul>
+
+<h2 id="rules">Workspace rules and plugins</h2>
+<p><code>tenant.workflow.rules</code> lets a workspace select <strong>named implementations</strong> registered in code (<code>plugins/builtin.js</code>) for fixed extension points. Config never carries code, so an admin editing settings cannot execute anything the deployment did not ship. This is the "vocabulary in code, selection in config" rule. (Earlier, the field existed in the schema with five hook names and nothing ever read it: a workspace could configure a rule and get neither behaviour nor a warning.)</p>
+<p>Each rule entry is <code>{ hook, implementation, config, enabled, order }</code>. Rules for a hook run in <code>order</code>. A rule receives the operation's context and may return a partial patch that is merged into it, so a <code>listing.beforeSave</code> rule can normalise a field without knowing about the others. <code>GET /api/rules</code> (admin) returns the hooks, the available implementations and the workspace's configured rules; rules are saved through <code>PATCH /api/tenant/config</code> (<code>workflow.rules</code>) from <code>WorkspaceRulesPanel.jsx</code>.</p>
+
+<h3 id="hooks">Hooks (<code>HOOKS</code> in <code>plugins/registry.js</code>)</h3>
+<table>
+<thead><tr><th>Hook</th><th>Where it is called</th></tr></thead>
+<tbody>
+<tr><td><code>listing.beforeSave</code></td><td><code>createListing</code> in <code>listing.controller.js</code>, before the write. (Not called from the update path.)</td></tr>
+<tr><td><code>listing.afterSave</code></td><td><code>createListing</code>, after the write, with <code>created: true</code>.</td></tr>
+<tr><td><code>deal.beforeStageChange</code></td><td><code>updateDealStage</code> in <code>crm.controller.js</code>, with <code>fromStage</code>, <code>toStage</code>, <code>notes</code>.</td></tr>
+<tr><td><code>lead.onCreate</code></td><td><code>client.controller.js</code> create.</td></tr>
+<tr><td><code>listing.beforeImport</code></td><td>Declared and has a built-in rule, but no call to <code>runHook('listing.beforeImport', ...)</code> exists in the listing import controller, so such a rule currently does nothing.</td></tr>
+</tbody>
+</table>
+
+<h3 id="builtin-rules">Built-in rules</h3>
+<table>
+<thead><tr><th>Implementation</th><th>Hook</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>normaliseLocality</code></td><td>listing.beforeSave</td><td>Trims and title-cases the locality so "whitefield " and "Whitefield" group together.</td></tr>
+<tr><td><code>requirePriceOnPublish</code></td><td>listing.beforeSave</td><td>Vetoes saving a listing with <code>status: 'available'</code> and no price above 1: "This property needs a price before it can be published".</td></tr>
+<tr><td><code>defaultCityFromWorkspace</code></td><td>listing.beforeSave</td><td>Fills an empty city with <code>config.city</code>.</td></tr>
+<tr><td><code>requireNoteOnLoss</code></td><td>deal.beforeStageChange</td><td>Vetoes moving a deal to <code>closed_lost</code> without a note.</td></tr>
+<tr><td><code>blockSkippingToWon</code></td><td>deal.beforeStageChange</td><td>Vetoes jumping from <code>new_lead</code> or <code>contacted</code> straight to <code>closed_won</code>.</td></tr>
+<tr><td><code>tagLeadBySource</code></td><td>lead.onCreate</td><td>Sets the lead's priority from <code>config.priorityBySource</code>, keyed by lowercased source.</td></tr>
+<tr><td><code>skipRowsWithoutPrice</code></td><td>listing.beforeImport</td><td>Marks an imported row with no price as skipped (see the hook note above).</td></tr>
+</tbody>
+</table>
+
+<h3 id="veto">Veto versus error: two different things</h3>
+<p>A rule can call <code>veto('message')</code> (throws <code>RuleVetoError</code>, status 400). <code>runHook</code> treats the two outcomes differently, and they must stay distinct:</p>
+<ul>
+<li><strong>A veto propagates.</strong> It is the rule working: the whole point of "ask for a reason before marking a deal lost" is that it reaches the user as a validation error (HTTP 400) they can act on.</li>
+<li><strong>Any other thrown error is logged and the rule is skipped.</strong> That means somebody's automation is misconfigured, which must not stop them saving a property.</li>
+<li>An unregistered <code>implementation</code> name in stored config is logged as a warning and skipped. Names are not validated when the config is saved.</li>
+</ul>
+<p>Catching both in one handler once made every veto rule silently do nothing. <code>registerRule</code> throws on an unknown hook, a missing <code>run</code>, or a duplicate name. A rule's name is a contract with stored config: never rename one. To add a rule: write it in <code>plugins/builtin.js</code> with <code>registerRule(name, { hook, describe, run })</code>; if it needs options, the panel in the frontend needs a matching editor.</p>
+
+<h2 id="imports">Imports</h2>
+<p>There are two importers: listings (<code>/api/listing/import/suggest-mapping|preview|commit</code>, wizard at <code>/admin/import</code>) and leads (<code>/api/lead-import/suggest-mapping|preview|commit</code>, wizard at <code>/admin/import-leads</code>). Both follow the same shape: <strong>suggest a column mapping, preview, then commit</strong>. Both validate every row first and then write in batches with per-row results.</p>
+<ul>
+<li><strong>Leads:</strong> up to 5000 rows per request (<code>MAX_ROWS</code>), written in <code>insertMany</code> batches of 500 with <code>ordered: false</code>, so one bad row costs that row and not the rest of the file. It used to save one row at a time and the first row the database refused threw out of the loop: rows before it were written, rows after it were not, and the response did not say which.</li>
+<li><strong>Listings:</strong> at most 500 rows per request (<code>IMPORT_CHUNK_LIMIT</code>; the client chunks) and 20000 per import job (<code>IMPORT_TOTAL_LIMIT</code>). <code>duplicateMode</code> is <code>skip</code>, <code>update</code> or <code>create</code>; updates never reassign <code>userRef</code>, the original creator.</li>
+<li><strong>Row errors</strong> are returned in <code>rowErrors</code>, capped at 200 entries (<code>MAX_ROW_ERRORS</code>); the counts stay exact and <code>rowErrorsTruncated</code> says the list was cut. A 5000-row file of the wrong export should not produce a 5000-entry response. The summary mirrors the ingest pipeline shape (<code>inputCount</code>, <code>inserted</code>, <code>updated</code>, <code>failed</code>) on top of the older <code>created</code> and <code>skipped</code> fields the UI reads.</li>
+<li><strong>Duplicates and errors are skipped, not merged</strong> (lead import): deciding two records are the same person is a judgement an importer should not make silently on 400 rows. Duplicate detection uses indexed lookups only (<code>phoneKey</code>, <code>email</code>), one query per key kind, not one regex per row.</li>
+<li><strong>The monthly meter:</strong> <code>maxImportRowsPerMonth</code> is enforced by <code>reserveImportRows(n)</code> in <code>tenancy/limits.js</code>, which atomically reserves rows in <code>models/importUsage.model.js</code> <em>before</em> any row is written (refusing halfway through a file would leave the agency guessing which half they have) and returns <code>release(unused)</code> to hand back what did not land, so duplicates and refused rows do not cost allowance. A refusal is <strong>402 <code>PLAN_LIMIT</code></strong> with <code>details: { limit, used, requested, remaining }</code>. Both importers charge the same meter.</li>
+<li><strong><code>insertMany</code> skips <code>pre('save')</code>,</strong> so the lead importer sets derived fields (phone key, score via <code>calculateScore()</code>, assignment per the workspace's rule) itself. <code>tests/leadImportCommit.test.js</code> compares an imported lead with a saved one so the two cannot drift. Each created lead also emits <code>lead.created</code>.</li>
+<li>If a column header or field aliases a native listing column, update <code>NATIVE_FIELD_ALIASES</code> in <strong>both</strong> <code>frontend/src/utils/nativeFieldAliases.js</code> and <code>backend/utils/importMapping.js</code>.</li>
+</ul>
+<div class="note"><p>The <code>import-usage-reset</code> job rolls <code>tenant.importUsage</code>, the older counter on the tenant document. The enforced meter is the <code>ImportUsage</code> collection keyed by <code>{tenantId, month}</code>, where the month in the workspace's own timezone is part of the key, so it resets by changing key rather than by a job. The job is therefore housekeeping for the legacy field.</p></div>
+
+<h2 id="data-rights">Data rights</h2>
+<p><code>controllers/dataRights.controller.js</code> and <code>routes/dataRights.route.js</code> (<code>/api/data-rights</code>) implement access and erasure. Before this there was no export, no erasure, and a "Delete Account" button that only deactivated while telling the user it removed everything.</p>
+<table>
+<thead><tr><th>Endpoint</th><th>Who</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span> <code>/export/me</code></td><td>Any signed-in user</td><td>Everything the workspace holds about the caller, as JSON (<code>tenantId</code> and <code>__v</code> stripped).</td></tr>
+<tr><td><span class="method get">GET</span> <code>/export/user/:id</code></td><td><code>exportData</code> permission</td><td>Export a team member.</td></tr>
+<tr><td><span class="method get">GET</span> <code>/export/:kind/:id</code></td><td><code>exportData</code> permission</td><td>Export a contact.</td></tr>
+<tr><td><span class="method delete">DELETE</span> <code>/erase/user/:id</code></td><td>Workspace admin</td><td>Erases a team member's personal details.</td></tr>
+<tr><td><span class="method delete">DELETE</span> <code>/erase/:kind/:id</code></td><td>Workspace admin</td><td>Erases a contact (<code>client</code>, <code>owner</code> or <code>buyer</code>).</td></tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Erasing a team member</strong> closes the account (inactive, soft-deleted, <code>refreshTokens</code> emptied) and replaces personal fields (<code>username</code>, <code>email</code>, <code>phone</code> and the address fields). <em>Records they created stay</em>, attributed to "Former team member &lt;id&gt;": a workspace's audit trail and property book belong to the agency, and a trail with a dangling author is worse than one naming a former member. The shared <code>erasedUserFields(id)</code> is used by admin erasure and self-service account deletion so they cannot drift. Username and email carry the full id because both are unique per workspace; a constant made every erasure after the first fail with a duplicate-key error and left the data in place. <code>phone</code> becomes <code>null</code>, not an empty string, because the phone index is partial on strings. Their notifications are deleted and security logs keyed on their email are re-keyed. An admin cannot erase themselves, and a platform operator cannot be erased from here.</li>
+<li><strong>Erasing a contact</strong> removes the personal details outright and keeps an anonymous shell ("Erased contact") so counts and pipeline history stay correct, and soft-deletes their documents and makes them non-public.</li>
+<li>Each key in <code>ERASABLE_CONTACTS</code> must be a real path on its model: an unknown <code>$set</code> key is dropped silently under Mongoose strict mode, so a wrong field name does not fail, it leaves the data in place. <code>tests/erasureFields.test.js</code> checks this.</li>
+<li>Erasure is deliberately irreversible and admin-only. The policy text on <code>/privacy</code> makes claims about these buttons, so a change here changes <code>pages/Legal.jsx</code> in the same commit (see <a href="security.html">Security and data protection</a>).</li>
+</ul>
+
+<h2 id="notification-types">Notification types</h2>
+<p><code>utils/notificationTypes.js</code> is the one catalogue. It feeds the Notification model's enum, the per-user preference toggles and the Settings screen, so the three cannot disagree. In-app delivery always happens unless the user turned it off ("the bell is the record of what occurred"); <code>defaultEmail</code> decides whether mail is also sent when the user has expressed no preference. An email preference is honoured only when stored as exactly <code>true</code>.</p>
+<table>
+<thead><tr><th>Type</th><th>When</th><th>Email by default</th></tr></thead>
+<tbody>
+<tr><td><code>lead.assigned</code></td><td>A client or lead is assigned to you</td><td>yes</td></tr>
+<tr><td><code>deal.stage_changed</code></td><td>A deal you own moves to a new stage</td><td>yes</td></tr>
+<tr><td><code>task.assigned</code></td><td>Someone assigns you a task</td><td>yes</td></tr>
+<tr><td><code>task.due</code></td><td>A reminder shortly before one of your tasks is due</td><td>yes</td></tr>
+<tr><td><code>followup.due</code></td><td>A scheduled follow-up comes due (also used by sequence reminder steps)</td><td>yes</td></tr>
+<tr><td><code>buyer.match</code></td><td>A new listing matches one of your buyer requirements</td><td>no</td></tr>
+<tr><td><code>message.received</code></td><td>A colleague sends you a message</td><td>no</td></tr>
+<tr><td><code>import.finished</code></td><td>A bulk import you started completes</td><td>no</td></tr>
+<tr><td><code>share.viewed</code></td><td>Someone opens a share link you created</td><td>no</td></tr>
+<tr><td><code>listing.updated</code></td><td>A property you are involved with is created or changed</td><td>no</td></tr>
+<tr><td><code>system.alert</code></td><td>Plan limits, trial expiry and other account notices</td><td>yes</td></tr>
+</tbody>
+</table>
+<p>Raise them only through <code>notify()</code> (see <a href="architecture.html#notifications">Architecture</a>). A workspace can rewrite the wording of an event's email through email templates (<code>/api/email-templates</code>), which render only named variables and are sanitised when saved.</p>
+
+<h2 id="adding">Adding to this machinery</h2>
+<ul>
+<li><strong>A new scheduled job:</strong> write an async function that does one workspace's worth of work and returns a count; register it in <code>jobs/index.js</code> with a stable name and cadence, wrapped in <code>forEachTenant</code> (use <code>serviceableOnly: false</code> only when a suspended workspace genuinely needs the work). Make the work idempotent (mark done before, or in the same step as, the side effect). Do not read the clock inside cadence logic.</li>
+<li><strong>A new webhook event:</strong> add it to <code>WEBHOOK_EVENTS</code>, then call <code>emitEvent(name, smallPayload)</code> at the write site. Do not await a network call in the request.</li>
+<li><strong>A new notification type:</strong> add it to <code>NOTIFICATION_TYPES</code> and call <code>notify()</code>.</li>
+<li><strong>A new rule or hook:</strong> add the hook to <code>HOOKS</code> <em>and</em> the enum in <code>tenant.model.js</code>, and call <code>runHook</code> at the write site; add the rule in <code>plugins/builtin.js</code>.</li>
+</ul>
+
+<div class="cards">
+<a class="card" href="architecture.html"><b>Architecture</b><span>Caches, notifications, search and realtime.</span></a>
+<a class="card" href="multi-tenancy.html"><b>Multi-tenancy</b><span>forEachTenant and the rest of the tenant context.</span></a>
+<a class="card" href="leads-and-pipeline.html"><b>Leads and pipeline</b><span>The product side of scoring and sequences.</span></a>
+<a class="card" href="api/webhooks.html"><b>Webhooks API</b><span>Manage subscriptions and read deliveries.</span></a>
+</div>
+
+<div class="pager"><a href="request-pipeline.html"><small>Previous</small>Request pipeline and errors</a><a href="frontend.html"><small>Next</small>Frontend</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#scheduler">The scheduler</a><a class="h3" href="#claim">How a job is claimed</a><a class="h2" href="#jobs">The registered jobs</a><a class="h3" href="#jobs-enabled">JOBS_ENABLED</a><a class="h2" href="#scoring">Lead scoring and temperature</a><a class="h2" href="#sequences">Follow-up sequences</a><a class="h2" href="#webhooks">Outbound webhooks</a><a class="h3" href="#webhook-events">Events ( WEBHOOK_EVENTS )</a><a class="h3" href="#webhook-signing">Delivery and signing</a><a class="h3" href="#webhook-retries">Retries, failure and disabling</a><a class="h2" href="#rules">Workspace rules and plugins</a><a class="h3" href="#hooks">Hooks ( HOOKS in plugins/registry.js )</a><a class="h3" href="#builtin-rules">Built-in rules</a><a class="h3" href="#veto">Veto versus error: two different things</a><a class="h2" href="#imports">Imports</a><a class="h2" href="#data-rights">Data rights</a><a class="h2" href="#notification-types">Notification types</a><a class="h2" href="#adding">Adding to this machinery</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!--
+title: Sharing and imports
+description: Send a shortlist to someone without an account, bring properties and leads in from spreadsheets, and export or erase a person's data.
+-->
+<h2 id="share">Share links</h2>
+<p>Nothing about a listing is reachable without a session, so a share link is the only way a property leaves the agency. An agent picks properties, gets a link and sends it (for example on WhatsApp). The recipient opens <code>/s/:token</code> with no account.</p>
+
+<div class="warn"><p><strong>The token is the credential.</strong> Anyone holding the link can open it until it expires or is withdrawn. Treat a link like a password: send it only to the intended person, prefer an expiry, and add a passcode for anything sensitive.</p></div>
+
+<h3 id="share-create">Create a link</h3>
+<p>To share: on <strong>All Properties</strong> select one or more rows and choose Share, or use Share on a single property's page. Fill in:</p>
+<table>
+<thead><tr><th>Field</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>What is this list?</td><td>A label so your list of links is readable (up to 120 characters).</td></tr>
+<tr><td>Sent to, their phone</td><td>A note to yourself. Never shown on the shared page.</td></tr>
+<tr><td>Message</td><td>Up to 1,000 characters, shown at the top of the shared page.</td></tr>
+<tr><td>Link expires in</td><td>7, 30 (default), 90 days or <em>No expiry</em>. The API accepts 1 to 365 days; <code>null</code> means no expiry and is a deliberate choice.</td></tr>
+<tr><td>Passcode</td><td>Optional, at least 4 characters. Stored hashed (bcrypt). The recipient is asked for it before anything is returned.</td></tr>
+<tr><td>Show the price</td><td>On by default. Off withholds price, offer price and the offer flag from the page, for gauging interest before a number is agreed.</td></tr>
+</tbody></table>
+<ul>
+<li>A link carries between <strong>1 and 50</strong> properties.</li>
+<li>The token is 32 random bytes (base64url), so it cannot be guessed.</li>
+<li><strong>You cannot share what you cannot see.</strong> The server re-reads the chosen properties through your own access scope (<code>listingScope</code>). If any are outside it, the whole request is refused with "Some of those properties are not yours to share". An employee can share only listings they created, are assigned to, or that sit in their assigned categories; sellers only their own. There is no separate permission key for sharing; any signed-in user passes this check for properties in scope.</li>
+</ul>
+
+<h3 id="share-manage">Track and revoke</h3>
+<p>The <strong>Share links</strong> dialog on All Properties lists links with their state, view count and last-viewed time. An admin sees every link in the workspace (latest 200); anyone else sees their own. To withdraw a link: Revoke. It sets <code>revokedAt</code> and <code>revokedBy</code> instead of deleting, so "who did we send this to and when did we stop it" stays answerable. Only the creator or an admin can revoke, and a link already withdrawn cannot be revoked again. Every successful open increments the view count; a count that climbs unexpectedly means the link has spread.</p>
+
+<h3 id="share-open">What the recipient sees</h3>
+<p><code>GET /api/share/open/:token</code> is the one unauthenticated endpoint that returns property data. It is rate-limited to 60 requests per 15 minutes. The workspace comes from the share record, so a token reaches only the workspace that issued it.</p>
+<table>
+<thead><tr><th>Situation</th><th>Response</th></tr></thead>
+<tbody>
+<tr><td>Token does not exist</td><td>404 "This link is not valid." (the same answer for old and never-existing tokens, so valid tokens cannot be enumerated)</td></tr>
+<tr><td>Revoked</td><td>410 "This link has been withdrawn by the agent."</td></tr>
+<tr><td>Expired</td><td>410 "This link has expired."</td></tr>
+<tr><td>Passcode required, none sent</td><td>401 with <code>passcodeRequired: true</code>; the page shows a passcode prompt. The browser sends it in the <code>x-share-passcode</code> header.</td></tr>
+<tr><td>Wrong passcode</td><td>401 "That passcode is not right." and a security log line</td></tr>
+</tbody></table>
+<p><code>forRecipient()</code> is an <strong>allowlist</strong>, so a new Listing column never becomes public by being added. The page shows only: name, description, address, area name, locality, city, state, type, status, bedrooms, bathrooms, area (sq ft), sq yard, plot size, furnished, parking, photos, map location and, unless hidden, regular price, offer price and the offer flag. It never includes owners or owner contacts, the assigned agent, the creator, internal notes (<code>remarks</code>), voice notes, category attributes, cost or commission fields or the tenant id. The page is dressed in the agency's name, logo, brand colours and support email and phone.</p>
+
+<h2 id="imports">Imports: shared rules</h2>
+<p>Both importers (properties and leads) follow the same pattern:</p>
+<div class="flow"><div class="step">Choose file</div><div class="arrow">→</div><div class="step">Match columns</div><div class="arrow">→</div><div class="step">Preview (writes nothing)</div><div class="arrow">→</div><div class="step">Commit in batches</div></div>
+<ul>
+<li><strong>Every row is validated before anything is written.</strong> Preview and commit build rows through the same code, so the report you approve is what lands.</li>
+<li>Rows are written in batches with per-row results, so one bad row costs that row and not the file. Row problems are returned individually and capped (see each importer).</li>
+<li>Files: <code>.xlsx</code>, <code>.xls</code> or <code>.csv</code>, up to <strong>15 MB</strong> (the browser rejects larger files and unsupported types before upload).</li>
+<li><strong>Monthly import meter.</strong> The plan limit <code>maxImportRowsPerMonth</code> counts rows brought in by <em>either</em> importer (trial 2,000, starter 20,000, growth 100,000, enterprise unlimited). Rows are reserved before writing and the unused part is released, so rejected rows cost nothing. If the file would pass the cap the request answers <code>402</code> with <code>details.limit</code>, <code>used</code>, <code>requested</code> and <code>remaining</code>. The counter resets at the start of each month in the workspace's timezone (a daily job rolls it).</li>
+</ul>
+
+<h2 id="listing-import">Import properties</h2>
+<p>To import: <strong>Import from Excel</strong> in the sidebar, the Import button on Categories, or <code>/admin/import</code>. Admin only (the screen is <code>adminOnly</code> and every route is <code>requireAdmin</code>); it is a screen a workspace can switch off.</p>
+<ol>
+<li><strong>Choose file.</strong> Pick the <em>category</em> first: its fields decide what columns are understood. Download a template CSV for that category (<code>GET /api/listing/import/template</code>) to skip the mapping step entirely.</li>
+<li><strong>Match columns.</strong> Headers are auto-mapped using synonyms (for example "plot no", "unit number" and "khasra no" map to Property / plot no.; "bhk" to Bedrooms; "gaj" to sq. yard). Each column can be sent to a core field, a category field or ignored. Prices accept forms like "1.4 Cr".</li>
+<li><strong>Review.</strong> Preview classifies each row as <code>ready</code>, <code>error</code>, <code>duplicate</code> (already in the system) or <code>duplicate_in_file</code> (an earlier row in the same file is the same property). Pick what to do with existing duplicates:
+  <ul>
+  <li><em>Leave the existing one alone</em> (<code>skip</code>, default; safest for topping up a list);</li>
+  <li><em>Update it with this row</em> (<code>update</code>; overwrites the existing property);</li>
+  <li><em>Add it anyway</em> (<code>create</code>; a second record).</li>
+  </ul></li>
+<li><strong>Done.</strong> A summary with created, updated and skipped rows. You can download "problems" and "not imported" CSVs.</li>
+</ol>
+<p>Rules to know:</p>
+<ul>
+<li>A property's identity is its <code>propertyNo</code> within the category when present, otherwise name plus address plus city (case and whitespace ignored).</li>
+<li>Required: name and address (the bulk endpoint refuses rows without both). The CSV chunk limit is <strong>500 rows per request</strong>, and the server reports a total of 20,000 per job; the browser sends bigger files in chunks and reconciles duplicates across chunks.</li>
+<li>The plan limit <code>maxListings</code> is checked against the number of rows <em>about to be created</em> before any row is written, so a file never half-imports past the cap. Updates do not add listings but do count against the monthly import meter.</li>
+<li><strong>Native field aliases.</strong> A column mapped to a category field whose key is <code>sqYard</code>, <code>rateSqYard</code>, <code>totalValue</code>, <code>propertyNo</code>, <code>plotSize</code>, <code>remarks</code> or <code>areaName</code> is stored in the real column rather than in <code>attributes</code>. A value that cannot be read (for example text in a number column) is left blank with a warning rather than failing the row. Latitude and longitude columns collapse into the location pin and are ignored if out of range.</li>
+<li>Imported listings are owned by the admin who ran the import (<code>userRef</code>); updating an existing one never reassigns its creator.</li>
+</ul>
+
+<h2 id="lead-import">Import leads</h2>
+<p>To import portal enquiries (99acres, MagicBricks, Housing and similar exports): palette command <strong>Import leads</strong> or <code>/admin/import-leads</code> (the page sits under the admin routes). The API needs <code>createClient</code>.</p>
+<ol>
+<li><strong>Upload</strong> the file (.csv, .xlsx, .xls; 15 MB).</li>
+<li><strong>Map columns.</strong> Fields: Name (required), Phone (required), Email, Alternate phone, Source, Requirement, Property type, Preferred locations, Budget (min), Budget (max), Enquiry date.</li>
+<li><strong>Review.</strong> Rows are <code>new</code>, <code>duplicate</code> or <code>error</code>. Choose a <em>default source</em> for rows without one (otherwise "Import"); the list of workspace lead sources feeds this picker.</li>
+<li><strong>Done.</strong> Shows created and skipped counts.</li>
+</ol>
+<ul>
+<li>Up to <strong>5,000 rows</strong> per request.</li>
+<li><strong>Duplicates are skipped, never merged</strong>, because deciding two records are the same person is a judgement. A row is a duplicate if its ten-digit phone key, or (for a short number) its email, or (no email) the short number together with the name, already exists or appeared earlier in the same file.</li>
+<li>Leads are assigned using the workspace's lead-assignment rule, dealt out for the whole batch at once, so a 400-row import is not all owned by whoever pressed the button (see <a href="leads-and-pipeline.html#assignment">Assignment rules</a>). New leads start with status <code>lead</code>, are scored on the way in, and honour the email suppression list.</li>
+<li>New source names in the file are added to the lead sources catalogue (at most 25 per import) so the ROI report can see them.</li>
+<li>The response is a summary: <code>created</code>, <code>skipped</code> (<code>duplicates</code>, <code>errors</code>), <code>inputCount</code>, <code>inserted</code>, <code>updated</code> (always 0), <code>failed</code>, <code>writeFailures</code> and <code>rowErrors</code>, each with a row number, code (<code>INVALID_ROW</code>, <code>VALIDATION_FAILED</code>, <code>DUPLICATE</code>, <code>WRITE_FAILED</code>) and message. <strong><code>rowErrors</code> is capped at 200</strong>; <code>rowErrorsTruncated</code> says the list was cut while the counts stay exact.</li>
+<li>Up to 50 <code>lead.created</code> webhook events are emitted per import, not one per row.</li>
+</ul>
+
+<h2 id="exports">Exporting data</h2>
+<table>
+<thead><tr><th>What</th><th>Where</th><th>Gate</th></tr></thead>
+<tbody>
+<tr><td>Leads (CSV)</td><td>Clients, Export</td><td><code>exportData</code>; honours your current filters, up to 50,000 rows</td></tr>
+<tr><td>Pipeline deals (CSV)</td><td><code>GET /api/crm/pipeline/export</code></td><td>admin or employee (employees only their own)</td></tr>
+<tr><td>Buyer requirements (CSV)</td><td><code>GET /api/buyer-requirements/export</code></td><td>signed in</td></tr>
+</tbody></table>
+
+<h2 id="data-rights">Data export and erasure (data rights)</h2>
+<p>These cover access and erasure requests from a person. The admin UI is <strong>Settings, System, Data requests</strong>.</p>
+<table>
+<thead><tr><th>Action</th><th>Endpoint</th><th>Who</th></tr></thead>
+<tbody>
+<tr><td>Export my own data</td><td><code>GET /api/data-rights/export/me</code></td><td>any signed-in user</td></tr>
+<tr><td>Export a team member</td><td><code>GET /api/data-rights/export/user/:id</code></td><td><code>exportData</code></td></tr>
+<tr><td>Export a contact (<code>client</code>, <code>owner</code> or <code>buyer</code>)</td><td><code>GET /api/data-rights/export/:kind/:id</code></td><td><code>exportData</code></td></tr>
+<tr><td>Erase a team member</td><td><code>DELETE /api/data-rights/erase/user/:id</code></td><td>admin only</td></tr>
+<tr><td>Erase a contact</td><td><code>DELETE /api/data-rights/erase/:kind/:id</code></td><td>admin only</td></tr>
+</tbody></table>
+<ul>
+<li>An export is a JSON download. A user export contains their account (without password or refresh tokens), the clients, owners, buyer requirements, tasks, documents (no file path), notifications and message <em>metadata</em> (not message bodies) linked to them, plus activity and security logs. A contact export contains the record, its documents and its activity.</li>
+<li>Every export is written to the activity log (<code>data.exported</code>).</li>
+<li><strong>Erasing a team member</strong> closes the account, ends every session, replaces username and email with "Former team member &lt;id&gt;" and a <code>.invalid</code> address, and clears name, phone, avatar and address fields. The records they created stay, now attributed to the anonymised account, so the agency's audit trail remains intact. You cannot erase your own account (ask another admin) or a platform operator.</li>
+<li><strong>Erasing a contact</strong> removes the personal details outright (name becomes "Erased contact"; email, phone, notes, requirements, communications, follow-ups and photos are cleared) and keeps only the anonymous shape needed for reporting totals. It is not reversible.</li>
+</ul>
+<div class="note"><p>Exporting or erasing does not narrow to the requester's own leads: a contact export is authorised by <code>exportData</code> alone, not by lead ownership. Grant <code>exportData</code> only to people who should see every contact.</p></div>
+
+<h2 id="related">Related</h2>
+<ul>
+<li>Permissions and plan limits: <a href="team-roles-permissions.html">Team, roles and permissions</a>, <a href="workspace-settings.html">Workspace settings</a>.</li>
+<li>API: <a href="api/share.html">Share</a> and <a href="api/lead-import.html">Lead import</a>.</li>
+</ul>

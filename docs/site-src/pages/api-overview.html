@@ -1,0 +1,195 @@
+<!--
+title: API conventions
+description: What every endpoint shares: base URL, session and CSRF headers, response and error shapes, paging, conflicts and limits, response encryption, uploads, real-time events and signed webhooks.
+-->
+<h2 id="basics">Base URL and transport</h2>
+<ul>
+<li>All routes are under <code>/api</code>. The API and the built web app are served by the same Express process in production (<code>frontend/dist</code>), so the web app is same-origin. In development the Vite server on port 5173 proxies <code>/api</code> and <code>/uploads</code> to <code>localhost:3000</code> (<code>frontend/vite.config.js</code>), so <code>VITE_API_URL</code> is empty. A split deployment sets <code>VITE_API_URL</code> and must list the app's origin in <code>FRONTEND_URL</code> / <code>ADMIN_URL</code> / <code>EXTRA_CORS_ORIGINS</code>.</li>
+<li>Bodies are JSON (<code>Content-Type: application/json</code>, 10 MB limit) except uploads (<code>multipart/form-data</code>). Responses are JSON and gzip-compressed.</li>
+<li>The generated, always-current endpoint reference is under <a href="api/index.html">API reference</a>. It is built from the live router and the same Joi schemas that validate requests (<code>backend/utils/openapi.js</code>), so it cannot drift; never hand-edit <code>docs/openapi.json</code>. A workspace admin can also fetch it from a running server at <span class="method get">GET</span> <code>/api/docs/openapi.json</code>, or regenerate the file with <code>npm run docs:openapi</code> in <code>backend/</code>.</li>
+</ul>
+
+<h2 id="headers">Headers a client sends</h2>
+<table>
+<thead><tr><th>Header or cookie</th><th>When</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>Cookie: access_token, refresh_token, csrf_token</code></td><td>Every authenticated call</td><td>Set by sign-in. There is no <code>Authorization: Bearer</code> mode. Details: <a href="authentication.html">Authentication and sessions</a>.</td></tr>
+<tr><td><code>X-CSRF-Token</code></td><td>Every POST/PUT/PATCH/DELETE made with a session</td><td>Must equal the <code>csrf_token</code> cookie. Otherwise <code>403</code> <code>CSRF_TOKEN_INVALID</code> or <code>CSRF_COOKIE_MISSING</code>. Get it from the cookie or <code>GET /api/auth/csrf</code>.</td></tr>
+<tr><td><code>x-tenant: &lt;workspace-slug&gt;</code></td><td>Sign-in, password reset, tenant lookup (and any call with no session)</td><td>Which agency. Once signed in, the token's <code>tid</code> wins and the header is ignored. Unknown slug: <code>404 WORKSPACE_NOT_FOUND</code>.</td></tr>
+<tr><td><code>X-Request-Id</code></td><td>Optional</td><td>Kept if it matches <code>^[A-Za-z0-9_-]{8,64}$</code>, else replaced with a UUID.</td></tr>
+<tr><td><code>x-share-passcode</code></td><td>Opening a passcode-protected share link</td><td>Also accepted as <code>?passcode=</code>.</td></tr>
+</tbody></table>
+
+<h2 id="success">Success responses</h2>
+<p>There is <strong>no single success envelope</strong>. Three shapes exist; check the reference for the endpoint you call.</p>
+<ol>
+<li><strong>Helper envelope</strong> (<code>sendSuccessResponse</code>): <code>{ "success": true, "statusCode": 200, "message": "...", "data": ..., "timestamp": "ISO" }</code>. Used by tenant, platform, share, invite, health and most newer controllers.</li>
+<li><strong>Hand-written</strong>: <code>{ "success": true, "data": ... }</code>, and for lists <code>{ "success": true, "data": [...], "page": 1, "limit": 20, "total": 134 }</code> (e.g. <code>GET /api/clients</code>, <code>POST /api/clients</code> answers <code>201 { success, data }</code>).</li>
+<li><strong>Top-level fields</strong>: sign-in and refresh spread the user document next to <code>success</code>; uploads answer <code>{ success, url }</code> or <code>{ success, urls }</code>.</li>
+</ol>
+<p>In every shape a boolean <code>success</code> is present, and failures always use the error envelope below.</p>
+
+<h2 id="errors">Errors</h2>
+<p>Every failure answers one shape. <strong><code>code</code> is the contract; <code>message</code> is for a person</strong> and may be reworded or translated. Branch on <code>code</code>.</p>
+<pre><code>{
+  "success": false,
+  "statusCode": 409,
+  "code": "VERSION_CONFLICT",
+  "message": "This record was changed by someone else while you were editing it.",
+  "type": "conflict",
+  "details": { "currentUpdatedAt": "2026-10-01T09:12:44.000Z" },
+  "requestId": "6c1f0f63-6a63-4d0b-9d0c-2f3d8e1a5b77",
+  "timestamp": "2026-10-01T09:13:02.114Z",
+  "path": "/api/clients/65f..."
+}</code></pre>
+<p>Optional fields: <code>type</code> (<code>validation</code>, <code>authentication</code>, <code>authorization</code>, <code>not_found</code>, <code>conflict</code>, <code>rate_limit</code>, <code>database</code>), <code>field</code> (the offending input), <code>details</code>. Hand-written <code>res.status(4xx).json({ success:false, ... })</code> responses still get <code>code</code> and <code>requestId</code> added by <code>middleware/errorEnvelope.js</code>. Quote <code>requestId</code> (also in the <code>X-Request-Id</code> response header) in a bug report; the logger stamps it on every line. In production an unexpected 500 returns a generic sentence and the request id, never the internal message.</p>
+<h3 id="codes">Codes</h3>
+<table>
+<thead><tr><th>Code</th><th>Status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>VALIDATION_FAILED</code></td><td>400</td><td>Joi or model validation. <code>field</code> names the input; only the first problem is reported.</td></tr>
+<tr><td><code>BAD_REQUEST</code></td><td>400, 413</td><td>Malformed JSON, body too large, other 400s.</td></tr>
+<tr><td><code>INVALID_ID</code></td><td>404</td><td>An id that is not an ObjectId. Answered as 404 on purpose: to a person following a link, a malformed id and a missing record are the same thing.</td></tr>
+<tr><td><code>UNAUTHENTICATED</code></td><td>401</td><td>No usable session. The web client tries <code>/auth/refresh</code> once.</td></tr>
+<tr><td><code>SESSION_EXPIRED</code></td><td>401</td><td>An expired JWT reached the error handler.</td></tr>
+<tr><td><code>FORBIDDEN</code></td><td>403</td><td>Signed in but not allowed (role, permission, read-only acting session, disabled or suspended workspace).</td></tr>
+<tr><td><code>NOT_FOUND</code></td><td>404</td><td>No such record or route.</td></tr>
+<tr><td><code>CONFLICT</code></td><td>409</td><td>Generic conflict, e.g. a duplicate lead.</td></tr>
+<tr><td><code>DUPLICATE</code></td><td>409</td><td>A unique index fired (the message names the field, never the tenant).</td></tr>
+<tr><td><code>VERSION_CONFLICT</code></td><td>409</td><td>See <a href="#conflicts">Edit conflicts</a>.</td></tr>
+<tr><td><code>PLAN_LIMIT</code></td><td>402</td><td>The workspace's plan does not cover this. See <a href="#limits">Plan limits</a>.</td></tr>
+<tr><td><code>RATE_LIMITED</code></td><td>429</td><td>Too many requests.</td></tr>
+<tr><td><code>INTERNAL</code></td><td>5xx</td><td>Unexpected error.</td></tr>
+</tbody></table>
+<p>Endpoint-specific codes, all set by the code that raises them: <code>CSRF_TOKEN_INVALID</code>, <code>CSRF_COOKIE_MISSING</code> (403), <code>WORKSPACE_NOT_FOUND</code> (404), <code>INVITE_REPLACED</code> (410). Some responses add their own flags next to <code>code</code>: a share link answers <code>passcodeRequired: true</code> with 401, and an expired link <code>410</code> with <code>expired: true</code>.</p>
+<div class="note"><p>A <code>CastError</code> and a duplicate-key error are translated for you: a bad id is <code>404 INVALID_ID</code>; <code>E11000</code> is <code>409 DUPLICATE</code> with a message like "Email already exists". Sign-in failures are intentionally uniform (<code>401</code> "Invalid email or password").</p></div>
+
+<h2 id="paging">Paging, sorting and filtering</h2>
+<ul>
+<li><strong>Query</strong>: <code>?page=1&amp;limit=20&amp;sort=field:asc|desc</code>. <code>utils/listQuery.js</code> turns untrusted values into safe numbers: non-numeric or non-positive <code>page</code>/<code>limit</code> fall back to defaults (page 1, limit 20 unless the endpoint sets another), and <strong><code>limit</code> is capped at 500</strong>. <code>sort</code> is an <strong>allowlist per endpoint</strong>; anything else falls back to the endpoint's default, with <code>_id</code> always the final tie-breaker so rows do not repeat or vanish across pages.</li>
+<li><strong>Response</strong>: <code>{ success, data: [...], page, limit, total }</code>. Sorting and paging happen in the database, so sort by the server (<code>sort=</code>), never by re-sorting one page.</li>
+<li><strong>Bare arrays when <code>page</code> is absent.</strong> <code>GET /api/owner/list</code> and <code>GET /api/buyer-requirements</code> page only when <code>page</code> is passed; without it they return a bare array, which the mobile app and the listing form read. Do not assume a list is wrapped.</li>
+<li><strong>Clients list</strong> sorts by <code>name, score, temperature, status, priority, budget, nextFollowUp, email, createdAt, updatedAt</code> (default <code>updatedAt</code> desc) and filters by <code>q</code> (text search), <code>status</code>, <code>contactType</code>, <code>tag</code>, <code>temperature</code> (<code>hot|warm|cold</code>) and, for admins, <code>assignedTo</code>. A non-admin is always narrowed to their own leads whatever the query says.</li>
+<li><strong>Listings</strong>: search is one service (<code>backend/search/listingSearch.js</code>) behind <code>GET /api/listing/search</code>; use <code>GET /api/listing/facets</code> for counts over the whole filtered set (a header count must never be computed from a page).</li>
+</ul>
+<div class="note"><p><code>X-Total-Count</code> and <code>X-Rate-Limit-Remaining</code> are listed in the CORS <code>exposedHeaders</code> but no controller sets them today. Read the total from the body, and rate-limit state from the standard <code>RateLimit-*</code> headers.</p></div>
+
+<h2 id="conflicts">Edit conflicts (409)</h2>
+<p>Listing and client edits accept <code>expectedUpdatedAt</code> (the <code>updatedAt</code> the form loaded). The write is conditional on it, and if someone saved in between, the answer is <code>409 VERSION_CONFLICT</code> with <code>details.currentUpdatedAt</code>. The form offers "Load their version" or "Keep mine" (resend without the guard). A caller that sends no version (the mobile app, scripts) keeps last-write-wins. An unparseable value is a <code>400</code>, not a silent skip. Client updates stay a document <code>save()</code> with <code>$where</code>, so pre-save hooks and score recalculation still run.</p>
+<p>Other 409s answer with a count instead of proceeding, and the UI turns them into a choice with <code>?force=true</code>: deleting a category in use, removing a category field that holds values, and creating a lead whose email or phone already exists (<code>POST /api/clients</code> returns <code>data.duplicate</code> and <code>canForce: true</code>; <code>?force=true</code> creates it anyway).</p>
+
+<h2 id="limits">Plan limits (402)</h2>
+<p>Plan limits (<code>maxUsers</code>, <code>maxListings</code>, <code>maxImportRowsPerMonth</code>, <code>maxStorageMb</code>; a value of 0 or less means unlimited) gate <strong>creation only, never reads</strong>: a workspace that went over after a downgrade keeps full access to what it has. A blocked create answers <code>402</code> <code>PLAN_LIMIT</code> and a message saying what to do next (for example the plan name, cap and a hint). <code>GET /api/tenant/usage</code> shows usage against caps, with a <code>nearLimit</code> flag at 80%. Import row allowances reset monthly (job <code>import-usage-reset</code>).</p>
+
+<h2 id="ratelimit">Rate limiting</h2>
+<p>429 responses use the error envelope with <code>code: "RATE_LIMITED"</code>, plus <code>RateLimit-*</code> and <code>Retry-After</code> headers. The default general ceiling is 1000 requests per 15 minutes per user (per IP when signed out), 20 per 15 minutes on credential endpoints. Full table: <a href="security.html#rate-limits">Security</a>. Honour <code>Retry-After</code>; the web client shows "Too many requests. Please wait a moment and try again."</p>
+
+<h2 id="encryption">Response encryption (optional)</h2>
+<p>When the server runs with <code>ENCRYPT_API_RESPONSES=true</code> and <code>API_RESPONSE_SECRET</code>, <code>middleware/encryptResponse.js</code> replaces every JSON body under <code>/api</code> (except <code>/api/health*</code> and <code>/api/observability*</code>; the rate limiter's 429s are emitted before it) with:</p>
+<pre><code>{ "_enc": true, "iv": "&lt;base64, 12 bytes&gt;", "data": "&lt;base64: ciphertext || 16-byte GCM tag&gt;" }</code></pre>
+<p>The key is <code>SHA-256(API_RESPONSE_SECRET)</code>; the cipher is AES-256-GCM with no additional data. The error envelope's <code>code</code> and <code>requestId</code> are added <em>before</em> encryption. If encryption throws, the server falls back to plaintext rather than breaking the response. The web client decrypts in <code>parseJsonSafely</code> when <code>VITE_API_RESPONSE_SECRET</code> (the same value, baked into the bundle at build time) is set; otherwise it logs "Received encrypted response but VITE_API_RESPONSE_SECRET is not configured" and treats the body as empty. <code>ENCRYPT_API_RESPONSES</code> is a startup flag: it is read once, at import.</p>
+<pre><code>// Node decode of one response body
+import crypto from 'node:crypto';
+const key = crypto.createHash('sha256').update(process.env.API_RESPONSE_SECRET).digest();
+function decode({ iv, data }) {
+  const buf = Buffer.from(data, 'base64');
+  const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));
+  d.setAuthTag(buf.subarray(buf.length - 16));
+  return JSON.parse(Buffer.concat([d.update(buf.subarray(0, buf.length - 16)), d.final()]).toString('utf8'));
+}</code></pre>
+<div class="warn"><p>This is not a confidentiality control: the secret ships in the public JavaScript bundle. Treat it as response obfuscation on top of TLS. The mobile app has no decoder, so leave encryption off if the mobile app must work.</p></div>
+
+<h2 id="uploads">File uploads</h2>
+<p>Images and voice notes in the web app go to Cloudinary directly from the browser. The backend accepts multipart uploads on <code>POST /api/upload/single</code> (field <code>image</code>, 10 MB), <code>/multiple</code> (field <code>images</code>, up to 6, 10 MB each) and <code>/audio</code> (field <code>audio</code>, 25 MB), and documents on <code>/api/documents</code>. Types are decided by magic bytes, never by the declared <code>Content-Type</code> (<a href="security.html#uploads">Security</a>). Do not set <code>Content-Type</code> yourself; let the client add the boundary. Results: <code>201 { success, url: "/uploads/..." }</code>. Documents are downloaded through <code>GET /api/documents/file/:filename</code>, not <code>/uploads</code>.</p>
+<pre><code>curl -X POST http://localhost:3000/api/upload/single \
+  -b cookies.txt -H "X-CSRF-Token: $CSRF" \
+  -F 'image=@photo.jpg'</code></pre>
+
+<h2 id="realtime">Real-time events (Socket.IO)</h2>
+<p>Connect to the same origin (or <code>VITE_SOCKET_URL</code>) with the session cookie; the handshake is rejected without a valid <code>access_token</code> (error strings "Authentication required", "Invalid or expired token", "Account is disabled"). Each connection joins <code>user:&lt;id&gt;</code> and <code>tenant:&lt;tenantId&gt;</code> rooms. The events below are the complete set emitted by the code today.</p>
+<table>
+<thead><tr><th>Event</th><th>Direction</th><th>Payload</th></tr></thead>
+<tbody>
+<tr><td><code>message:send</code></td><td>client to server</td><td><code>{ receiverId, content, listingId? }</code> with an ack callback: <code>{ success, message }</code> or <code>{ error }</code>. Receiver must be in the same workspace. 30 messages per minute per user.</td></tr>
+<tr><td><code>typing</code>, <code>stop_typing</code></td><td>both</td><td>Send <code>{ to }</code>; the recipient gets <code>{ from }</code> if they are online in your workspace.</td></tr>
+<tr><td><code>message:new</code></td><td>to receiver</td><td>The decrypted message document.</td></tr>
+<tr><td><code>message:sent</code></td><td>to sender</td><td>The decrypted message (REST send path).</td></tr>
+<tr><td><code>message:read</code></td><td>to the other party</td><td><code>{ from }</code></td></tr>
+<tr><td><code>conversations:update</code></td><td>to sender and receiver</td><td>No payload; refetch the conversation list.</td></tr>
+<tr><td><code>unread:messages</code></td><td>on connect</td><td><code>{ count }</code>, only when greater than zero.</td></tr>
+<tr><td><code>presence:update</code></td><td>to the workspace room</td><td><code>{ userId, online }</code></td></tr>
+<tr><td><code>presence:bulk</code></td><td>on connect</td><td>Array of user ids online in your workspace.</td></tr>
+<tr><td><code>notification:new</code></td><td>to one user</td><td><code>{ _id, type, title, body, link, createdAt }</code></td></tr>
+<tr><td><code>listing:update</code></td><td>to related users, or the workspace room after imports</td><td>Change details such as <code>listingId</code>, <code>title</code>, <code>category</code>, or <code>{ action: 'bulk_import', count }</code>.</td></tr>
+<tr><td><code>owners:changed</code></td><td>to the workspace room</td><td>No payload; refetch owners.</td></tr>
+</tbody></table>
+<p>A bare <code>io.emit()</code> would reach every agency, so server code emits only through <code>emitToTenant()</code> / <code>emitToUser()</code> in <code>backend/socket.js</code>.</p>
+
+<h2 id="webhooks">Outbound webhooks</h2>
+<p>Admins manage endpoints under <code>/api/webhooks</code> (list, create, update, delete, <code>POST /:id/rotate-secret</code>, <code>POST /:id/test</code>, <code>GET /:id/deliveries</code>). Subscribe to event names or <code>*</code> (stored as-is, so a workspace subscribed to everything keeps getting new event types). The vocabulary lives in <code>WEBHOOK_EVENTS</code> (<code>models/webhook.model.js</code>):</p>
+<p><code>lead.created</code>, <code>lead.updated</code>, <code>lead.assigned</code>, <code>lead.deleted</code>, <code>deal.created</code>, <code>deal.stage_changed</code>, <code>listing.created</code>, <code>listing.updated</code>, <code>task.created</code>, <code>task.completed</code>, <code>buyer.created</code>, <code>share.viewed</code>.</p>
+<p><strong>Delivery.</strong> Emitting only writes a row inside the request that caused it, so a slow or dead endpoint never slows or fails the user's action. The scheduler (job <code>webhook-delivery</code>, every minute) does the POST with a 10-second timeout and no redirects. Retries wait 10 s, 1 min, 5 min, 30 min (five attempts in total); an endpoint that fails 10 times in a row disables itself. Delivery rows are kept 30 days.</p>
+<pre><code>POST https://your.endpoint/hook
+Content-Type: application/json
+User-Agent: RealVista-Webhooks/1
+X-Webhook-Event: lead.created
+X-Webhook-Delivery: 65f0c1...
+X-Webhook-Timestamp: 1790000000
+X-Webhook-Signature: sha256=3b1f...
+
+{ "event": "lead.created", "sentAt": "2026-10-01T09:12:44.000Z",
+  "data": { "id": "...", "name": "Asha Verma", "email": "", "phone": "9876543210",
+            "status": "lead", "source": "", "assignedTo": "..." } }</code></pre>
+<p>The signature is <code>HMAC-SHA256(secret, timestamp + "." + rawBody)</code> in hex, prefixed <code>sha256=</code>, computed over the exact bytes sent. The timestamp is inside the signed string so a captured delivery cannot be replayed later against a receiver that checks it. The secret has the form <code>whsec_&lt;48 hex&gt;</code>; it is stored readable on purpose, since the receiver needs the same value.</p>
+<pre><code>// Express receiver: verify before trusting anything in the body
+import crypto from 'node:crypto';
+import express from 'express';
+
+const SECRET = process.env.REALVISTA_WEBHOOK_SECRET;   // whsec_...
+const app = express();
+
+app.post('/hook', express.raw({ type: 'application/json' }), (req, res) => {
+  const ts = req.get('X-Webhook-Timestamp');
+  const sig = req.get('X-Webhook-Signature') || '';
+  if (Math.abs(Date.now() / 1000 - Number(ts)) &gt; 300) return res.sendStatus(400);   // replay window
+
+  const expected = 'sha256=' + crypto.createHmac('sha256', SECRET)
+    .update(`${ts}.${req.body.toString('utf8')}`).digest('hex');
+  const ok = sig.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  if (!ok) return res.sendStatus(401);
+
+  const { event, data } = JSON.parse(req.body.toString('utf8'));
+  // handle event ...
+  res.sendStatus(200);          // any 2xx counts as delivered
+});</code></pre>
+<p>Use the raw body, not a re-serialised object: re-stringifying changes bytes and breaks the signature. Webhook URLs must pass the SSRF guard (public host, <code>https</code> in production): <a href="security.html#webhooks">Security</a>.</p>
+
+<h2 id="curl">Worked example: sign in, then create a lead</h2>
+<p>The sign-in response already sets <code>csrf_token</code>, so the explicit <code>/api/auth/csrf</code> call is only needed by clients that cannot read cookies. Replace <code>acme</code> with your workspace slug (omit <code>x-tenant</code> on a single-workspace deployment).</p>
+<pre><code>BASE=http://localhost:3000
+
+# 1. Sign in (sets access_token, refresh_token, csrf_token)
+curl -s -c jar.txt -X POST $BASE/api/auth/signin \
+  -H 'Content-Type: application/json' -H 'x-tenant: acme' \
+  -d '{"email":"owner@acme.in","password":"Secret@123"}'
+
+# 2. Get the CSRF token (works for any client; echoes the cookie value)
+CSRF=$(curl -s -b jar.txt -c jar.txt $BASE/api/auth/csrf | node -pe 'JSON.parse(require("fs").readFileSync(0)).csrfToken')
+
+# 3. Create a lead
+curl -s -b jar.txt -X POST $BASE/api/clients \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
+  -d '{"name":"Asha Verma","phone":"9876543210","email":"asha@example.com","source":"99acres","budget":{"min":4000000,"max":6000000,"currency":"INR"}}'
+# 201 { "success": true, "data": { "_id": "...", "name": "Asha Verma", "status": "lead", ... } }
+
+# 4. The same phone or email again answers 409 (data.duplicate, canForce: true);
+#    ?force=true creates the second record anyway
+curl -s -b jar.txt -X POST "$BASE/api/clients?force=true" \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
+  -d '{"name":"Asha Verma (second number)","phone":"9876543210"}'
+
+# 5. Read it back, paged and sorted
+curl -s -b jar.txt "$BASE/api/clients?page=1&amp;limit=20&amp;sort=createdAt:desc&amp;status=lead"</code></pre>
+<p>The create schema (<code>clientValidation.create</code>) requires only <code>name</code> (2 to 120 characters). <code>status</code> is one of <code>lead, contacted, qualified, proposal, negotiation, won, lost</code>; <code>temperature</code> is <code>hot|warm|cold</code>; unknown fields are dropped. The assignee is chosen by the workspace's lead-assignment rule when you do not name one, and a non-admin cannot assign to someone else. Creating a lead also fires the <code>lead.created</code> webhook and computes the lead score.</p>
+<p>In production the cookies are <code>Secure</code>, so use <code>https://</code>; <code>curl</code> then needs the cookie jar from an https session.</p>

@@ -1,0 +1,120 @@
+<!--
+title: Frontend
+description: The React single-page app: routing and shells, the design system, state, API access, i18n and locale, printing, and the SEO build.
+-->
+<h2>Stack and layout</h2>
+<p>React 18, Vite 4, Tailwind 3.3, react-router-dom 6, Redux Toolkit with redux-persist, i18next, Leaflet for maps, ApexCharts for charts, socket.io-client for realtime. Source lives in <code>frontend/src</code>:</p>
+<table>
+<tr><th>Folder</th><th>What is in it</th></tr>
+<tr><td><code>app/</code></td><td><code>AppRoutes.jsx</code> (the authoritative route list), <code>AppShell.jsx</code>, <code>CrmShell.jsx</code>, <code>screenRegistry.js</code>, <code>commands.js</code> (the shared command list), <code>RouteSeo.jsx</code>, keyboard shortcuts.</td></tr>
+<tr><td><code>pages/</code></td><td>One file per screen. Most are lazy-loaded from <code>AppRoutes.jsx</code>.</td></tr>
+<tr><td><code>components/</code></td><td>Feature components (panels in Settings, <code>GlobalSearch</code>, <code>crm/*</code>).</td></tr>
+<tr><td><code>design-system/</code></td><td>Shared primitives, imported from the barrel <code>'../design-system'</code>.</td></tr>
+<tr><td><code>contexts/</code></td><td><code>TenantProvider</code>, <code>PermissionsContext</code>, notifications, appearance, search.</td></tr>
+<tr><td><code>hooks/</code></td><td><code>useScreens</code>, <code>useCrmAccess</code>, <code>useActingAs</code>, <code>useListingForm</code>, <code>useColumnPrefs</code>, &hellip;</td></tr>
+<tr><td><code>utils/</code></td><td><code>http.js</code> (API client), <code>currency.js</code> (all formatters), <code>cloudinary.js</code>, <code>nativeFieldAliases.js</code>, <code>categoryFieldRules.js</code>.</td></tr>
+<tr><td><code>i18n/</code></td><td>i18next setup and <code>locales/*.json</code>.</td></tr>
+<tr><td><code>redux/</code></td><td>Store and the <code>user</code> slice; only <code>user</code> is persisted.</td></tr>
+</table>
+
+<h2>Routing and shells</h2>
+<p>Two layouts. <strong>AppShell</strong> wraps public and seller routes with a minimal header. <strong>CrmShell</strong> wraps every CRM route with the sidebar and top bar and requires <code>role === 'admin' || role === 'employee'</code>. Guards are <code>AdminRoute</code>, <code>SellerRoute</code>, <code>PrivateRoute</code> and the <code>canAccess</code> check in <code>CrmShell</code>.</p>
+<div class="note"><p>Read <code>frontend/src/app/AppRoutes.jsx</code> rather than any list in prose. Renamed paths keep aliases: <code>/contacts</code> to <code>/owners</code>, <code>/deals</code> to <code>/pipeline</code>, <code>/buyer-requirements</code> to <code>/buyers</code>, <code>/client-reports</code> to <code>/reports</code>.</p></div>
+<p>Reachable without a session: <code>/</code>, the legal pages, <code>/download</code>, <code>/sign-in</code>, <code>/forgot-password</code>, <code>/s/:token</code> (a share link), <code>/invite/:token</code> and <code>/unsubscribe/:token</code>. The property book is not browsable anonymously.</p>
+
+<h3>The sidebar is data, not markup</h3>
+<p>The server owns what each screen is (<code>backend/tenancy/screenCatalogue.js</code>: id, label, section, permission). The client owns how it looks (<code>app/screenRegistry.js</code>: icon, route). <code>hooks/useScreens.js</code> intersects both with the workspace's feature flags and the user's permissions.</p>
+<div class="warn"><p><strong>Screen ids are a contract with every workspace's stored settings.</strong> Renaming one detaches the screen from the catalogue and it vanishes from the menu with no error. Add and deprecate freely; never rename. A workspace's own rename of a screen beats a translation (<code>useScreens</code> compares <code>label</code> to <code>defaultLabel</code>).</p></div>
+<p>Adding a screen: an entry in both files plus a route in <code>AppRoutes.jsx</code>.</p>
+
+<h3>Command palette and shortcuts</h3>
+<p>The &#8984;K palette and the keyboard shortcuts read one list, <code>app/commands.js</code> (<code>useCommands</code>), filtered by screens and permissions. Add an action there, never in either consumer. A "New &hellip;" command links to <code>?new=1</code> and the destination page opens its own create form.</p>
+
+<h2>Talking to the API</h2>
+<p>Always use <code>apiClient</code> from <code>@/utils/http</code>; never raw <code>fetch</code>.</p>
+<pre><code>import { apiClient, normalizeImageUrl } from '@/utils/http';
+
+await apiClient.get('/endpoint');
+await apiClient.post('/endpoint', data);
+await apiClient.patch('/endpoint', data);
+await apiClient.delete('/endpoint');
+await apiClient.upload('/endpoint', formData);   // multipart</code></pre>
+<ul>
+<li>Sessions are httpOnly cookies. A 401 triggers one refresh and a retry (<code>fetchWithRefresh</code>); see <a href="authentication.html">Authentication</a>.</li>
+<li>Failures arrive as one envelope with a <code>code</code>. Branch on <code>code</code>; show <code>message</code> to people (<a href="request-pipeline.html">Request pipeline</a>).</li>
+<li>Pass <code>{ silent: true }</code> to suppress the global error toast when the caller handles the failure itself (a widget that should degrade quietly).</li>
+<li>Run image URLs through <code>normalizeImageUrl()</code>; it turns absolute localhost URLs into relative paths so production works.</li>
+<li>Uploads of images and voice notes go straight to Cloudinary from the browser (<code>utils/cloudinary.js</code>, unsigned preset; audio uses the <code>video</code> resource type). Only documents go through <code>/api/documents</code>.</li>
+</ul>
+
+<h2>Environment</h2>
+<table>
+<tr><th>Variable</th><th>Purpose</th></tr>
+<tr><td><code>VITE_API_URL</code></td><td>API origin. Empty in dev; the Vite proxy forwards <code>/api</code> and <code>/uploads</code> to <code>localhost:3000</code>.</td></tr>
+<tr><td><code>VITE_API_RESPONSE_SECRET</code></td><td>Response decryption secret.</td></tr>
+<tr><td><code>VITE_SOCKET_URL</code></td><td>Socket.IO endpoint.</td></tr>
+<tr><td><code>VITE_CLOUDINARY_CLOUD_NAME</code>, <code>VITE_CLOUDINARY_UPLOAD_PRESET</code></td><td>Uploads.</td></tr>
+<tr><td><code>VITE_SITE_URL</code></td><td>Public origin used for the sitemap, canonical URLs and social tags at build time. Defaults to <code>https://realvista.duckdns.org</code>.</td></tr>
+</table>
+<p><code>VITE_*</code> values are baked in at build time, which is why production builds on the server that holds them.</p>
+
+<h2>Design system</h2>
+<p>Import from the barrel: <code>import { Button, Modal, Table } from '../design-system'</code>. Components: Avatar, Badge, Button, Card, ColumnToggle, Drawer, Dropdown, EmptyState, Input/Select/Textarea, KpiCard, Modal, PageHeader, Pagination, SearchBar, Skeleton, Spinner, Table, Tabs, Toggle (Switch/Checkbox), Toolbar, Tooltip. <code>Modal</code> and <code>Drawer</code> share <code>useDialog</code>.</p>
+<ul>
+<li><strong>Icons:</strong> <code>react-icons/hi</code> (HeroIcons) only. No Font Awesome, no lucide, no emoji icons.</li>
+<li><strong>Maps:</strong> Leaflet occupies z-index 400&ndash;800. On map pages use inline confirmation (a rose-50 strip with Cancel and Delete, see <code>PropertyDocuments.jsx</code>) instead of a modal; elsewhere use <code>ConfirmDialog</code>.</li>
+<li><strong>Tokens:</strong> new code should prefer theme tokens (<code>bg-card</code>, <code>border-border</code>, <code>text-foreground</code>, <code>text-muted-foreground</code>, <code>bg-secondary</code>, <code>hover:bg-accent</code>) over slate classes, so dark mode needs no override entry.</li>
+</ul>
+<h3>Visual conventions</h3>
+<table>
+<tr><th>Element</th><th>Classes</th></tr>
+<tr><td>Page background</td><td><code>bg-slate-50</code></td></tr>
+<tr><td>Card</td><td><code>bg-white border border-slate-200 rounded-xl p-5 shadow-sm</code></td></tr>
+<tr><td>Primary button</td><td><code>bg-slate-900 hover:bg-slate-800 text-white rounded-lg</code></td></tr>
+<tr><td>Secondary button</td><td><code>border border-slate-200 bg-white hover:bg-slate-50 rounded-lg</code></td></tr>
+<tr><td>CTA on dark</td><td><code>bg-brand-600 hover:bg-brand-700 text-white</code></td></tr>
+</table>
+<h3>Colour</h3>
+<p>The accent is a deep petrol blue on an OKLCH ramp named <code>brand</code> in <code>tailwind.config.js</code>. The same config overrides Tailwind's stock <code>indigo</code> with that ramp, so the ~520 older <code>indigo-*</code> classes repaint coherently and the dark-mode override sheet in <code>index.css</code> keeps working. Use <code>brand-*</code> in new code; do not introduce new <code>indigo-*</code>.</p>
+<div class="danger"><p><strong>Interpolated class names never work.</strong> <code>`text-${color}-400`</code> is not emitted because Tailwind scans source as plain text. Every colour must appear as a complete literal string, usually via a lookup table keyed by variant.</p></div>
+<p>Per-workspace branding uses CSS variables on <code>:root</code> and utilities such as <code>bg-workspace</code>. <code>text-balance</code> and <code>text-pretty</code> are hand-defined in <code>index.css</code> (Tailwind 3.3 predates the built-ins).</p>
+
+<h3>Lists</h3>
+<p>A list page sorts and pages on the server: <code>&lt;Th sortKey sort onSort&gt;</code> sets the sort, the page sends <code>sort=key:asc|desc&amp;page=&amp;limit=</code>, and <code>&lt;Pagination&gt;</code> reads <code>total</code> from the response. Sorting one page of results sorts the wrong set; <code>useTableSort</code>'s <code>sorted</code> is only for lists that are already whole. Use <code>Skeleton</code>/<code>SkeletonRows</code> for loading, <code>EmptyState</code> for empty, and <code>ColumnToggle</code> with <code>useColumnPrefs</code> for column choice.</p>
+
+<h2>Forms that matter</h2>
+<ul>
+<li><strong>Listing form:</strong> <code>pages/ListingForm.jsx</code> with <code>mode="create"|"edit"</code> is the only listing form; <code>CreateListing</code> and <code>UpdateListing</code> are tiny wrappers. A new property field is one edit in <code>EMPTY</code> (<code>hooks/useListingForm.js</code>) plus one input. If it aliases a native column, update <code>NATIVE_FIELD_ALIASES</code> in both <code>frontend/src/utils/nativeFieldAliases.js</code> and <code>backend/utils/importMapping.js</code>.</li>
+<li><strong>Edit conflicts:</strong> listing and client edits send <code>expectedUpdatedAt</code>. A 409 <code>VERSION_CONFLICT</code> shows <code>EditConflictNotice</code> inline with "Load their version" or "Keep mine".</li>
+<li><strong>Category fields:</strong> <code>utils/categoryFieldRules.js</code> mirrors the cheap server rules for inline hints; the server (<code>backend/utils/categoryFields.js</code>) is authoritative.</li>
+</ul>
+
+<h2>Locale, currency and translation</h2>
+<p><code>utils/currency.js</code> holds every formatter. <code>TenantProvider</code> pushes the workspace locale in with <code>setLocaleConfig()</code>. Use <code>formatCurrency</code>, <code>formatNumber</code>, <code>formatDate</code>, <code>formatArea</code> and <code>areaUnitLabel</code>.</p>
+<div class="warn"><p>Never construct <code>Intl.NumberFormat</code> at a call site and never hardcode <code>&#8377;</code>, <code>en-IN</code> or <code>sq ft</code>. All six area units must work: <code>sqft</code>, <code>sqyard</code>, <code>sqm</code>, <code>acre</code>, <code>cent</code>, <code>guntha</code>. A two-way ternary once showed "sq yard" for the other four.</p></div>
+<p>Translations are <code>src/i18n/locales/*.json</code>, discovered by a Vite glob, so a new language is one dropped-in file (<code>en</code> and <code>hi</code> ship today). <code>i18n/__tests__/locales.test.js</code> fails the build on a missing key or a dropped <code>{{placeholder}}</code>, and <code>keys-exist</code> fails on a <code>t('key')</code> that is absent from <code>en.json</code>. Some newer panels use plain English strings; both are accepted by the tests.</p>
+
+<h2>Realtime</h2>
+<p><code>config/socket.js</code> connects to <code>VITE_SOCKET_URL</code> for messages, presence and notifications; the unread count comes from <code>useUnreadCount</code> and <code>NotificationFeedProvider</code>.</p>
+
+<h2>Printing</h2>
+<p><code>.print-area</code>, <code>.no-print</code>, <code>.print-only</code> and <code>.print-stack</code> in <code>index.css</code> are the convention. Use <code>&lt;PrintButton /&gt;</code> rather than per-page print CSS; browsers already offer "Save as PDF".</p>
+
+<h2>SEO</h2>
+<p>Only a handful of pages are public, and they are the only ones meant to be indexed. The list lives in <code>frontend/seo/pages.mjs</code> and is read by the build and the runtime.</p>
+<ul>
+<li><strong>Build</strong> (<code>seo/vite-plugin-seo.mjs</code>): writes a real HTML file per public page with its own title, description, canonical, Open Graph and Twitter tags, JSON-LD and a no-JavaScript fallback; generates <code>sitemap.xml</code> and <code>robots.txt</code> using <code>VITE_SITE_URL</code>. The home page also carries <code>FAQPage</code> data drawn from <code>landing.faq</code> in <code>en.json</code>.</li>
+<li><strong>Runtime</strong> (<code>app/RouteSeo.jsx</code>): after client-side navigation, sets robots, canonical and social tags for public pages and <code>noindex, nofollow</code> for every other route, so a route missing from the list fails closed.</li>
+<li><strong>Static assets:</strong> <code>public/og-image.png</code> (1200&times;630). There is no hand-written <code>robots.txt</code>; the build produces it.</li>
+</ul>
+<div class="note"><p>The web server must fall back with <code>try_files $uri $uri/ /index.html</code> so <code>/privacy</code> serves <code>privacy/index.html</code>. See <a href="operations.html">Deploy and operate</a>.</p></div>
+<h3>Marketing-claims policy</h3>
+<p>Public pages (<code>Home</code>, <code>Footer</code>, <code>MinimalHeader</code>, <code>Legal</code>) carry no performance statistics, no customer counts and no attributed testimonials. Every claim must be traceable to something in the repository or to a measurement someone can produce. Legal text changes in the same commit as the behaviour it describes, and <code>LEGAL_UPDATED</code> (<code>pages/Legal.jsx</code>) moves with <code>LEGAL_VERSION</code> (<code>backend/utils/legalVersion.js</code>). Business identity lives only in <code>BUSINESS</code> in <code>utils/marketingCopy.js</code>; null fields are not printed, so never fill one with a guess.</p>
+
+<h2>Testing</h2>
+<pre><code>cd frontend
+npm run test            # vitest --run (jsdom)
+npm run test:ui
+npm run test:coverage
+npm run lint</code></pre>
+<p>End-to-end specs are in the repo-root <code>e2e/</code> directory and run with Playwright (<code>playwright.config.js</code>).</p>

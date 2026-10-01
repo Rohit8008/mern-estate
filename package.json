@@ -11,6 +11,7 @@
     "e2e:debug": "playwright test --debug",
     "e2e:report": "playwright show-report playwright-report",
     "e2e:codegen": "playwright codegen http://localhost:5173",
+    "docs:site": "node docs/site-src/build.mjs",
     "seed:demo": "cd backend && node scripts/seedDemo.js",
     "demo:video": "playwright test --config=playwright.demo.config.js",
     "demo:video:report": "playwright show-report e2e/demo/demo-report",

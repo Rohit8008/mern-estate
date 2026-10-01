@@ -1,3 +1,5 @@
+> **Superseded.** This guide predates multi-tenancy and the current environment variables. The maintained documentation is the site in [`docs/site`](docs/site/index.html) (source in `docs/site-src`). Treat this file as history.
+
 # Production Setup Guide
 
 ## 🚀 Quick Start

@@ -1,3 +1,5 @@
+> **Superseded.** This guide predates multi-tenancy and still mentions Firebase, which has been removed. The maintained documentation is the site in [`docs/site`](docs/site/index.html) (source in `docs/site-src`). Treat this file as history.
+
 # MERN Estate - Deployment Guide
 
 This guide covers deploying the MERN Estate application to Render (recommended for PaaS deployment).

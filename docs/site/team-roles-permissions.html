@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team, roles and permissions — Real Vista Docs</title>
+<meta name="description" content="Adding people, choosing what each can do, how access is scoped to categories and records, and where to look when something goes wrong.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html" class="active">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Team, roles and permissions</h1>
+<p class="lede">Adding people, choosing what each can do, how access is scoped to categories and records, and where to look when something goes wrong.</p>
+
+<h2 id="two-layers">Two layers of access</h2>
+<p>What a person can do is decided by two separate things. Mixing them up is the most common source of "why can't they see it".</p>
+<ol>
+<li><strong>Account type</strong> (<code>user.role</code>): <code>admin</code>, <code>employee</code>, <code>seller</code>, <code>buyer</code> (the schema also allows <code>user</code>, the default). Only <code>admin</code> and <code>employee</code> can enter the CRM (the CRM shell requires one of the two).</li>
+<li><strong>Custom role</strong> (<code>user.assignedRole</code>): a named bundle of permissions that you assign to an <em>employee</em>. Admins bypass permission checks entirely.</li>
+</ol>
+<p>Then a third thing narrows the data: <a href="#scoping">scoping</a> (which categories, listings and leads an employee may touch).</p>
+
+<table>
+<thead><tr><th>Account type</th><th>What it means</th></tr></thead>
+<tbody>
+<tr><td><code>admin</code></td><td>Admin of <em>one workspace</em>, not the vendor. Sees everything in that workspace, passes every permission check, manages users, roles and settings. Not the same as a platform operator (see <a href="multi-tenancy.html">Multi-tenancy</a>).</td></tr>
+<tr><td><code>employee</code></td><td>Agency staff. Gets only the permissions of the custom role assigned to them, and sees only data in their scope.</td></tr>
+<tr><td><code>seller</code></td><td>Sees only listings they created. No CRM.</td></tr>
+<tr><td><code>buyer</code></td><td>No CRM; may not create, edit or delete listings.</td></tr>
+</tbody></table>
+
+<div class="warn"><p><strong>An employee with no custom role can do almost nothing.</strong> The permission check answers 403 "No role assigned. Access denied." and the app's permission context resolves to an empty set, so the CRM screens redirect to "Unauthorized". The single exception is creating listings, which an employee with no role is allowed (category restrictions still apply). Always assign a role right after inviting an employee.</p></div>
+
+<h2 id="add-people">Add a team member</h2>
+<p>To invite an employee: <strong>Admin Panel</strong> (<code>/admin</code>), Users tab, <em>Create Employee</em>: username, email, optional phone, and the categories they are assigned to. Admin only. Then assign a role in the Roles &amp; Permissions tab.</p>
+<ul>
+<li>Counts against the plan's <strong>seat limit</strong> <code>maxUsers</code> (trial 3, starter 10, growth 40, enterprise unlimited). At the cap the request answers 402 before anything is created.</li>
+<li>Email must be unused in the workspace (409 otherwise); a phone number must also be unused.</li>
+<li>No password is ever chosen or emailed. The account is created with a random password nobody sees, and an <strong>invitation</strong> is sent.</li>
+</ul>
+
+<h3 id="invites">Invitations</h3>
+<ul>
+<li>The invite email links to <code>/invite/:token</code>. The token is 32 random bytes, stored only as a SHA-256 hash, valid for <strong>7 days</strong> and <strong>single-use</strong>. The link carries the workspace, so the recipient lands in the right agency without knowing the word "workspace".</li>
+<li>The invitee chooses a password and must accept the Terms of Service and Privacy Policy. The acceptance records the legal version and time. They are then signed in directly, and the email tells them the workspace address to use on later sign-ins.</li>
+<li>An unknown, expired or already-used token all show the same "no longer valid" message, so tokens cannot be probed.</li>
+<li><strong>Only the newest invitation works.</strong> Sending a fresh invite remembers up to four earlier links; opening one of those answers 410 with code <code>INVITE_REPLACED</code> ("A newer invitation was sent to you") so the invitee knows to open the newer email.</li>
+<li>If mail is not configured the invite cannot be delivered. The create call returns the link (<code>inviteUrl</code>) so an admin could pass it on, but the Admin Panel does not display it, and there is no tenant-admin button to re-send an employee invite (the platform console can re-send a workspace's first admin invite only). To unblock someone, an admin can set an employee's password directly (below).</li>
+</ul>
+
+<h3 id="manage-users">Manage existing users</h3>
+<p>In the Users tab, open <em>Manage</em> on a person. All of these are admin-only and refuse to act on yourself or on another admin:</p>
+<table>
+<thead><tr><th>Action</th><th>Rules</th></tr></thead>
+<tbody>
+<tr><td>Change account type and assigned categories</td><td><code>POST /api/user/role/:id</code>. You cannot change your own type or another admin's.</td></tr>
+<tr><td>Deactivate or reactivate</td><td>Status <code>active</code> / <code>inactive</code>. An inactive account cannot sign in ("Your account is inactive"). Not allowed on admins or yourself.</td></tr>
+<tr><td>Set an employee's password</td><td>Employees only (not admins, not yourself). The password must meet the rules below. It clears pending reset codes and <strong>signs the employee out everywhere</strong> (refresh tokens are cleared). A security-log entry <code>admin_password_reset</code> is written.</td></tr>
+<tr><td>Delete</td><td>Soft delete, not on admins or yourself.</td></tr>
+</tbody></table>
+<p>A person can close their own account from Settings, Privacy (Close Account) or their Profile; that erases their personal details and keeps the records they created, attributed to "Former team member". See <a href="sharing-and-imports.html#data-rights">Data rights</a>.</p>
+
+<h3 id="passwords">Password rules and lockout</h3>
+<ul>
+<li>At least <strong>8 characters</strong> with an uppercase letter, a lowercase letter, a digit and a special character from <code>! @ # $ % ^ &amp; * ( ) , . ? " : { } | &lt; &gt;</code>. The same check applies to invites, password changes, resets and admin resets.</li>
+<li>After <strong>5</strong> failed sign-ins (<code>MAX_LOGIN_ATTEMPTS</code>) the account is locked for <strong>15 minutes</strong> (<code>LOCKOUT_DURATION</code>); a successful sign-in resets the counter. Auth endpoints are rate-limited (20 requests per 15 minutes by default in production).</li>
+<li>Sessions: 15-minute access token and 30-day refresh token in httpOnly cookies. See <a href="authentication.html">Authentication</a>.</li>
+</ul>
+
+<h2 id="roles">Custom roles</h2>
+<p>Roles live under <strong>Admin Panel, Roles &amp; Permissions</strong> (<code>RoleManagement</code>). The whole <code>/api/roles</code> API is admin-only, whatever the <code>manageRoles</code> permission says.</p>
+<ul>
+<li><strong>Create a role:</strong> a unique name (per workspace), a description (up to 500 characters) and ticked permissions. All permissions default to off.</li>
+<li><strong>Assign / remove:</strong> choose a role for a user (<code>POST /api/roles/assign</code>, <code>/remove</code>). You cannot assign an inactive role.</li>
+<li><strong>Members:</strong> open a role to list its members (<code>GET /api/roles/:id/users</code>).</li>
+<li><strong>Edit:</strong> a role marked <code>isSystem</code> cannot be renamed or deactivated; its permissions can still be edited.</li>
+<li><strong>Delete:</strong> system roles cannot be deleted. A role with members answers 400 "Cannot delete role. N user(s) are assigned…"; confirming a force delete (<code>?force=true</code>) unassigns everyone and then soft-deletes the role. Those employees are left with no role, which locks them out of most of the CRM (see the warning above).</li>
+<li><strong>Restore default roles:</strong> the button calls <code>GET /api/roles/initialize-defaults</code> (a GET that writes), which creates any of the three built-in roles that do not already exist by name and leaves existing ones untouched.</li>
+</ul>
+<table>
+<thead><tr><th>Built-in role</th><th>Permissions it grants</th></tr></thead>
+<tbody>
+<tr><td>Super Admin (system)</td><td>All 35.</td></tr>
+<tr><td>Employee (system)</td><td><code>viewClients</code>, <code>viewOwners</code>, <code>createListing</code>, <code>viewListings</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
+<tr><td>Listing Manager (system)</td><td><code>createOwner</code>, <code>updateOwner</code>, <code>viewOwners</code>, <code>toggleOwnerActive</code>, <code>createListing</code>, <code>updateListing</code>, <code>viewListings</code>, <code>publishListing</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
+</tbody></table>
+<p>The seed script <code>npm run db:seed-roles</code> defines a longer set (Super Admin, Sales Manager, Listing Manager, Employee, Viewer) and is the way to get "Sales Manager" and "Viewer"; the in-app restore button only knows the three above.</p>
+<div class="note"><p>Role documents are cached per process for <strong>60 seconds</strong> (<code>requirePermission</code>), so a permission change can take up to a minute to reach every API call. The app fetches an employee's permissions once per session load (<code>/api/user/my-permissions</code>), so a signed-in employee sees menu changes after a reload.</p></div>
+
+<h2 id="catalogue">The permission catalogue (35)</h2>
+<p>Every permission is declared once in <code>backend/utils/permissionCatalogue.js</code>. The role schema, the Roles screen and <code>requirePermission()</code> all read it; <code>requirePermission('x')</code> <strong>throws at module load</strong> if <code>x</code> is not in the catalogue, and <code>tests/permissionCatalogue.test.js</code> walks the real route files so a typo fails the build. Adding a permission is one edit in that file.</p>
+<table>
+<thead><tr><th>Group</th><th>Key</th><th>Label</th><th>Enforced today by</th></tr></thead>
+<tbody>
+<tr><td rowspan="4">userManagement</td><td><code>createUser</code></td><td>Create new users</td><td>nothing (inventing users is admin-only)</td></tr>
+<tr><td><code>updateUser</code></td><td>Update user information</td><td>API: assigning a lead (<code>POST /api/clients/:id/assign</code>)</td></tr>
+<tr><td><code>deleteUser</code></td><td>Delete users</td><td>nothing</td></tr>
+<tr><td><code>viewUsers</code></td><td>View user list</td><td>nothing (the user list is admin-only)</td></tr>
+<tr><td rowspan="4">clientManagement</td><td><code>createClient</code></td><td>Create new clients</td><td>API: create lead, lead import. UI: gates create actions</td></tr>
+<tr><td><code>updateClient</code></td><td>Update client information</td><td>API: edit lead, bulk, photos, interested listings, email opt-out</td></tr>
+<tr><td><code>deleteClient</code></td><td>Delete clients</td><td>API: delete lead</td></tr>
+<tr><td><code>viewClients</code></td><td>View client list</td><td>API: lead list and detail, <strong>all tasks</strong>, <strong>all transactions</strong>. UI: Clients, Pipeline</td></tr>
+<tr><td rowspan="5">ownerManagement</td><td><code>createOwner</code></td><td>Create new owners</td><td>API: create owner</td></tr>
+<tr><td><code>updateOwner</code></td><td>Update owner information</td><td>API: edit owner (including the active flag)</td></tr>
+<tr><td><code>deleteOwner</code></td><td>Delete owners</td><td>API: delete owner</td></tr>
+<tr><td><code>viewOwners</code></td><td>View owner list</td><td>API: list and read owners. UI: Property Owners screen</td></tr>
+<tr><td><code>toggleOwnerActive</code></td><td>Activate/deactivate owners</td><td>nothing (the Activate/Deactivate button uses <code>updateOwner</code>)</td></tr>
+<tr><td rowspan="5">listingManagement</td><td><code>createListing</code></td><td>Create new listings</td><td>API: create listing. UI: Add Property screen</td></tr>
+<tr><td><code>updateListing</code></td><td>Update listing information</td><td>UI route guard on the edit form only. The API decides by ownership and scope</td></tr>
+<tr><td><code>deleteListing</code></td><td>Delete listings</td><td>nothing (API decides by ownership and scope)</td></tr>
+<tr><td><code>viewListings</code></td><td>View listing list</td><td>UI: All Properties screen and route</td></tr>
+<tr><td><code>publishListing</code></td><td>Publish/unpublish listings</td><td>nothing</td></tr>
+<tr><td rowspan="4">categoryManagement</td><td><code>createCategory</code></td><td>Create new categories</td><td>API: create category</td></tr>
+<tr><td><code>updateCategory</code></td><td>Update category information</td><td>API: rename, fields, location</td></tr>
+<tr><td><code>deleteCategory</code></td><td>Delete categories</td><td>API: delete, list deleted, restore</td></tr>
+<tr><td><code>viewCategories</code></td><td>View category list</td><td>UI: Categories screen</td></tr>
+<tr><td rowspan="3">messageManagement</td><td><code>viewMessages</code></td><td>View messages</td><td>nothing</td></tr>
+<tr><td><code>sendMessages</code></td><td>Send messages</td><td>nothing</td></tr>
+<tr><td><code>deleteMessages</code></td><td>Delete messages</td><td>nothing</td></tr>
+<tr><td rowspan="4">buyerRequirements</td><td><code>createBuyerRequirement</code></td><td>Create buyer requirements</td><td>nothing</td></tr>
+<tr><td><code>updateBuyerRequirement</code></td><td>Update buyer requirements</td><td>nothing</td></tr>
+<tr><td><code>deleteBuyerRequirement</code></td><td>Delete buyer requirements</td><td>nothing</td></tr>
+<tr><td><code>viewBuyerRequirements</code></td><td>View buyer requirements</td><td>UI: Buyer Requirements screen and route</td></tr>
+<tr><td rowspan="6">system</td><td><code>uploadFiles</code></td><td>Upload files</td><td>API: list, upload and delete documents</td></tr>
+<tr><td><code>viewAnalytics</code></td><td>View analytics and reports</td><td>API: lead source ROI. UI: Dashboard, Analytics, Transactions screens</td></tr>
+<tr><td><code>exportData</code></td><td>Export data</td><td>API: lead export, data-rights exports. UI: Client Reports screen</td></tr>
+<tr><td><code>manageRoles</code></td><td>Manage roles and permissions</td><td>nothing (the roles API is admin-only)</td></tr>
+<tr><td><code>systemSettings</code></td><td>Access system settings</td><td>API: property-type create, update, delete, seed</td></tr>
+<tr><td><code>viewLogs</code></td><td>View system logs</td><td>API: workspace activity search and export; the full trail of any record</td></tr>
+</tbody></table>
+<div class="warn"><p><strong>"Nothing" means the key can be ticked on a role but no code consults it.</strong> This column was derived from every <code>requirePermission(...)</code> call in <code>backend/routes</code>, the <code>canCreateListing</code> middleware, direct <code>hasPermission</code> calls in controllers, and the permission checks in <code>frontend/src/app/AppRoutes.jsx</code> and <code>screenCatalogue.js</code>. Do not rely on ticking or clearing those boxes to restrict anything; the real boundary for listings, buyers, messages and users is the account type plus scoping below.</p></div>
+
+<h3 id="how-it-works">How requirePermission works</h3>
+<pre><code>router.get('/', requirePermission('viewClients'), getClients);</code></pre>
+<ol>
+<li>If the account type is <code>admin</code>, it passes.</li>
+<li>Otherwise the user needs an <code>assignedRole</code>, else 403 "No role assigned".</li>
+<li>The role is loaded (cached 60 s). It must exist and be active, else 403 "Invalid or inactive role".</li>
+<li>The role must have the key set to <code>true</code>, else 403 "Permission denied. Required permission: &lt;key&gt;".</li>
+</ol>
+<p>The frontend mirrors this for navigation only: the sidebar is the intersection of the screen catalogue, the workspace's switched-on screens and the user's permissions (<code>useScreens</code>), and <code>PermissionRoute</code> redirects to "Unauthorized". The UI is not a security boundary; the API enforces. Screens with a <code>requires</code> key: Dashboard and Analytics and Transactions (<code>viewAnalytics</code>), All Properties (<code>viewListings</code>), Categories (<code>viewCategories</code>), Add Property (<code>createListing</code>), Clients and Sales Pipeline (<code>viewClients</code>), Property Owners (<code>viewOwners</code>), Buyer Requirements (<code>viewBuyerRequirements</code>), Client Reports (<code>exportData</code>). Tasks and Calendar require none. Import from Excel, Admin Panel and Settings are admin-only.</p>
+
+<h2 id="scoping">Employee scoping</h2>
+<p>Permissions say <em>what kind</em> of thing you may do; scoping says <em>which records</em>.</p>
+<h3 id="listing-scope">Listings</h3>
+<p><code>listingScope(user)</code> returns a database filter that every multi-listing read path (list, search, suggestions, facets, export, buyer matching, share creation) merges in. The UI is not relied on.</p>
+<table>
+<thead><tr><th>Account type</th><th>Listings visible</th></tr></thead>
+<tbody>
+<tr><td>admin</td><td>All in the workspace.</td></tr>
+<tr><td>employee</td><td>Listings whose <code>assignedAgent</code> is them, which they created (<code>userRef</code>), or which sit in one of their <strong>assigned categories</strong>.</td></tr>
+<tr><td>seller</td><td>Only what they created.</td></tr>
+<tr><td>buyer</td><td>No filter is applied by this function (it returns an empty filter for buyers and anonymous callers).</td></tr>
+</tbody></table>
+<p>Single-record access (<code>canAccessListing</code>) follows the same rules; for updates and voice notes the assigned agent also counts. An employee can create a listing only in an assigned category. <strong>Assigned categories</strong> are set when the employee is created and changed with <em>Manage</em>. Use <code>POST /api/listing/assign-agent</code> (admin-only) to give a specific agent a specific listing.</p>
+<h3 id="lead-scope">Leads, tasks and the rest</h3>
+<ul>
+<li><strong>Leads:</strong> an employee sees and edits only leads assigned to them; reassigning is admin-only.</li>
+<li><strong>Tasks:</strong> own tasks; admin can see and assign across the team.</li>
+<li><strong>Documents:</strong> admin: all; others only on parents they own or work on (their leads, their listings, their assigned categories).</li>
+<li><strong>Buyer requirements:</strong> admin and employee see every requirement in the workspace; sellers and buyers see only their own.</li>
+<li><strong>Share links:</strong> an admin sees all links, anyone else only their own.</li>
+</ul>
+<div class="note"><p>Two endpoints are looser than the lead scope: a data-rights contact export is authorised by <code>exportData</code> alone, and <code>viewClients</code> opens the tasks and transactions APIs. Grant those permissions deliberately.</p></div>
+
+<h2 id="audit">Security log and audit trail</h2>
+<table>
+<thead><tr><th>Log</th><th>Where</th><th>Who</th><th>What it records</th></tr></thead>
+<tbody>
+<tr><td>Security logs</td><td>Admin Panel, <strong>Security Logs</strong> tab (<code>GET /api/user/security/logs</code>)</td><td>admin only</td><td>Sign-in attempts and related events: email, method (<code>password</code>, <code>google</code>, <code>signup</code>, <code>other</code>), status (<code>success</code>, <code>invalid</code>, <code>blocked</code>), reason, IP, user agent, path. Filter by method, status, email and date; up to 1,000 per page.</td></tr>
+<tr><td>Audit trail</td><td><code>/admin/audit-log</code> (<code>GET /api/activity/search</code>, export)</td><td>admin, or anyone holding <code>viewLogs</code> at the API</td><td>Who did what to clients, tasks, owners, categories and more: action or message, actor, date range, field-level changes. Exportable as CSV. Data exports and erasures write entries too.</td></tr>
+<tr><td>Per-record timeline</td><td>A lead's <em>Timeline</em> tab (<code>GET /api/activity?entityType=client&amp;entityId=…</code>)</td><td>admin or <code>viewLogs</code>; otherwise the record's owner</td><td>The trail for that one record.</td></tr>
+</tbody></table>
+<ul>
+<li>While a platform operator is "acting as" a workspace, their session is read-only, and security logs about their session are written to their own workspace, not the customer's. See <a href="multi-tenancy.html">Multi-tenancy</a>.</li>
+<li>When logs are shipped to OpenObserve (see <a href="getting-started.html#backend-env">environment variables</a>), audit and security entries are also shipped; with no credentials they go to stdout only.</li>
+</ul>
+<p>The audit-log page has a route but no menu entry in the app; open it by address. Its route requires the admin account type even though the API also accepts <code>viewLogs</code>.</p>
+
+<h2 id="checklist">Checklist: onboarding an agent</h2>
+<ol>
+<li>Check seats: Settings, Workspace shows plan usage; <code>maxUsers</code> blocks the invite at the cap.</li>
+<li>Admin Panel, Users, Create Employee (choose their categories).</li>
+<li>Roles &amp; Permissions: assign a role (restore the defaults first if the list is empty).</li>
+<li>Ask them to open the invite within 7 days and choose a password.</li>
+<li>If the sidebar is missing items, check the role's permissions and whether the workspace switched the screen off (<a href="workspace-settings.html#screens">Screens</a>).</li>
+</ol>
+<p>API: see the <a href="api/roles.html">Roles</a> and <a href="api/tenant.html">Tenant</a> references.</p>
+
+<div class="pager"><a href="sharing-and-imports.html"><small>Previous</small>Sharing and imports</a><a href="workspace-settings.html"><small>Next</small>Workspace settings</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#two-layers">Two layers of access</a><a class="h2" href="#add-people">Add a team member</a><a class="h3" href="#invites">Invitations</a><a class="h3" href="#manage-users">Manage existing users</a><a class="h3" href="#passwords">Password rules and lockout</a><a class="h2" href="#roles">Custom roles</a><a class="h2" href="#catalogue">The permission catalogue (35)</a><a class="h3" href="#how-it-works">How requirePermission works</a><a class="h2" href="#scoping">Employee scoping</a><a class="h3" href="#listing-scope">Listings</a><a class="h3" href="#lead-scope">Leads, tasks and the rest</a><a class="h2" href="#audit">Security log and audit trail</a><a class="h2" href="#checklist">Checklist: onboarding an agent</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

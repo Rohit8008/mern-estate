@@ -1,0 +1,162 @@
+<!--
+title: Listings and categories
+description: Adding and finding properties, how categories define extra fields, how paperwork and voice notes attach, and how search and maps behave.
+-->
+<h2 id="overview">The property book</h2>
+<p>A listing is one property. Properties are grouped into <strong>categories</strong> (a colony, a project, "Apartments"), and a category decides which extra fields a property in it collects. The register is the <strong>All Properties</strong> screen (<code>/properties</code>); the form is <code>/create-listing</code> and <code>/update-listing/:listingId</code>. Nothing about a listing, category or property type is reachable without a signed-in session; to show a property to someone outside the agency use a share link, see <a href="sharing-and-imports.html">Sharing and imports</a>.</p>
+
+<h2 id="listing-form">Add or edit a property</h2>
+<p>To add a property: sidebar, <strong>Add Property</strong> (needs <code>createListing</code>; employees with no custom role may also create, subject to category assignment). To edit: open the property and choose edit. Both use the same form (<code>pages/ListingForm.jsx</code>); the only difference is that Documents and Voice notes appear only once the property exists.</p>
+<table>
+<thead><tr><th>Section</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td>The property</td><td>Name (the only always-required field), category, property type, listing type (for sale, for rent, for lease), status, property or plot number, description.</td></tr>
+<tr><td>Where it is</td><td>Address, area or colony, locality or sector, city, state, pincode, and a map pin. Type an address and use <strong>Find on map</strong>, or click the map.</td></tr>
+<tr><td>Price and size</td><td>Price, offer price, bedrooms, bathrooms, area, plot size, square-yard figures, total value. Amounts use the workspace currency and area unit.</td></tr>
+<tr><td>&lt;Category&gt; details</td><td>The category's own fields (below). Fields marked * are required.</td></tr>
+<tr><td>Photos</td><td>The first photo is the one used everywhere else in the product. Images upload from the browser straight to Cloudinary.</td></tr>
+<tr><td>Owners</td><td>One or more Property Owners; you can create an owner inline.</td></tr>
+<tr><td>Internal notes</td><td>Visible to your team only.</td></tr>
+<tr><td>Documents, Voice notes</td><td>Edit mode only.</td></tr>
+</tbody></table>
+
+<h3 id="statuses">Statuses and types</h3>
+<table>
+<thead><tr><th>Field</th><th>Values</th></tr></thead>
+<tbody>
+<tr><td>status</td><td><code>available</code> (default), <code>sold</code>, <code>rented</code>, <code>under_negotiation</code></td></tr>
+<tr><td>type</td><td><code>sale</code> (default), <code>rent</code>, <code>lease</code></td></tr>
+<tr><td>propertyCategory</td><td><code>residential</code>, <code>commercial</code>, <code>land</code>, <code>industrial</code>, <code>other</code>, <code>unknown</code> (default). Inferred from the property type when you do not set it.</td></tr>
+</tbody></table>
+<p>A listing's status also changes by itself: when a deal is marked Won on a lead, the linked listing becomes <code>sold</code> (or <code>rented</code> for a rent or lease deal). See <a href="leads-and-pipeline.html#deals">Deals</a>.</p>
+
+<h3 id="form-behaviour">Things the form does for you</h3>
+<ul>
+<li><strong>Unsaved changes</strong> are tracked against what was loaded.</li>
+<li><strong>Edit conflicts.</strong> The form remembers the <code>updatedAt</code> it loaded and sends it back as <code>expectedUpdatedAt</code>. If a colleague saved first the server answers <code>409 VERSION_CONFLICT</code> and the form shows a notice with <strong>Load their version</strong> or <strong>Keep mine</strong> (which resends without the guard). A caller that sends no version (scripts, the mobile app) gets last-write-wins.</li>
+<li><strong>Find on map</strong> fills only empty fields, so a typed address is not overwritten by the geocoder's best match, but the map pin itself is always updated.</li>
+<li>Category fields whose key is a real column (bedrooms, bathrooms, parking, furnishing) are copied into that column too, because filters, cards and the bed/bath line read the column.</li>
+</ul>
+
+<h3 id="limits">What gates it</h3>
+<ul>
+<li><strong>Plan limit <code>maxListings</code></strong> (trial 250, starter 2,500, growth 25,000, enterprise unlimited). Creating over the cap answers 402. Bulk import checks the number it is about to create before writing any row.</li>
+<li><strong>Employees</strong> can create a listing only in a category assigned to them (otherwise "Not allowed for this category"), and can edit or delete only listings they created, are assigned to, or that sit in their assigned categories. Sellers see only their own listings. See <a href="team-roles-permissions.html#scoping">employee scoping</a>.</li>
+<li>Buyers cannot create, update or delete listings.</li>
+<li>A workspace rule can normalise or veto a save (for example refuse to save without a price); the user sees the rule's message.</li>
+</ul>
+
+<h2 id="delete">Deleting and restoring</h2>
+<p>Deleting a listing is always a <strong>soft delete</strong> (<code>isDeleted</code>, <code>deletedAt</code>). Removing a property from the board hides it from search, facets and lists but does not destroy it.</p>
+<ul>
+<li>To delete: from the board or the property. Anyone who can access the listing can delete it through <code>DELETE /api/listing/delete/:id</code>; admins also have <code>POST /api/listing/soft-delete/:id</code>.</li>
+<li>To restore: admin only. On All Properties open the bin (the Deleted listings dialog) and restore; it lists up to 200, newest deleted first.</li>
+</ul>
+<div class="note"><p>Restoring does not re-check the plan's <code>maxListings</code> cap; the cap is enforced when listings are created or imported, not when they are un-deleted.</p></div>
+
+<h2 id="board">The All Properties board</h2>
+<p>The same data in four views, chosen with <code>?view=</code> in the URL: <strong>Main table</strong> (default), <strong>Pipeline</strong> (by status), <strong>Cards</strong> and <strong>Map</strong>. The table sorts and pages on the server. Filters, all kept in the URL so a view is linkable: search text, status, assigned agent, owner, city, locality, listing type, category, property category, property type, min and max price, minimum bedrooms and bathrooms, furnished, parking and offer.</p>
+<ul>
+<li><strong>Saved views</strong> (the bar above the table) store the current filter query string under a name. They belong to the signed-in user, follow them across devices (<code>/api/user/saved-views/:namespace</code>), and hold up to 50 per list. Views saved by older versions in the browser are merged up once.</li>
+<li><strong>Assigning an agent</strong> to a listing is admin-only (<code>POST /api/listing/assign-agent</code> and <code>/unassign-agent</code>). The assigned agent gains edit access, and "My assigned" lists their listings.</li>
+</ul>
+
+<h2 id="search">Search</h2>
+<p>There is one listing search, <code>backend/search/listingSearch.js</code>, used by the board, the search page and the command palette. It scopes results to what the signed-in user may see, then matches in tiers and stops once there are enough results:</p>
+<ol>
+<li><strong>Identifier</strong>: property number, pincode or id, exact.</li>
+<li><strong>Text</strong>: the database text index, ranked by relevance.</li>
+<li><strong>Prefix</strong>: an anchored prefix on city, locality, area name or name ("Sush" finds "Sushant").</li>
+<li><strong>Fuzzy</strong>: a looser pattern, only against a set the filters have already narrowed.</li>
+</ol>
+<p>Ranking and paging happen in the database, so the total is the real number of matches and any page can be fetched.</p>
+<p><strong>Facet counts.</strong> <code>GET /api/listing/facets</code> returns counts by status, category, city, locality, type and assigned agent (top 50 for the open-ended ones) plus total count, total value and average price over the whole filtered set. Use it for any header count; never count a page.</p>
+
+<h3 id="palette">The command palette (&#8984;K)</h3>
+<p>Press <kbd>&#8984;K</kbd> on macOS or <kbd>Ctrl K</kbd> elsewhere. The palette searches listings, clients, owners, buyers, tasks and users in parallel, each applying its own access rules, and understands natural phrases such as "3 BHK in Gurgaon under 2cr" or "leads assigned to Amit this month". It also lists actions (a "New &hellip;" command opens that page's create form via <code>?new=1</code>) and recently visited pages, filtered by your screens and permissions.</p>
+<ul>
+<li><strong>Save this search</strong> (the save control that appears once you have typed two characters) names a query. Saved searches are per user; <strong>pin</strong> toggles a search to the top (pinned first, then most recently run); delete is a soft delete (<code>/api/search/saved</code>).</li>
+<li>Clicks on results are recorded. Admins can see what the team searches for under Settings, System, Search insights (<code>GET /api/search/analytics</code>, admin only).</li>
+</ul>
+
+<h2 id="categories">Categories</h2>
+<p>Open <strong>Categories</strong> (<code>/categories</code>; needs <code>viewCategories</code>). Each card shows the category and its property count. A category's <code>/category/:slug</code> page lists its properties.</p>
+<table>
+<thead><tr><th>Task</th><th>How</th><th>Gate</th></tr></thead>
+<tbody>
+<tr><td>Create</td><td><strong>New category</strong>: a name (the address, i.e. slug, is built from it and never changes even if you rename). Names must produce a slug with letters or digits; a name matching a deleted category asks you to restore that one instead.</td><td><code>createCategory</code></td></tr>
+<tr><td>Rename</td><td>Up to 50 characters; the slug stays.</td><td><code>updateCategory</code></td></tr>
+<tr><td>Edit fields</td><td><strong>Set up</strong> on a card opens <code>/admin/categories/:slug/fields</code>, a route under the admin-only routes in the app (the API itself checks <code>updateCategory</code>).</td><td><code>updateCategory</code></td></tr>
+<tr><td>Set a default map location</td><td><code>POST /api/category/update-location/:id</code>; latitude -90 to 90, longitude -180 to 180.</td><td><code>updateCategory</code></td></tr>
+<tr><td>Delete</td><td>See below.</td><td><code>deleteCategory</code></td></tr>
+<tr><td>Restore</td><td>Deleted categories panel on the Categories page (latest 50). Refused if another category now uses the same address; rename that one first.</td><td><code>deleteCategory</code></td></tr>
+</tbody></table>
+<p>New workspaces get a starter category unless provisioned with <code>--no-sample-data</code>.</p>
+
+<h3 id="delete-409">Destructive actions answer 409 with a count</h3>
+<ul>
+<li><strong>Deleting a category in use</strong> answers <code>409</code> with <code>details.listingCount</code>. The UI turns that into a choice: <em>See the properties</em>, <em>Keep it</em>, or <em>Delete anyway</em>, which resends with <code>?force=true</code>. Listings keep pointing at the slug, so their category fields stop rendering until the category is restored. Delete is soft.</li>
+<li><strong>Removing a field that holds values</strong> answers <code>409</code> with <code>details.removedWithData</code> (field and number of properties). Confirming resends with <code>?force=true</code>. The values stay in the database but nothing displays them.</li>
+</ul>
+
+<h3 id="field-rules">Field definition rules</h3>
+<p>A category's <code>fields</code> govern how every listing in it is stored, so they are validated structure (<code>backend/utils/categoryFields.js</code> is authoritative; <code>frontend/src/utils/categoryFieldRules.js</code> mirrors the cheap rules as inline hints).</p>
+<ul>
+<li>At most <strong>100</strong> fields per category.</li>
+<li><strong>Key</strong>: starts with a lowercase letter, then letters, digits or underscores, up to 40 characters; unique within the category.</li>
+<li><strong>Type</strong>: <code>text</code>, <code>number</code>, <code>boolean</code>, <code>select</code>, <code>date</code>, <code>textarea</code>.</li>
+<li><strong>Label</strong> required, up to 100 characters.</li>
+<li><strong>Select</strong> needs at least one option, at most 200, no duplicates.</li>
+<li><strong>Min / max</strong> must be numbers with min not above max.</li>
+<li><strong>Pattern</strong> (regex) up to 200 characters, must parse, and nested repetition such as <code>(a+)+</code> or <code>(a|a)*</code> is rejected because it can hang the process.</li>
+<li><strong>Show when</strong>: a field can depend on another field's value; it cannot depend on itself and the target must exist.</li>
+<li>Other per-field settings: required, description (300), placeholder (200), default value, multiple (for select), unit (30), group (60). Order is the order you send them.</li>
+</ul>
+<h4 id="reserved">Reserved keys</h4>
+<p>A key may not shadow a real listing column or prototype name. Reserved: <code>__proto__</code>, <code>constructor</code>, <code>prototype</code>, <code>toString</code>, <code>valueOf</code>, <code>hasOwnProperty</code>, <code>_id</code>, <code>id</code>, <code>name</code>, <code>description</code>, <code>address</code>, <code>city</code>, <code>locality</code>, <code>state</code>, <code>pincode</code>, <code>type</code>, <code>status</code>, <code>category</code>, <code>attributes</code>, <code>location</code>, <code>regularPrice</code>, <code>discountPrice</code>, <code>offer</code>, <code>parking</code>, <code>furnished</code>, <code>bedrooms</code>, <code>bathrooms</code>, <code>imageUrls</code>, <code>ownerIds</code>, <code>userRef</code>, <code>assignedAgent</code>, <code>tenantId</code>, <code>isDeleted</code>, <code>deletedAt</code>, <code>createdAt</code>, <code>updatedAt</code>, <code>__v</code>, <code>propertyType</code>, <code>propertyCategory</code>, <code>commercialType</code>, <code>plotType</code>.</p>
+<h4 id="native-aliases">Native column aliases</h4>
+<p>Seven keys are the documented exception: when a category field uses one of these keys, the value is stored in the real column instead of in <code>attributes</code>, because that column is what filters, sorting and duplicate detection read.</p>
+<table>
+<thead><tr><th>Category field key</th><th>Stored in column</th></tr></thead>
+<tbody>
+<tr><td><code>sqYard</code></td><td><code>sqYard</code></td></tr>
+<tr><td><code>rateSqYard</code></td><td><code>sqYardRate</code></td></tr>
+<tr><td><code>totalValue</code></td><td><code>totalValue</code></td></tr>
+<tr><td><code>propertyNo</code></td><td><code>propertyNo</code></td></tr>
+<tr><td><code>plotSize</code></td><td><code>plotSize</code></td></tr>
+<tr><td><code>remarks</code></td><td><code>remarks</code></td></tr>
+<tr><td><code>areaName</code></td><td><code>areaName</code></td></tr>
+</tbody></table>
+<p>Adding an alias means updating <code>NATIVE_FIELD_ALIASES</code> in both <code>frontend/src/utils/nativeFieldAliases.js</code> and <code>backend/utils/importMapping.js</code>. The old <code>propertyTypeFields</code> store is retired: dynamic values go to <code>attributes</code> or to their native column.</p>
+
+<h2 id="paperwork">Category paperwork and photos</h2>
+<p>A category (colony) carries typed documents. Upload them on the category (kind <code>category</code>, needs <code>uploadFiles</code>; employees only for categories assigned to them). Types (<code>backend/utils/documentTypes.js</code>):</p>
+<table>
+<thead><tr><th>Type id</th><th>Label</th><th>Accepts</th><th>Pre-ticked public?</th></tr></thead>
+<tbody>
+<tr><td><code>rera</code></td><td>RERA certificate</td><td>documents</td><td>yes</td></tr>
+<tr><td><code>layout</code></td><td>Layout plan</td><td>documents or images</td><td>yes</td></tr>
+<tr><td><code>approval</code></td><td>Approval letter</td><td>documents</td><td>no</td></tr>
+<tr><td><code>brochure</code></td><td>Brochure</td><td>documents</td><td>yes</td></tr>
+<tr><td><code>image</code></td><td>Photograph</td><td>images (jpeg, png, webp, gif)</td><td>yes</td></tr>
+<tr><td><code>other</code></td><td>Other document</td><td>documents or images</td><td>no</td></tr>
+</tbody></table>
+<ul>
+<li>The type is checked against the file's <em>detected</em> content, not the name or declared type. Allowed files: PDF, Office documents, JPG and PNG, up to <strong>10 MB</strong>. A file that fails is refused with a message.</li>
+<li><strong><code>isPublic</code> defaults to false and is never set implicitly.</strong> The upload form pre-ticks it for the types marked yes ("suggest public"), but the server never applies that. Only an <strong>admin</strong> can publish; an employee asking for <code>isPublic</code> gets 403. Documents also count against the plan's storage limit (<code>maxStorageMb</code>).</li>
+<li>"Public" here means <em>published to the category's page for signed-in members</em> (<code>GET /api/documents/public/category/:categoryId</code> returns only published documents, without the uploader's name). The route sits behind a session; a share link is how it reaches someone outside the agency. The comment above the controller still says it is reachable without signing in; the route registration is what governs.</li>
+<li>Documents can also be attached to a single property (edit mode, Documents section; you must have created it or be assigned to it unless you are an admin), to a client, deal or transaction. A lead's Documents tab uses the same store.</li>
+</ul>
+<p>Public category reads (<code>publicView()</code>) never include <code>defaultLocation</code>, soft-delete metadata or <code>tenantId</code>.</p>
+
+<h2 id="voice-notes">Voice notes</h2>
+<p>On a property in edit mode, the <strong>Voice notes</strong> section records audio in the browser (microphone permission required). The recording is uploaded to Cloudinary (audio uses its <code>video</code> resource type) and the resulting URL, a label and the duration in seconds are saved on the listing (<code>POST /api/listing/:id/voice-notes</code>). Anyone who can edit the listing may add or delete a note. The backend also has <code>POST /api/upload/audio</code> for direct uploads: it validates the real file type (webm, ogg, m4a, mp3, wav), allows up to 25 MB, and counts against storage. Voice notes are among the internal fields returned only to admins and employees.</p>
+
+<h2 id="maps">Maps and geocoding</h2>
+<p>Maps use Leaflet. The address lookup (<code>GET /api/geocode/search</code>, <code>/reverse</code>; sign-in required) proxies OpenStreetMap's Nominatim service and caches results in memory for one hour (500 entries). A listing's pin is stored as <code>location.lat</code> and <code>location.lng</code>; the Map view of the board shows listings with a location. Leaflet panes use z-index 400 to 800, so pages with maps use inline delete confirmations instead of modals, and the listing form's sticky save bar sits at z-index 900.</p>
+
+<h2 id="related">Related</h2>
+<ul>
+<li>Importing many properties from a spreadsheet: <a href="sharing-and-imports.html#listing-import">listing import</a>.</li>
+<li>API references: <a href="api/listing.html">Listing</a> and <a href="api/category.html">Category</a>.</li>
+</ul>

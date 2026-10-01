@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tenant — Real Vista Docs</title>
+<meta name="description" content="14 endpoints under /api/tenant.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>tenant</h1>
+<p class="lede"><a href="index.html">API reference</a> › tenant. 14 endpoints under /api/tenant.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="get-api-tenant-config">
+<h3 id="get-api-tenant-configpublic"><span class="method get">GET</span>/api/tenant/config<span class="badge public">Public</span></h3>
+<p>The sign-in screen needs this workspace's name, logo and colours before anyone has signed in. Serves toPublicConfig() only — never limits, billing or internal notes.</p>
+
+
+
+</section>
+<section class="endpoint" id="patch-api-tenant-config">
+<h3 id="patch-api-tenant-configsession"><span class="method patch">PATCH</span>/api/tenant/config<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td></td><td>max 120</td></tr><tr><td><code>branding</code></td><td>object</td><td></td><td></td></tr><tr><td><code>locale</code></td><td>object</td><td></td><td></td></tr><tr><td><code>workflow</code></td><td>object</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-tenant-lookup">
+<h3 id="get-api-tenant-lookuppublic"><span class="method get">GET</span>/api/tenant/lookup<span class="badge public">Public</span></h3>
+<p>The sign-in Workspace field confirms the name typed exists and shows what it is called. Returns slug, name and logo only; rate limited like sign-in.</p>
+
+
+
+</section>
+<section class="endpoint" id="get-api-tenant-features">
+<h3 id="get-api-tenant-featurespublic"><span class="method get">GET</span>/api/tenant/features<span class="badge public">Public</span></h3>
+<p>Which modules this workspace has, for rendering the signed-out shell.</p>
+
+
+
+</section>
+<section class="endpoint" id="get-api-tenant-usage">
+<h3 id="get-api-tenant-usagesession"><span class="method get">GET</span>/api/tenant/usage<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-tenant-pipeline">
+<h3 id="get-api-tenant-pipelinesession"><span class="method get">GET</span>/api/tenant/pipeline<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="patch-api-tenant-pipeline">
+<h3 id="patch-api-tenant-pipelinesession"><span class="method patch">PATCH</span>/api/tenant/pipeline<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>stages</code></td><td>array&lt;object&gt;</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-tenant-onboarding">
+<h3 id="get-api-tenant-onboardingsession"><span class="method get">GET</span>/api/tenant/onboarding<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-tenant-onboarding-dismiss">
+<h3 id="post-api-tenant-onboarding-dismisssession"><span class="method post">POST</span>/api/tenant/onboarding/dismiss<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
+</section>
+<section class="endpoint" id="get-api-tenant-mail">
+<h3 id="get-api-tenant-mailsession"><span class="method get">GET</span>/api/tenant/mail<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="patch-api-tenant-mail">
+<h3 id="patch-api-tenant-mailsession"><span class="method patch">PATCH</span>/api/tenant/mail<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>enabled</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>host</code></td><td>any</td><td></td><td></td></tr><tr><td><code>port</code></td><td>one of</td><td></td><td></td></tr><tr><td><code>secure</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>user</code></td><td>any</td><td></td><td></td></tr><tr><td><code>password</code></td><td>any</td><td></td><td></td></tr><tr><td><code>from</code></td><td>any</td><td></td><td></td></tr><tr><td><code>fromName</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-tenant-mail-verify">
+<h3 id="post-api-tenant-mail-verifysession"><span class="method post">POST</span>/api/tenant/mail/verify<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
+</section>
+<section class="endpoint" id="get-api-tenant-screens">
+<h3 id="get-api-tenant-screenssession"><span class="method get">GET</span>/api/tenant/screens<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="patch-api-tenant-screens">
+<h3 id="patch-api-tenant-screenssession"><span class="method patch">PATCH</span>/api/tenant/screens<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>screens</code></td><td>object</td><td></td><td></td></tr><tr><td><code>labels</code></td><td>object</td><td></td><td></td></tr></table>
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#get-api-tenant-configpublic">GET /api/tenant/config</a><a class="h3" href="#patch-api-tenant-configsession">PATCH /api/tenant/config</a><a class="h3" href="#get-api-tenant-lookuppublic">GET /api/tenant/lookup</a><a class="h3" href="#get-api-tenant-featurespublic">GET /api/tenant/features</a><a class="h3" href="#get-api-tenant-usagesession">GET /api/tenant/usage</a><a class="h3" href="#get-api-tenant-pipelinesession">GET /api/tenant/pipeline</a><a class="h3" href="#patch-api-tenant-pipelinesession">PATCH /api/tenant/pipeline</a><a class="h3" href="#get-api-tenant-onboardingsession">GET /api/tenant/onboarding</a><a class="h3" href="#post-api-tenant-onboarding-dismisssession">POST /api/tenant/onboarding/dismiss</a><a class="h3" href="#get-api-tenant-mailsession">GET /api/tenant/mail</a><a class="h3" href="#patch-api-tenant-mailsession">PATCH /api/tenant/mail</a><a class="h3" href="#post-api-tenant-mail-verifysession">POST /api/tenant/mail/verify</a><a class="h3" href="#get-api-tenant-screenssession">GET /api/tenant/screens</a><a class="h3" href="#patch-api-tenant-screenssession">PATCH /api/tenant/screens</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

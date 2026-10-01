@@ -312,7 +312,7 @@ Route guards: `AdminRoute`, `SellerRoute`, plus `CrmShell.canAccess` check.
 
 ### Authentication
 - JWT in httpOnly cookies; access token (15m) + refresh token (30d)
-- `verifyToken`, `requireRole`, `requireAdmin` middleware in `backend/middleware/auth.js`
+- `verifyToken`, `requireRole`, `requireAdmin` middleware in `backend/utils/verifyUser.js`
 - Frontend auto-refreshes on 401 via `fetchWithRefresh()` in `utils/http.js`
 
 ### API Client Pattern

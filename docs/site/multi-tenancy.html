@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-tenancy and platform admin — Real Vista Docs</title>
+<meta name="description" content="One database, many agencies - how queries are scoped by a global Mongoose plugin, how a request picks its workspace, and how the vendor console, act-as, plans and billing sit on top.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html" class="active">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Multi-tenancy and platform admin</h1>
+<p class="lede">One database, many agencies - how queries are scoped by a global Mongoose plugin, how a request picks its workspace, and how the vendor console, act-as, plans and billing sit on top.</p>
+
+<h2 id="model">The model: shared database, one <code>tenantId</code> per document</h2>
+<p>A <em>tenant</em> (also called a workspace) is one real-estate agency. All tenants share one MongoDB database; every document carries a <code>tenantId</code>. Isolation is enforced by code rather than by the database, so the code is written to <strong>fail loudly</strong> rather than quietly do the wrong thing.</p>
+<ul>
+<li><strong>Never build a <code>tenantId</code> filter by hand.</strong> A global Mongoose plugin (<code>backend/tenancy/tenantPlugin.js</code>) adds it to every query, aggregation and write.</li>
+<li><strong>Never add a bare <code>unique: true</code>.</strong> Uniqueness is per workspace: <code>schema.index({ tenantId: 1, field: 1 }, { unique: true })</code>. A global unique lets whichever agency signed up first claim a slug or name for everyone.</li>
+<li><strong>A query with no tenant context throws</strong> (<code>TenantScopeError</code>). This is deliberate; see <a href="#context">the tenant context</a>.</li>
+<li>Only three collections are global (<code>tenantScoped: false</code> in their schema options): <code>Tenant</code>, <code>Invoice</code> and <code>JobLock</code>.</li>
+</ul>
+
+<h2 id="plugin">The tenant plugin</h2>
+<p><code>registerTenancy(mongoose)</code> is called at the top of <code>backend/index.js</code> (and of every script, via <code>scripts/_bootstrap.js</code>) <em>before any model is imported</em>. It also sets <code>applyPluginsToChildSchemas</code> to <code>false</code>: otherwise every embedded subdocument schema (voice notes on a listing, deals on a client, field definitions on a category) would get its own required <code>tenantId</code> and every write would fail with "branding.tenantId is required".</p>
+<p>What the plugin does to each schema:</p>
+<table>
+<thead><tr><th>Operation</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td><code>find</code>, <code>findOne</code>, <code>count</code>, <code>countDocuments</code>, <code>distinct</code>, <code>update*</code>, <code>delete*</code>, <code>findOneAnd*</code>, <code>replaceOne</code></td><td>Injects <code>tenantId</code> into the filter. If the filter already names a <em>different</em> tenant, it throws instead of overriding.</td></tr>
+<tr><td>upserts</td><td>Stamps <code>tenantId</code> with <code>$setOnInsert</code>, so a matched document never has its tenant rewritten.</td></tr>
+<tr><td><code>aggregate</code></td><td>Puts the <code>$match</code> at the very front, before any <code>$lookup</code> or <code>$group</code> can widen it. Merges into a leading <code>$match</code> rather than unshifting (needed for <code>$text</code>, see <a href="architecture.html#search">listing search</a>) and casts the id to an ObjectId, since pipelines are not cast.</td></tr>
+<tr><td><code>save</code> / <code>create</code></td><td>Stamps <code>tenantId</code> in a <code>pre('validate')</code> hook (validation runs as its own pre-save hook registered earlier, so stamping on <code>save</code> would be too late and every create would fail with "tenantId is required"). <code>tenantId</code> is <code>immutable</code>: a record never moves between agencies by accident.</td></tr>
+<tr><td><code>insertMany</code></td><td>Stamps a <em>copy</em> of each element. Callers pass module-level constants (seed data, starter roles); mutating those made the first insert poison every later one with a stale tenant id.</td></tr>
+<tr><td><code>bulkWrite</code></td><td>Mongoose fires no query middleware for it, so the plugin overrides the static and scopes each operation by hand. This is the fast path bulk import uses.</td></tr>
+<tr><td><code>estimatedDocumentCount</code></td><td>Throws. It reads collection metadata with no filter, so it would report every tenant's rows. Use <code>countDocuments()</code>.</td></tr>
+</tbody>
+</table>
+<p>A deliberate cross-tenant read on a model can also be written <code>Model.acrossTenants('reason').find()</code>, which requires a reason string.</p>
+
+<h2 id="context">The tenant context</h2>
+<p><code>backend/tenancy/tenantContext.js</code> keeps the current tenant in Node's <code>AsyncLocalStorage</code>. The value is bound to one request's async chain, so two concurrent requests for two agencies cannot see each other's context (a module-level variable would not guarantee that).</p>
+<table>
+<thead><tr><th>Function</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>runWithTenant({ tenantId, tenant?, userId? }, fn)</code></td><td>Run <code>fn</code> inside one workspace. Throws if given neither a <code>tenantId</code> nor an explicit bypass.</td></tr>
+<tr><td><code>withTenantBySlug(slug, fn)</code> (<code>resolveTenant.js</code>)</td><td>Same, looking the workspace up by slug. For scripts and non-request work.</td></tr>
+<tr><td><code>forEachTenant(fn, { serviceableOnly = true })</code> (<code>tenantContext.js</code>)</td><td>Run <code>fn(tenant)</code> once in every workspace. One workspace failing does not stop the others (failures are collected). Skips suspended, cancelled and expired-trial workspaces unless <code>serviceableOnly: false</code>. This is what scheduled jobs use.</td></tr>
+<tr><td><code>runWithoutTenantScope('why', fn)</code></td><td>Deliberately unscoped work: the platform console, migrations, the login lookup that must find a user before it knows the tenant. The reason string is mandatory and is recorded on the context so an audit can ask "which code paths run unscoped?".</td></tr>
+<tr><td><code>inHomeTenant(req, fn)</code></td><td>Pin a lookup about the <em>caller</em> to their home workspace. See <a href="#act-as">act-as</a>.</td></tr>
+<tr><td><code>getTenantId()</code>, <code>getTenant()</code></td><td>Read the active context (<code>null</code> when unscoped).</td></tr>
+</tbody>
+</table>
+<p><code>runWithTenant</code> forces the callback's thenable to start executing while the context is still bound. A Mongoose query is lazy: <code>await runWithTenant(store, () =&gt; Model.find())</code> would otherwise create the query inside the scope but execute it outside it, with no context at all.</p>
+<div class="warn"><p><code>forEachTenant</code> exists twice with different signatures. <code>tenancy/tenantContext.js</code> exports <code>forEachTenant(fn, opts)</code>, which the scheduler jobs use. <code>tenancy/resolveTenant.js</code> exports <code>forEachTenant(reason, fn)</code>, which iterates only <code>trial</code> and <code>active</code> workspaces and is used by <code>server.js</code> to seed default property types. Check the import path before using one.</p></div>
+
+<h2 id="resolve">How a request picks its workspace</h2>
+<p><code>resolveTenant()</code> (<code>backend/tenancy/resolveTenant.js</code>) is mounted on <code>/api</code> after health and unsubscribe. It decides the tenant, then runs the rest of the request inside that tenant's context. Order, most authoritative first:</p>
+<ol>
+<li><strong>The <code>tid</code> claim</strong> on the signed <code>access_token</code> cookie. Cannot be forged.</li>
+<li><strong>A custom domain</strong> (<code>tenant.customDomain</code>, e.g. <code>crm.acme.in</code>).</li>
+<li><strong>A subdomain</strong> of <code>APP_DOMAIN</code> (<code>acme.&lt;APP_DOMAIN&gt;</code>). Only a single label counts (<code>a.b.&lt;domain&gt;</code> is not tenant "a.b"), and these are reserved and never treated as tenants: <code>www app api admin auth static cdn assets localhost</code>.</li>
+<li><strong>The <code>x-tenant</code> header</strong>, a workspace slug. This is what the sign-in screen's Workspace field (web and mobile) and API clients send.</li>
+<li><strong>The default tenant</strong> (<code>DEFAULT_TENANT_SLUG</code>, default <code>default</code>): single-workspace deployments, and the migration window before every session carried a tenant claim.</li>
+</ol>
+<p>Rules that follow from real bugs or abuse cases:</p>
+<ul>
+<li><strong>Token and host must agree.</strong> If the token names one tenant and the host names another, the request is refused with a security log entry (<code>tenant_host_mismatch</code>). A valid session for one agency must not operate on another agency's domain.</li>
+<li><strong>A named workspace that does not exist is an answer, not a reason to fall through.</strong> An unknown <code>x-tenant</code> slug yields 404 with code <code>WORKSPACE_NOT_FOUND</code>; a typo on the sign-in screen must never sign someone in to the default agency.</li>
+<li><strong>On entry routes the typed workspace wins over a leftover cookie.</strong> <code>POST /auth/signin</code>, <code>POST /user/password/request-otp</code>, <code>POST /user/password/reset</code> and <code>GET /tenant/lookup</code> prefer the header over the session cookie. Otherwise signing in to workspace B while holding A's cookie looked the email up in A and answered "invalid email or password".</li>
+<li><strong>Not serviceable means 403.</strong> A suspended or cancelled workspace, or a trial past <code>trialEndsAt</code>, gets a message to contact support. (Exception: an operator acting-as can still open it. See below.)</li>
+<li><strong>Tenant records are cached 60 s</strong> in process (negative results too, so a flood of requests for a non-existent subdomain is not a flood of queries). Suspending a workspace therefore takes effect within about a minute on every instance without a deploy.</li>
+</ul>
+<p>In production, <code>validateConfig()</code> refuses to boot unless <code>APP_DOMAIN</code> or <code>DEFAULT_TENANT_SLUG</code> is set. Without either, requests fall back to a workspace called <code>default</code> that may not exist, and since a query with no tenant throws, the whole API would be down rather than degraded.</p>
+
+<h2 id="two-admins">Platform admin versus workspace admin</h2>
+<p>There are two kinds of administrator, and confusing them would be the worst bug in the product.</p>
+<table>
+<thead><tr><th></th><th>Workspace admin</th><th>Platform admin (operator)</th></tr></thead>
+<tbody>
+<tr><td>Flag</td><td><code>role: 'admin'</code> on User</td><td><code>isPlatformAdmin: true</code> on User (<code>select: false</code>)</td></tr>
+<tr><td>Scope</td><td>Administers ONE agency. There is one per tenant, eventually hundreds.</td><td>The vendor's staff; administers every workspace.</td></tr>
+<tr><td>Guards</td><td><code>requireAdmin</code>, <code>requirePermission</code></td><td><code>requirePlatformAdmin</code> (<code>middleware/platformAuth.js</code>) on <code>/api/platform/*</code></td></tr>
+<tr><td>Can change plan/limits/status?</td><td>No. <code>PLATFORM_ONLY</code> in <code>tenant.controller.js</code> lists <code>slug customDomain status plan features limits trialEndsAt internalNotes</code>; an attempt is rejected, not silently dropped.</td><td>Yes.</td></tr>
+</tbody>
+</table>
+<p><code>role: 'admin'</code> is <strong>not sufficient for anything under <code>/api/platform</code></strong>: if it were, every customer's own admin could provision workspaces and read across the estate. <code>requirePlatformAdmin</code> re-reads the flag from the database on every call (it is deliberately absent from <code>req.user</code>) and requires <code>status: 'active'</code>. A denied attempt is logged at security level (<code>platform_access_denied</code>). The flag must never be settable through a tenant-facing API; the data-rights erase endpoint also refuses to erase an operator.</p>
+<p>The platform API (<code>routes/platform.route.js</code>): <span class="method get">GET</span> <code>/api/platform/summary</code>, <code>/tenants</code>, <code>/tenants/:id</code>, <code>/tenants/check-slug</code>, <code>/plans</code>, <code>/tenants/:id/billing</code>; <span class="method post">POST</span> <code>/tenants</code>, <code>/tenants/:id/suspend</code>, <code>/resume</code>, <code>/invite</code>, <code>/plan</code>, <code>/invoices</code>, <code>/invoices/:invoiceId/pay</code> and <code>/void</code>, <code>/act-as/:id</code>, <code>/stop-acting</code>; <code>PATCH /tenants/:id</code>. See <a href="api/platform.html">the generated reference</a>.</p>
+
+<h2 id="provisioning">Provisioning a workspace</h2>
+<p><code>provisionTenant()</code> (<code>backend/tenancy/provisionTenant.js</code>) is the single function used by both the platform API (<code>POST /api/platform/tenants</code>) and the CLI (<code>backend/scripts/provisionTenant.js</code>), so a workspace made by a script is identical to one made in the console. A Tenant row alone is not a usable workspace: without roles there is no permission model, without an admin nobody can sign in, without a category the property form has nothing to offer.</p>
+<ol>
+<li><strong>Tenant</strong> - slug normalised and validated (3-40 chars of lowercase letters, digits and hyphens; a reserved list such as <code>www</code>, <code>api</code>, <code>admin</code>, <code>platform</code>, <code>billing</code>, <code>demo</code> is refused; must be free). <code>plan</code> defaults to <code>trial</code>, with a 14-day <code>trialEndsAt</code> (<code>trialDays</code>). Any other plan starts <code>active</code>. Limits come from the plan.</li>
+<li><strong>Starter roles</strong> - Super Admin, Employee, Viewer (<code>STARTER_ROLES</code>), deep-cloned per workspace.</li>
+<li><strong>First admin</strong> - <code>role: 'admin'</code>, assigned the Super Admin role. With no <code>adminPassword</code> the account is created with an invitation token and an invite email is attempted; the raw link is returned once so the operator can pass it on if mail fails. A password chosen by the vendor and emailed around is a password everyone keeps using.</li>
+<li><strong>A starter category</strong> ("Residential Plots") unless <code>seedSampleData: false</code>.</li>
+</ol>
+<p>There is no transaction (they need a replica set, and single-node deployments cannot start one), so it <em>compensates</em>: it records what it created and deletes it in reverse order if a later step throws, deleting rather than soft-deleting so the slug is not held hostage on retry. That is weaker than a transaction under a hard crash; if the database moves to a replica set, wrapping it in a session is a small change.</p>
+<pre><code># From /backend. The first run needs --platform-admin: the very first operator
+# cannot be created through an API that requires an operator.
+node scripts/provisionTenant.js --name "Acme Realty" --slug acme \
+     --admin-email owner@acme.in [--admin-password '...'] \
+     [--plan growth] [--trial-days 30] [--no-sample-data] [--platform-admin]</code></pre>
+
+<h2 id="act-as">Acting as a customer: identity is pinned, data is not</h2>
+<p>A platform operator can view a customer's workspace to answer "what does the customer actually see?". The mechanics have two halves that must never be collapsed.</p>
+<table>
+<thead><tr><th>JWT claim</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>tid</code></td><td>The workspace where the operator's <strong>account</strong> lives. Always their home workspace.</td></tr>
+<tr><td><code>act</code></td><td>The workspace they are currently <strong>viewing</strong>.</td></tr>
+<tr><td><code>pa</code></td><td>A signed <code>true</code> that proves the token was minted for an operator. <code>act</code> is honoured only alongside <code>pa</code>.</td></tr>
+</tbody>
+</table>
+<div class="flow">
+<div class="step">POST /api/platform/act-as/:id</div><div class="arrow">→</div>
+<div class="step">requirePlatformAdmin re-reads isPlatformAdmin</div><div class="arrow">→</div>
+<div class="step">reissueSession: tid = home, act = target, pa = true</div><div class="arrow">→</div>
+<div class="step">resolveTenant scopes request to act</div><div class="arrow">→</div>
+<div class="step">non-GET blocked at the edge</div>
+</div>
+<ul>
+<li><code>startActingAs</code> is the only place that sets <code>pa</code>, after <code>requirePlatformAdmin</code> re-read the flag from the database. It replaces the refresh token in the same call and logs <code>acting_as_started</code> (operator email, home and target workspace, IP). <code>POST /api/platform/stop-acting</code> reissues a plain session and logs <code>acting_as_ended</code>.</li>
+<li>A token carrying <code>act</code> without <code>pa</code> is simply scoped to the user's own workspace.</li>
+<li><strong>Refresh re-checks the privilege.</strong> On <code>POST /api/auth/refresh</code> the <code>act</code> and <code>pa</code> claims are only carried forward if <code>isPlatformAdmin</code> is still true and the account is active; otherwise they are dropped and logged (<code>acting_claim_dropped_on_refresh</code>), so revoking someone's platform access ends their view into a customer at the next refresh.</li>
+<li>If the target workspace was deleted while the operator was inside it, resolution falls back to their home workspace (the safe direction to fail). The acting target is <em>not</em> gated on <code>isServiceable()</code>: a suspended or expired workspace is exactly the one support needs to open.</li>
+<li><code>req.homeTenant</code> / <code>req.homeTenantId</code> hold the operator's own workspace; <code>req.tenant</code> / <code>req.tenantId</code> hold the viewed one; <code>req.actingAs</code> carries the target's name, slug and status. <code>GET /api/tenant/config</code> exposes <code>actingAs</code> so the shell can show a banner (<code>ActingAsBanner.jsx</code>) and a way out, and its ETag includes <code>act</code>/<code>own</code> so a cached response cannot survive a switch.</li>
+</ul>
+
+<h3 id="pin">Every query about the caller must be pinned</h3>
+<p><code>resolveTenant</code> scopes the request to <code>act</code>, but the operator's user record, roles, permissions and refresh tokens live at home. So <strong>any query about the CALLER</strong> (<code>User.findById(req.user.id)</code>, <code>User.findByIdAndUpdate(req.user.id, ...)</code>, a SecurityLog write about a session) must run through <code>inHomeTenant(req, fn)</code>. It is a no-op when nobody is acting. The failure mode is silent: an unpinned lookup runs in the customer's workspace, finds nothing, and <em>nothing reads as "signed out" or as "nothing to do"</em>. Real bugs from exactly this:</p>
+<ul>
+<li><code>tryVerifyToken</code> (optional auth) failed silently, so <code>signOut</code> skipped its <code>if (req.user)</code> block and answered "signed out" while leaving the refresh token valid for 30 days.</li>
+<li>Auth security logs wrote the operator's email into the customer's <code>securitylogs</code>.</li>
+<li>Unpinned, the "assign the default Employee role" fix-up in <code>verifyToken</code> would have written the <em>customer's</em> Role id onto the operator's account, silently stripping their permissions at home.</li>
+</ul>
+<p><code>verifyToken</code> and <code>tryVerifyToken</code> look the user up with <code>runWithTenant({ tenantId: payload.tid })</code>. <code>requirePlatformAdmin</code> uses <code>req.homeTenantId</code>. <code>tests/actingAs.test.js</code> covers all of this.</p>
+
+<h3 id="read-only">The acting session is read-only</h3>
+<p><code>tenancy/readOnlyWhileActing.js</code> is mounted once on <code>/api</code>, so a controller added later inherits it. While <code>req.actingAs</code> is set, every non-GET/HEAD/OPTIONS request is rejected with a 403 (<code>AuthorizationError</code>, and a <code>acting_write_blocked</code> security log) unless it is one of five session-level writes:</p>
+<pre><code>POST /api/platform/stop-acting
+POST /api/platform/act-as          (prefix match - carries an id)
+POST /api/auth/signout
+POST /api/auth/signout-all
+POST /api/auth/refresh
+POST /api/user/legal-acceptance    (written via inHomeTenant, so it lands on the operator's own record)</code></pre>
+<p>If you exempt anything else, check that it does not write into the customer's workspace. The alternative (allow writes, log loudly) was rejected: an operator who can silently edit customer data is a liability the customer cannot audit, and an agency's audit trail should name a person at that agency. The prefix match is defensive about ambiguity: a <code>.</code> or <code>..</code> segment, an empty segment, an encoded slash or malformed encoding refuses outright.</p>
+
+<h2 id="plans">Plans and limits</h2>
+<p><code>backend/tenancy/plans.js</code> is the single source for what a plan includes. Prices are in the smallest currency unit (paise), per month; <code>null</code> means "talk to us". A limit of <code>0</code> means unlimited.</p>
+<table>
+<thead><tr><th>Plan</th><th>Monthly price (INR)</th><th>maxUsers</th><th>maxListings</th><th>maxStorageMb</th><th>maxImportRowsPerMonth</th></tr></thead>
+<tbody>
+<tr><td><code>trial</code></td><td>0 (14 days)</td><td>3</td><td>250</td><td>512</td><td>2000</td></tr>
+<tr><td><code>starter</code></td><td>249900 paise (2,499)</td><td>10</td><td>2500</td><td>2048</td><td>20000</td></tr>
+<tr><td><code>growth</code></td><td>749900 paise (7,499)</td><td>40</td><td>25000</td><td>10240</td><td>100000</td></tr>
+<tr><td><code>enterprise</code></td><td>negotiated</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+</tbody>
+</table>
+<div class="warn"><p><strong>Changing a figure in <code>PLANS</code> re-caps every live workspace on that plan</strong> the next time the plan is applied. That is a commercial decision, not a refactor. <code>provisionTenant.js</code> re-exports <code>limitsForPlan</code> and a deprecated <code>PLAN_LIMITS</code> from <code>plans.js</code>. Note that the schema default in <code>tenant.model.js</code> (<code>limits</code>: 25 users, 10000 listings, 5120 MB, 50000 rows) matches no plan; every provisioned workspace overwrites it from its plan.</p></div>
+<ul>
+<li><code>applyPlan(tenantId, plan, { keepOverrides = true })</code> (<code>tenancy/billing.js</code>) moves a workspace's limits with its plan. A cap an operator set by hand survives: only values that differ from the <em>old plan's</em> figure count as deliberate overrides, so "the same as the plan" does not pin itself forever. Moving to a non-trial plan sets <code>billing.state</code> from <code>none</code>/<code>trialing</code> to <code>active</code> and ends the trial (<code>status</code> becomes <code>active</code>).</li>
+<li><strong>Limits gate creation, never reads</strong> (<code>tenancy/limits.js</code>). A workspace over its cap after a downgrade keeps full access to what it has; locking an agency out of its own property register over a billing question is never the right response. Exceeding a cap answers <strong>402</strong> (<code>PlanLimitError</code>, error code <code>PLAN_LIMIT</code>) rather than 403: "your plan doesn't cover this", not "you may not". The message says what to do next.</li>
+<li><code>assertWithinLimit(key, countFn, adding)</code> is called by creators (users, listings). The count function only runs if a cap exists, so unlimited plans cost no query. <code>assertStorageAvailable(bytes, usedBytesFn)</code> weighs uploads in whole MB, rounded up; usage is measured from the Document collection only (images and voice notes leave no size record).</li>
+<li><strong>The monthly import allowance is a meter, not a count.</strong> <code>reserveImportRows(rows)</code> atomically increments a per-workspace, per-month counter in <code>ImportUsage</code> (<code>{tenantId, month}</code> unique, month is "YYYY-MM" in the workspace's own timezone). The update only matches while the counter has room; when it does not, the upsert collides with the unique index and that collision <em>is</em> the refusal. It returns a <code>release(unused)</code> to hand back rows that did not land. See <a href="background-jobs.html#imports">imports</a>.</li>
+<li><code>GET /api/tenant/usage</code> shows used versus cap per limit, with <code>nearLimit</code> at 80%.</li>
+</ul>
+
+<h2 id="billing">Billing is a ledger, not a gateway</h2>
+<p>Every customer is invoiced by hand today. <code>models/invoice.model.js</code> records what was asked and what was received; a payment gateway would later write to the same rows rather than becoming a second source of truth.</p>
+<ul>
+<li>Invoice <code>status</code>: <code>draft</code>, <code>issued</code>, <code>paid</code>, <code>void</code>, <code>uncollectible</code>. Numbers look like <code>INV-2026-0042</code>, sequential within the year so gaps are visible. Amounts are integers in paise.</li>
+<li><code>POST /api/platform/tenants/:id/invoices</code> calls <code>raiseInvoice</code>: idempotent per period (a second call for the same <code>periodStart</code> returns the existing invoice), net 14 days, and returns nothing for trial or enterprise plans (they are not on the price list). <strong>Nothing schedules invoice creation;</strong> it is manual.</li>
+<li><code>POST /api/platform/invoices/:invoiceId/pay</code> records settlement and clears a <code>past_due</code> flag; <code>.../void</code> voids.</li>
+<li>Separately from <code>status</code> (whether the product serves the workspace), <code>tenant.billing.state</code> (<code>none</code>, <code>trialing</code>, <code>active</code>, <code>past_due</code>, <code>cancelled</code>) records where it stands commercially.</li>
+<li><strong>The overdue sweep never suspends.</strong> The daily job <code>overdue-invoice-sweep</code> (07:30 UTC) only sets <code>billing.state = 'past_due'</code> on workspaces with an <code>issued</code> invoice past <code>dueAt</code>. Suspending an agency over a billing question is a decision for a person.</li>
+<li>A workspace admin can see their plan but cannot change it: there is no self-serve upgrade because there is no payment gateway.</li>
+</ul>
+
+<h2 id="customisation">Per-workspace customisation</h2>
+<p>The pattern throughout is <strong>vocabulary in code, selection in config</strong>. Config chooses from fixed catalogues; it never carries free-form structure or code. Four axes, all under Settings for a workspace admin:</p>
+<h3 id="branding">1. Branding tokens</h3>
+<p><code>tenant.branding</code> holds product name, logo URLs, support contact and <code>tokens</code> (<code>brand</code>, <code>brandContrast</code>, <code>accent</code>, <code>sidebar</code>, <code>sidebarText</code>). The client writes these onto <code>:root</code> as CSS custom properties, which Tailwind utilities such as <code>bg-workspace</code> read, so a palette flows through every component without a rebuild. <code>GET /api/tenant/config</code> (public; <code>toPublicConfig()</code> never exposes limits, billing or internal notes) lets the sign-in screen draw itself before anyone is authenticated. The schema default <code>brand</code> token is <code>#4f46e5</code>, the stock indigo the design system otherwise bans, so it is what a workspace shows until it saves its own.</p>
+<h3 id="screens">2. The screen catalogue</h3>
+<p>The sidebar is the intersection of three things: the catalogue (<code>backend/tenancy/screenCatalogue.js</code>: id, label, section, permission, flags), the frontend registry (<code>frontend/src/app/screenRegistry.js</code>: icon, route), the workspace's <code>features</code> map, and the user's permissions (<code>hooks/useScreens.js</code>). Current screen ids: <code>dashboard analytics properties categories createListing import clients owners pipeline buyers tasks calendar transactions reports adminPanel settings</code>.</p>
+<ul>
+<li><strong>Screen ids are a contract with stored tenant settings. Never rename one.</strong> Workspaces enable screens by id; renaming silently disables the screen everywhere. Change a label freely. To retire a screen, mark it <code>deprecated</code> and leave the id.</li>
+<li>An id absent from <code>features</code> is <strong>on</strong> (a workspace must not lose a screen the day flags were introduced, and the stored map records only differences). <code>core</code> screens (dashboard, properties, adminPanel, settings) ignore the flag. <code>adminOnly</code> screens are for admins regardless of flags.</li>
+<li>A workspace's own rename (<code>tenant.settings.navLabels</code>, e.g. calling Clients "Leads") beats a translation: <code>useScreens.js</code> compares <code>label</code> to <code>defaultLabel</code>. Endpoints: <code>GET/PATCH /api/tenant/screens</code>.</li>
+</ul>
+<h3 id="fields">3. Category dynamic fields</h3>
+<p>A category's <code>fields</code> define how every listing in it is stored, so they are validated structure (reserved keys, duplicates and ReDoS-prone patterns are rejected by <code>utils/categoryFields.js</code>). Destructive changes answer <strong>409 with a count</strong> (deleting a category in use, removing a field that holds values) and the UI offers <code>?force=true</code>. Public category reads go through <code>publicView()</code>. Dynamic values are stored in <code>attributes</code> or in their native column; <code>propertyTypeFields</code> is retired.</p>
+<h3 id="pipeline">4. The sales pipeline</h3>
+<p><code>backend/tenancy/stageCatalogue.js</code> defines every stage the product understands: <code>new_lead contacted qualified site_visit_scheduled negotiation booking_token documentation closed_won closed_lost</code>, plus legacy <code>initial_contact site_visit_done payment_pending</code> that existing deals may still carry. A workspace chooses which stages, in which order, under which names (<code>tenant.workflow.dealStages</code>); <code>closed_won</code> and <code>closed_lost</code> are required, since a board with no end state keeps deals forever and makes every conversion figure wrong. Why not free-text stages? <code>deals.stage</code> is an enum on Client, and cross-workspace reporting needs a stage to mean one thing. Unlike screens, an unselected stage is <em>off</em> (a pipeline is an explicit, ordered list). Endpoints: <code>GET/PATCH /api/tenant/pipeline</code>.</p>
+<p>Behaviour beyond settings is delivered by <a href="background-jobs.html#rules">workspace rules</a>, also chosen by name. Mail (<code>tenant.mail</code>), locale (currency, number locale, timezone, area unit, dial code, language), assignment mode (<code>manual</code>, <code>round_robin</code>, <code>by_locality</code>) and the onboarding checklist are the other tenant-level settings; see <a href="workspace-settings.html">Workspace settings</a>.</p>
+
+<h2 id="shared-state">Anything outside the database needs its own tenant boundary</h2>
+<ul>
+<li><strong>Response caches:</strong> use <code>getTenantScopedCache()</code>, never plain <code>getCache()</code>, for anything derived from one workspace's data. See <a href="architecture.html#caching">Caches</a>.</li>
+<li><strong>Sockets:</strong> emit to <code>tenant:&lt;id&gt;</code> or <code>user:&lt;id&gt;</code> rooms, and enter <code>runWithTenant</code> in handlers.</li>
+<li><strong>Jobs:</strong> a job body runs inside <code>forEachTenant</code>; a query with no context throws.</li>
+<li><strong>Webhooks, sequences, notifications</strong> are written and delivered per workspace.</li>
+</ul>
+
+<h2 id="scripts">CLI scripts must bootstrap tenancy</h2>
+<p><strong>Never <code>import</code> a model directly in a script.</strong> A global plugin only applies to schemas compiled after it registers, and hoisted imports compile the model first, producing records with no <code>tenantId</code> that the application can never see. Use <code>backend/scripts/_bootstrap.js</code>:</p>
+<pre><code>const { models, inWorkspace, tenant, acrossWorkspaces, close } = await bootstrapScript();
+await inWorkspace(async () =&gt; {
+  await models.Listing.countDocuments();
+});
+await close();</code></pre>
+<ul>
+<li>It calls <code>registerTenancy</code>, then dynamically imports the models (<code>Tenant User Role Category Listing Owner Client Task BuyerRequirement PropertyType</code>), validates config, and connects.</li>
+<li>It takes <code>--workspace &lt;slug&gt;</code>. With exactly one workspace it uses that one; with several and no flag it <strong>refuses to guess</strong> and lists the slugs; with none it tells you to run <code>provisionTenant.js</code> first.</li>
+<li>Scripts that need other models import them <em>after</em> <code>registerTenancy</code> via dynamic <code>await import()</code>, as <code>scripts/provisionTenant.js</code> does.</li>
+<li>Destructive scripts exist: <code>npm run db:seed-fresh</code> wipes and reseeds with no confirmation gate; <code>npm run db:restore</code> is destructive and requires <code>--confirm</code> plus typing the database name. The one-time migrations are <code>db:migrate-tenancy</code> (single to multi-tenant, supports <code>--dry-run</code>) and <code>db:migrate-fields</code>.</li>
+</ul>
+
+<div class="cards">
+<a class="card" href="request-pipeline.html"><b>Request pipeline</b><span>Where resolveTenant sits in the middleware order.</span></a>
+<a class="card" href="authentication.html"><b>Authentication</b><span>Tokens, cookies, refresh and sessions.</span></a>
+<a class="card" href="team-roles-permissions.html"><b>Team, roles and permissions</b><span>The 35-permission catalogue and starter roles.</span></a>
+<a class="card" href="api/platform.html"><b>Platform API</b><span>The operator console endpoints.</span></a>
+</div>
+
+<div class="pager"><a href="architecture.html"><small>Previous</small>System architecture</a><a href="request-pipeline.html"><small>Next</small>Request pipeline and errors</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#model">The model: shared database, one tenantId per doc</a><a class="h2" href="#plugin">The tenant plugin</a><a class="h2" href="#context">The tenant context</a><a class="h2" href="#resolve">How a request picks its workspace</a><a class="h2" href="#two-admins">Platform admin versus workspace admin</a><a class="h2" href="#provisioning">Provisioning a workspace</a><a class="h2" href="#act-as">Acting as a customer: identity is pinned, data i</a><a class="h3" href="#pin">Every query about the caller must be pinned</a><a class="h3" href="#read-only">The acting session is read-only</a><a class="h2" href="#plans">Plans and limits</a><a class="h2" href="#billing">Billing is a ledger, not a gateway</a><a class="h2" href="#customisation">Per-workspace customisation</a><a class="h3" href="#branding">1. Branding tokens</a><a class="h3" href="#screens">2. The screen catalogue</a><a class="h3" href="#fields">3. Category dynamic fields</a><a class="h3" href="#pipeline">4. The sales pipeline</a><a class="h2" href="#shared-state">Anything outside the database needs its own tena</a><a class="h2" href="#scripts">CLI scripts must bootstrap tenancy</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ and troubleshooting — Real Vista Docs</title>
+<meta name="description" content="Symptoms, causes and fixes for the failures that have actually happened in this codebase, grouped by area.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html" class="active">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>FAQ and troubleshooting</h1>
+<p class="lede">Symptoms, causes and fixes for the failures that have actually happened in this codebase, grouped by area.</p>
+
+<p>Each answer names the code that produces the symptom, so you can confirm the cause rather than guess. When you report a problem, quote the <code>requestId</code> from the error body (also the <code>X-Request-Id</code> response header): it finds the exact request in the logs.</p>
+
+<h2 id="setup">Setup and development</h2>
+
+<h3 id="q-node">The backend crashes on start with a <code>SlowBuffer</code> error.</h3>
+<p>You are on Node 25. It removed <code>SlowBuffer</code>, which the <code>jsonwebtoken</code> dependency chain (<code>jwa</code>, <code>buffer-equal-constant-time</code>) still uses. Run the backend on Node 20; CI does (<code>.github/workflows/ci.yml</code>). With Homebrew: <code>PATH="/opt/homebrew/opt/node@20/bin:$PATH" npm run dev</code>. The Vite frontend runs fine on newer Node.</p>
+
+<h3 id="q-env-exit">The backend exits immediately saying environment variables are missing, or configuration validation failed.</h3>
+<p><code>config/environment.js</code> exits if any of <code>JWT_SECRET</code>, <code>REFRESH_SECRET</code>, <code>MONGO_URI</code>, <code>NODE_ENV</code>, <code>MESSAGE_ENCRYPTION_KEY</code> is unset. <code>validateConfig()</code> then requires both JWT secrets to be at least 32 characters and, in production, either <code>APP_DOMAIN</code> or <code>DEFAULT_TENANT_SLUG</code>. The last one catches a quiet failure: with neither, requests fall back to a workspace slugged <code>default</code> that may not exist, and because a query with no workspace throws, the whole API would be down rather than degraded. See the <a href="operations.html#env">variable table</a>.</p>
+
+<h3 id="q-mongo">MongoDB will not connect locally.</h3>
+<p>Check the server is actually listening (<code>lsof -nP -iTCP:27017 -sTCP:LISTEN</code>). On macOS <code>mongod --fork</code> is unsupported; start it with <code>mongod --config /opt/homebrew/etc/mongod.conf</code> in a background shell. An Atlas <code>mongodb+srv://</code> URI whose cluster was deleted fails DNS resolution; point <code>MONGO_URI</code> at a local database instead.</p>
+
+<h3 id="q-npm401">npm install fails with 401 on package fetches.</h3>
+<p>A user-level <code>~/.npmrc</code> points at a private registry. Override per command: <code>npm_config_registry=https://registry.npmjs.org npm install</code>. Separately, the frontend's <code>xlsx</code> dependency resolves to a tarball on <code>cdn.sheetjs.com</code>, so installs (and CI) need egress to it; install with <code>--legacy-peer-deps</code>.</p>
+
+<h3 id="q-cors-web">The Flutter web app (or a second frontend origin) says "Unable to reach Real Vista" and nothing loads.</h3>
+<p>The browser is blocking the call under CORS. In development only the Vite and API origins are allowed by default; add the extra origin, comma-separated, to <code>EXTRA_CORS_ORIGINS</code> in <code>backend/.env</code> (for example <code>http://localhost:54321</code>). In production the allowed origins are only <code>FRONTEND_URL</code> and <code>ADMIN_URL</code>; <code>EXTRA_CORS_ORIGINS</code> is ignored there. A native mobile app sends no <code>Origin</code> and is not affected.</p>
+
+<h3 id="q-script-invisible">A seed or one-off script ran, but the records are invisible in the app.</h3>
+<p>The script imported a model directly. Tenant scoping is a global Mongoose plugin and only applies to schemas compiled <em>after</em> it is registered; a hoisted <code>import</code> compiles the schema first, so the records are written with no <code>tenantId</code> and the app can never see them. Load models with <code>const { models, inWorkspace, close } = await bootstrapScript()</code> from <code>scripts/_bootstrap.js</code>. It takes <code>--workspace &lt;slug&gt;</code> and refuses to guess when several workspaces exist. Records already written without a <code>tenantId</code> have to be repaired by hand (<code>npm run db:migrate-tenancy</code> stamps documents that have none, but it is a one-time migration; read it first).</p>
+
+<h3 id="q-no-tenant">An error says "a query ran with no tenant context".</h3>
+<p>That is the isolation guarantee working. <code>tenantPlugin.js</code> throws rather than run an unscoped query. In a request it means something ran outside the tenant context (for example work started after the response, or a callback that lost async context). In a script, cron job or socket handler, enter a workspace explicitly with <code>runWithTenant</code>, <code>withTenantBySlug</code> or <code>forEachTenant</code>. For deliberate cross-tenant work use <code>runWithoutTenantScope('why')</code>, and never build a <code>tenantId</code> filter by hand. A related error says a query asked for a different tenant than the request's; that is also deliberate.</p>
+
+<h3 id="q-asynchandler">My test calls a controller directly and gets an empty response with no error.</h3>
+<p><code>asyncHandler</code> does not return its promise, so <code>await controller(req, res, next)</code> resolves before any database work finishes. Either go through HTTP with supertest (which needs a session), or call the handler without awaiting and poll until <code>res.body</code> is set or <code>next</code> fires.</p>
+
+<h3 id="q-index">Creating a second user without a phone number fails with a duplicate key error.</h3>
+<p>An obsolete unique index survived. Mongoose never drops an index it no longer declares, so the old <code>phone_1</code> (plain unique and sparse, which still collides on <code>null</code>) outlives the model's partial index <code>tenant_phone_unique_string</code>. The same class of problem is why <code>db:migrate-tenancy</code> drops the old global unique indexes (a leftover <code>email_1</code> makes the second agency's duplicate email fail). Drop the stale index (<code>db.users.dropIndex('phone_1')</code>) or run <code>User.syncIndexes()</code> once.</p>
+
+<h3 id="q-dev-seed">I ran <code>db:seed-fresh</code> and lost data.</h3>
+<p>It is destructive with no confirmation prompt: it wipes the collections of the workspace it runs in and reseeds sample data (keeping the first admin). Only use it on a throwaway database. To empty a real workspace safely, <code>scripts/purgeWorkspaceData.js --workspace &lt;slug&gt; --confirm</code> writes a JSON backup first and keeps the tenant, admins and roles.</p>
+
+<h2 id="auth">Sign-in and sessions</h2>
+
+<h3 id="q-wrong-workspace">Sign-in says "invalid email or password", but the credentials are right.</h3>
+<p>Usually the wrong workspace. The same email can exist in two agencies, and an unauthenticated request with no workspace falls back to <code>DEFAULT_TENANT_SLUG</code>. Enter the workspace name on the sign-in screen (sent as <code>x-tenant</code>). A name that does not exist answers <code>404 WORKSPACE_NOT_FOUND</code> ("There's no workspace called ...") instead of using the default. If the account is locked the message says so: "Account locked. Try again in N minute(s)". Five wrong passwords (<code>MAX_LOGIN_ATTEMPTS</code>) lock the account for 15 minutes (<code>LOCKOUT_DURATION</code>), and the lock is checked before the password, so the right password does not help until it lapses.</p>
+
+<h3 id="q-401loop">Every request returns 401 and the app keeps sending me back to sign-in.</h3>
+<p>Work down this list.</p>
+<ul>
+<li><strong>Cookies not stored.</strong> In production the cookies are <code>SameSite=None; Secure</code>, so the site must be served over HTTPS. Over plain HTTP the browser rejects them. If the app and API are on different origins, <code>FRONTEND_URL</code> must exactly match the app's origin or CORS blocks credentialed calls.</li>
+<li><strong>The server's secrets changed.</strong> Changing <code>JWT_SECRET</code> or <code>REFRESH_SECRET</code> invalidates every existing token; signed-in users are signed out once their access token lapses (up to 15 minutes). That is expected, not a bug.</li>
+<li><strong>The refresh token was replayed.</strong> A refresh token that is validly signed but not on the user's stored list is treated as theft and every session of that user is wiped. Two tabs refreshing with the same cookie at once can trigger it; the web client serialises refreshes for this reason.</li>
+<li><strong>The cookie outlived its token.</strong> Cookie lifetimes now come from <code>ACCESS_TOKEN_EXPIRY</code> / <code>REFRESH_TOKEN_EXPIRY</code>, so they cannot drift from the JWT. A cookie from before that change could.</li>
+<li><strong>The account is disabled or the password changed.</strong> <code>inactive</code> and <code>suspended</code> accounts are rejected on every request, and access tokens issued before a password change are refused ("Session expired. Please log in again.").</li>
+<li><strong>Sockets only:</strong> "Session predates workspaces. Please sign in again." means the token has no <code>tid</code> claim; sign in once.</li>
+</ul>
+
+<h3 id="q-csrf">A write fails with 403 <code>CSRF_TOKEN_INVALID</code> or <code>CSRF_COOKIE_MISSING</code>.</h3>
+<p>Every non-GET call made with a session must send an <code>X-CSRF-Token</code> header equal to the <code>csrf_token</code> cookie. <code>CSRF_TOKEN_INVALID</code>: the header is missing or stale; the token rotates on sign-in, refresh and act-as, so re-read the cookie (or <code>GET /api/auth/csrf</code>) at call time and retry once. <code>CSRF_COOKIE_MISSING</code>: the session predates the CSRF check; sign in again. For a cross-origin deployment the proxy or CORS preflight must allow the header. Scripts using <code>curl</code> must send both the cookie jar and the header. See <a href="authentication.html#csrf">Authentication</a>.</p>
+
+<h3 id="q-signedout-ok">Sign-out said it worked, but the session still came back.</h3>
+<p>This was a real bug during operator "acting as" sessions: the user lookup ran in the customer's workspace, found nothing, skipped revoking the refresh token and still answered "signed out", leaving it valid for 30 days. Sign-out is now pinned to the caller's home workspace (<code>inHomeTenant</code>). Any new code that looks up <em>the caller</em> (<code>User.findById(req.user.id)</code>, a security-log write about a session) must be pinned the same way, because an unpinned lookup fails silently as "nothing to do".</p>
+
+<h3 id="q-readonly">As a platform operator, my edits fail with "This view is read-only".</h3>
+<p>You are in an acting-as session. By design it is read-only: <code>tenancy/readOnlyWhileActing.js</code> blocks every non-GET except session-level calls (stop-acting, act-as, refresh, sign-out and your own Terms acceptance). Support can see what the customer sees but not edit their records, so an agency's audit trail always names a person at that agency. Leave with <code>POST /api/platform/stop-acting</code> and make changes in your own workspace.</p>
+
+<h3 id="q-invite">An invitation link says it is no longer valid, or "a newer invitation was sent".</h3>
+<p>Links expire after 7 days and work once. Expired, used and unknown tokens all answer the same <code>404</code> on purpose. If you open an older email after the invitation was re-sent, the answer is <code>410 INVITE_REPLACED</code>: open the newest email. If none work, a workspace admin (or a platform operator via <code>POST /api/platform/tenants/:id/invite</code> for the first admin) can send a fresh one.</p>
+
+<h3 id="q-pw-reset">The password-reset code never arrives.</h3>
+<p>The request always answers "If that address has an account, a code is on its way", whether or not the address exists, so the response cannot tell you. Check that SMTP is configured (<code>SMTP_USER</code> and <code>SMTP_PASS</code>; otherwise no transport exists), that you entered the right workspace, and the spam folder. The code is six digits, valid for 10 minutes and dies after 5 wrong guesses. In development with no SMTP configured the response includes <code>devOtp</code>.</p>
+
+<h2 id="api">API behaviour</h2>
+
+<h3 id="q-409">I got 409 <code>VERSION_CONFLICT</code>.</h3>
+<p>Someone saved the record after you loaded it. Listing and client edits send <code>expectedUpdatedAt</code>, the write is conditional on it, and the answer carries <code>details.currentUpdatedAt</code>. The web form offers "Load their version" or "Keep mine" (resend without the guard). A caller that sends no version (mobile app, scripts) is last-write-wins and never sees this. Other 409s are different: creating a lead whose phone or email exists returns <code>data.duplicate</code> and <code>canForce: true</code> (use <code>?force=true</code> if it is genuinely a second person on a shared number), and deleting a category in use, or removing a field that holds values, returns a count you can override with <code>?force=true</code>.</p>
+
+<h3 id="q-402">I got 402 <code>PLAN_LIMIT</code>.</h3>
+<p>The workspace's plan caps users, listings, monthly import rows or storage, and the create was refused. 402 (not 403) because it means "your plan doesn't cover this", not "you may not". Limits gate creation only; reads and existing data are never locked. The message names the cap and the way out. Check <code>GET /api/tenant/usage</code>, or ask the operator to move the plan or raise the cap. Changing a figure in <code>tenancy/plans.js</code> re-caps every live workspace on that plan.</p>
+
+<h3 id="q-import">My import was rejected or only partly written.</h3>
+<p>Both importers validate every row first, then write in batches and return per-row results. The lead importer accepts at most 5000 rows per file ("import up to 5000 at a time"). Row errors are capped at 200 in the response (<code>rowErrorsTruncated: true</code> says the list was cut; the counts stay exact). Rows are metered against <code>maxImportRowsPerMonth</code>: the importer reserves rows before writing and releases what did not land, and a request that would pass the allowance answers 402. The meter rolls over by the daily <code>import-usage-reset</code> job. Imported leads that duplicate an existing phone match on the derived <code>phoneKey</code>; if you migrated old data, run <code>npm run db:backfill-phone-keys</code> or older leads are invisible to the duplicate check.</p>
+
+<h3 id="q-429">I get 429 <code>RATE_LIMITED</code>.</h3>
+<p>The general limit is 1000 requests per 15 minutes per signed-in user (per IP if signed out), 20 per 15 minutes on credential endpoints, 30 uploads per minute. Behind a proxy, check that production <code>trust proxy</code> (set to one hop) matches your topology; if the limiter sees the proxy's IP, everyone shares one bucket. On several instances without <code>REDIS_URL</code> each instance counts separately (limits are looser than configured, not tighter). Honour <code>Retry-After</code>.</p>
+
+<h3 id="q-list-array">A list endpoint returns an array on one call and an object on another.</h3>
+<p><code>GET /api/owner/list</code> and <code>GET /api/buyer-requirements</code> page only when <code>page</code> is passed; without it they return a bare array (the mobile app and the listing form depend on it). With <code>page</code> you get <code>{ success, data, page, limit, total }</code>. <code>limit</code> is capped at 500. Sort on the server with <code>sort=key:asc|desc</code> using the endpoint's allowed keys.</p>
+
+<h3 id="q-encrypted">Responses look like <code>{ "_enc": true, "iv": ..., "data": ... }</code> and the app shows nothing.</h3>
+<p>The server has <code>ENCRYPT_API_RESPONSES=true</code>. The web client decrypts only if it was <em>built</em> with <code>VITE_API_RESPONSE_SECRET</code> equal to <code>API_RESPONSE_SECRET</code>; otherwise the console shows "Received encrypted response but VITE_API_RESPONSE_SECRET is not configured". The mobile app cannot decrypt at all. Turn encryption off, or rebuild the web app with the matching secret. See <a href="api-overview.html#encryption">API conventions</a>.</p>
+
+<h3 id="q-veto">A workspace rule makes a save fail with 400.</h3>
+<p>A rule that calls <code>veto('...')</code> refuses the operation and its message reaches the user as a 400. Any other error inside a rule is logged and the rule is skipped, so "my rule does nothing" usually means it threw (look for the log line) rather than vetoed. Rules are named implementations registered in <code>plugins/builtin.js</code>; config selects them, never carries code.</p>
+
+<h2 id="sharing">Sharing and public pages</h2>
+
+<h3 id="q-share">A share link does not work for the buyer.</h3>
+<ul>
+<li><strong>"This link is not valid" (404):</strong> wrong or mistyped token. Unknown and never-existed tokens look identical so the endpoint cannot be used to enumerate them.</li>
+<li><strong>410:</strong> the link expired (default 30 days from creation) or was revoked. Create a new one.</li>
+<li><strong>401 with <code>passcodeRequired</code>:</strong> the link has a passcode (min 4 characters). The page sends it as <code>x-share-passcode</code>; a wrong one is logged and answers 401 again.</li>
+<li><strong>Too many attempts:</strong> the open endpoint allows 60 requests per 15 minutes per IP.</li>
+<li><strong>The property is missing from the page:</strong> a deleted listing drops out; and you can only share listings you can see (<code>createShare</code> re-reads through <code>listingScope</code>).</li>
+<li>Owner contacts, internal notes and commission are never shown on a share page; <code>forRecipient()</code> is an allowlist.</li>
+</ul>
+
+<h3 id="q-public-404">A public page such as <code>/privacy</code> or <code>/terms</code> returns 404 (or crawlers show the home page's title).</h3>
+<p>The web server lacks the SPA fallback. The build writes real files like <code>dist/privacy/index.html</code>, so the server must use <strong><code>try_files $uri $uri/ /index.html;</code></strong>. Without <code>$uri/</code> the per-page HTML is skipped and every crawler sees the home page's tags; without any fallback a deep link is a 404. Also confirm <code>VITE_SITE_URL</code> was set at build time: if not, canonicals and <code>sitemap.xml</code> use the default <code>https://realvista.duckdns.org</code>. See <a href="operations.html#nginx">Deploy and operate</a>.</p>
+
+<h3 id="q-vite-env">I changed a <code>VITE_*</code> value and nothing happened.</h3>
+<p>Vite compiles these into the bundle at build time. Rebuild (and redeploy <code>frontend/dist</code>) after any change. In Docker they are build args; compose passes only the two Cloudinary values. On the production host, build in place so the values in <code>frontend/.env.production.local</code> are used.</p>
+
+<h2 id="data">Data and display</h2>
+
+<h3 id="q-area">Areas show "sq ft" or the rupee sign for a workspace that uses something else.</h3>
+<p>A call site is bypassing the locale layer. Never construct <code>Intl.NumberFormat</code> in a component and never hardcode <code>₹</code>, <code>en-IN</code> or <code>sq ft</code>. Use the formatters in <code>frontend/src/utils/currency.js</code>; <code>TenantProvider</code> pushes the workspace locale in via <code>setLocaleConfig()</code>. There are six area units (<code>sqft</code>, <code>sqyard</code>, <code>sqm</code>, <code>acre</code>, <code>cent</code>, <code>guntha</code>) and all six must work, not the two a ternary covers.</p>
+
+<h3 id="q-label">A screen shows the wrong name or a missing translation.</h3>
+<p>A workspace's own rename of a screen beats a translation (<code>useScreens.js</code> compares <code>label</code> with <code>defaultLabel</code>). Translations are JSON files in <code>frontend/src/i18n/locales/</code>, found by glob; <code>i18n/__tests__/locales.test.js</code> fails the build on a missing key or a dropped <code>{{placeholder}}</code>. Screen ids are a contract with stored workspace settings: never rename one.</p>
+
+<h3 id="q-colours">A Tailwind colour does not appear.</h3>
+<p>Interpolated class names such as <code>`text-${color}-400`</code> never work: Tailwind scans source as plain text, so the class is never emitted. Write every class as a complete literal string, usually via a lookup table keyed by variant.</p>
+
+<h3 id="q-lead-temp">A lead's temperature or score looks wrong.</h3>
+<p><code>client.calculateScore()</code> is the only place the score is computed, and it runs on create, update, deal-stage change and nightly. Temperature follows the score <em>unless</em> someone set it by hand, which sets <code>temperatureManual</code> and pins it. Won and lost leads are never rescored, so past reports do not change.</p>
+
+<h3 id="q-sequence">A lead got another follow-up email after being marked won.</h3>
+<p>It should not. <code>stopSequencesForClient()</code> is called synchronously from the deal-stage change so there is no gap, and the job stops an enrollment when the lead is won, lost or deleted. If it happened, check that the stage change went through <code>updateDealStage</code> and not a direct database write.</p>
+
+<h2 id="deploy">Deployment</h2>
+
+<h3 id="q-cookie-prod">Works locally but not behind a reverse proxy.</h3>
+<ul>
+<li>Forward <code>/api</code>, <code>/uploads</code> and <code>/socket.io</code> (with WebSocket upgrade) to the Node process.</li>
+<li>Pass <code>X-Forwarded-For</code> / <code>-Host</code> / <code>-Proto</code>. Production trusts exactly one proxy hop.</li>
+<li>Terminate TLS: <code>Secure</code> cookies are not set over HTTP.</li>
+<li>Subdomain routing needs <code>APP_DOMAIN</code> and a wildcard DNS and certificate; a single-label subdomain only, and <code>www app api admin auth static cdn assets localhost</code> are reserved.</li>
+</ul>
+
+<h3 id="q-uploads">Uploads fail with permission denied in Docker.</h3>
+<p>The container runs as the <code>node</code> user (uid 1000). A host bind mount keeps the host's ownership and the app cannot write to it. Use the named volume compose defines (<code>uploads_data</code>), or chown the host path to uid 1000.</p>
+
+<h3 id="q-upload-type">An upload is rejected as "not a valid image" although it opens fine.</h3>
+<p>Uploads are judged by their real content (magic bytes), never by file extension or declared type. A renamed file, an SVG, or a corrupt file is refused. Images accept JPEG, PNG, GIF and WebP; documents accept PDF, DOCX, XLSX, PPTX, ZIP, JPEG and PNG (plus legacy DOC, XLS, PPT). Size limits are 10 MB per image, 25 MB per audio file, and the plan's storage cap (402) applies first.</p>
+
+<h3 id="q-pm2">PM2 restarts are slow or kill requests mid-flight.</h3>
+<p>The ecosystem file sets <code>kill_timeout: 5000</code>, shorter than the app's 10-second default drain (<code>SHUTDOWN_TIMEOUT_MS</code>), so PM2 can SIGKILL a drain in progress. It also sets <code>wait_ready</code> although the app never sends the ready signal, so PM2 waits for <code>listen_timeout</code>. Raise <code>kill_timeout</code>, and drop <code>wait_ready</code> or add <code>process.send('ready')</code>.</p>
+
+<h3 id="q-realtime-cluster">Live updates or presence work for some users but not others.</h3>
+<p>You are probably running more than one process (PM2 <code>instances: 'max'</code> cluster, or several hosts). There is no Socket.IO adapter, and presence is an in-process map, so an event emitted in one process never reaches sockets held by another. Run one process, or add an adapter first. <code>REDIS_URL</code> shares the rate limiter and cache invalidation, not sockets.</p>
+
+<h3 id="q-restore">Restoring a backup fails.</h3>
+<p>Dumps from <code>npm run db:backup</code> are gzipped and restore with <code>npm run db:restore -- --from &lt;name&gt; --confirm</code> (production also needs <code>ALLOW_PRODUCTION_RESTORE=true</code>, and you must type the database name). The compose <code>backup</code> service dumps <em>without</em> <code>--gzip</code>, so <code>restore.js</code>, which always passes <code>--gzip</code>, cannot read them; restore those with <code>mongorestore --drop</code> directly. Both need MongoDB Database Tools installed.</p>
+
+<h3 id="q-mobile-build">The mobile build fails in Gradle.</h3>
+<p>Use Flutter 3.24.5 and JDK 17. A newer Flutter's Gradle plugin needs Gradle 8.14 and fails inside AGP 8.1.0, and it rewrites <code>gradle.properties</code>, <code>analysis_options.yaml</code> and <code>pubspec.lock</code> (check <code>git status</code>). Details in <a href="mobile.html#sdk">Mobile app</a>. If a release APK cannot reach the server, it was built without <code>--dart-define=API_BASE_URL</code> and is pointing at <code>localhost</code>.</p>
+
+<h3 id="q-logs">Production errors and security events are not in any log.</h3>
+<p>Without <code>OPENOBSERVE_USERNAME</code> and <code>OPENOBSERVE_PASSWORD</code> the logger writes to stdout only and drops everything else; production prints a warning at boot. Set them, or collect stdout elsewhere. The security log in MongoDB (180-day TTL) is separate and always written. Sentry is not wired (<code>utils/sentry.js</code> is a no-op stub).</p>
+
+<div class="pager"><a href="mobile.html"><small>Previous</small>Mobile app</a><span></span></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#setup">Setup and development</a><a class="h3" href="#q-node">The backend crashes on start with a SlowBuffer e</a><a class="h3" href="#q-env-exit">The backend exits immediately saying environment</a><a class="h3" href="#q-mongo">MongoDB will not connect locally.</a><a class="h3" href="#q-npm401">npm install fails with 401 on package fetches.</a><a class="h3" href="#q-cors-web">The Flutter web app (or a second frontend origin</a><a class="h3" href="#q-script-invisible">A seed or one-off script ran, but the records ar</a><a class="h3" href="#q-no-tenant">An error says &quot;a query ran with no tenant contex</a><a class="h3" href="#q-asynchandler">My test calls a controller directly and gets an </a><a class="h3" href="#q-index">Creating a second user without a phone number fa</a><a class="h3" href="#q-dev-seed">I ran db:seed-fresh and lost data.</a><a class="h2" href="#auth">Sign-in and sessions</a><a class="h3" href="#q-wrong-workspace">Sign-in says &quot;invalid email or password&quot;, but th</a><a class="h3" href="#q-401loop">Every request returns 401 and the app keeps send</a><a class="h3" href="#q-csrf">A write fails with 403 CSRF_TOKEN_INVALID or CSR</a><a class="h3" href="#q-signedout-ok">Sign-out said it worked, but the session still c</a><a class="h3" href="#q-readonly">As a platform operator, my edits fail with &quot;This</a><a class="h3" href="#q-invite">An invitation link says it is no longer valid, o</a><a class="h3" href="#q-pw-reset">The password-reset code never arrives.</a><a class="h2" href="#api">API behaviour</a><a class="h3" href="#q-409">I got 409 VERSION_CONFLICT .</a><a class="h3" href="#q-402">I got 402 PLAN_LIMIT .</a><a class="h3" href="#q-import">My import was rejected or only partly written.</a><a class="h3" href="#q-429">I get 429 RATE_LIMITED .</a><a class="h3" href="#q-list-array">A list endpoint returns an array on one call and</a><a class="h3" href="#q-encrypted">Responses look like { &quot;_enc&quot;: true, &quot;iv&quot;: ..., &quot;</a><a class="h3" href="#q-veto">A workspace rule makes a save fail with 400.</a><a class="h2" href="#sharing">Sharing and public pages</a><a class="h3" href="#q-share">A share link does not work for the buyer.</a><a class="h3" href="#q-public-404">A public page such as /privacy or /terms returns</a><a class="h3" href="#q-vite-env">I changed a VITE_* value and nothing happened.</a><a class="h2" href="#data">Data and display</a><a class="h3" href="#q-area">Areas show &quot;sq ft&quot; or the rupee sign for a works</a><a class="h3" href="#q-label">A screen shows the wrong name or a missing trans</a><a class="h3" href="#q-colours">A Tailwind colour does not appear.</a><a class="h3" href="#q-lead-temp">A lead's temperature or score looks wrong.</a><a class="h3" href="#q-sequence">A lead got another follow-up email after being m</a><a class="h2" href="#deploy">Deployment</a><a class="h3" href="#q-cookie-prod">Works locally but not behind a reverse proxy.</a><a class="h3" href="#q-uploads">Uploads fail with permission denied in Docker.</a><a class="h3" href="#q-upload-type">An upload is rejected as &quot;not a valid image&quot; alt</a><a class="h3" href="#q-pm2">PM2 restarts are slow or kill requests mid-fligh</a><a class="h3" href="#q-realtime-cluster">Live updates or presence work for some users but</a><a class="h3" href="#q-restore">Restoring a backup fails.</a><a class="h3" href="#q-mobile-build">The mobile build fails in Gradle.</a><a class="h3" href="#q-logs">Production errors and security events are not in</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

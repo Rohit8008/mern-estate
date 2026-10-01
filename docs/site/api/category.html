@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>category — Real Vista Docs</title>
+<meta name="description" content="9 endpoints under /api/category.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>category</h1>
+<p class="lede"><a href="index.html">API reference</a> › category. 9 endpoints under /api/category.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="get-api-category-list">
+<h3 id="get-api-category-listsession"><span class="method get">GET</span>/api/category/list<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-category-by-slug-slug">
+<h3 id="get-api-category-by-slug-slug-session"><span class="method get">GET</span>/api/category/by-slug/{slug}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>slug</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-category-create">
+<h3 id="post-api-category-createsession"><span class="method post">POST</span>/api/category/create<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td>yes</td><td>max 50</td></tr><tr><td><code>fields</code></td><td>array&lt;object&gt;</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="patch-api-category-id">
+<h3 id="patch-api-category-id-session"><span class="method patch">PATCH</span>/api/category/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td>yes</td><td>max 50</td></tr></table>
+</section>
+<section class="endpoint" id="delete-api-category-delete-id">
+<h3 id="delete-api-category-delete-id-session"><span class="method delete">DELETE</span>/api/category/delete/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-category-update-fields-id">
+<h3 id="post-api-category-update-fields-id-session"><span class="method post">POST</span>/api/category/update-fields/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>fields</code></td><td>array&lt;object&gt;</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-category-update-location-id">
+<h3 id="post-api-category-update-location-id-session"><span class="method post">POST</span>/api/category/update-location/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>defaultLocation</code></td><td>object</td><td>yes</td><td></td></tr><tr><td><code>defaultLocation.lat</code></td><td>number</td><td></td><td></td></tr><tr><td><code>defaultLocation.lng</code></td><td>number</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-category-deleted">
+<h3 id="get-api-category-deletedsession"><span class="method get">GET</span>/api/category/deleted<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-category-restore-id">
+<h3 id="post-api-category-restore-id-session"><span class="method post">POST</span>/api/category/restore/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#get-api-category-listsession">GET /api/category/list</a><a class="h3" href="#get-api-category-by-slug-slug-session">GET /api/category/by-slug/{slug}</a><a class="h3" href="#post-api-category-createsession">POST /api/category/create</a><a class="h3" href="#patch-api-category-id-session">PATCH /api/category/{id}</a><a class="h3" href="#delete-api-category-delete-id-session">DELETE /api/category/delete/{id}</a><a class="h3" href="#post-api-category-update-fields-id-session">POST /api/category/update-fields/{id}</a><a class="h3" href="#post-api-category-update-location-id-session">POST /api/category/update-location/{id}</a><a class="h3" href="#get-api-category-deletedsession">GET /api/category/deleted</a><a class="h3" href="#post-api-category-restore-id-session">POST /api/category/restore/{id}</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

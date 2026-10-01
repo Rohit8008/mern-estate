@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real Vista documentation — Real Vista Docs</title>
+<meta name="description" content="A multi-tenant CRM for real estate agencies: leads, property owners, listings, deals and paperwork in one workspace, with share links an agency controls.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html" class="active">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Real Vista documentation</h1>
+<p class="lede">A multi-tenant CRM for real estate agencies: leads, property owners, listings, deals and paperwork in one workspace, with share links an agency controls.</p>
+
+<h2 id="what-it-is">What it is</h2>
+<p>Real Vista is a SaaS CRM for real estate agencies. One deployment serves many agencies; each agency gets an isolated <em>workspace</em> with its own users, properties, leads, branding and pipeline. Agency staff (admins and employees) work in the CRM; sellers use a lighter surface; people outside the agency see only what is deliberately shared with them through expiring links.</p>
+
+<div class="cards">
+<a class="card" href="getting-started.html"><b>Getting started</b><span>Run it locally and create your first workspace.</span></a>
+<a class="card" href="leads-and-pipeline.html"><b>Product guide</b><span>Leads, pipeline, listings, sharing, roles and settings.</span></a>
+<a class="card" href="architecture.html"><b>Architecture</b><span>How the pieces fit, and the rules that keep them safe.</span></a>
+<a class="card" href="multi-tenancy.html"><b>Multi-tenancy</b><span>Isolation, platform operators, plans and billing.</span></a>
+<a class="card" href="api/index.html"><b>API reference</b><span>Every endpoint, generated from the code.</span></a>
+<a class="card" href="operations.html"><b>Operations</b><span>Deploy, back up, monitor, recover.</span></a>
+</div>
+
+<h2 id="the-shape-of-the-system">The shape of the system</h2>
+<div class="flow">
+<div class="step">React + Vite app<br>(CRM, public pages)</div><div class="arrow">&harr;</div>
+<div class="step">Express API<br>(port 3000)</div><div class="arrow">&harr;</div>
+<div class="step">MongoDB<br>(one DB, tenantId on every document)</div>
+</div>
+<div class="flow">
+<div class="step">Flutter mobile app</div><div class="arrow">&rarr;</div>
+<div class="step">Same API</div><div class="arrow">+</div>
+<div class="step">Cloudinary (media, from the browser)</div><div class="arrow">+</div>
+<div class="step">Socket.IO (realtime)</div>
+</div>
+
+<h2 id="principles-you-will-meet-everywhere">Principles you will meet everywhere</h2>
+<table>
+<tr><th>Principle</th><th>In practice</th></tr>
+<tr><td>Isolation is enforced in the data layer</td><td>A global Mongoose plugin scopes every query to one workspace. A query with no tenant context throws rather than returning someone else's records. <a href="multi-tenancy.html">Details</a></td></tr>
+<tr><td>Vocabulary in code, selection in config</td><td>Permissions, notification types, webhook events, rules, pipeline stages and screens are fixed catalogues in one file each; a workspace chooses from them and never supplies code.</td></tr>
+<tr><td>The property book is private</td><td>Nothing about a listing is reachable without a session. Sharing goes through expiring, revocable links. <a href="sharing-and-imports.html">Sharing</a></td></tr>
+<tr><td>One error shape</td><td>Every failure is <code>{ success:false, statusCode, code, message, requestId }</code>. Branch on <code>code</code>. <a href="request-pipeline.html">Pipeline</a></td></tr>
+<tr><td>Claims match code</td><td>Public pages carry no invented statistics, and policy text changes with the behaviour it describes.</td></tr>
+</table>
+
+<h2 id="who-should-read-what">Who should read what</h2>
+<table>
+<tr><th>If you are&hellip;</th><th>Start with</th></tr>
+<tr><td>A new developer</td><td><a href="getting-started.html">Getting started</a>, then <a href="architecture.html">Architecture</a> and <a href="multi-tenancy.html">Multi-tenancy</a>, and <code>CLAUDE.md</code> at the repo root for the rules that came from real bugs.</td></tr>
+<tr><td>An agency admin</td><td><a href="team-roles-permissions.html">Team, roles and permissions</a> and <a href="workspace-settings.html">Workspace settings</a>.</td></tr>
+<tr><td>An agent</td><td><a href="leads-and-pipeline.html">Leads and pipeline</a> and <a href="listings-and-categories.html">Listings and categories</a>.</td></tr>
+<tr><td>Integrating with the API</td><td><a href="api-overview.html">API conventions</a> and the <a href="api/index.html">reference</a>.</td></tr>
+<tr><td>Running a deployment</td><td><a href="operations.html">Deploy and operate</a> and the <a href="faq.html">FAQ</a>.</td></tr>
+</table>
+
+<h2 id="keeping-these-docs-true">Keeping these docs true</h2>
+<ul>
+<li>The API reference is generated: <code>npm run docs:openapi</code> rewrites <code>docs/openapi.json</code> from the live router, then <code>npm run docs:site</code> rebuilds this site into <code>docs/site</code>.</li>
+<li>Pages are fragments in <code>docs/site-src/pages</code>. The build fails on a navigation entry with no page and on a broken internal link.</li>
+<li>When a change alters behaviour a page describes, change the page in the same commit.</li>
+</ul>
+
+<div class="pager"><span></span><a href="getting-started.html"><small>Next</small>Getting started</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#what-it-is">What it is</a><a class="h2" href="#the-shape-of-the-system">The shape of the system</a><a class="h2" href="#principles-you-will-meet-everywhere">Principles you will meet everywhere</a><a class="h2" href="#who-should-read-what">Who should read what</a><a class="h2" href="#keeping-these-docs-true">Keeping these docs true</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

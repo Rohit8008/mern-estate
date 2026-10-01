@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Request pipeline and errors — Real Vista Docs</title>
+<meta name="description" content="The order middleware runs in, why that order is load-bearing, the one error shape every failure uses, and the structural tests that stop unguarded or unvalidated routes shipping.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html" class="active">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Request pipeline and errors</h1>
+<p class="lede">The order middleware runs in, why that order is load-bearing, the one error shape every failure uses, and the structural tests that stop unguarded or unvalidated routes shipping.</p>
+
+<h2 id="order">Middleware order</h2>
+<p><code>createApp()</code> in <code>backend/app.js</code> is the one place the pipeline is assembled. The order is tested (<code>tests/requestPipeline.test.js</code>) because several of these steps only work in a particular sequence.</p>
+<table>
+<thead><tr><th>#</th><th>Middleware</th><th>What it does and why it is here</th></tr></thead>
+<tbody>
+<tr><td>0</td><td><code>trust proxy</code></td><td>Set to 1 in production so <code>req.ip</code> is the client behind one proxy hop.</td></tr>
+<tr><td>1</td><td><code>requestId</code></td><td>First, so every later log line and every error body carries the id. See <a href="#request-id">request ids</a>.</td></tr>
+<tr><td>2</td><td><code>securityHeaders</code></td><td>Helmet with a CSP (self, Google Fonts, Cloudinary, data/blob images), HSTS one year with preload, no framing.</td></tr>
+<tr><td>3</td><td><code>requestLogger</code></td><td>On <code>finish</code> writes one structured access entry (method, url, status, duration, ip, user agent, user id); 5xx also to the error stream, 4xx as warnings.</td></tr>
+<tr><td>4</td><td><code>express.json</code>, <code>express.urlencoded</code> (10 MB), <code>cookieParser</code></td><td>The body is parsed <strong>before</strong> sanitising. See <a href="#sanitising">sanitising</a>.</td></tr>
+<tr><td>5</td><td><code>hpp</code></td><td>HTTP parameter pollution: <code>?role=user&amp;role=admin</code> collapses to one value.</td></tr>
+<tr><td>6</td><td><code>mongoSanitization</code></td><td>Strips Mongo operators from body, query and params; logs an injection attempt. <code>allowDots: true</code>.</td></tr>
+<tr><td>7</td><td><code>xssProtection</code></td><td>XSS-escapes <strong>query and params only</strong>, not the body.</td></tr>
+<tr><td>8</td><td><code>compression</code>, <code>cors</code></td><td>CORS from <code>config.cors</code>: production origins are <code>FRONTEND_URL</code> and <code>ADMIN_URL</code>; development adds localhost:5173 and :3000 and <code>EXTRA_CORS_ORIGINS</code>. Credentials on. Allowed request headers include <code>X-CSRF-Token</code> and <code>X-Request-Id</code>.</td></tr>
+<tr><td>9</td><td><code>morgan('dev')</code></td><td>Development only. In production <code>requestLogger</code> is the single access log.</td></tr>
+<tr><td>10</td><td>rate limiters</td><td>If <code>ENABLE_RATE_LIMITING</code> is not <code>false</code>: <code>strictRateLimit</code> on <code>/api/upload</code>, then <code>apiRateLimit</code> on <code>/api/</code>. See <a href="#rate-limits">rate limits</a>.</td></tr>
+<tr><td>11</td><td><code>encryptResponse</code> (<code>/api</code>)</td><td>Optional AES-256-GCM envelope around JSON bodies when <code>ENCRYPT_API_RESPONSES=true</code>; skips <code>/api/health</code> and <code>/api/observability</code>. On a crypto error it falls back to plaintext rather than breaking the response.</td></tr>
+<tr><td>12</td><td><code>errorEnvelope</code></td><td>Installed <em>after</em> <code>encryptResponse</code> on purpose: each wraps <code>res.json</code> and the last installed runs first, so <code>code</code> and <code>requestId</code> are added to the body <em>before</em> it is encrypted, not to the ciphertext envelope.</td></tr>
+<tr><td>13</td><td><code>/api/health</code>, <code>/api/unsubscribe</code></td><td>Answer <strong>before tenant resolution</strong>. A load-balancer probe has no workspace, and a broken tenant lookup must not take the pod out of service. The unsubscribe token names its own workspace, and a person's "stop" is honoured even for an agency since suspended or closed.</td></tr>
+<tr><td>14</td><td><code>resolveTenant()</code> (<code>/api</code>)</td><td>Everything after this runs inside a tenant context. See <a href="multi-tenancy.html#resolve">Multi-tenancy</a>.</td></tr>
+<tr><td>15</td><td><code>readOnlyWhileActing</code></td><td>Blocks non-GET requests during an operator's act-as session. See <a href="multi-tenancy.html#read-only">act-as</a>.</td></tr>
+<tr><td>16</td><td><code>requireCsrfToken</code></td><td>Double-submit CSRF check on writes. See <a href="#csrf">CSRF</a>.</td></tr>
+<tr><td>17</td><td>routers</td><td>Tenant, share, platform, user, auth, listing, category and so on. Guards and <code>validateBody</code> live on the routes.</td></tr>
+<tr><td>18</td><td>static, <code>/uploads/docs</code>, <code>/uploads</code></td><td><code>frontend/dist</code>; a 307 redirect from the old document URLs to <code>/api/documents/file/:name</code>; listing photographs and avatars.</td></tr>
+<tr><td>19</td><td><code>/api</code> catch-all, then <code>*</code></td><td>Unknown <code>/api</code> path: JSON 404 <code>NOT_FOUND</code> (an HTML page if the client accepts <code>text/html</code>). Anything else serves <code>frontend/dist/index.html</code> (or a development hint if there is no build).</td></tr>
+<tr><td>20</td><td><code>globalErrorHandler</code></td><td>Last. Every thrown error ends here.</td></tr>
+</tbody>
+</table>
+
+<h2 id="request-id">Request ids</h2>
+<p><code>utils/requestContext.js</code> gives each request an id. A caller-supplied <code>X-Request-Id</code> is kept if it matches <code>^[A-Za-z0-9_-]{8,64}$</code>; otherwise a UUID is generated. It is set on <code>req.id</code>, returned as the <code>X-Request-Id</code> response header, repeated as <code>requestId</code> in every error body, and stamped by the logger on every line written while the request is in flight (along with the tenant), so a "ref" a user reads out finds the log. <code>getRequestId()</code> works anywhere in the request's async chain.</p>
+<p>It is a separate <code>AsyncLocalStorage</code> from the tenant context on purpose: the id exists before the tenant is resolved (and for routes that have none), and the two must not be able to overwrite each other. Outside a request (jobs, scripts) it is <code>null</code>.</p>
+
+<h2 id="errors">One error shape</h2>
+<p>Every failure answers:</p>
+<pre><code>{
+  "success": false,
+  "statusCode": 409,
+  "code": "VERSION_CONFLICT",     // the contract - branch on this
+  "message": "This record was changed by someone else while you were editing it.",
+  "type": "conflict",             // optional
+  "field": "email",               // optional
+  "details": { "currentUpdatedAt": "..." },   // optional
+  "requestId": "6f1c...",
+  "timestamp": "2026-10-02T09:15:00.000Z",
+  "path": "/api/listing/update/&lt;id&gt;"
+}</code></pre>
+<p><strong><code>code</code> is the contract; <code>message</code> is for a person.</strong> A client switching on "Category in use" broke the day the sentence was improved, and wording also changes with language. Codes are additive: older fields stay and <code>code</code> and <code>requestId</code> are added.</p>
+
+<h3 id="throwing">How to raise an error</h3>
+<ul>
+<li>Throw <code>AppError</code> (<code>new AppError(message, statusCode, isOperational = true, code?)</code>) or a subclass from <code>utils/error.js</code>: <code>ValidationError</code> (400, <code>VALIDATION_FAILED</code>, takes a <code>field</code>), <code>AuthenticationError</code> (401), <code>AuthorizationError</code> (403), <code>NotFoundError</code> (404), <code>ConflictError</code> (409), <code>VersionConflictError</code> (409, <code>VERSION_CONFLICT</code>, takes <code>details</code>), <code>RateLimitError</code> (429), <code>DatabaseError</code> (500). The legacy helper <code>errorHandler(status, message)</code> returns an <code>AppError</code>.</li>
+<li>Wrap async handlers in <code>asyncHandler</code> so a rejection reaches <code>next(err)</code>.</li>
+<li>A hand-written <code>res.status(4xx).json({ success: false, ... })</code> still works: <code>middleware/errorEnvelope.js</code> adds <code>code</code> (from the status) and <code>requestId</code> to any <code>success: false</code> body with status &gt;= 400, leaving a code that is already present alone. About a hundred call sites (upload limits, the rate limiter, route guards) write errors themselves; rewriting each would be a hundred chances to change a message a client depends on.</li>
+<li>For a 409 the controller attaches <code>details</code> to say <em>what</em> the conflict is about (how many listings use the category, which fields still hold values). <code>globalErrorHandler</code> passes <code>details</code> through; dropping it once left the UI unable to offer the <code>?force=true</code> choice.</li>
+</ul>
+
+<h3 id="classify">What <code>classifyError</code> does</h3>
+<p>One pass turns any thrown value into <code>{ status, code, type, message, field, details }</code>. (There used to be two passes that disagreed: the first mapped a bad ObjectId to 404 with type "validation", the second rewrote the message.)</p>
+<table>
+<thead><tr><th>Thrown</th><th>Status</th><th>code</th></tr></thead>
+<tbody>
+<tr><td>Mongoose <code>CastError</code> (bad ObjectId)</td><td>404</td><td><code>INVALID_ID</code> (to a person following a link, a malformed id and a missing record are the same)</td></tr>
+<tr><td>Mongo duplicate key (11000)</td><td>409</td><td><code>DUPLICATE</code>; the message names the field, never <code>tenantId</code></td></tr>
+<tr><td>Mongoose <code>ValidationError</code></td><td>400</td><td><code>VALIDATION_FAILED</code></td></tr>
+<tr><td><code>JsonWebTokenError</code> / <code>TokenExpiredError</code></td><td>401</td><td><code>UNAUTHENTICATED</code> / <code>SESSION_EXPIRED</code></td></tr>
+<tr><td>Malformed JSON body / body over 10 MB</td><td>400 / 413</td><td><code>BAD_REQUEST</code></td></tr>
+<tr><td>Anything else</td><td><code>err.statusCode</code> or <code>status</code>, else 500</td><td>The error's own string <code>code</code> only if it is an <code>AppError</code> or a 4xx; otherwise derived from the status</td></tr>
+</tbody>
+</table>
+<p>A system error's own <code>code</code> (like <code>ECONNREFUSED</code>) is an internal detail and never becomes the API code. <strong>In production an unexpected 500 never shows its message</strong>: the client gets "Something went wrong on our side..." plus the request id, which is all support needs to find the log. In development the body also carries <code>stack</code> and <code>originalError</code>.</p>
+
+<h3 id="codes">Error codes</h3>
+<p>Core codes (<code>ERROR_CODES</code> in <code>utils/error.js</code>):</p>
+<table>
+<thead><tr><th>Code</th><th>Typical status</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>VALIDATION_FAILED</code></td><td>400</td><td>Body failed its schema, or a model validation failed.</td></tr>
+<tr><td><code>INVALID_ID</code></td><td>404</td><td>Malformed ObjectId.</td></tr>
+<tr><td><code>UNAUTHENTICATED</code></td><td>401</td><td>No or invalid session.</td></tr>
+<tr><td><code>SESSION_EXPIRED</code></td><td>401</td><td>Access token expired; the client refreshes and retries.</td></tr>
+<tr><td><code>FORBIDDEN</code></td><td>403</td><td>Signed in but not allowed.</td></tr>
+<tr><td><code>NOT_FOUND</code></td><td>404</td><td>No such record or route.</td></tr>
+<tr><td><code>CONFLICT</code></td><td>409</td><td>Generic conflict (often a destructive action that needs <code>?force=true</code>).</td></tr>
+<tr><td><code>DUPLICATE</code></td><td>409</td><td>A per-workspace unique value already exists.</td></tr>
+<tr><td><code>VERSION_CONFLICT</code></td><td>409</td><td>Someone saved in between. See <a href="#edit-conflicts">edit conflicts</a>.</td></tr>
+<tr><td><code>PLAN_LIMIT</code></td><td>402</td><td>The workspace's plan does not cover creating more.</td></tr>
+<tr><td><code>RATE_LIMITED</code></td><td>429</td><td>Too many requests.</td></tr>
+<tr><td><code>BAD_REQUEST</code></td><td>400 / 413</td><td>Malformed request.</td></tr>
+<tr><td><code>INTERNAL</code></td><td>500</td><td>Unexpected failure.</td></tr>
+</tbody>
+</table>
+<p>Endpoint-specific codes found in the code:</p>
+<table>
+<thead><tr><th>Code</th><th>Status</th><th>Raised by</th></tr></thead>
+<tbody>
+<tr><td><code>WORKSPACE_NOT_FOUND</code></td><td>404</td><td><code>resolveTenant</code>: <code>x-tenant</code> named a workspace that does not exist.</td></tr>
+<tr><td><code>CSRF_TOKEN_INVALID</code></td><td>403</td><td><code>middleware/csrf.js</code>: header missing or not equal to the cookie.</td></tr>
+<tr><td><code>CSRF_COOKIE_MISSING</code></td><td>403</td><td>A session cookie exists without the CSRF cookie (a session predating the check); signing in again mints it.</td></tr>
+<tr><td><code>INVITE_REPLACED</code></td><td>410</td><td><code>invite.controller.js</code>: a newer invitation was sent.</td></tr>
+<tr><td><code>LEGAL_VERSION_CHANGED</code></td><td>409</td><td><code>POST /api/user/legal-acceptance</code>: the client sent a stale terms version; the body includes the current <code>version</code>.</td></tr>
+<tr><td><code>INVALID_ROW</code>, <code>WRITE_FAILED</code></td><td>(row level)</td><td>Entries inside an import's <code>rowErrors</code>, not whole-request errors.</td></tr>
+</tbody>
+</table>
+
+<h2 id="validation">Validation</h2>
+<p><strong>Every POST/PUT/PATCH needs <code>validateBody(schema)</code></strong> (<code>middleware/validation.js</code>, Joi). It validates with <code>abortEarly: true</code> and <code>stripUnknown: true</code>, reports the first problem as a <code>ValidationError</code> with the dotted path in <code>field</code>, and replaces <code>req.body</code> with the cleaned value.</p>
+<div class="warn"><p><code>stripUnknown</code> drops any field the schema omits. <strong>A field the controller reads but the schema lacks is silently lost.</strong> When you add a field to a controller, add it to the schema in the same change. (This is also why <code>expectedUpdatedAt</code> appears in listing and client update schemas.)</p></div>
+<p>The returned middleware is a function <em>named</em> <code>validateBody</code> carrying its <code>.schema</code>. That lets two tools find it: <code>tests/validationCoverage.test.js</code> walks the live router and fails on any write route with no <code>validateBody</code> on its stack unless it is in the <code>UNVALIDATED</code> list with a reason (multipart uploads, spreadsheet imports, cookie-only session endpoints, routes whose only input is a URL id), and <code>utils/openapi.js</code> documents the request body from the very schema that enforces it. Shrink that list as routes gain schemas; never add to it to make a new route pass. Write the schema.</p>
+
+<h2 id="regex">User text and regular expressions</h2>
+<p>User text never goes into a regex raw. Use <code>utils/escapeRegex.js</code>: <code>escapeRegex</code>, <code>containsInsensitive</code> and <code>equalsInsensitive</code>. The text is a literal to find, never a pattern. Without this a stray <code>(</code> was a 500, <code>a.*</code> matched everything, and <code>(a+)+$</code> could pin a database thread on catastrophic backtracking. They <code>String()</code>-coerce the input first, because Express parses <code>?q[$ne]=x</code> into an object and an object must reach a query only as its string form.</p>
+
+<h2 id="sanitising">Sanitising: why the order matters</h2>
+<ul>
+<li>The sanitisers originally ran <em>before</em> the body was parsed, when <code>req.body</code> was still undefined, so <code>{"email": {"$ne": null}}</code> reached controllers untouched and only query strings were cleaned. The body is now parsed first and then <code>mongoSanitization</code> strips operators from body, query and params.</li>
+<li><code>allowDots: true</code> because real bodies carry dotted keys: an import's column mapping is keyed by the spreadsheet's own header text ("Phone no."), which replacing the dot would corrupt.</li>
+<li><code>xssProtection</code> touches <strong>query and params only</strong>. Bodies carry intentional HTML (email templates up to 100 KB, report templates, a note saying "&lt;3 BHK"), and escaping on the way in would corrupt what the user saved. Escaping belongs on output: React escapes everything it renders, and mail templates are rendered through <code>utils/emailTemplates.js</code> (named variables only, no expression syntax; HTML sanitised with a whitelist when saved).</li>
+</ul>
+
+<h2 id="csrf">CSRF</h2>
+<p>Authentication is cookie-only and, in production, session cookies are <code>sameSite: 'none'</code> so the app can be served from a different origin than the API. That tells the browser to attach cookies to cross-site requests, which is precisely when a CSRF token becomes mandatory. CORS does not cover it: a cross-origin form POST with <code>application/x-www-form-urlencoded</code> is a CORS "simple request", sent without a preflight, with cookies, and Express parses it.</p>
+<p><code>middleware/csrf.js</code> implements a double-submit token. A random token lives in a readable cookie <code>csrf_token</code> (30 days, <code>httpOnly: false</code>); same-origin script reads it and echoes it in the <code>X-CSRF-Token</code> header. Another origin cannot read our cookies and cannot add a custom header without a preflight that CORS refuses. It is deliberately <em>not</em> a secret: it proves same-origin, not identity. It is minted at sign-in (<code>issueCsrfToken</code>) and on session reissue, and <span class="method get">GET</span> <code>/api/auth/csrf</code> echoes it to a caller.</p>
+<p>The check is skipped for: safe methods (GET/HEAD/OPTIONS); public writes derived from <code>security/publicRoutes.js</code> (so exemptions cannot drift from the access allowlist); and requests with neither an <code>access_token</code> nor a <code>refresh_token</code> cookie (nothing ambient to forge, and the route's own guard then answers 401 instead of a confusing CSRF error). Comparison is constant-time. The frontend's <code>apiClient</code> attaches the header; the generated API reference marks every guarded write with it.</p>
+
+<h2 id="rate-limits">Rate limits</h2>
+<table>
+<thead><tr><th>Limiter</th><th>Applies to</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td><code>apiRateLimit</code></td><td>All <code>/api/</code>. Keyed by <code>u:&lt;userId&gt;</code> from the access cookie when present (an office behind one IP does not share one quota), else by IP. Skips <code>/api/auth/refresh</code> and <code>/api/health/</code>.</td><td>1000 per 15 min (<code>RATE_LIMIT_MAX_REQUESTS</code>, <code>RATE_LIMIT_WINDOW_MS</code>); 5000 when <code>NODE_ENV=development</code></td></tr>
+<tr><td><code>strictRateLimit</code></td><td><code>/api/upload</code></td><td>30 per minute (<code>STRICT_RATE_LIMIT_MAX</code>)</td></tr>
+<tr><td><code>authRateLimit</code></td><td>Sign-in, invite open/accept, workspace lookup, password endpoints</td><td>20 per 15 min (<code>AUTH_RATE_LIMIT_MAX</code>); 1000 in development</td></tr>
+<tr><td><code>refreshRateLimit</code></td><td><code>POST /api/auth/refresh</code></td><td>max(5 x auth limit, 500) per window; 5000 in development</td></tr>
+<tr><td><code>shareRateLimit</code></td><td><code>GET /api/share/open/:token</code></td><td>60 per 15 min</td></tr>
+</tbody>
+</table>
+<p>Because the global limiter runs before any route's <code>verifyToken</code>, <code>req.user</code> is never set yet; the user id is decoded from the cookie directly. An invalid token falls back to the IP: this chooses a bucket, it authenticates nothing. A limit answers 429 with <code>code: 'RATE_LIMITED'</code> and the request id (the limiter answers before <code>errorEnvelope</code>, so it builds the body itself). Standard <code>RateLimit-*</code> headers are on; legacy ones are off. Account lockout is separate: <code>MAX_LOGIN_ATTEMPTS</code> (5) and <code>LOCKOUT_DURATION</code> (15 min).</p>
+<p><strong>Multi-instance:</strong> the limiter counts in process memory by default, so on a PM2 cluster a "20 per 15 minutes" limit is really 20 times the number of instances. With <code>REDIS_URL</code> set, all limiters share one <code>RedisStore</code> (prefix <code>rl:</code>). See <a href="architecture.html#redis">Redis</a>.</p>
+
+<h2 id="route-access">Route access guard</h2>
+<p>Access control lives at three levels (a guard on the route, <code>router.use(verifyToken)</code> on a whole router, app-level middleware), so no single file answers "is this endpoint public?". The failure worth guarding is narrow: someone adds a route and forgets the guard, and it is public without anyone deciding that.</p>
+<p><code>backend/security/publicRoutes.js</code> lists only the endpoints that are public <strong>on purpose</strong>, each with a <code>why</code>: health probes, sign-in/refresh/CSRF/password reset, invite open and accept, workspace config/lookup/features, the share link open, the contact form, unsubscribe, client log ingest, and the SPA fallback. <code>tests/routeAccess.test.js</code> walks the live router and fails if a mounted route is neither guarded (<code>verifyToken</code>, <code>tryVerifyToken</code>, <code>requireAdmin</code>, <code>requirePermission</code>, <code>requirePlatformAdmin</code>, <code>canCreateListing</code>) nor listed, if a listed entry no longer exists, if a public route lacks a reason, if any <code>/api/platform</code> route lacks the platform guard, or if a write has no session requirement.</p>
+<div class="warn"><p>If the test fails on a new route, <strong>add the missing guard.</strong> Do not add the route to the allowlist unless it is genuinely meant to be public, and then say why. The same list drives the CSRF exemptions and the "Public" marker in the generated API reference.</p></div>
+<p>Related rule: the property book is not public. Anonymous browsing was removed; nothing about a listing, category or property type is reachable without a session. Sharing outside the agency goes through <code>/api/share</code> and the public <code>GET /api/share/open/:token</code>, where the token is the credential.</p>
+
+<h2 id="edit-conflicts">Edit conflicts (409 <code>VERSION_CONFLICT</code>)</h2>
+<p>Listing and client edits send <code>expectedUpdatedAt</code> (the <code>updatedAt</code> the form loaded). The server makes the write conditional on it: listings put it into the update filter so the check and the write are one atomic operation; client updates remain a document <code>save()</code> with <code>$where: { updatedAt }</code>, so pre-save hooks and <code>calculateScore()</code> still run. If someone saved in between, the answer is <strong>409 <code>VERSION_CONFLICT</code></strong> with <code>details.currentUpdatedAt</code>. The form then shows <code>EditConflictNotice</code> ("Load their version" or "Keep mine", which resends without the guard); it is inline because the listing form hosts a Leaflet map and a modal would fight its z-index.</p>
+<p>A caller that sends no version (the mobile app, scripts) keeps last-write-wins. An unparseable value is a 400 rather than a silent skip, so a client that meant to guard its edit finds out it did not. Joi's <code>date()</code> hands over a <code>Date</code>; <code>parseExpectedUpdatedAt</code> avoids round-tripping it through a string, which would drop milliseconds and make every guarded save "conflict".</p>
+
+<h2 id="paging">Paging and sorting</h2>
+<p>List pages sort and page <strong>on the server</strong>: the page sends <code>sort=key:asc|desc&amp;page=&amp;limit=</code> and reads <code>total</code> from the response. Sorting a page of results sorts the wrong set. On the backend use <code>utils/listQuery.js</code>:</p>
+<ul>
+<li><code>parsePaging(query, { defaultLimit = 20, maxLimit = 500 })</code> returns <code>{ page, limit, skip }</code>. Non-numeric or non-positive values fall back to defaults, so <code>?page=abc</code> no longer produces a <code>NaN</code> skip and a 500, and <code>limit</code> is capped at 500 (high enough for Calendar's 500 tasks and Reports' 200 clients, low enough that no request returns a whole collection).</li>
+<li><code>parseSort(raw, allowed, fallback)</code> takes an <strong>allowlist</strong> mapping public sort keys to stored paths; anything else falls back to the endpoint default. <code>_id</code> is always appended as the final key so equal rows keep a stable order across pages.</li>
+<li><code>/owner/list</code> and <code>/buyer-requirements</code> page only when <code>page</code> is passed; without it they return a bare array, which the mobile app and the listing form read.</li>
+</ul>
+
+<h2 id="openapi">OpenAPI generation</h2>
+<p>The API description is generated, never hand-edited (<code>backend/utils/openapi.js</code>). It walks the mounted router for paths, converts the Joi schema attached to each <code>validateBody</code> into the request body schema, and derives security from the guards on each route's stack (public routes carry the <code>why</code> from <code>publicRoutes.js</code> as a "Public:" description). It does not know response bodies (controllers build them by hand), so every operation documents the shared error shape and leaves success open.</p>
+<ul>
+<li><code>npm run docs:openapi</code> (from <code>/backend</code>) writes <code>docs/openapi.json</code>. It needs no database; it registers tenancy, builds the app and walks the router.</li>
+<li><span class="method get">GET</span> <code>/api/docs/openapi.json</code> serves the same document to a workspace admin (<code>verifyToken</code> and <code>requireAdmin</code>), built once per process on first request.</li>
+<li>The <a href="api/index.html">API reference</a> pages in this site are built from <code>docs/openapi.json</code>.</li>
+</ul>
+
+<h2 id="shutdown-health">Health and readiness</h2>
+<ul>
+<li><span class="method get">GET</span> <code>/api/health/health</code>, <code>/ready</code>, <code>/live</code>, <code>/startup</code>, <code>/detailed</code> and <code>/metrics</code> are public probes. They report up/down and version only. pid, Node version and heap sizes were removed from the public health route as reconnaissance; <code>/metrics</code> is the place for numbers and takes a bearer <code>METRICS_TOKEN</code> when set.</li>
+<li><code>/ready</code> answers 503 while shutting down (see <a href="architecture.html#shutdown">shutdown</a>) and reports Redis as <code>connected</code>, <code>degraded</code> or <code>not_configured</code> without failing readiness over it.</li>
+</ul>
+
+<div class="cards">
+<a class="card" href="api-overview.html"><b>API conventions</b><span>Calling the API: cookies, CSRF, paging, errors.</span></a>
+<a class="card" href="authentication.html"><b>Authentication</b><span>verifyToken, tokens and refresh.</span></a>
+<a class="card" href="security.html"><b>Security</b><span>The wider security posture.</span></a>
+<a class="card" href="api/index.html"><b>API reference</b><span>Every endpoint, generated.</span></a>
+</div>
+
+<div class="pager"><a href="multi-tenancy.html"><small>Previous</small>Multi-tenancy and platform admin</a><a href="background-jobs.html"><small>Next</small>Background jobs and automation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#order">Middleware order</a><a class="h2" href="#request-id">Request ids</a><a class="h2" href="#errors">One error shape</a><a class="h3" href="#throwing">How to raise an error</a><a class="h3" href="#classify">What classifyError does</a><a class="h3" href="#codes">Error codes</a><a class="h2" href="#validation">Validation</a><a class="h2" href="#regex">User text and regular expressions</a><a class="h2" href="#sanitising">Sanitising: why the order matters</a><a class="h2" href="#csrf">CSRF</a><a class="h2" href="#rate-limits">Rate limits</a><a class="h2" href="#route-access">Route access guard</a><a class="h2" href="#edit-conflicts">Edit conflicts (409 VERSION_CONFLICT )</a><a class="h2" href="#paging">Paging and sorting</a><a class="h2" href="#openapi">OpenAPI generation</a><a class="h2" href="#shutdown-health">Health and readiness</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

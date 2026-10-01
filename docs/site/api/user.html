@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>user — Real Vista Docs</title>
+<meta name="description" content="25 endpoints under /api/user.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>user</h1>
+<p class="lede"><a href="index.html">API reference</a> › user. 25 endpoints under /api/user.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="get-api-user-test">
+<h3 id="get-api-user-testpublic"><span class="method get">GET</span>/api/user/test<span class="badge public">Public</span></h3>
+<p>A liveness stub returning a fixed string. Holds no data.</p>
+
+
+
+</section>
+<section class="endpoint" id="get-api-user-list">
+<h3 id="get-api-user-listsession"><span class="method get">GET</span>/api/user/list<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-user-me">
+<h3 id="get-api-user-mesession"><span class="method get">GET</span>/api/user/me<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-user-legal-acceptance">
+<h3 id="get-api-user-legal-acceptancesession"><span class="method get">GET</span>/api/user/legal-acceptance<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-user-legal-acceptance">
+<h3 id="post-api-user-legal-acceptancesession"><span class="method post">POST</span>/api/user/legal-acceptance<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+
+</section>
+<section class="endpoint" id="get-api-user-my-permissions">
+<h3 id="get-api-user-my-permissionssession"><span class="method get">GET</span>/api/user/my-permissions<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-user-security-logs">
+<h3 id="get-api-user-security-logssession"><span class="method get">GET</span>/api/user/security/logs<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-user-employee">
+<h3 id="post-api-user-employeesession"><span class="method post">POST</span>/api/user/employee<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>username</code></td><td>string</td><td>yes</td><td>max 30</td></tr><tr><td><code>firstName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>lastName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>email</code></td><td>string</td><td>yes</td><td>email; max 254</td></tr><tr><td><code>assignedCategories</code></td><td>array&lt;string&gt;</td><td></td><td></td></tr><tr><td><code>phone</code></td><td>any</td><td></td><td></td></tr><tr><td><code>message</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-user-update-id">
+<h3 id="post-api-user-update-id-session"><span class="method post">POST</span>/api/user/update/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>username</code></td><td>string</td><td></td><td>max 30</td></tr><tr><td><code>firstName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>lastName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>avatar</code></td><td>any</td><td></td><td></td></tr><tr><td><code>phone</code></td><td>any</td><td></td><td></td></tr><tr><td><code>addressLine1</code></td><td>any</td><td></td><td></td></tr><tr><td><code>addressLine2</code></td><td>any</td><td></td><td></td></tr><tr><td><code>city</code></td><td>any</td><td></td><td></td></tr><tr><td><code>state</code></td><td>any</td><td></td><td></td></tr><tr><td><code>postalCode</code></td><td>any</td><td></td><td></td></tr><tr><td><code>country</code></td><td>any</td><td></td><td></td></tr><tr><td><code>bio</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="delete-api-user-delete-id">
+<h3 id="delete-api-user-delete-id-session"><span class="method delete">DELETE</span>/api/user/delete/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="delete-api-user-admin-delete-id">
+<h3 id="delete-api-user-admin-delete-id-session"><span class="method delete">DELETE</span>/api/user/admin/delete/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-user-admin-toggle-status-id">
+<h3 id="post-api-user-admin-toggle-status-id-session"><span class="method post">POST</span>/api/user/admin/toggle-status/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>status</code></td><td>string</td><td>yes</td><td>one of: active, inactive</td></tr></table>
+</section>
+<section class="endpoint" id="post-api-user-admin-set-employee-password-id">
+<h3 id="post-api-user-admin-set-employee-password-id-session"><span class="method post">POST</span>/api/user/admin/set-employee-password/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>newPassword</code></td><td>string</td><td>yes</td><td>max 128</td></tr></table>
+</section>
+<section class="endpoint" id="get-api-user-search">
+<h3 id="get-api-user-searchsession"><span class="method get">GET</span>/api/user/search<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-user-listings-id">
+<h3 id="get-api-user-listings-id-session"><span class="method get">GET</span>/api/user/listings/{id}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="get-api-user-id">
+<h3 id="get-api-user-id-session"><span class="method get">GET</span>/api/user/{id}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="get-api-user-public-id">
+<h3 id="get-api-user-public-id-session"><span class="method get">GET</span>/api/user/public/{id}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-user-role-id">
+<h3 id="post-api-user-role-id-session"><span class="method post">POST</span>/api/user/role/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>role</code></td><td>string</td><td>yes</td><td>one of: user, buyer, seller, employee, admin</td></tr><tr><td><code>assignedCategories</code></td><td>array&lt;string&gt;</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-user-password-request-otp">
+<h3 id="post-api-user-password-request-otppublic"><span class="method post">POST</span>/api/user/password/request-otp<span class="badge public">Public</span></h3>
+<p>Password reset starts from a signed-out state. Rate limited.</p>
+
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>email</code></td><td>string</td><td>yes</td><td>email; max 254</td></tr></table>
+</section>
+<section class="endpoint" id="get-api-user-preferences-dashboard-widgets">
+<h3 id="get-api-user-preferences-dashboard-widgetssession"><span class="method get">GET</span>/api/user/preferences/dashboard-widgets<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="put-api-user-preferences-dashboard-widgets">
+<h3 id="put-api-user-preferences-dashboard-widgetssession"><span class="method put">PUT</span>/api/user/preferences/dashboard-widgets<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>items</code></td><td>array&lt;object&gt;</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-user-saved-views-namespace">
+<h3 id="get-api-user-saved-views-namespace-session"><span class="method get">GET</span>/api/user/saved-views/{namespace}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>namespace</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="put-api-user-saved-views-namespace">
+<h3 id="put-api-user-saved-views-namespace-session"><span class="method put">PUT</span>/api/user/saved-views/{namespace}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>namespace</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>items</code></td><td>array&lt;object&gt;</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-user-password-change">
+<h3 id="post-api-user-password-changesession"><span class="method post">POST</span>/api/user/password/change<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>currentPassword</code></td><td>string</td><td>yes</td><td>max 128</td></tr><tr><td><code>newPassword</code></td><td>string</td><td>yes</td><td>max 128</td></tr></table>
+</section>
+<section class="endpoint" id="post-api-user-password-reset">
+<h3 id="post-api-user-password-resetpublic"><span class="method post">POST</span>/api/user/password/reset<span class="badge public">Public</span></h3>
+<p>Completes a reset with an emailed OTP, which is the credential.</p>
+
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>email</code></td><td>string</td><td>yes</td><td>email; max 254</td></tr><tr><td><code>otp</code></td><td>string</td><td>yes</td><td></td></tr><tr><td><code>newPassword</code></td><td>string</td><td>yes</td><td>max 128</td></tr></table>
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#get-api-user-testpublic">GET /api/user/test</a><a class="h3" href="#get-api-user-listsession">GET /api/user/list</a><a class="h3" href="#get-api-user-mesession">GET /api/user/me</a><a class="h3" href="#get-api-user-legal-acceptancesession">GET /api/user/legal-acceptance</a><a class="h3" href="#post-api-user-legal-acceptancesession">POST /api/user/legal-acceptance</a><a class="h3" href="#get-api-user-my-permissionssession">GET /api/user/my-permissions</a><a class="h3" href="#get-api-user-security-logssession">GET /api/user/security/logs</a><a class="h3" href="#post-api-user-employeesession">POST /api/user/employee</a><a class="h3" href="#post-api-user-update-id-session">POST /api/user/update/{id}</a><a class="h3" href="#delete-api-user-delete-id-session">DELETE /api/user/delete/{id}</a><a class="h3" href="#delete-api-user-admin-delete-id-session">DELETE /api/user/admin/delete/{id}</a><a class="h3" href="#post-api-user-admin-toggle-status-id-session">POST /api/user/admin/toggle-status/{id}</a><a class="h3" href="#post-api-user-admin-set-employee-password-id-session">POST /api/user/admin/set-employee-password/{id}</a><a class="h3" href="#get-api-user-searchsession">GET /api/user/search</a><a class="h3" href="#get-api-user-listings-id-session">GET /api/user/listings/{id}</a><a class="h3" href="#get-api-user-id-session">GET /api/user/{id}</a><a class="h3" href="#get-api-user-public-id-session">GET /api/user/public/{id}</a><a class="h3" href="#post-api-user-role-id-session">POST /api/user/role/{id}</a><a class="h3" href="#post-api-user-password-request-otppublic">POST /api/user/password/request-otp</a><a class="h3" href="#get-api-user-preferences-dashboard-widgetssession">GET /api/user/preferences/dashboard-widgets</a><a class="h3" href="#put-api-user-preferences-dashboard-widgetssession">PUT /api/user/preferences/dashboard-widgets</a><a class="h3" href="#get-api-user-saved-views-namespace-session">GET /api/user/saved-views/{namespace}</a><a class="h3" href="#put-api-user-saved-views-namespace-session">PUT /api/user/saved-views/{namespace}</a><a class="h3" href="#post-api-user-password-changesession">POST /api/user/password/change</a><a class="h3" href="#post-api-user-password-resetpublic">POST /api/user/password/reset</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

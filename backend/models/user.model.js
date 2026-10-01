@@ -11,7 +11,11 @@ const refreshTokenSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       default: Date.now,
-      expires: 2592000, // 30 days
+      // No `expires` here. A TTL index on a field inside an array expires the
+      // WHOLE DOCUMENT once the oldest element is due, not that element — so a
+      // user with one forgotten device would have lost their account 30 days
+      // after signing in on it. A token's lifetime is enforced by the refresh
+      // JWT's own expiry; see tests/userTtl.test.js.
     },
     ip: {
       type: String,

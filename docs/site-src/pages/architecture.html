@@ -1,0 +1,208 @@
+<!--
+title: System architecture
+description: How the monorepo, the Express API, the models, realtime, caches, search and notifications fit together, and the rules that keep them safe.
+-->
+<h2 id="shape">The shape of the system</h2>
+<p>The repository is one monorepo with a Node/Express API, a React single-page app and a Flutter mobile app. One deployment serves many agencies (<em>tenants</em>) from a single MongoDB database. Everything else on this page follows from that decision, so read <a href="multi-tenancy.html">Multi-tenancy and platform admin</a> alongside it.</p>
+
+<pre><code>/
+├── backend/            Node/Express API (default port 3000)
+│   ├── app.js          createApp(): middleware order, route mounting, 404s, error handler
+│   ├── index.js        process entry: tenancy registration, boot, ordered shutdown
+│   ├── server.js       HTTP server, DB connect, Socket.IO event handlers
+│   ├── socket.js       Socket.IO auth handshake, emitToTenant / emitToUser
+│   ├── config/         environment.js (config + validateConfig), database.js
+│   ├── controllers/    request handlers (one file per area)
+│   ├── routes/         Express routers (one file per mount point)
+│   ├── middleware/     security, csrf, validation, permissions, errorEnvelope, ...
+│   ├── models/         Mongoose models (36)
+│   ├── tenancy/        tenant plugin, context, resolution, plans, limits, billing
+│   ├── jobs/           scheduler and the scheduled jobs
+│   ├── plugins/        workspace rule registry and built-in rules
+│   ├── search/         the one listing search, the parser, per-entity searchers
+│   ├── security/       publicRoutes.js - the allowlist of unauthenticated routes
+│   ├── utils/          error, cache, notify, webhooks, logger, openapi, ...
+│   ├── scripts/        CLI: provisioning, seeds, backup/restore, migrations
+│   └── tests/          Jest suites (including the structural ones)
+├── frontend/           React + Vite (dev server on 5173, proxies /api and /uploads)
+│   └── src/            app/ (routes, shells), components/, design-system/, hooks/,
+│                       i18n/, pages/, redux/, utils/ (http.js, cloudinary.js, currency.js)
+├── mobile/             Flutter app
+└── docs/               openapi.json (generated) and this site (docs/site-src)</code></pre>
+
+<div class="note"><p>Two long-standing sentences in <code>CLAUDE.md</code> are slightly stale: the auth middleware is not in <code>backend/middleware/auth.js</code> (that file does not exist; <code>verifyToken</code>, <code>tryVerifyToken</code>, <code>requireAdmin</code> and <code>requireRole</code> live in <code>backend/utils/verifyUser.js</code>), and the required environment variables are wider than four (see <a href="#config">Configuration</a>).</p></div>
+
+<h2 id="request-flow">A request, end to end</h2>
+<div class="flow">
+<div class="step">Browser / app</div><div class="arrow">→</div>
+<div class="step">security + parsing + rate limit</div><div class="arrow">→</div>
+<div class="step">resolveTenant</div><div class="arrow">→</div>
+<div class="step">CSRF, auth guard, validateBody</div><div class="arrow">→</div>
+<div class="step">controller (queries auto-scoped)</div><div class="arrow">→</div>
+<div class="step">JSON envelope</div>
+</div>
+<p>The exact order, and why it matters, is in <a href="request-pipeline.html">Request pipeline and errors</a>. The short version: everything after <code>resolveTenant</code> runs inside an <code>AsyncLocalStorage</code> tenant context, so every Mongoose query is filtered by <code>tenantId</code> without any controller asking for it.</p>
+
+<h2 id="boot">Startup sequence (<code>backend/index.js</code>)</h2>
+<ol>
+<li><strong>Register tenancy first.</strong> <code>registerTenancy(mongoose)</code> installs the global tenant plugin. A Mongoose global plugin only applies to schemas compiled <em>after</em> it is registered, and ES imports are hoisted, so <code>index.js</code> deliberately uses <code>await import('./server.js')</code> after registering. Importing any model before this line would produce a model with no <code>tenantId</code>.</li>
+<li><code>validateConfig()</code> checks secrets and production settings (see <a href="#config">Configuration</a>) and exits on error.</li>
+<li><code>registerBuiltinRules()</code> fills the workspace rule vocabulary, because rules are resolved by name and must exist before the first request can run a hook.</li>
+<li><code>startCacheInvalidationListener()</code> subscribes to Redis when <code>REDIS_URL</code> is set; otherwise it is a no-op.</li>
+<li><code>setupSocket()</code> attaches the Socket.IO connection handlers, then <code>startServer()</code> connects to Mongo, seeds default property types for any workspace that has none, and listens.</li>
+<li><code>startJobs()</code> runs <em>after</em> the server is listening, so a job failure cannot stop boot. <code>JOBS_ENABLED=false</code> skips it (see <a href="background-jobs.html">Background jobs</a>).</li>
+</ol>
+
+<h2 id="shutdown">Shutdown sequence</h2>
+<p>There is exactly one shutdown path, <code>shutdown(reason, exitCode)</code> in <code>index.js</code>, bound to <code>SIGTERM</code>, <code>SIGINT</code>, <code>unhandledRejection</code> and <code>uncaughtException</code>. <strong>Never add another SIGTERM handler.</strong> The pieces used to race: the database module exited the instant Mongo disconnected, so in-flight requests got a reset connection, the logger's flush lost, and the scheduler's lease was never released.</p>
+<ol>
+<li><code>markShuttingDown()</code> (<code>utils/lifecycle.js</code>) makes <code>GET /api/health/ready</code> answer 503 so a load balancer stops sending traffic.</li>
+<li>Stop accepting connections and wait for in-flight requests (<code>server.close</code>, plus <code>closeIdleConnections</code> so keep-alive sockets do not hold it open).</li>
+<li><code>stopScheduler()</code> and <code>stopCacheInvalidationListener()</code>.</li>
+<li>Close Socket.IO, Redis, and the Mongo connection.</li>
+<li><code>flushLogs()</code>, then <code>process.exit</code>.</li>
+</ol>
+<p><code>SHUTDOWN_TIMEOUT_MS</code> (default 10000) bounds the wait; after it, remaining connections are closed forcibly.</p>
+<div class="warn"><p><code>backend/ecosystem.config.js</code> sets PM2 <code>kill_timeout: 5000</code>, shorter than the 10 s default drain, and <code>wait_ready: true</code> although nothing in the backend calls <code>process.send('ready')</code> (PM2 then falls back to <code>listen_timeout</code>). If you rely on PM2 for graceful drains, raise <code>kill_timeout</code> above <code>SHUTDOWN_TIMEOUT_MS</code>.</p></div>
+
+<h2 id="config">Configuration</h2>
+<p><code>backend/config/environment.js</code> loads <code>backend/.env</code> and exits immediately if any of these are missing: <code>JWT_SECRET</code>, <code>REFRESH_SECRET</code>, <code>MONGO_URI</code>, <code>NODE_ENV</code>, <code>MESSAGE_ENCRYPTION_KEY</code>. The last one is required because without it the first Socket.IO message send would throw inside an unhandled-rejection handler and take the server down.</p>
+<table>
+<thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>PORT</code>, <code>HOST</code></td><td>3000, 0.0.0.0</td><td>Listener.</td></tr>
+<tr><td><code>JWT_SECRET</code>, <code>REFRESH_SECRET</code></td><td>none (min 32 chars)</td><td>Token signing; <code>validateConfig</code> enforces length.</td></tr>
+<tr><td><code>ACCESS_TOKEN_EXPIRY</code>, <code>REFRESH_TOKEN_EXPIRY</code></td><td>15m, 30d</td><td>Token lifetimes.</td></tr>
+<tr><td><code>APP_DOMAIN</code></td><td>empty</td><td>Subdomain routing: <code>acme.&lt;APP_DOMAIN&gt;</code> resolves to the workspace with slug <code>acme</code>.</td></tr>
+<tr><td><code>DEFAULT_TENANT_SLUG</code></td><td><code>default</code></td><td>Fallback workspace for single-workspace deployments. In production one of <code>APP_DOMAIN</code> or <code>DEFAULT_TENANT_SLUG</code> must be set, or <code>validateConfig</code> exits.</td></tr>
+<tr><td><code>FRONTEND_URL</code>, <code>ADMIN_URL</code></td><td>none</td><td>Production CORS origins and the base of links in emails. <code>EXTRA_CORS_ORIGINS</code> (comma list) adds origins outside production.</td></tr>
+<tr><td><code>ENABLE_RATE_LIMITING</code></td><td>on unless <code>false</code></td><td>Master switch for the global limiters.</td></tr>
+<tr><td><code>RATE_LIMIT_WINDOW_MS</code>, <code>RATE_LIMIT_MAX_REQUESTS</code>, <code>AUTH_RATE_LIMIT_MAX</code>, <code>STRICT_RATE_LIMIT_MAX</code></td><td>15 min, 1000, 20, 30</td><td>Limiter sizes (see <a href="request-pipeline.html#rate-limits">rate limits</a>).</td></tr>
+<tr><td><code>REDIS_URL</code></td><td>unset</td><td>Shares the rate limiter and cache invalidation across instances.</td></tr>
+<tr><td><code>JOBS_ENABLED</code></td><td>on unless <code>false</code></td><td>Whether this instance takes scheduler leases.</td></tr>
+<tr><td><code>ENCRYPT_API_RESPONSES</code>, <code>API_RESPONSE_SECRET</code></td><td>off</td><td>AES-256-GCM envelope around every <code>/api</code> JSON response except <code>/api/health</code> and <code>/api/observability</code>; the frontend decrypts with <code>VITE_API_RESPONSE_SECRET</code>.</td></tr>
+<tr><td><code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>, <code>SMTP_FROM</code></td><td>host defaults to smtp.gmail.com, port 587</td><td>Platform mail transport; a workspace may configure its own (<code>tenant.mail</code>).</td></tr>
+<tr><td><code>OPENOBSERVE_URL</code>, <code>_ORG</code>, <code>_USERNAME</code>, <code>_PASSWORD</code></td><td>localhost:5080, <code>default</code></td><td>Log shipping streams: backend, security, audit, access, frontend.</td></tr>
+<tr><td><code>LOG_LEVEL</code></td><td><code>info</code></td><td>Logger gate.</td></tr>
+<tr><td><code>CACHE_TTL</code>, <code>CACHE_MAX_SIZE</code></td><td>300, 100</td><td>Present in <code>config.cache</code>; the listing/category controllers pass their own TTL and size to the cache.</td></tr>
+</tbody>
+</table>
+
+<h2 id="models">Models</h2>
+<p>There are 36 Mongoose models in <code>backend/models/</code>. All are tenant-scoped except three that describe the platform itself (<code>tenantScoped: false</code>): <code>Tenant</code>, <code>Invoice</code> and <code>JobLock</code>.</p>
+<table>
+<thead><tr><th>Area</th><th>Models</th></tr></thead>
+<tbody>
+<tr><td>Platform (global)</td><td><code>Tenant</code>, <code>Invoice</code>, <code>JobLock</code></td></tr>
+<tr><td>People and access</td><td><code>User</code>, <code>Role</code>, <code>SecurityLog</code></td></tr>
+<tr><td>Property book</td><td><code>Listing</code>, <code>Category</code>, <code>PropertyType</code>, <code>Document</code>, <code>PropertyShare</code>, <code>Tag</code></td></tr>
+<tr><td>CRM</td><td><code>Client</code> (leads; deals are embedded), <code>Owner</code>, <code>BuyerRequirement</code>, <code>LeadSource</code>, <code>Task</code>, <code>CalendarEvent</code>, <code>Transaction</code></td></tr>
+<tr><td>Automation</td><td><code>Sequence</code>, <code>SequenceEnrollment</code>, <code>Webhook</code>, <code>WebhookDelivery</code>, <code>EmailTemplate</code>, <code>EmailSuppression</code></td></tr>
+<tr><td>Reporting</td><td><code>ReportTemplate</code>, <code>GeneratedReport</code>, <code>ActivityLog</code>, <code>ImportUsage</code></td></tr>
+<tr><td>Communication</td><td><code>Message</code>, <code>Notification</code>, <code>Subscriber</code></td></tr>
+<tr><td>Search</td><td><code>SearchLog</code>, <code>SavedSearch</code></td></tr>
+</tbody>
+</table>
+<p>Uniqueness is always per workspace: indexes are written as <code>{ tenantId: 1, field: 1 }, { unique: true }</code>, never a bare <code>unique: true</code> (a global unique would let whichever agency signed up first claim a slug or name). The exceptions are the global collections, e.g. <code>Invoice.number</code> and <code>JobLock.name</code>. <code>Category</code> is the live category system the UI uses; <code>PropertyType</code> is a parallel older system that is still seeded per workspace at boot.</p>
+
+<h2 id="conventions">Controller, route and validation conventions</h2>
+<ul>
+<li><strong>One router file per mount point</strong> in <code>routes/*.route.js</code>, mounted in <code>app.js</code> under <code>/api/&lt;name&gt;</code> (for example <code>/api/listing</code>, <code>/api/clients</code>, <code>/api/webhooks</code>).</li>
+<li><strong>Handlers are wrapped in <code>asyncHandler</code></strong> (<code>utils/error.js</code>) so a rejected promise reaches <code>globalErrorHandler</code>. Throw <code>AppError</code> or one of its subclasses (<code>ValidationError</code>, <code>NotFoundError</code>, <code>ConflictError</code>, <code>VersionConflictError</code>...) instead of hand-writing error JSON.</li>
+<li><strong>Every POST/PUT/PATCH has <code>validateBody(schema)</code></strong> (Joi, <code>stripUnknown: true</code>). A structural test fails the build on a write route without one.</li>
+<li><strong>Guards:</strong> <code>verifyToken</code> for a session, <code>requireAdmin</code> for workspace admins, <code>requirePermission('key')</code> for catalogued permissions, <code>requirePlatformAdmin</code> for the vendor console. Every mounted route must be guarded or listed in <code>security/publicRoutes.js</code>.</li>
+<li><strong>Lists</strong> take <code>page</code>, <code>limit</code> and <code>sort=key:asc|desc</code> through <code>utils/listQuery.js</code>.</li>
+<li><strong>Success</strong> responses use <code>sendSuccessResponse(res, data, message)</code> which returns <code>{ success: true, statusCode, message, data, timestamp }</code>; some older handlers write their own <code>{ success: true, ... }</code> shapes.</li>
+</ul>
+<p>All of this is covered in detail on <a href="request-pipeline.html">Request pipeline and errors</a>.</p>
+
+<h3 id="catalogues">Catalogues are single sources</h3>
+<p>Four fixed vocabularies exist where config <em>selects</em> and code <em>defines</em>. Each lives in exactly one file because duplicated lists have already drifted here twice.</p>
+<table>
+<thead><tr><th>Vocabulary</th><th>File</th><th>Consumers</th></tr></thead>
+<tbody>
+<tr><td>Permissions</td><td><code>utils/permissionCatalogue.js</code></td><td><code>role.model.js</code> generates its schema from it; <code>requirePermission()</code> throws at module load on an unknown key.</td></tr>
+<tr><td>Notification types</td><td><code>utils/notificationTypes.js</code></td><td>Notification model enum, per-user preference toggles, Settings screen.</td></tr>
+<tr><td>Webhook events</td><td><code>WEBHOOK_EVENTS</code> in <code>models/webhook.model.js</code></td><td>Subscription validation and the settings UI.</td></tr>
+<tr><td>Rule hooks</td><td><code>HOOKS</code> in <code>plugins/registry.js</code></td><td>Rule registration; must match the enum in <code>tenant.model.js</code>.</td></tr>
+</tbody>
+</table>
+<p>The bugs that motivated this: the Roles UI served 31 of 35 permissions, so client create/update/delete/view were enforced but unassignable; and <code>propertyType.route.js</code> asked for a <code>manage_settings</code> permission that never existed, denying every non-admin forever. <code>tests/permissionCatalogue.test.js</code> walks the real route files and fails on either.</p>
+
+<h2 id="realtime">Realtime (Socket.IO)</h2>
+<p><code>backend/socket.js</code> creates the server; <code>backend/server.js</code> registers the handlers.</p>
+<ul>
+<li><strong>Auth at the handshake.</strong> The <code>access_token</code> cookie is verified (issuer and audience included). A token without a <code>tid</code> claim is refused ("Session predates workspaces"). The user is looked up inside the token's workspace and disabled accounts are rejected. The socket stores <code>socket.userId</code> and <code>socket.tenantId</code>.</li>
+<li><strong>Two rooms per connection:</strong> <code>user:&lt;userId&gt;</code> for one person and <code>tenant:&lt;tenantId&gt;</code> for the workspace. A bare <code>io.emit()</code> reaches every socket on the deployment, which in a shared database means every other agency. Use <code>emitToTenant(tenantId, event, payload)</code> or <code>emitToUser(userId, event, payload)</code> from <code>socket.js</code>; <code>io.emit(</code> should not appear outside that file.</li>
+<li><strong>A socket is not a request,</strong> so nothing sets up a tenant context for it. Each handler wraps its database work in <code>runWithTenant({ tenantId: socket.tenantId, userId }, fn)</code>.</li>
+<li><strong>Events:</strong> server-to-client <code>presence:update</code>, <code>presence:bulk</code>, <code>unread:messages</code>, <code>message:new</code>, <code>conversations:update</code>, <code>typing</code>, <code>stop_typing</code>, <code>notification:new</code>; client-to-server <code>message:send</code> (with an ack callback), <code>typing</code>, <code>stop_typing</code>.</li>
+<li><strong>Presence is per workspace</strong> (<code>utils/onlineUsers.js</code>, keyed by tenant). It used to send the process-global set, handing each connection every signed-in user id on the platform.</li>
+<li><strong>Messages</strong> are encrypted at rest with <code>MESSAGE_ENCRYPTION_KEY</code> (<code>utils/encryption.js</code>), rate limited to 30 per minute per user in process memory, and the recipient is looked up inside the sender's workspace, so an id from another agency simply is not found.</li>
+</ul>
+
+<h2 id="uploads">Uploads and files</h2>
+<ul>
+<li><strong>Images and voice notes go to Cloudinary directly from the browser</strong> (<code>frontend/src/utils/cloudinary.js</code>, unsigned upload preset; audio and video use Cloudinary's <code>video</code> resource type). It needs <code>VITE_CLOUDINARY_CLOUD_NAME</code> and <code>VITE_CLOUDINARY_UPLOAD_PRESET</code>. CSP <code>connectSrc</code> allows <code>api.cloudinary.com</code> and <code>res.cloudinary.com</code>.</li>
+<li><strong>The backend still has <code>POST /api/upload/single|multiple|audio</code></strong> (<code>routes/upload.route.js</code>): multer in memory (10 MB images, 25 MB audio), magic-byte validation through <code>utils/fileValidation.js</code>, then written to <code>backend/uploads/</code> under a server-chosen name. Only listing photographs and avatars are served from <code>/uploads</code>; they are referenced by <code>&lt;img&gt;</code> on share pages that have no session. These routes are covered by the strict rate limiter and the plan's storage cap.</li>
+<li><strong>Documents are never public.</strong> Contracts, RERA certificates and layout plans go through <code>/api/documents</code> and are served by <code>/api/documents/file/:name</code> after authentication and an ownership check. <code>/uploads/docs/*</code> (old absolute URLs) redirects with 307 to that route rather than serving a file.</li>
+<li>Use <code>normalizeImageUrl()</code> from <code>@/utils/http</code> for every image URL; it converts absolute localhost URLs to relative paths.</li>
+</ul>
+
+<h2 id="caching">Caches</h2>
+<p>All response caching is in-process (<code>utils/cache.js</code>): a <code>MemoryCache</code> with a TTL and a simple LRU eviction by insertion order.</p>
+<table>
+<thead><tr><th>API</th><th>Use for</th></tr></thead>
+<tbody>
+<tr><td><code>getTenantScopedCache(opts)</code></td><td>Anything derived from one workspace's data (listing search, category and property type lists). Keys get a <code>::t=&lt;tenantId&gt;</code> suffix automatically.</td></tr>
+<tr><td><code>getCache(opts)</code></td><td>Genuinely global data only (for example geocoding). A deliberate choice every time.</td></tr>
+<tr><td><code>invalidateEverywhere({ prefix | key | all })</code></td><td>Any write that invalidates a cached read. Clears locally and publishes to Redis so every instance drops the same keys.</td></tr>
+</tbody>
+</table>
+<div class="danger"><p><strong>A response cache sits in front of the database,</strong> so Mongoose query scoping cannot protect it. Before <code>getTenantScopedCache</code> existed, <code>/api/listing/search</code> and <code>/api/category/list</code> cached under keys like <code>category:list</code>: the query ran correctly for tenant A, and tenant B was then served A's data without a query running. The tenant goes in a <em>suffix</em> so existing <code>clearByPrefix('listing:')</code> invalidation still matches across tenants.</p></div>
+<ul>
+<li>Cached reads stay local (a local Map beats a network round trip, and the TTL bounds staleness). Only <em>invalidation</em> is shared: <code>invalidateEverywhere</code> publishes <code>{from, prefix, key, all}</code> on the Redis channel <code>cache:invalidate</code>; each instance ignores messages it sent itself.</li>
+<li>Without <code>REDIS_URL</code> this is a no-op and behaviour is exactly per-process. On a PM2 cluster or multi-dyno setup, an edit on instance A without Redis leaves B serving the old value until its TTL expires, which shows up as an edit that "sometimes doesn't save".</li>
+<li>Caveat: <code>getCache()</code> is a singleton, so the TTL and size passed by the <em>first</em> caller win for the shared instance.</li>
+<li>Two other caches are deliberately separate instances: the tenant record cache in <code>resolveTenant.js</code> (60 s TTL, 500 entries, so a busy list request cannot evict tenants) and the role cache in <code>middleware/permissions.js</code> (60 s, 200 entries). Neither is shared across instances, so a role or suspension change can take up to a minute to reach every instance.</li>
+</ul>
+
+<h2 id="redis">Redis (optional)</h2>
+<p><code>utils/redis.js</code> returns a shared <code>ioredis</code> client only when <code>REDIS_URL</code> is set and never throws: if Redis is unreachable the app degrades to per-process behaviour rather than failing. With Redis the rate limiter uses a <code>RedisStore</code> (key prefix <code>rl:</code>) so a "20 attempts per 15 minutes" limit really is 20, not 20 times the number of instances. <code>GET /api/health/ready</code> reports <code>redis</code> as <code>connected</code>, <code>degraded</code> or <code>not_configured</code> but never turns the instance unready over it.</p>
+
+<h2 id="search">Listing search</h2>
+<p><code>backend/search/listingSearch.js</code> is the <strong>only</strong> listing search. The properties board (<code>GET /api/listing/search</code>), the global search and the command palette all delegate to it. Do not add a fourth path.</p>
+<p>Matching is tiered and stops as soon as there are enough results (<code>ENOUGH = 5</code>):</p>
+<ol>
+<li><strong>identifier</strong> - property number, pincode or id, exact.</li>
+<li><strong>text</strong> - MongoDB <code>$text</code>, ranked by <code>textScore</code>.</li>
+<li><strong>prefix</strong> - anchored <code>^term</code> on city, locality, area name and name. Anchored so it can use an index; it answers half-typed words that <code>$text</code> (whole words only) cannot.</li>
+<li><strong>fuzzy</strong> - an unanchored regex built by <code>buildFuzzyRegex</code>, last resort, only over a set the filters already narrowed.</li>
+</ol>
+<p>Ranking and paging happen in the database with <code>$facet</code> returning both the page (<code>rows</code>) and a true <code>total</code> from one pass, so a count always describes exactly the rows returned. The previous implementation pulled 500 rows into Node, scored them there and sliced, so <code>total</code> was the size of that truncated pull and page 42 could be empty while matches existed.</p>
+<p><code>GET /api/listing/facets</code> (<code>getListingFacets</code>) returns counts per status, category, city, locality, type and assigned agent (each capped to the top 50 values) over the <strong>whole</strong> filtered set, plus <code>totals</code> (count, total value, average price ignoring zero placeholder prices). Use it for any header count; never count a page. Counts and rows share <code>buildListingFilter</code>, so they cannot be computed from different filters.</p>
+<div class="warn"><p><strong>The <code>$text</code>-first trap.</strong> MongoDB requires <code>$text</code> to be in the <em>first</em> <code>$match</code> of a pipeline. The tenant plugin therefore <em>merges</em> <code>tenantId</code> into a leading <code>$match</code> instead of unshifting a second one (which would push the caller's <code>$text</code> to stage two and fail with "$match with $text is only allowed as the first pipeline stage"). If you change how the plugin handles aggregations, keep that property. The plugin also casts the id to an ObjectId explicitly, because aggregation pipelines are not cast against the schema: a string id silently matches nothing, which reads as "this tenant has no data".</p></div>
+
+<h2 id="notifications">Notifications</h2>
+<p><code>utils/notify.js</code> is the one entry point for telling a person something. <code>notify({ to, type, title, body, link, entity, actorId, email })</code>:</p>
+<ol>
+<li>Validates <code>type</code> against <code>utils/notificationTypes.js</code> (unknown types are logged and ignored).</li>
+<li>De-duplicates recipients and drops the actor, so nobody is notified of their own action.</li>
+<li>Loads active users and resolves each one's saved preferences. In-app always happens unless the user turned it off; email defaults per type (<code>defaultEmail</code>).</li>
+<li>Writes a <code>Notification</code> row and pushes <code>notification:new</code> to the user's socket room.</li>
+<li>Sends mail through <code>sendMail</code>, using the workspace's own template for that event if it has written one.</li>
+</ol>
+<p>It never throws: a notification is a side effect and failing to tell someone must not fail the request. <strong>Do not call <code>sendMail</code> from a controller for an event a person should see.</strong> That is how task mail once went to a single global <code>NOTIFY_TO</code> address instead of the assignee. <code>workspaceAdminIds()</code> returns the admins to address for workspace-level events (plan limits, trials). The types are listed in <a href="background-jobs.html#notification-types">Background jobs and automation</a>.</p>
+<p>Outbound mail (<code>utils/mailer.js</code>) uses the workspace's own SMTP settings if <code>tenant.mail.enabled</code>; the password is stored AES-GCM encrypted and is <code>select: false</code>. Otherwise it falls back to the platform transport. SMTP timeouts are 8 s connect, 8 s greeting, 10 s socket, so a dead mail server costs a request a "could not send", not a hang.</p>
+
+<h2 id="print">Printing</h2>
+<p>There is no server-side PDF generation (no headless Chrome). The convention is four CSS classes in <code>frontend/src/index.css</code> inside <code>@media print</code>: <code>.print-area</code> (when present, only this subtree prints), <code>.no-print</code>, <code>.print-only</code> (hidden on screen, shown on paper) and <code>.print-stack</code>. Use <code>&lt;PrintButton /&gt;</code> (<code>components/PrintButton.jsx</code>), which calls <code>window.print()</code>; browsers already offer "Save as PDF" from their own dialogue.</p>
+
+<h2 id="rules">Workspace rules and webhooks</h2>
+<p>Per-workspace behaviour that goes beyond settings is a <em>named rule</em> from a fixed vocabulary in code, selected by config; config never carries code. Outbound webhooks let an agency wire the CRM to Zapier, Make or n8n. Both are explained in <a href="background-jobs.html">Background jobs and automation</a>.</p>
+
+<div class="cards">
+<a class="card" href="multi-tenancy.html"><b>Multi-tenancy</b><span>The tenant plugin, tenant resolution, act-as and plans.</span></a>
+<a class="card" href="request-pipeline.html"><b>Request pipeline</b><span>Middleware order, error envelope, validation, rate limits.</span></a>
+<a class="card" href="background-jobs.html"><b>Background jobs</b><span>Scheduler, sequences, webhooks, rules, imports.</span></a>
+<a class="card" href="frontend.html"><b>Frontend</b><span>Shells, routes, design system and i18n.</span></a>
+</div>

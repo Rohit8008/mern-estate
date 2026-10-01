@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-root="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leads and pipeline — Real Vista Docs</title>
+<meta name="description" content="How leads, follow-ups, scoring, sequences, deals, buyers, owners, tasks and the calendar work together for an agency team.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Product guide</h4><a href="leads-and-pipeline.html" class="active">Leads and pipeline</a><a href="listings-and-categories.html">Listings and categories</a><a href="sharing-and-imports.html">Sharing and imports</a><a href="team-roles-permissions.html">Team, roles and permissions</a><a href="workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="architecture.html">System architecture</a><a href="multi-tenancy.html">Multi-tenancy and platform admin</a><a href="request-pipeline.html">Request pipeline and errors</a><a href="background-jobs.html">Background jobs and automation</a><a href="frontend.html">Frontend</a><h4>Security</h4><a href="authentication.html">Authentication and sessions</a><a href="security.html">Security and data protection</a><h4>API</h4><a href="api-overview.html">API conventions</a><a href="api/index.html">API reference</a><h4>Operations</h4><a href="operations.html">Deploy and operate</a><a href="mobile.html">Mobile app</a><a href="faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>Leads and pipeline</h1>
+<p class="lede">How leads, follow-ups, scoring, sequences, deals, buyers, owners, tasks and the calendar work together for an agency team.</p>
+
+<h2 id="vocabulary">Who is who</h2>
+<p>Three kinds of people live in three different screens. Mixing them up is the most common mistake.</p>
+<table>
+<thead><tr><th>Concept</th><th>Screen (default label)</th><th>Route</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td>Lead / client</td><td>Clients</td><td><code>/clients</code>, <code>/clients/:id</code></td><td>A sales lead: someone who may buy or rent. The <code>Client</code> model; each has a status, priority, source, budget, score, deals, follow-ups and a communications log. A "contact type" marks it as <code>lead</code>, <code>co_agent</code> or <code>referral_partner</code>.</td></tr>
+<tr><td>Owner</td><td>Property Owners</td><td><code>/owners</code></td><td>A landlord or seller whose property you list. Name, contact details, company, address, optional tax id (hidden from normal reads), active flag. Not a sales lead.</td></tr>
+<tr><td>Buyer requirement</td><td>Buyer Requirements</td><td><code>/buyers</code></td><td>What one buyer wants (sale or rent, price range, bedrooms, bathrooms, location), matched against your stock.</td></tr>
+</tbody></table>
+<p>A workspace may rename any screen under Settings (for example "Clients" to "Leads"); the sidebar then shows the workspace's label. See <a href="workspace-settings.html">Workspace settings</a>. The old paths <code>/contacts</code>, <code>/deals</code>, <code>/buyer-requirements</code> and <code>/client-reports</code> still work as aliases of <code>/owners</code>, <code>/pipeline</code>, <code>/buyers</code> and <code>/reports</code>.</p>
+
+<div class="flow"><div class="step">Lead created</div><div class="arrow">→</div><div class="step">Assigned</div><div class="arrow">→</div><div class="step">Calls, notes, follow-ups</div><div class="arrow">→</div><div class="step">Deal on the pipeline</div><div class="arrow">→</div><div class="step">Won or Lost</div></div>
+
+<h2 id="who-sees-what">Who sees which leads</h2>
+<ul>
+<li>An <strong>admin</strong> sees every lead in the workspace and may filter by agent.</li>
+<li>An <strong>employee</strong> sees and edits only leads assigned to them, whatever the query string says. This holds for the list, export, bulk actions, pipeline, bottlenecks, follow-ups, ROI report and sequences.</li>
+<li>On top of that, the Clients endpoints need a permission: <code>viewClients</code>, <code>createClient</code>, <code>updateClient</code>, <code>deleteClient</code>, <code>exportData</code>. Admins pass every permission check; an employee needs a custom role that grants them (an employee with no role gets "No role assigned"). See <a href="team-roles-permissions.html">Team, roles and permissions</a>.</li>
+<li>The CRM endpoints (<code>/api/crm/*</code>: deals, follow-ups, communications, summary, pipeline) check only that the caller is an admin or employee and, for single-lead calls, that the lead is theirs. They do not check a permission key.</li>
+</ul>
+
+<h2 id="create-lead">Create and find leads</h2>
+<p>To add a lead: Clients, then <strong>New client</strong> (the command palette's "New client" opens the same form via <code>/clients?new=1</code>). Requires <code>createClient</code>. Only the name is required by the model.</p>
+<ul>
+<li><strong>Duplicates are refused.</strong> The server looks across the whole workspace (not just your leads) for the same email, or for the same phone using the last ten digits (so "+91 98765 43210" and "09876543210" match). A hit answers <code>409</code> with the existing lead's name, owner and status. The API accepts <code>?force=true</code> to create anyway; the Clients form has no override button, so use the existing record or the API.</li>
+<li><strong>Who owns it.</strong> If you name no owner, the workspace's lead-assignment rule picks one (see <a href="#assignment">Assignment</a>). An employee cannot assign a lead to anyone but themselves.</li>
+<li>The score is calculated at creation, so a new lead with a budget and an urgent priority does not start cold.</li>
+</ul>
+<p>The list has three views: <strong>Cards</strong>, <strong>Board</strong> and <strong>Table</strong>. Filters: search text, status, contact type, owner (admin), tag and temperature. The table sorts and pages on the server (sortable: name, score, temperature, status, priority, budget, next follow-up, email, created, updated). <strong>Export</strong> downloads a CSV of everything matching the current filters (not just the page; capped at 50,000 rows) and needs <code>exportData</code>.</p>
+
+<h3 id="status">Lead status and priority</h3>
+<table>
+<thead><tr><th>Field</th><th>Values</th></tr></thead>
+<tbody>
+<tr><td>status</td><td><code>lead</code> (default), <code>contacted</code>, <code>qualified</code>, <code>proposal</code>, <code>negotiation</code>, <code>won</code>, <code>lost</code></td></tr>
+<tr><td>priority</td><td><code>low</code>, <code>medium</code> (default), <code>high</code>, <code>urgent</code></td></tr>
+<tr><td>temperature</td><td><code>hot</code>, <code>warm</code>, <code>cold</code> (default)</td></tr>
+</tbody></table>
+
+<h3 id="bulk">Bulk actions</h3>
+<p>Tick rows, then use the bar: <strong>assign</strong> (admin only), <strong>change status</strong>, <strong>delete</strong>, and tag or untag (API actions <code>assign</code>, <code>status</code>, <code>delete</code>, <code>tag</code>, <code>untag</code>). Up to 500 ids at once. Requires <code>updateClient</code>. An employee's selection is narrowed to the leads they own before anything is written; ids they do not own are silently skipped. Deleting a lead is a soft delete.</p>
+
+<h2 id="scoring">Lead score and temperature</h2>
+<p><code>client.calculateScore()</code> is the only place the score is computed. It adds five factors and caps the total at 100:</p>
+<table>
+<thead><tr><th>Factor</th><th>Points</th></tr></thead>
+<tbody>
+<tr><td>Engagement</td><td>10 per communication logged in the last 30 days, max 30</td></tr>
+<tr><td>Budget</td><td>20 if a maximum budget is set, otherwise 0</td></tr>
+<tr><td>Urgency</td><td>by priority: low 5, medium 10, high 20, urgent 30</td></tr>
+<tr><td>Fit</td><td>5 per interested listing, max 20</td></tr>
+<tr><td>Recency</td><td>by days since last contact (or last update): 7 or fewer 20; up to 30 days 12; up to 90 days 5; beyond that 0</td></tr>
+</tbody></table>
+<p>Temperature follows the score: 60 and above is <strong>hot</strong>, 30 and above is <strong>warm</strong>, below that <strong>cold</strong>.</p>
+<p>The score is recomputed when a lead is created, when it is edited, when a communication is logged, edited or deleted, when a deal changes stage, and nightly at 03:00 (UTC, job <code>lead-rescore</code>), because the recency factor decays with time.</p>
+<div class="warn"><p><strong>Manual temperature is pinned.</strong> If you choose Hot, Warm or Cold on the lead's Overview (the Temperature control says "Set by hand — the nightly score will not change it"), the server sets <code>temperatureManual</code> and stops deriving temperature from the score. The score itself keeps updating. The code has no endpoint or button that clears <code>temperatureManual</code> again; only a direct database edit does.</p></div>
+<div class="note"><p><strong>Won and lost leads are never rescored by the nightly job</strong>, so past reports do not change. (The job also processes at most 1,000 open leads per workspace per run, in natural order, because <code>rescoreLeads</code> takes a batch of 1,000 with no cursor. A workspace with more open leads than that will not have every lead refreshed nightly.)</p></div>
+
+<h2 id="lead-detail">Working a lead</h2>
+<p>Open a lead from Clients (<code>/clients/:id</code>). The header shows Active Deals, Won Value, Pending Follow-ups and Lead Score. Tabs: <strong>Overview</strong>, <strong>Deals</strong>, <strong>Follow-ups</strong>, <strong>Timeline</strong>, <strong>Calls/Notes</strong>, <strong>Tasks</strong>, <strong>Documents</strong>.</p>
+
+<h3 id="overview">Overview</h3>
+<ul>
+<li>Contact information, source, requirements (budget range, property type, preferred locations, free text) with inline edit, and tags (see <a href="#tags">Tags</a>).</li>
+<li><strong>Temperature</strong> control (above).</li>
+<li><strong>Assigned to</strong> and, for an admin, a "Reassign to" picker listing active admins and employees. Reassigning asks for confirmation when the lead already has an owner. The API route is <code>POST /api/clients/:id/assign</code>; it requires the caller to be an admin and to hold <code>updateUser</code> (admins always pass). The new owner gets a notification.</li>
+<li><strong>Interested in</strong>: search listings and link them to the lead (<code>POST /api/clients/:id/interested/add</code> and <code>/remove</code>, needs <code>updateClient</code>). Each linked listing adds 5 to the score's "fit" factor, up to 20.</li>
+<li><strong>Follow-up sequences</strong> the lead is enrolled in, and an email opt-out control (see <a href="#sequences">Sequences</a>).</li>
+<li><strong>Photos</strong>: attach images to the lead (uploaded to Cloudinary from the browser; only the URL is stored).</li>
+</ul>
+
+<h3 id="communications">Calls and notes (communications)</h3>
+<p>Log Activity records one of <code>call</code>, <code>email</code>, <code>sms</code>, <code>meeting</code>, <code>whatsapp</code>, <code>site_visit</code>, <code>note</code>, a direction (outbound by default or inbound), a summary (2 to 500 characters), optional details, duration in minutes and an outcome. Logging sets the lead's "last contact" time and recalculates the score.</p>
+<p>Each entry has <strong>Edit</strong> and <strong>Delete</strong> icons. Only the person who logged the entry, or an admin, may edit or delete it; anyone else gets 403 "You can only edit a communication you logged". Deleting moves "last contact" back to the newest remaining entry and rescoring follows, so a mistaken entry no longer skews the number for good.</p>
+
+<h3 id="follow-ups">Follow-ups</h3>
+<p>To schedule one: lead, Follow-ups tab, set a due date and time, a type (<code>call</code>, <code>email</code>, <code>meeting</code>, <code>site_visit</code>, <code>whatsapp</code>, <code>other</code>) and notes. Mark it <strong>Done</strong> to complete it. The lead's "next follow-up" is always the earliest pending one. The <code>followup-reminders</code> job (every five minutes) sends the owner a reminder once a follow-up is due, once per follow-up.</p>
+<p><strong>Follow-ups due widget.</strong> The Dashboard (<code>/dashboard</code>) has a "Follow-ups due" card with Leads and Buyers tabs, showing the next 7 days with Overdue and Today badges. It reads <code>GET /api/crm/follow-ups/upcoming?days=7</code> (an employee gets their own leads) and <code>/api/dashboard/buyer-stats</code>.</p>
+
+<h3 id="deals">Deals, stages and commission</h3>
+<p>A lead can hold several deals. To add one: lead, Deals tab, Add deal (stage, value, commission percentage, notes). You can also add a quick deal from the pipeline board. Each deal keeps a <code>stageHistory</code> of who moved it and when.</p>
+<p>The stages are a fixed vocabulary in <code>backend/tenancy/stageCatalogue.js</code>; a workspace chooses which to use, their order, names and colours (Settings, Sales pipeline). The default set is every non-legacy stage:</p>
+<table>
+<thead><tr><th>Key</th><th>Default label</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>new_lead</code></td><td>New Lead</td><td>default for a new deal</td></tr>
+<tr><td><code>contacted</code></td><td>Contacted</td><td></td></tr>
+<tr><td><code>qualified</code></td><td>Qualified</td><td></td></tr>
+<tr><td><code>site_visit_scheduled</code></td><td>Site Visit</td><td></td></tr>
+<tr><td><code>negotiation</code></td><td>Negotiation</td><td></td></tr>
+<tr><td><code>booking_token</code></td><td>Booking / Token</td><td></td></tr>
+<tr><td><code>documentation</code></td><td>Documentation</td><td></td></tr>
+<tr><td><code>closed_won</code></td><td>Won</td><td>end state, required in every pipeline</td></tr>
+<tr><td><code>closed_lost</code></td><td>Lost</td><td>end state, required in every pipeline</td></tr>
+<tr><td><code>initial_contact</code>, <code>site_visit_done</code>, <code>payment_pending</code></td><td>Initial Contact, Site Visit Done, Payment Pending</td><td>legacy; a workspace can still enable them, but the deal-write validation accepts only the nine non-legacy keys</td></tr>
+</tbody></table>
+
+<p><strong>What happens when a deal is marked Won</strong> (<code>PATCH /api/crm/:id/deals/:dealId/stage</code>):</p>
+<ul>
+<li>the lead's status becomes <code>won</code> and <code>convertedAt</code> is set;</li>
+<li>every active sequence enrollment for that lead stops immediately;</li>
+<li>if the deal has no linked transaction, a completed <strong>Transaction</strong> is created automatically (amount, commission, type, agent), and the linked listing's status becomes <code>sold</code> (or <code>rented</code> for a rent or lease deal). If saving fails afterwards the transaction is soft-deleted and the listing status restored;</li>
+<li>the score is recalculated.</li>
+</ul>
+<p><strong>Lost</strong>: status becomes <code>lost</code>, <code>lostAt</code> is set, <code>lostReason</code> is the notes you gave (or "Deal lost"), and sequences stop. A workspace rule can veto a stage change before anything is written (for example "ask for a reason before marking a deal lost"); the user sees the rule's message as a 400. See <a href="workspace-settings.html#rules">Rules</a>.</p>
+<p><strong>Commission.</strong> A deal carries a commission percentage (0 to 100), an amount (value times percentage) and a status: <code>pending</code>, <code>partial</code> or <code>paid</code>. Edit percentage and status from the deal on the lead (<code>PATCH /api/crm/:id/deals/:dealId/commission</code>). The amount is recomputed from the deal's current value whenever the percentage changes.</p>
+<div class="note"><p>The stage endpoint validates against the nine non-legacy catalogue keys, not against the workspace's enabled list. The board only shows the workspace's stages, so in normal use they agree; an API caller can still move a deal to a stage the workspace turned off.</p></div>
+
+<h2 id="pipeline">Sales pipeline board</h2>
+<p>Sales Pipeline (<code>/pipeline</code>, requires <code>viewClients</code> to appear in the sidebar) shows one column per stage in the workspace's configured order and labels. Drag a deal card to another column to move it, which calls the same stage endpoint (so the Won and Lost effects above apply). The column totals are the number of deals and their summed value. Leads that have no deal yet appear in the column matching their status (<code>lead</code> maps to New Lead, <code>proposal</code> and <code>negotiation</code> to Negotiation, <code>won</code> to Won, <code>lost</code> to Lost) and can be given a deal quickly with a value. A deals export (CSV, one row per deal) is available at <code>GET /api/crm/pipeline/export</code>.</p>
+<h3 id="bottlenecks">Bottlenecks</h3>
+<p>A card above the board shows the average days deals spend in each stage (from stage history), the slowest stage that has at least three samples, and open deals idle for 14 days or more (up to 50 listed). Data comes from <code>GET /api/crm/pipeline/bottlenecks</code>; employees see only their own deals.</p>
+
+<h2 id="assignment">Assignment rules</h2>
+<p>The workspace setting <code>workflow.leadAssignment</code> decides who owns a new lead that arrives without a named owner. It is stored in the workspace's workflow config and edited through <code>PATCH /api/tenant/config</code> (admin only); the Settings screens do not currently expose a control for it, so a new workspace stays on <code>manual</code> until it is set through the API.</p>
+<table>
+<thead><tr><th>Mode</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td><code>manual</code> (default)</td><td>The creator owns it.</td></tr>
+<tr><td><code>round_robin</code></td><td>Goes to the active admin or employee holding the fewest open (not won or lost) leads; ties broken by a stable id order.</td></tr>
+<tr><td><code>by_locality</code></td><td>Goes to whoever already owns the most leads in the lead's first preferred location (case-insensitive exact match); falls back to the least-loaded agent for a new locality.</td></tr>
+</tbody></table>
+<p>An explicitly named owner always wins over the rule. An automatically assigned owner other than the creator is notified (<code>lead.assigned</code>). The lead importer applies the same rule in bulk, see <a href="sharing-and-imports.html">Sharing and imports</a>.</p>
+
+<h2 id="tags">Tags</h2>
+<p>Tags are a workspace taxonomy: a named, coloured row referenced by id, so renaming or recolouring applies everywhere. Colours: slate, red, amber, emerald, sky, indigo, violet, pink, teal. Names are unique per workspace case-insensitively ("Hot Lead" equals "hot lead"). Leads and listings can be tagged (<code>POST /api/tags/:kind/:id/:tagId</code>, kind <code>client</code> or <code>listing</code>); an employee can tag only records they own. Anyone signed in can create a tag; renaming and deleting are admin-only (Settings, Tags). The older free-text <code>tags</code> array stays on records that already have values.</p>
+
+<h2 id="sources">Lead sources, cost and ROI</h2>
+<p>The Source on a lead is chosen from the workspace's lead sources. The first read in a workspace seeds the defaults: Walk-in, Referral, Website, Phone enquiry, WhatsApp, Property portal, Social media, Print advertising, Hoarding, Repeat client, Other. An admin manages them in Settings, Lead sources: name, a <strong>monthly cost</strong>, description and active flag. Deleting a source that leads still use answers 409 with a count.</p>
+<p>The ROI report (<code>GET /api/lead-sources/roi</code>, needs <code>viewAnalytics</code>; optional <code>startDate</code> and <code>endDate</code>, default the last 30 days) groups leads created in the period by source and returns, per source: leads, won, lost, revenue (summed value of deals in <code>closed_won</code>), cost (monthly cost times the period in 30-day months), conversion rate, cost per lead, cost per deal and ROI percent. If no cost is on file, cost per lead, cost per deal and ROI are <code>null</code> ("unknown"), not zero. Employees see only their own leads in the report.</p>
+
+<h2 id="sequences">Follow-up sequences</h2>
+<p>A sequence is an ordered list of steps, each with a delay in days (0 to 365) after the previous step, and an action:</p>
+<ul>
+<li><code>task</code>: create a task for the lead's owner, due now;</li>
+<li><code>email</code>: send the lead an email (subject and body support merge fields written <code>&#123;&#123;firstName&#125;&#125;</code>: <code>recipientName</code>, <code>firstName</code>, <code>lastName</code>, <code>phone</code>, <code>email</code>, <code>workspaceName</code>, <code>date</code>);</li>
+<li><code>reminder</code>: notify the owner to make contact.</li>
+</ul>
+<p>Admins create, edit and delete sequences in Settings, Follow-up sequences (<code>requireAdmin</code>); any admin or employee can list them. To enroll a lead: open the lead, Follow-up sequences card, enroll. An employee can enroll only their own leads. Enrolling again restarts the sequence. The runner (<code>sequence-steps</code> job, every 15 minutes) behaves like this:</p>
+<ul>
+<li>a step fires <strong>exactly once</strong> because the enrollment advances in the same pass;</li>
+<li>an enrollment <strong>stops</strong> the moment its lead is won, lost or deleted, or its sequence is paused or deleted. Marking a deal won or lost stops it synchronously, so no further chase email goes out;</li>
+<li>you cannot enroll a lead that is already won or lost (400);</li>
+<li>a failing step still advances, with the failure recorded in the enrollment history, so one bad address cannot freeze it;</li>
+<li>an email step is skipped when the lead has no email or the address is on the workspace's suppression list. Every sequence email carries a footer and the <code>List-Unsubscribe</code> headers. Task and reminder steps still run for unsubscribed leads because they go to the agent.</li>
+</ul>
+<p>The lead's email opt-out is shown on the Overview. An agent can record an opt-out on the lead's behalf; undoing it is admin-only, and an opt-out the person made themselves (via the link) cannot be undone by staff (409).</p>
+
+<h2 id="buyers">Buyer requirements and matching</h2>
+<p>Buyer Requirements (<code>/buyers</code>) records what a buyer wants: name, contact, sale or rent, property category (residential, commercial, land, any), min and max price, minimum bedrooms and bathrooms, preferred location, priority (low, medium, high), a follow-up date and a status: <code>active</code>, <code>matched</code>, <code>closed</code>, <code>inactive</code>. Setting the status to <code>matched</code> also stamps the requirement's last-contact date. Admins and employees see every requirement in the workspace; other roles see only those they created.</p>
+<p>To see matches: open a requirement's matches (<code>GET /api/buyer-requirements/:id/matches</code>). The server searches only listings <em>you</em> are allowed to see (admin: all; employee: own, assigned or in their assigned categories) with the hard criteria applied in the database, takes up to 200, and ranks them with a 0 to 100 matching score: property type 30 points, price range 20 (half for a one-sided fit), bedrooms 15, bathrooms 15, location substring 20, normalised over the checks the buyer actually set. A match can be saved onto the requirement and removed again.</p>
+<p>Requirements with a follow-up date show up under the Buyers tab of the Dashboard's "Follow-ups due" card.</p>
+
+<h2 id="owners">Property owners</h2>
+<p>Property Owners (<code>/owners</code>) is a plain address book for the people behind your stock. Permissions: <code>viewOwners</code>, <code>createOwner</code>, <code>updateOwner</code>, <code>deleteOwner</code>. Email is unique per workspace when present. The list pages and sorts on the server when <code>page</code> is passed; without it, <code>/api/owner/list</code> returns a bare array (the mobile app and the listing form rely on that). Deleting is soft. A listing can reference several owners.</p>
+
+<h2 id="tasks">Tasks and calendar</h2>
+<p>Tasks (<code>/tasks</code>) are to-dos with status <code>todo</code>, <code>in_progress</code>, <code>review</code>, <code>done</code>, <code>blocked</code> (default todo), priority <code>low</code>, <code>medium</code> (default), <code>high</code>, <code>urgent</code>, a due date, reminders and an optional link to a lead, listing or transaction. Everyone sees their own tasks; an admin may filter by assignee and assign to others. Creating a task for a lead requires that lead to be yours (admin: any). A non-admin cannot reassign a task. The <code>task-reminders</code> job sends reminders every five minutes. The tasks API is gated by <code>viewClients</code> for every action, including create and delete.</p>
+<p>Calendar (<code>/calendar</code>) overlays your tasks (by due date), your follow-ups (<code>/api/crm/follow-ups/range</code>) and personal events (title, date, time, reminder minutes before; stored per user on the server, not in the browser). Event times are wall-clock strings, so they do not shift between timezones.</p>
+
+<h2 id="team-performance">Team performance (admin)</h2>
+<p>The Dashboard shows a <strong>Team performance</strong> card to admins only (<code>GET /api/dashboard/employee-performance</code>, admin-only): per employee, assigned listings, sold listings, assigned buyers, closed buyers and a conversion rate.</p>
+
+<h2 id="quick-reference">Quick reference: who can do what</h2>
+<table>
+<thead><tr><th>Action</th><th>Gate</th></tr></thead>
+<tbody>
+<tr><td>List and open leads</td><td><code>viewClients</code>; employees only their own</td></tr>
+<tr><td>Create a lead</td><td><code>createClient</code></td></tr>
+<tr><td>Edit a lead, link listings, bulk-update, add photos, opt out email</td><td><code>updateClient</code>; employees only their own</td></tr>
+<tr><td>Delete a lead</td><td><code>deleteClient</code>; employees only their own</td></tr>
+<tr><td>Export leads</td><td><code>exportData</code></td></tr>
+<tr><td>Assign a lead</td><td>admin role and <code>updateUser</code></td></tr>
+<tr><td>Deals, follow-ups, communications, pipeline</td><td>admin or employee, on leads they can access</td></tr>
+<tr><td>Create, edit or delete sequences, sources, rename or delete tags</td><td>admin</td></tr>
+<tr><td>Lead source ROI</td><td><code>viewAnalytics</code></td></tr>
+<tr><td>Team performance</td><td>admin</td></tr>
+</tbody></table>
+<p>Every endpoint above is documented in the <a href="api/clients.html">Clients</a>, <a href="api/crm.html">CRM</a>, <a href="api/sequences.html">Sequences</a> and <a href="api/tasks.html">Tasks</a> API references.</p>
+
+<div class="pager"><a href="getting-started.html"><small>Previous</small>Getting started</a><a href="listings-and-categories.html"><small>Next</small>Listings and categories</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#vocabulary">Who is who</a><a class="h2" href="#who-sees-what">Who sees which leads</a><a class="h2" href="#create-lead">Create and find leads</a><a class="h3" href="#status">Lead status and priority</a><a class="h3" href="#bulk">Bulk actions</a><a class="h2" href="#scoring">Lead score and temperature</a><a class="h2" href="#lead-detail">Working a lead</a><a class="h3" href="#overview">Overview</a><a class="h3" href="#communications">Calls and notes (communications)</a><a class="h3" href="#follow-ups">Follow-ups</a><a class="h3" href="#deals">Deals, stages and commission</a><a class="h2" href="#pipeline">Sales pipeline board</a><a class="h3" href="#bottlenecks">Bottlenecks</a><a class="h2" href="#assignment">Assignment rules</a><a class="h2" href="#tags">Tags</a><a class="h2" href="#sources">Lead sources, cost and ROI</a><a class="h2" href="#sequences">Follow-up sequences</a><a class="h2" href="#buyers">Buyer requirements and matching</a><a class="h2" href="#owners">Property owners</a><a class="h2" href="#tasks">Tasks and calendar</a><a class="h2" href="#team-performance">Team performance (admin)</a><a class="h2" href="#quick-reference">Quick reference: who can do what</a></nav></div>
+<script src="assets/docs.js"></script>
+</body>
+</html>

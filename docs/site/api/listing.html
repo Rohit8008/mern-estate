@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>listing — Real Vista Docs</title>
+<meta name="description" content="22 endpoints under /api/listing.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>listing</h1>
+<p class="lede"><a href="index.html">API reference</a> › listing. 22 endpoints under /api/listing.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="get-api-listing-search">
+<h3 id="get-api-listing-searchsession"><span class="method get">GET</span>/api/listing/search<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-listing-facets">
+<h3 id="get-api-listing-facetssession"><span class="method get">GET</span>/api/listing/facets<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-listing-suggestions">
+<h3 id="get-api-listing-suggestionssession"><span class="method get">GET</span>/api/listing/suggestions<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-listing-popular-searches">
+<h3 id="get-api-listing-popular-searchessession"><span class="method get">GET</span>/api/listing/popular-searches<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-listing-get-id">
+<h3 id="get-api-listing-get-id-session"><span class="method get">GET</span>/api/listing/get/{id}<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-listing-create">
+<h3 id="post-api-listing-createsession"><span class="method post">POST</span>/api/listing/create<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td>yes</td><td>max 100</td></tr><tr><td><code>description</code></td><td>any</td><td></td><td></td></tr><tr><td><code>address</code></td><td>any</td><td></td><td></td></tr><tr><td><code>regularPrice</code></td><td>number</td><td></td><td>min 0; max 1000000000</td></tr><tr><td><code>discountPrice</code></td><td>number</td><td></td><td>min 0; max 1000000000</td></tr><tr><td><code>bathrooms</code></td><td>integer</td><td></td><td>min 0; max 20</td></tr><tr><td><code>bedrooms</code></td><td>integer</td><td></td><td>min 0; max 20</td></tr><tr><td><code>furnished</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>parking</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>type</code></td><td>string</td><td></td><td>one of: sale, rent</td></tr><tr><td><code>offer</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>imageUrls</code></td><td>array&lt;string&gt;</td><td></td><td></td></tr><tr><td><code>category</code></td><td>any</td><td></td><td></td></tr><tr><td><code>attributes</code></td><td>object</td><td></td><td></td></tr><tr><td><code>propertyTypeFields</code></td><td>object</td><td></td><td></td></tr><tr><td><code>ownerIds</code></td><td>array&lt;string&gt;</td><td></td><td></td></tr><tr><td><code>city</code></td><td>any</td><td></td><td></td></tr><tr><td><code>locality</code></td><td>any</td><td></td><td></td></tr><tr><td><code>areaName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>state</code></td><td>any</td><td></td><td></td></tr><tr><td><code>pincode</code></td><td>any</td><td></td><td></td></tr><tr><td><code>areaSqFt</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>sqYard</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>sqYardRate</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>totalValue</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>plotSize</code></td><td>any</td><td></td><td></td></tr><tr><td><code>propertyNo</code></td><td>any</td><td></td><td></td></tr><tr><td><code>remarks</code></td><td>any</td><td></td><td></td></tr><tr><td><code>otherAttachment</code></td><td>any</td><td></td><td></td></tr><tr><td><code>status</code></td><td>string</td><td></td><td>one of: available, sold, rented, under_negotiation</td></tr><tr><td><code>assignedAgent</code></td><td>any</td><td></td><td></td></tr><tr><td><code>propertyCategory</code></td><td>string</td><td></td><td>one of: residential, commercial, land, unknown</td></tr><tr><td><code>propertyType</code></td><td>any</td><td></td><td></td></tr><tr><td><code>commercialType</code></td><td>string</td><td></td><td>one of: office, shop, showroom, warehouse, other, </td></tr><tr><td><code>plotType</code></td><td>string</td><td></td><td>one of: residential, commercial, agricultural, other, </td></tr><tr><td><code>location</code></td><td>object</td><td></td><td></td></tr><tr><td><code>location.lat</code></td><td>number</td><td></td><td>min -90; max 90</td></tr><tr><td><code>location.lng</code></td><td>number</td><td></td><td>min -180; max 180</td></tr></table>
+</section>
+<section class="endpoint" id="delete-api-listing-delete-id">
+<h3 id="delete-api-listing-delete-id-session"><span class="method delete">DELETE</span>/api/listing/delete/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-listing-update-id">
+<h3 id="post-api-listing-update-id-session"><span class="method post">POST</span>/api/listing/update/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>expectedUpdatedAt</code></td><td>string</td><td></td><td>date-time</td></tr><tr><td><code>name</code></td><td>string</td><td></td><td>max 100</td></tr><tr><td><code>description</code></td><td>any</td><td></td><td></td></tr><tr><td><code>address</code></td><td>any</td><td></td><td></td></tr><tr><td><code>regularPrice</code></td><td>number</td><td></td><td>min 0; max 1000000000</td></tr><tr><td><code>discountPrice</code></td><td>number</td><td></td><td>min 0; max 1000000000</td></tr><tr><td><code>bathrooms</code></td><td>integer</td><td></td><td>min 0; max 20</td></tr><tr><td><code>bedrooms</code></td><td>integer</td><td></td><td>min 0; max 20</td></tr><tr><td><code>furnished</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>parking</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>type</code></td><td>string</td><td></td><td>one of: sale, rent</td></tr><tr><td><code>offer</code></td><td>boolean</td><td></td><td></td></tr><tr><td><code>imageUrls</code></td><td>array&lt;string&gt;</td><td></td><td></td></tr><tr><td><code>category</code></td><td>any</td><td></td><td></td></tr><tr><td><code>attributes</code></td><td>object</td><td></td><td></td></tr><tr><td><code>propertyTypeFields</code></td><td>object</td><td></td><td></td></tr><tr><td><code>ownerIds</code></td><td>array&lt;string&gt;</td><td></td><td></td></tr><tr><td><code>city</code></td><td>any</td><td></td><td></td></tr><tr><td><code>locality</code></td><td>any</td><td></td><td></td></tr><tr><td><code>areaName</code></td><td>any</td><td></td><td></td></tr><tr><td><code>state</code></td><td>any</td><td></td><td></td></tr><tr><td><code>pincode</code></td><td>any</td><td></td><td></td></tr><tr><td><code>areaSqFt</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>sqYard</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>sqYardRate</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>totalValue</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>plotSize</code></td><td>any</td><td></td><td></td></tr><tr><td><code>propertyNo</code></td><td>any</td><td></td><td></td></tr><tr><td><code>remarks</code></td><td>any</td><td></td><td></td></tr><tr><td><code>otherAttachment</code></td><td>any</td><td></td><td></td></tr><tr><td><code>status</code></td><td>string</td><td></td><td>one of: available, sold, rented, under_negotiation</td></tr><tr><td><code>assignedAgent</code></td><td>any</td><td></td><td></td></tr><tr><td><code>propertyCategory</code></td><td>string</td><td></td><td>one of: residential, commercial, land, unknown</td></tr><tr><td><code>propertyType</code></td><td>any</td><td></td><td></td></tr><tr><td><code>commercialType</code></td><td>string</td><td></td><td>one of: office, shop, showroom, warehouse, other, </td></tr><tr><td><code>plotType</code></td><td>string</td><td></td><td>one of: residential, commercial, agricultural, other, </td></tr><tr><td><code>location</code></td><td>object</td><td></td><td></td></tr><tr><td><code>location.lat</code></td><td>number</td><td></td><td>min -90; max 90</td></tr><tr><td><code>location.lng</code></td><td>number</td><td></td><td>min -180; max 180</td></tr></table>
+</section>
+<section class="endpoint" id="get-api-listing-get">
+<h3 id="get-api-listing-getsession"><span class="method get">GET</span>/api/listing/get<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-listing-assign-agent">
+<h3 id="post-api-listing-assign-agentsession"><span class="method post">POST</span>/api/listing/assign-agent<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>listingId</code></td><td>string</td><td>yes</td><td></td></tr><tr><td><code>agentId</code></td><td>string</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-listing-unassign-agent">
+<h3 id="post-api-listing-unassign-agentsession"><span class="method post">POST</span>/api/listing/unassign-agent<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>listingId</code></td><td>string</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-listing-my-assigned">
+<h3 id="get-api-listing-my-assignedsession"><span class="method get">GET</span>/api/listing/my-assigned<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-listing-soft-delete-id">
+<h3 id="post-api-listing-soft-delete-id-session"><span class="method post">POST</span>/api/listing/soft-delete/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-listing-restore-id">
+<h3 id="post-api-listing-restore-id-session"><span class="method post">POST</span>/api/listing/restore/{id}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="get-api-listing-deleted">
+<h3 id="get-api-listing-deletedsession"><span class="method get">GET</span>/api/listing/deleted<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-listing-import-template">
+<h3 id="get-api-listing-import-templatesession"><span class="method get">GET</span>/api/listing/import/template<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-listing-import-suggest-mapping">
+<h3 id="post-api-listing-import-suggest-mappingsession"><span class="method post">POST</span>/api/listing/import/suggest-mapping<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+
+</section>
+<section class="endpoint" id="post-api-listing-import-preview">
+<h3 id="post-api-listing-import-previewsession"><span class="method post">POST</span>/api/listing/import/preview<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+
+</section>
+<section class="endpoint" id="post-api-listing-import-commit">
+<h3 id="post-api-listing-import-commitsession"><span class="method post">POST</span>/api/listing/import/commit<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+
+</section>
+<section class="endpoint" id="post-api-listing-bulk-import">
+<h3 id="post-api-listing-bulk-importsession"><span class="method post">POST</span>/api/listing/bulk-import<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>listings</code></td><td>array&lt;object&gt;</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-listing-id-voice-notes">
+<h3 id="post-api-listing-id-voice-notessession"><span class="method post">POST</span>/api/listing/{id}/voice-notes<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="delete-api-listing-id-voice-notes-noteid">
+<h3 id="delete-api-listing-id-voice-notes-noteid-session"><span class="method delete">DELETE</span>/api/listing/{id}/voice-notes/{noteId}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr><tr><td><code>noteId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#get-api-listing-searchsession">GET /api/listing/search</a><a class="h3" href="#get-api-listing-facetssession">GET /api/listing/facets</a><a class="h3" href="#get-api-listing-suggestionssession">GET /api/listing/suggestions</a><a class="h3" href="#get-api-listing-popular-searchessession">GET /api/listing/popular-searches</a><a class="h3" href="#get-api-listing-get-id-session">GET /api/listing/get/{id}</a><a class="h3" href="#post-api-listing-createsession">POST /api/listing/create</a><a class="h3" href="#delete-api-listing-delete-id-session">DELETE /api/listing/delete/{id}</a><a class="h3" href="#post-api-listing-update-id-session">POST /api/listing/update/{id}</a><a class="h3" href="#get-api-listing-getsession">GET /api/listing/get</a><a class="h3" href="#post-api-listing-assign-agentsession">POST /api/listing/assign-agent</a><a class="h3" href="#post-api-listing-unassign-agentsession">POST /api/listing/unassign-agent</a><a class="h3" href="#get-api-listing-my-assignedsession">GET /api/listing/my-assigned</a><a class="h3" href="#post-api-listing-soft-delete-id-session">POST /api/listing/soft-delete/{id}</a><a class="h3" href="#post-api-listing-restore-id-session">POST /api/listing/restore/{id}</a><a class="h3" href="#get-api-listing-deletedsession">GET /api/listing/deleted</a><a class="h3" href="#get-api-listing-import-templatesession">GET /api/listing/import/template</a><a class="h3" href="#post-api-listing-import-suggest-mappingsession">POST /api/listing/import/suggest-mapping</a><a class="h3" href="#post-api-listing-import-previewsession">POST /api/listing/import/preview</a><a class="h3" href="#post-api-listing-import-commitsession">POST /api/listing/import/commit</a><a class="h3" href="#post-api-listing-bulk-importsession">POST /api/listing/bulk-import</a><a class="h3" href="#post-api-listing-id-voice-notessession">POST /api/listing/{id}/voice-notes</a><a class="h3" href="#delete-api-listing-id-voice-notes-noteid-session">DELETE /api/listing/{id}/voice-notes/{noteId}</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

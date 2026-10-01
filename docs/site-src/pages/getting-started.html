@@ -1,0 +1,185 @@
+<!--
+title: Getting started
+description: Install the monorepo, configure the backend and frontend, create your first workspace and admin, and run the tests.
+-->
+<h2 id="prerequisites">Prerequisites</h2>
+<table>
+<thead><tr><th>Tool</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Node.js 20</td><td>CI (<code>.github/workflows/ci.yml</code>) runs on Node 20 and neither <code>package.json</code> declares an <code>engines</code> field. Run the <strong>backend</strong> on Node 20: on Node 25 the <code>jsonwebtoken</code> dependency chain (<code>jwa</code> / <code>buffer-equal-constant-time</code>) uses the removed <code>SlowBuffer</code> API and crashes on require. The Vite frontend ran fine on Node 25 in our tests.</td></tr>
+<tr><td>MongoDB</td><td>A local <code>mongod</code> is the simplest option. The default <code>MONGO_URI</code> used in docs and the example file is <code>mongodb://127.0.0.1:27017/mern-estate</code>. The unit tests do not need it (they start an in-memory server, see <a href="#tests">Running tests</a>).</td></tr>
+<tr><td>npm</td><td>Each of <code>backend/</code>, <code>frontend/</code> and the repo root has its own <code>package.json</code> and lock file.</td></tr>
+<tr><td>Redis (optional)</td><td>Only needed when you run more than one backend instance. See <code>REDIS_URL</code> below.</td></tr>
+<tr><td>Cloudinary account (optional)</td><td>Listing photos and voice notes are uploaded from the browser straight to Cloudinary. Without it the rest of the app works but those uploads do not.</td></tr>
+</tbody></table>
+
+<div class="note"><p>macOS note: <code>mongod --fork</code> is not supported there. Start it in the foreground or via a service, e.g. <code>mongod --config /opt/homebrew/etc/mongod.conf</code> for a Homebrew install.</p></div>
+
+<h2 id="install">Clone and install</h2>
+<pre><code>git clone &lt;repo-url&gt; mern-estate
+cd mern-estate/backend  &amp;&amp; npm install
+cd ../frontend          &amp;&amp; npm install
+cd ..                   &amp;&amp; npm install   # repo root: Playwright e2e only</code></pre>
+
+<div class="note"><p>If <code>npm install</code> fails with a 401 on package fetches, your user-level <code>~/.npmrc</code> may point at a private registry. Override per command: <code>npm_config_registry=https://registry.npmjs.org npm install</code>.</p></div>
+
+<h2 id="backend-env">Backend environment</h2>
+<p>Copy <code>backend/.env.example</code> to <code>backend/.env</code>. <code>backend/config/environment.js</code> loads it and <strong>exits the process</strong> if any of these five are missing: <code>JWT_SECRET</code>, <code>REFRESH_SECRET</code>, <code>MONGO_URI</code>, <code>NODE_ENV</code>, <code>MESSAGE_ENCRYPTION_KEY</code>. <code>validateConfig()</code> additionally requires both JWT secrets to be at least 32 characters, and in production requires <code>APP_DOMAIN</code> or <code>DEFAULT_TENANT_SLUG</code>.</p>
+<p>Generate secrets with <code>node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"</code> (the example file uses 32 bytes for <code>MESSAGE_ENCRYPTION_KEY</code>).</p>
+
+<table>
+<thead><tr><th>Variable</th><th>Required</th><th>Default</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>NODE_ENV</code></td><td>yes</td><td>none</td><td><code>development</code>, <code>production</code> or <code>test</code>. Production tightens CORS and config validation.</td></tr>
+<tr><td><code>MONGO_URI</code></td><td>yes</td><td>none</td><td>MongoDB connection string.</td></tr>
+<tr><td><code>JWT_SECRET</code></td><td>yes</td><td>none</td><td>Signs access tokens; at least 32 characters.</td></tr>
+<tr><td><code>REFRESH_SECRET</code></td><td>yes</td><td>none</td><td>Signs refresh tokens; at least 32 characters.</td></tr>
+<tr><td><code>MESSAGE_ENCRYPTION_KEY</code></td><td>yes</td><td>none</td><td>Key for chat message encryption. Without it the first socket message would throw, so it is checked at boot.</td></tr>
+<tr><td><code>PORT</code></td><td>no</td><td><code>3000</code></td><td>API port. The Vite proxy targets 3000.</td></tr>
+<tr><td><code>HOST</code></td><td>no</td><td><code>0.0.0.0</code></td><td>Bind address.</td></tr>
+<tr><td><code>ACCESS_TOKEN_EXPIRY</code> / <code>REFRESH_TOKEN_EXPIRY</code></td><td>no</td><td><code>15m</code> / <code>30d</code></td><td>Token lifetimes.</td></tr>
+<tr><td><code>JWT_ISSUER</code> / <code>JWT_AUDIENCE</code></td><td>no</td><td><code>mern-estate-api</code> / <code>mern-estate-client</code></td><td>Token claims.</td></tr>
+<tr><td><code>DEFAULT_TENANT_SLUG</code></td><td>production: one of this or <code>APP_DOMAIN</code></td><td><code>default</code></td><td>Workspace a request falls back to when nothing else identifies one.</td></tr>
+<tr><td><code>APP_DOMAIN</code></td><td>no</td><td>empty</td><td>Enables subdomain routing: <code>acme.&lt;APP_DOMAIN&gt;</code> resolves to the workspace with slug <code>acme</code>.</td></tr>
+<tr><td><code>FRONTEND_URL</code>, <code>ADMIN_URL</code></td><td>production (warning only)</td><td>none</td><td>Production CORS origins and the base of links in invite and reset emails.</td></tr>
+<tr><td><code>EXTRA_CORS_ORIGINS</code></td><td>no</td><td>none</td><td>Comma-separated extra origins allowed in development (for example a Flutter web dev port).</td></tr>
+<tr><td><code>DB_MAX_POOL_SIZE</code>, <code>DB_SERVER_SELECTION_TIMEOUT</code>, <code>DB_SOCKET_TIMEOUT</code></td><td>no</td><td><code>10</code>, <code>5000</code>, <code>45000</code></td><td>Mongo driver options (ms for timeouts).</td></tr>
+<tr><td><code>MAX_LOGIN_ATTEMPTS</code>, <code>LOCKOUT_DURATION</code></td><td>no</td><td><code>5</code>, 15 minutes (ms)</td><td>Account lockout.</td></tr>
+<tr><td><code>ENABLE_RATE_LIMITING</code></td><td>no</td><td>on (anything but <code>false</code>)</td><td>Rate limiter switch.</td></tr>
+<tr><td><code>RATE_LIMIT_WINDOW_MS</code>, <code>RATE_LIMIT_MAX_REQUESTS</code>, <code>AUTH_RATE_LIMIT_MAX</code>, <code>STRICT_RATE_LIMIT_MAX</code></td><td>no</td><td>15 min, <code>1000</code>, <code>20</code>, <code>30</code></td><td>Limiter windows and ceilings.</td></tr>
+<tr><td><code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code></td><td>no</td><td>none</td><td>Outgoing mail (password reset, invites, notifications, sequences). Production logs a warning when unset and mail features are disabled. <code>.env.example</code> also lists <code>SMTP_PORT</code>, <code>SMTP_SECURE</code>, <code>EMAIL_FROM</code>.</td></tr>
+<tr><td><code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_FROM_NUMBER</code></td><td>no</td><td>none</td><td>SMS.</td></tr>
+<tr><td><code>CACHE_TTL</code>, <code>CACHE_MAX_SIZE</code></td><td>no</td><td><code>300</code> s, <code>100</code></td><td>In-process response cache.</td></tr>
+<tr><td><code>REDIS_URL</code></td><td>no</td><td>none</td><td>Makes the rate limiter and cache invalidation shared across instances.</td></tr>
+<tr><td><code>JOBS_ENABLED</code></td><td>no</td><td>on</td><td>Set <code>false</code> on an instance that should serve traffic but take no scheduled-job leases.</td></tr>
+<tr><td><code>OPENOBSERVE_URL</code>, <code>OPENOBSERVE_ORG</code>, <code>OPENOBSERVE_USERNAME</code>, <code>OPENOBSERVE_PASSWORD</code></td><td>no</td><td>none</td><td>Log shipping. With no username/password, logs go to stdout only.</td></tr>
+<tr><td><code>ENCRYPT_API_RESPONSES</code>, <code>API_RESPONSE_SECRET</code></td><td>no</td><td>off</td><td>Encrypts API responses; the secret must then be set and match the frontend's <code>VITE_API_RESPONSE_SECRET</code>.</td></tr>
+<tr><td><code>UNSUBSCRIBE_SECRET</code>, <code>PUBLIC_API_URL</code></td><td>no</td><td>derived from <code>JWT_SECRET</code></td><td>Signs unsubscribe links in automated emails (never rotate once mail has gone out); <code>PUBLIC_API_URL</code> is for split deployments.</td></tr>
+<tr><td><code>METRICS_TOKEN</code>, <code>SHUTDOWN_TIMEOUT_MS</code>, <code>NOTIFY_TO</code>, <code>PUBLIC_BASE_URL</code></td><td>no</td><td>none</td><td>Read in code (<code>grep process.env backend</code>) but not in <code>.env.example</code>.</td></tr>
+<tr><td><code>BACKUP_DIR</code>, <code>BACKUP_RETENTION_COUNT</code>, <code>ALLOW_PRODUCTION_RESTORE</code></td><td>no</td><td><code>../backups</code> relative to <code>scripts/</code></td><td>Used by <code>db:backup</code> / <code>db:restore</code>.</td></tr>
+</tbody></table>
+
+<div class="warn"><p>Several keys in <code>.env.example</code> (for example <code>BCRYPT_ROUNDS</code>, <code>SESSION_TIMEOUT</code>, <code>PASSWORD_MIN_LENGTH</code>, <code>ENABLE_SWAGGER</code>, <code>SENTRY_DSN</code>) are not read by any file under <code>backend/</code> outside tests; the file itself says <code>SENTRY_DSN</code> is read by nothing. Treat the table above, which is derived from <code>process.env</code> usage, as the working set.</p></div>
+
+<h2 id="frontend-env">Frontend environment</h2>
+<p>Copy <code>frontend/.env.example</code> to <code>frontend/.env.local</code>. All variables must start with <code>VITE_</code> and are baked into the bundle at build time, so none of them is a secret.</p>
+<table>
+<thead><tr><th>Variable</th><th>Required</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>VITE_API_URL</code></td><td>no</td><td>Empty in development (the Vite proxy forwards <code>/api</code> and <code>/uploads</code> to <code>http://localhost:3000</code>). Set it in production when the API is on another origin.</td></tr>
+<tr><td><code>VITE_SOCKET_URL</code></td><td>no</td><td>Socket.IO origin. Empty falls back to localhost:3000 in dev and same origin in production.</td></tr>
+<tr><td><code>VITE_CLOUDINARY_CLOUD_NAME</code>, <code>VITE_CLOUDINARY_UPLOAD_PRESET</code></td><td>for photo and voice-note upload</td><td>Use an <em>unsigned</em> upload preset.</td></tr>
+<tr><td><code>VITE_API_RESPONSE_SECRET</code></td><td>only if responses are encrypted</td><td>Must equal the backend <code>API_RESPONSE_SECRET</code>.</td></tr>
+<tr><td><code>VITE_SENTRY_DSN</code>, <code>VITE_ENABLE_DEV_DASHBOARD</code></td><td>no</td><td>Listed in the example file; no <code>import.meta.env</code> reference to either exists under <code>frontend/src</code> today.</td></tr>
+</tbody></table>
+
+<h2 id="run">Run the dev servers</h2>
+<pre><code># terminal 1: API on :3000 (nodemon)
+cd backend  &amp;&amp; npm run dev
+
+# terminal 2: web app on :5173 (Vite)
+cd frontend &amp;&amp; npm run dev</code></pre>
+<p>Check the API is up with <code>curl http://localhost:3000/api/health/health</code> (also <code>npm run health:check</code> from <code>backend/</code>). Open <code>http://localhost:5173</code>.</p>
+
+<h2 id="first-workspace">Create your first workspace and admin</h2>
+<p>Every record belongs to a workspace (see <a href="multi-tenancy.html">Multi-tenancy</a>), so a fresh database needs a workspace before anyone can sign in. <code>npm run make-admin</code> alone is not enough on an empty database: it prints "No workspaces exist. Create one first" and stops.</p>
+<p>To create the first workspace and its admin, from <code>backend/</code>:</p>
+<pre><code>node scripts/provisionTenant.js \
+  --name "Acme Realty" --slug acme \
+  --admin-email you@example.com \
+  --admin-password 'Secret@123' \
+  --platform-admin</code></pre>
+<table>
+<thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>--name</code>, <code>--admin-email</code></td><td>Required.</td></tr>
+<tr><td><code>--slug</code></td><td>Workspace address; derived from the name if omitted.</td></tr>
+<tr><td><code>--admin-name</code></td><td>Username for the admin.</td></tr>
+<tr><td><code>--admin-password</code></td><td>Optional. Omit it and the admin must use "Forgot password" to choose one (recommended for real customers, but needs SMTP).</td></tr>
+<tr><td><code>--plan</code></td><td><code>trial</code> (default), <code>starter</code>, <code>growth</code> or <code>enterprise</code>.</td></tr>
+<tr><td><code>--trial-days</code></td><td>Default 14.</td></tr>
+<tr><td><code>--no-sample-data</code></td><td>Skip the starter category.</td></tr>
+<tr><td><code>--platform-admin</code></td><td>Also makes this account the vendor-level operator who can administer every workspace (the <code>/platform</code> console). Use for the first workspace only; no tenant-facing API can grant it.</td></tr>
+</tbody></table>
+
+<p>With the dev setup, the sign-in page has a workspace picker. The chosen slug is stored in the browser (<code>localStorage</code> key <code>rv.workspace</code>) and sent as the <code>x-tenant</code> header; leaving it empty means the default workspace, i.e. <code>DEFAULT_TENANT_SLUG</code> (<code>default</code> unless you set it). Easiest local setup: provision with <code>--slug default</code>, or set <code>DEFAULT_TENANT_SLUG=acme</code> in <code>backend/.env</code>. Once a session is issued it carries its own workspace and the server trusts that over the header.</p>
+
+<h3 id="make-admin">Promoting someone to admin</h3>
+<p>To promote an existing user, or create an admin inside an existing workspace:</p>
+<pre><code>cd backend
+npm run make-admin -- --email you@example.com [--username name] [--password 'Pass@123'] [--reset-password] [--workspace acme]</code></pre>
+<p>The default password when none is given is <code>ChangeMe@123</code>, printed to the console. <code>--workspace</code> is optional when exactly one workspace exists and required when there are several. An existing user is promoted to <code>admin</code>; their password only changes if you pass <code>--reset-password</code>.</p>
+
+<h2 id="seed">Seed data</h2>
+<table>
+<thead><tr><th>Command (from <code>backend/</code>)</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>npm run db:seed-demo</code></td><td>Realistic sample data for demos. Upserts by key, safe to re-run. Needs an existing admin user (it tells you to run <code>make-admin</code> otherwise).</td></tr>
+<tr><td><code>npm run db:seed-fresh</code></td><td><strong>Destructive, no confirmation.</strong> Wipes the collections of the workspace it runs in and inserts clean sample data. Keeps the first admin and creates a demo employee and seller.</td></tr>
+<tr><td><code>npm run db:seed-categories</code></td><td>Seeds categories with their dynamic fields.</td></tr>
+<tr><td><code>npm run db:seed-roles</code></td><td>Seeds the default roles (the first is "Super Admin", with all permissions). See <a href="team-roles-permissions.html">Team, roles and permissions</a>.</td></tr>
+</tbody></table>
+<div class="danger"><p>Seed and purge scripts act inside one workspace. When several workspaces exist the bootstrap refuses to guess and asks for <code>--workspace &lt;slug&gt;</code>. Read the script header before running anything against a database holding real data.</p></div>
+
+<h2 id="tests">Running tests and lint</h2>
+<pre><code># backend (Jest; starts mongodb-memory-server, so no local Mongo needed)
+cd backend
+npm run test           # also: test:watch, test:coverage, test:ci
+npm run lint           # npx eslint@8 .   (lint:fix to autofix)
+npm run format         # Prettier, backend only
+
+# frontend (Vitest)
+cd frontend
+npm run test           # vitest --run
+npm run test:ui        # Vitest UI
+npm run test:coverage
+npm run lint           # eslint src --ext js,jsx</code></pre>
+<p>The backend suite registers the tenancy plugin before any model loads (<code>tests/setup.js</code>) and runs every test as a default test tenant, so isolation is exercised for real. Several tests act as guard rails: <code>routeAccess.test.js</code> fails if a mounted route is neither guarded nor allowlisted, <code>validationCoverage.test.js</code> fails a write route without <code>validateBody</code>, and <code>permissionCatalogue.test.js</code> fails on an unknown permission key. At the repo root, <code>npm run e2e</code> runs the Playwright suite.</p>
+
+<h2 id="commands">Command reference</h2>
+<table>
+<thead><tr><th>Where</th><th>Command</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>frontend</td><td><code>npm run dev</code> / <code>build</code> / <code>preview</code></td><td>Vite dev server, production build, preview of the build.</td></tr>
+<tr><td>backend</td><td><code>npm run dev</code> / <code>start</code></td><td>nodemon / plain node.</td></tr>
+<tr><td>backend</td><td><code>npm run make-admin</code></td><td>Create or promote an admin.</td></tr>
+<tr><td>backend</td><td><code>node scripts/provisionTenant.js</code></td><td>Create a workspace.</td></tr>
+<tr><td>backend</td><td><code>npm run db:migrate-tenancy</code></td><td>One-time single-tenant to multi-tenant migration; supports <code>--dry-run</code>.</td></tr>
+<tr><td>backend</td><td><code>npm run db:migrate-fields</code></td><td>One-time move of <code>propertyTypeFields</code> into <code>attributes</code> / native columns.</td></tr>
+<tr><td>backend</td><td><code>npm run db:backfill-phone-keys</code></td><td>Backfills the normalised phone key used for duplicate detection.</td></tr>
+<tr><td>backend</td><td><code>npm run db:backup</code></td><td>Write a backup.</td></tr>
+<tr><td>backend</td><td><code>npm run db:restore -- --list</code></td><td>List backups. Restoring is <code>--from &lt;name&gt; --confirm</code>, destructive, and also prompts for the database name.</td></tr>
+<tr><td>backend</td><td><code>npm run docs:openapi</code></td><td>Writes <code>docs/openapi.json</code> from the live router and validation schemas. Never hand-edit it.</td></tr>
+<tr><td>backend</td><td><code>npm run logs:rotate</code> / <code>logs:clean</code></td><td>Log housekeeping.</td></tr>
+<tr><td>backend</td><td><code>npm run health:check</code></td><td><code>curl -f http://localhost:3000/api/health/health</code>.</td></tr>
+</tbody></table>
+
+<h2 id="conventions">Project conventions</h2>
+<p><code>CLAUDE.md</code> at the repo root is the contributor rulebook and is worth reading in full before your first change. The rules that bite newcomers most:</p>
+<ul>
+<li>Never write a <code>tenantId</code> filter by hand and never add a bare <code>unique: true</code>; uniqueness is <code>{tenantId, field}</code>. Scripts must enter a workspace via <code>bootstrapScript()</code> from <code>scripts/_bootstrap.js</code> and must not import models directly.</li>
+<li>Every POST/PUT/PATCH needs <code>validateBody(schema)</code>; <code>stripUnknown</code> silently drops fields the schema omits.</li>
+<li>Every route is guarded or listed in <code>backend/security/publicRoutes.js</code> with a reason.</li>
+<li>Frontend: use <code>apiClient</code> from <code>@/utils/http</code>, never raw <code>fetch</code>; icons come from <code>react-icons/hi</code>; never hardcode currency or area units (use <code>utils/currency.js</code>); use literal Tailwind class names, never interpolated ones.</li>
+<li>User text never goes into a regex raw: use <code>utils/escapeRegex.js</code>.</li>
+<li>Notifications go through <code>utils/notify.js</code>, not <code>sendMail</code> from a controller.</li>
+</ul>
+<p>Deeper reading: <a href="architecture.html">System architecture</a>, <a href="request-pipeline.html">Request pipeline and errors</a>, <a href="frontend.html">Frontend</a>.</p>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+<tbody>
+<tr><td>Backend prints "Missing required environment variables" and exits</td><td>One of the five required variables is unset, including <code>NODE_ENV</code> and <code>MESSAGE_ENCRYPTION_KEY</code>.</td></tr>
+<tr><td>"Configuration validation failed" about a secret</td><td><code>JWT_SECRET</code> or <code>REFRESH_SECRET</code> is shorter than 32 characters.</td></tr>
+<tr><td>Crash on require in <code>jwa</code> / <code>buffer-equal-constant-time</code></td><td>Node too new (<code>SlowBuffer</code> removed). Use Node 20 for the backend.</td></tr>
+<tr><td>Server cannot connect to Mongo</td><td>Check <code>MONGO_URI</code> and that <code>mongod</code> is listening (<code>lsof -nP -iTCP:27017 -sTCP:LISTEN</code>). A cloud cluster whose DNS no longer resolves fails the same way.</td></tr>
+<tr><td>Every API call fails or sign-in finds no one</td><td>A query with no workspace throws by design. Provision a workspace, then either pick it in the sign-in workspace picker or set <code>DEFAULT_TENANT_SLUG</code> to its slug.</td></tr>
+<tr><td>Browser shows CORS errors from a non-default origin</td><td>In development only <code>localhost:5173</code> and <code>localhost:3000</code> are allowed; add others to <code>EXTRA_CORS_ORIGINS</code>. In production set <code>FRONTEND_URL</code>.</td></tr>
+<tr><td>All writes fail with <code>CSRF_TOKEN_INVALID</code></td><td>Every write must carry <code>X-CSRF-Token</code>; use <code>apiClient</code>, which handles it, and make sure a custom proxy forwards that header.</td></tr>
+<tr><td>Rate-limited while testing</td><td>Auth routes allow 20 requests per 15 minutes by default (<code>AUTH_RATE_LIMIT_MAX</code>). Raise it locally or set <code>ENABLE_RATE_LIMITING=false</code>.</td></tr>
+<tr><td>Photo upload fails</td><td>Set both <code>VITE_CLOUDINARY_*</code> variables and restart Vite; they are read at build/start time.</td></tr>
+<tr><td>Records created by a script are invisible in the app</td><td>The script imported a model before the tenancy plugin registered. Use <code>bootstrapScript()</code>.</td></tr>
+<tr><td>Cannot create a second user without a phone number</td><td>A stale <code>phone_1</code> index from before the partial-unique <code>phone_unique_string</code> index. Drop it (<code>db.users.dropIndex('phone_1')</code>) or run <code>User.syncIndexes()</code> once.</td></tr>
+</tbody></table>
+<p>More fixes are collected in the <a href="faq.html">FAQ</a>.</p>

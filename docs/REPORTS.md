@@ -1,3 +1,5 @@
+> **May be out of date.** This per-feature note predates multi-tenancy. The maintained documentation is the site in [`site`](site/index.html); where they disagree, the site and the code win.
+
 # Client Reports
 
 ## Overview

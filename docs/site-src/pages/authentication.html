@@ -1,0 +1,190 @@
+<!--
+title: Authentication and sessions
+description: How sign-in, cookies, refresh-token rotation, CSRF, lockout, password reset, invitations and operator "acting as" sessions work, and how the web app and the mobile app drive them.
+-->
+<h2 id="model">The model in one minute</h2>
+<p>Authentication is <strong>cookie-only</strong>. There is no bearer-token mode: the API never reads an <code>Authorization</code> header for identity, and the browser never holds a token in script-reachable storage. A sign-in sets three cookies; every later request carries them automatically.</p>
+<div class="flow">
+<div class="step">POST /api/auth/signin</div><div class="arrow">→</div>
+<div class="step">access_token + refresh_token + csrf_token</div><div class="arrow">→</div>
+<div class="step">401? POST /api/auth/refresh</div><div class="arrow">→</div>
+<div class="step">rotated pair, retry once</div>
+</div>
+<p>The code lives in <code>backend/controllers/auth.controller.js</code> (issuing and rotating), <code>backend/utils/verifyUser.js</code> (<code>verifyToken</code>, <code>tryVerifyToken</code>, <code>requireAdmin</code>, <code>requireRole</code>), <code>backend/middleware/csrf.js</code> and <code>backend/tenancy/resolveTenant.js</code>.</p>
+
+<h2 id="cookies">Cookies</h2>
+<table>
+<thead><tr><th>Cookie</th><th>httpOnly</th><th>Lifetime</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>access_token</code></td><td>yes</td><td><code>ACCESS_TOKEN_EXPIRY</code> (default <code>15m</code>) plus a 1-minute buffer</td><td>Signed JWT (<code>JWT_SECRET</code>). Proves the session.</td></tr>
+<tr><td><code>refresh_token</code></td><td>yes</td><td><code>REFRESH_TOKEN_EXPIRY</code> (default <code>30d</code>)</td><td>Signed JWT (<code>REFRESH_SECRET</code>). Only used to mint a new pair.</td></tr>
+<tr><td><code>csrf_token</code></td><td><strong>no, on purpose</strong></td><td>30 days (fixed in <code>middleware/csrf.js</code>)</td><td>Random 32-byte value, base64url. A proof of same-origin, not an identity.</td></tr>
+</tbody></table>
+<ul>
+<li><strong>Cookie lifetimes follow config.</strong> <code>maxAge</code> is derived from the same <code>ACCESS_TOKEN_EXPIRY</code> / <code>REFRESH_TOKEN_EXPIRY</code> that signs the JWT (<code>durationToMs</code> accepts <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>). A hard-coded 30-day cookie next to a 10-day token used to leave a stale cookie that outlived the token it carried and produced a confusing logout days later. The 1-minute buffer on the access cookie means the cookie always outlives its token.</li>
+<li><strong>SameSite and Secure.</strong> In production all three cookies are <code>SameSite=None; Secure</code> so the app can be served from a different origin than the API. In development they are <code>SameSite=Lax</code> and not <code>Secure</code>.</li>
+<li><strong>Clearing must match setting.</strong> A bare <code>clearCookie('access_token')</code> does not match a <code>SameSite=None; Secure</code> cookie, so the browser would keep it. <code>clearSessionCookies()</code> and the sign-out handlers clear each cookie with the same attributes it was set with.</li>
+</ul>
+<p>These three are also the only cookies listed on the public Cookie Policy (<code>pages/Legal.jsx</code>); the names and the "about 15 minutes / 30 days" lifetimes there agree with the code.</p>
+
+<h2 id="claims">JWT claims</h2>
+<p>Both tokens carry the same claims and differ only in secret and expiry. Issuer and audience default to <code>mern-estate-api</code> and <code>mern-estate-client</code> (<code>JWT_ISSUER</code>, <code>JWT_AUDIENCE</code>) and are verified on every request.</p>
+<table>
+<thead><tr><th>Claim</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>id</code></td><td>The user's id.</td></tr>
+<tr><td><code>tid</code></td><td>The workspace the <strong>account lives in</strong>. Signed, so it cannot be forged by changing a host or header. <code>resolveTenant</code> prefers it over everything else.</td></tr>
+<tr><td><code>act</code></td><td>Only on a platform operator's token while viewing a customer's workspace: the workspace being <strong>viewed</strong>. Ignored unless <code>pa</code> is also <code>true</code>.</td></tr>
+<tr><td><code>pa</code></td><td><code>true</code> only when <code>startActingAs</code> minted the token, after it re-read <code>isPlatformAdmin</code> from the database.</td></tr>
+<tr><td><code>iat</code>, <code>exp</code>, <code>iss</code>, <code>aud</code></td><td>Standard. <code>iat</code> is compared with <code>passwordChangedAt</code> (see <a href="#passwords">Passwords</a>).</td></tr>
+</tbody></table>
+<div class="warn"><p><code>tid</code> and <code>act</code> are never collapsed. Rewriting <code>tid</code> to the customer's workspace would put the operator's identity in a workspace their account is not in, and the session would stop resolving. Every query about <em>the caller</em> is pinned back to <code>tid</code> (<code>inHomeTenant</code> / <code>runWithTenant</code>); see <a href="multi-tenancy.html">Multi-tenancy</a>.</p></div>
+
+<h2 id="signin">Signing in</h2>
+<p><span class="method post">POST</span> <code>/api/auth/signin</code>, rate limited (<code>authRateLimit</code>, 20 per 15 minutes per IP by default), body validated by <code>userValidation.login</code>.</p>
+<pre><code>curl -i -X POST http://localhost:3000/api/auth/signin \
+  -H 'Content-Type: application/json' \
+  -H 'x-tenant: acme' \
+  -c cookies.txt \
+  -d '{"email":"owner@acme.in","password":"Secret@123"}'</code></pre>
+<p>Success is <code>200</code> with the user document spread at the top level (no <code>data</code> wrapper; <code>password</code> and <code>refreshTokens</code> are removed), plus <code>isPlatformAdmin</code> so the console link can be shown to operators:</p>
+<pre><code>{ "success": true, "_id": "...", "email": "owner@acme.in", "role": "admin", "isPlatformAdmin": false, ... }</code></pre>
+<p>and three <code>Set-Cookie</code> headers (<code>access_token</code>, <code>refresh_token</code>, <code>csrf_token</code>). The server also bumps <code>lastLogin</code> and <code>loginCount</code>, resets the failure counters and writes a <code>SecurityLog</code> row.</p>
+
+<h3 id="workspace-choice">Choosing the workspace</h3>
+<p>Every agency shares one server address, so a person signing in has no session, host or token to tell the server which agency they belong to. The sign-in screen has a <em>Workspace</em> field; its value travels as the <code>x-tenant</code> header (web: stored in <code>localStorage</code> under <code>rv.workspace</code> by <code>frontend/src/utils/workspace.js</code>; mobile: <code>WorkspaceStore</code>). <code>resolveTenant</code> resolves, most authoritative first:</p>
+<ol>
+<li>the <code>tid</code> claim on a valid access token;</li>
+<li>a custom domain;</li>
+<li>a single-label subdomain of <code>APP_DOMAIN</code> (reserved: <code>www app api admin auth static cdn assets localhost</code>);</li>
+<li>the <code>x-tenant</code> header;</li>
+<li>the default workspace (<code>DEFAULT_TENANT_SLUG</code>, default <code>default</code>).</li>
+</ol>
+<p>Two rules keep this safe:</p>
+<ul>
+<li><strong>On entry routes the typed workspace beats an old cookie.</strong> <code>POST /auth/signin</code>, <code>POST /user/password/request-otp</code>, <code>POST /user/password/reset</code> and <code>GET /tenant/lookup</code> prefer the header over a session cookie left from another workspace. Otherwise signing in to B while holding A's cookie looked the email up in A and answered "invalid email or password".</li>
+<li><strong>A typo is an answer, not a fallback.</strong> A named workspace that does not exist returns <code>404</code> with <code>code: "WORKSPACE_NOT_FOUND"</code> instead of silently using the default, so nobody is signed in to another agency by mistake.</li>
+</ul>
+<pre><code>{ "success": false, "statusCode": 404, "code": "WORKSPACE_NOT_FOUND",
+  "message": "There's no workspace called \"acmee\". Check the name and try again.",
+  "requestId": "..." }</code></pre>
+<p>If a token names one workspace and the host names another, the request is refused (<code>tenant_host_mismatch</code> is logged): a valid session for one agency must not operate on another agency's domain. Suspended, cancelled or expired-trial workspaces answer <code>403</code> with a plain-language reason. <span class="method get">GET</span> <code>/api/tenant/lookup</code> (rate limited, public) lets the sign-in screen confirm a name and show the workspace's logo before the password is typed.</p>
+
+<h3 id="lockout">Failed attempts and lockout</h3>
+<ul>
+<li>Wrong email or wrong password both answer <code>401</code> <code>"Invalid email or password"</code>, so the response does not say which half was wrong. The reason is recorded in the security log.</li>
+<li>Each wrong password increments <code>loginAttempts</code>. At <code>MAX_LOGIN_ATTEMPTS</code> (default <code>5</code>) the account gets <code>lockedUntil = now + LOCKOUT_DURATION</code> (milliseconds, default <code>900000</code>, 15 minutes).</li>
+<li>The lock check runs <strong>before</strong> the password check, so a locked account rejects even the correct password: <code>"Account locked. Try again in N minute(s)."</code></li>
+<li>A successful sign-in resets <code>loginAttempts</code> and clears <code>lockedUntil</code>.</li>
+<li>Accounts with <code>status</code> <code>inactive</code> or <code>suspended</code>, and accounts with no password set, are refused with their own message (and, for disabled accounts, are also rejected by <code>verifyToken</code> on every later request without waiting for token expiry).</li>
+</ul>
+<div class="note"><p>Lockout is per account, and the IP-based <code>authRateLimit</code> is separate: one slows a single account down, the other slows a single source down. With <code>REDIS_URL</code> unset the rate-limit counters are per process; see <a href="operations.html">Deploy and operate</a>.</p></div>
+
+<h2 id="refresh">Refresh and rotation</h2>
+<p><span class="method post">POST</span> <code>/api/auth/refresh</code> reads the <code>refresh_token</code> cookie. It is a public write (the cookie is the credential), exempt from CSRF, and has its own higher limit (<code>refreshRateLimit</code>: <code>max(AUTH_RATE_LIMIT_MAX x 5, 500)</code> per window; the general API limiter skips this URL entirely).</p>
+<ol>
+<li>Verify the JWT with <code>REFRESH_SECRET</code>. Invalid: <code>401 "Invalid refresh token"</code>.</li>
+<li>Load the user in the <strong>home</strong> workspace (<code>tid</code>) and look for the SHA-256 hash of the presented token among the user's stored hashes.</li>
+<li><strong>Not found = reuse.</strong> A well-signed token that is not on the list was already rotated away, so someone is replaying it. The server empties <code>refreshTokens</code> (every session of that user ends) and answers <code>401 "Invalid refresh token. Please log in again."</code></li>
+<li>Found: <code>$pull</code> the old hash, <code>$push</code> the new one, issue a new access and refresh pair and a new <code>csrf_token</code>.</li>
+</ol>
+<ul>
+<li><strong>Only hashes are stored.</strong> A database leak yields SHA-256 digests that are useless without the original tokens.</li>
+<li><strong>At most 10 concurrent sessions.</strong> Every push uses <code>$slice: -10</code>, so the 10 most recent are kept and the oldest device is signed out silently.</li>
+<li><strong>Atomic.</strong> <code>$pull</code> then <code>$push</code> avoids the read-modify-write race of splice-and-save.</li>
+<li><strong>Acting claims are re-checked.</strong> If the old token had <code>pa: true</code> and <code>act</code>, they are carried over only if the user is still <code>isPlatformAdmin</code> and <code>active</code>; otherwise they are dropped and <code>acting_claim_dropped_on_refresh</code> is logged. Revoking an operator ends their view into a customer's workspace at the next refresh.</li>
+</ul>
+<div class="warn"><p>Because a replayed token wipes all sessions, two tabs must never refresh independently with the same cookie. The web client serialises refreshes (below) and the mobile client does the same.</p></div>
+
+<h2 id="csrf">CSRF</h2>
+<p>Cookie-only auth plus <code>SameSite=None</code> in production means a cross-site form POST would carry the session. CORS does not help: a cross-origin <code>application/x-www-form-urlencoded</code> POST is a "simple request" with no preflight. So <code>requireCsrfToken</code> (mounted on all <code>/api</code> after tenant resolution) uses the double-submit pattern.</p>
+<table>
+<thead><tr><th>Request</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td><code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code></td><td>Passes.</td></tr>
+<tr><td>A write on a route in <code>security/publicRoutes.js</code> (sign-in, refresh, password OTP/reset, invite accept, unsubscribe, contact form, log ingest)</td><td>Passes: there is no ambient credential to forge. The exemption list is derived from the same allowlist the route-access test enforces, so the two cannot drift.</td></tr>
+<tr><td>A write with neither <code>access_token</code> nor <code>refresh_token</code> cookie</td><td>Passes to the route's own guard, which answers <code>401</code>. Otherwise every signed-out write would report a confusing CSRF error.</td></tr>
+<tr><td>Session cookies but no <code>csrf_token</code> cookie</td><td><code>403</code> <code>CSRF_COOKIE_MISSING</code>: "Your session predates a security update. Please sign in again."</td></tr>
+<tr><td>Cookie and <code>X-CSRF-Token</code> header differ (constant-time compare)</td><td><code>403</code> <code>CSRF_TOKEN_INVALID</code>: "Please refresh the page and try again."</td></tr>
+</tbody></table>
+<p><span class="method get">GET</span> <code>/api/auth/csrf</code> returns <code>{ "success": true, "csrfToken": "..." }</code>: the existing cookie value, or a fresh one (and cookie) if there is none. It exists for clients that cannot read cookies from script (a Flutter web build; a native app whose cookie jar is not script-visible). It is not a secret leak: same-origin script can read the cookie anyway, and a cross-origin page cannot read this response because CORS refuses it.</p>
+<p>The token is <strong>rotated</strong> on sign-in, refresh, accept-invite, act-as and stop-acting, and cleared on sign-out. Clients must therefore read it at call time and never cache it for long; on <code>CSRF_TOKEN_INVALID</code> they re-fetch and retry once. CORS allows the header (<code>allowedHeaders</code> includes <code>X-CSRF-Token</code> and <code>X-Request-Id</code>); a cross-origin deployment whose preflight did not would reject every POST.</p>
+<pre><code># Sign in, then write: the csrf_token cookie from sign-in is echoed as a header
+CSRF=$(grep csrf_token cookies.txt | awk '{print $7}')
+curl -X POST http://localhost:3000/api/clients \
+  -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'x-tenant: acme' \
+  -H 'Content-Type: application/json' -d '{"name":"Asha Verma","phone":"9876543210"}'</code></pre>
+
+<h2 id="signout">Signing out</h2>
+<ul>
+<li><span class="method post">POST</span> <code>/api/auth/signout</code> (optional auth, <code>tryVerifyToken</code>): removes <em>this</em> refresh token's hash, clears all three cookies, logs the event.</li>
+<li><span class="method post">POST</span> <code>/api/auth/signout-all</code> (<code>verifyToken</code>): sets <code>refreshTokens = []</code>, so every device has to sign in again once its access token (at most 15 minutes) lapses.</li>
+<li>There is no <code>GET</code> sign-out: it was removed because a GET can be triggered by <code>&lt;img src&gt;</code>.</li>
+<li><code>POST /api/auth/signup</code> exists only to answer <code>403 "Sign up is disabled. Contact admin."</code> People join through invitations.</li>
+</ul>
+<p>Both handlers pin their database writes to the caller's home workspace. During an acting session, an unpinned lookup finds nothing and the old code answered "signed out" while leaving the refresh token valid for 30 days; <code>tests/actingAs.test.js</code> covers this.</p>
+
+<h2 id="passwords">Passwords</h2>
+<ul>
+<li><strong>Policy</strong> (<code>validatePassword</code> in <code>middleware/security.js</code>): at least 8 characters with an uppercase letter, a lowercase letter, a digit and one of <code>!@#$%^&amp;*(),.?":{}|&lt;&gt;</code>. Enforced when accepting an invite, resetting and changing a password.</li>
+<li><strong>Storage:</strong> bcrypt (<code>bcryptjs</code>), cost 12, in the model's pre-save hook.</li>
+<li><strong>Tokens issued before a change are refused.</strong> A save that changes the password sets <code>passwordChangedAt</code> (one second in the past); <code>verifyToken</code> and <code>tryVerifyToken</code> reject any access token whose <code>iat</code> is earlier: "Session expired. Please log in again."</li>
+</ul>
+<h3 id="reset">Password reset</h3>
+<p>Two public, rate-limited calls. Both honour <code>x-tenant</code> (they are entry routes).</p>
+<pre><code>POST /api/user/password/request-otp   { "email": "owner@acme.in" }
+POST /api/user/password/reset         { "email": "owner@acme.in", "otp": "123456", "newPassword": "NewSecret@123" }</code></pre>
+<ul>
+<li>The request always answers <code>200</code> <code>"If that address has an account, a code is on its way."</code> with a masked address. The mail is deliberately not awaited, so a real address does not take an SMTP round-trip longer than an unknown one (the same leak, measured with a stopwatch).</li>
+<li>The code is 6 digits, stored as a SHA-256 hash, valid for 10 minutes. After 5 wrong guesses (<code>MAX_OTP_ATTEMPTS</code>) it is destroyed.</li>
+<li>Every failure on the reset call is the same <code>400</code>: "That code is not valid or has expired."</li>
+<li>Only outside production, and only when no SMTP is configured, the request response includes <code>devOtp</code> so the flow can be tested without a mail server. Never for an address with no account.</li>
+<li>A signed-in user changes their own password with <span class="method post">POST</span> <code>/api/user/password/change</code> (<code>currentPassword</code>, <code>newPassword</code>; the new one must differ). The response says "Please sign in again."</li>
+</ul>
+<div class="warn"><p><strong>Known limit.</strong> Neither the reset nor the change clears the user's stored refresh tokens, and <code>/refresh</code> does not compare against <code>passwordChangedAt</code>. An existing refresh cookie can therefore still mint a new access token after a password change. Use <code>signout-all</code> (an admin setting an employee's password through <code>/api/user/admin/set-employee-password/:id</code> does clear them) when a credential may be compromised.</p></div>
+
+<h2 id="invites">Invitations</h2>
+<p>An invitation is how anyone first gets into a workspace, including a brand-new agency's first admin. The recipient has no session and does not know "workspace" is a concept, so the token carries it.</p>
+<ul>
+<li>Token: 32 random bytes, base64url; only its SHA-256 hash is stored (<code>tenancy/invites.js</code>). It expires after 7 days by default (<code>DEFAULT_INVITE_DAYS</code>) and is single-use.</li>
+<li><span class="method get">GET</span> <code>/api/auth/invite/:token</code> returns <code>data: { email, name, hasPassword, workspace: { name, slug, logoUrl, tokens } }</code> so the page can be branded and remember the workspace. Nothing else about the user.</li>
+<li><span class="method post">POST</span> <code>/api/auth/invite/:token</code> takes <code>{ "password": "...", "acceptTerms": true }</code>. It applies the password policy, requires <code>acceptTerms === true</code>, stores <code>legalAcceptance = { version: LEGAL_VERSION, acceptedAt }</code>, activates the account, consumes the token and <strong>signs the person in</strong> with a session whose <code>tid</code> comes from the user record, not from anything the caller sent.</li>
+<li>Both are rate limited and CSRF-exempt (the token is the credential).</li>
+<li><strong>Unknown, expired and used tokens look identical</strong> (<code>404</code> "This invitation is no longer valid. Ask for a new one."), so the endpoint is not an oracle for outstanding invitations.</li>
+<li><strong>Re-sent invitations.</strong> Sending again replaces the hash, and up to the 4 previous hashes are remembered. Opening an older link while a newer one is still valid answers <code>410</code> with <code>code: "INVITE_REPLACED"</code> and "A newer invitation was sent to you." That tells the invitee to open the newer email and tells a guesser nothing, because only someone holding a once-valid link can reach it.</li>
+</ul>
+
+<h2 id="acting">Operator "acting as" sessions</h2>
+<p>A platform operator (<code>isPlatformAdmin</code>, a flag on the User that is <code>select: false</code> and never settable through a tenant-facing API) can view a customer's workspace to answer "what does the customer actually see?".</p>
+<ul>
+<li><span class="method post">POST</span> <code>/api/platform/act-as/:id</code> re-issues the session with <code>act: &lt;target&gt;, pa: true</code>, rotates the refresh token, logs <code>acting_as_started</code> and answers <code>{ actingAs: {...}, readOnly: true }</code>. <span class="method post">POST</span> <code>/api/platform/stop-acting</code> issues an ordinary pair again.</li>
+<li><code>resolveTenant</code> scopes the request to <code>act</code>; the user lookup stays on <code>tid</code>. A suspended or expired workspace can still be opened, since that is exactly when support needs to.</li>
+<li><strong>Read-only at the edge.</strong> <code>tenancy/readOnlyWhileActing.js</code> blocks every non-GET with <code>403</code> "You are viewing &lt;name&gt; as a platform operator. This view is read-only..." and logs <code>acting_write_blocked</code>. Exempt: <code>POST /api/platform/stop-acting</code>, <code>/api/platform/act-as</code>, <code>/api/auth/signout</code>, <code>/api/auth/signout-all</code>, <code>/api/auth/refresh</code>, <code>/api/user/legal-acceptance</code> (the last writes to the operator's own record in their home workspace). Paths with <code>.</code>/<code>..</code> segments, empty segments or encoded slashes are refused rather than interpreted.</li>
+</ul>
+
+<h2 id="verify">What every protected request goes through</h2>
+<ol>
+<li>Request id, security headers, body parsing, rate limit (general limiter keyed by user id from the access cookie, else IP).</li>
+<li><code>resolveTenant</code> sets the tenant context.</li>
+<li><code>readOnlyWhileActing</code>, then <code>requireCsrfToken</code>.</li>
+<li>The route's guard: <code>verifyToken</code> verifies the JWT (issuer, audience), loads the user in <code>tid</code>, rejects <code>inactive</code>/<code>suspended</code> accounts and tokens older than <code>passwordChangedAt</code>, then sets <code>req.user</code> (<code>id, email, username, status, role, assignedCategories, assignedRole</code>). An employee with no role is assigned the system "Employee" role on the fly.</li>
+<li><code>requireAdmin</code> / <code>requireRole(...)</code> / <code>requirePermission(key)</code> (see <a href="team-roles-permissions.html">Team, roles and permissions</a>).</li>
+</ol>
+<p>Failures return the standard error envelope (<a href="api-overview.html#errors">API conventions</a>). 401 means "no usable session"; 403 means "signed in but not allowed".</p>
+
+<h2 id="web">Web client behaviour</h2>
+<p><code>frontend/src/utils/http.js</code> is the only place that talks to the API; call sites use <code>apiClient</code> (<code>get</code>, <code>post</code>, <code>put</code>, <code>patch</code>, <code>delete</code>, <code>upload</code>), never raw <code>fetch</code>.</p>
+<ul>
+<li>Every call goes through <code>fetchWithRefresh</code>: <code>credentials: 'include'</code>, <code>X-CSRF-Token</code> read from the <code>csrf_token</code> cookie at call time for non-safe methods, and <code>x-tenant</code> from the stored workspace.</li>
+<li>On a <code>401</code> it calls <code>refreshAccessToken()</code> once. Concurrent 401s share one in-flight refresh promise. If it succeeds the original request is retried once, with the CSRF header re-read because the refresh just rotated it.</li>
+<li>If the refresh fails and the page is not <code>/sign-in</code>, a window event <code>auth-error</code> is dispatched and the app returns to sign-in. Errors raised by <code>apiClient</code> carry <code>code</code>, <code>details</code> and <code>requestId</code>; <code>handleApiResponse</code> also fires an <code>api-error</code> event (a toast) unless the call passed <code>silent: true</code>.</li>
+<li><code>setUserSignedOut(true)</code> is called before a deliberate sign-out so in-flight 401s do not trigger a refresh that would resurrect the session; <code>false</code> after the next sign-in.</li>
+<li>When response encryption is on, the same module decrypts transparently (<a href="api-overview.html#encryption">API conventions</a>).</li>
+</ul>
+<p>Sockets authenticate once, at the handshake: <code>backend/socket.js</code> reads <code>access_token</code> from the <code>Cookie</code> header, verifies it, requires a <code>tid</code> claim ("Session predates workspaces. Please sign in again." otherwise) and rejects disabled accounts. Each connection joins <code>user:&lt;id&gt;</code> and <code>tenant:&lt;tenantId&gt;</code> rooms.</p>
+
+<h2 id="mobile">Mobile client</h2>
+<p>The Flutter app (<code>mobile/lib/core/network/api_client.dart</code>) uses the same cookie protocol: Dio with a disk-persisted <code>PersistCookieJar</code> so the session survives restarts, an <code>x-tenant</code> interceptor fed by <code>WorkspaceStore</code>, a refresh-on-401 interceptor (not applied to signin/refresh/signup, one retry, concurrent 401s deduplicated), and a CSRF interceptor that calls <code>GET /api/auth/csrf</code> instead of reading a cookie and retries once on <code>CSRF_TOKEN_INVALID</code>. For Socket.IO on native it copies the jar's cookies into an explicit <code>Cookie</code> header. See <a href="mobile.html">Mobile app</a>.</p>
+
+<h2 id="logging">Security log</h2>
+<p>Sign-in success and failure (with reason), refresh success and reuse, and sign-out are written to the <code>SecurityLog</code> collection (email, method, status, reason, IP, user agent, path) and mirrored to the OpenObserve <code>security_logs</code> stream. Rows expire after 180 days via a TTL index. See <a href="security.html">Security</a>.</p>

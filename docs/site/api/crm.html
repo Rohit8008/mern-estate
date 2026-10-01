@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>crm — Real Vista Docs</title>
+<meta name="description" content="15 endpoints under /api/crm.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>crm</h1>
+<p class="lede"><a href="index.html">API reference</a> › crm. 15 endpoints under /api/crm.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="get-api-crm-pipeline">
+<h3 id="get-api-crm-pipelinesession"><span class="method get">GET</span>/api/crm/pipeline<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-crm-pipeline-bottlenecks">
+<h3 id="get-api-crm-pipeline-bottleneckssession"><span class="method get">GET</span>/api/crm/pipeline/bottlenecks<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-crm-pipeline-export">
+<h3 id="get-api-crm-pipeline-exportsession"><span class="method get">GET</span>/api/crm/pipeline/export<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-crm-id-deals">
+<h3 id="post-api-crm-id-dealssession"><span class="method post">POST</span>/api/crm/{id}/deals<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>listingId</code></td><td>any</td><td></td><td></td></tr><tr><td><code>stage</code></td><td>string</td><td></td><td>one of: new_lead, contacted, qualified, site_visit_scheduled, negotiation, booking_token, documentation, closed_won, closed_lost, initial_contact, site_visit_done, payment_pending</td></tr><tr><td><code>value</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>expectedCloseDate</code></td><td>any</td><td></td><td></td></tr><tr><td><code>notes</code></td><td>any</td><td></td><td></td></tr><tr><td><code>commissionPercentage</code></td><td>number</td><td></td><td>min 0; max 100</td></tr></table>
+</section>
+<section class="endpoint" id="patch-api-crm-id-deals-dealid-stage">
+<h3 id="patch-api-crm-id-deals-dealid-stagesession"><span class="method patch">PATCH</span>/api/crm/{id}/deals/{dealId}/stage<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr><tr><td><code>dealId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>stage</code></td><td>string</td><td>yes</td><td>one of: new_lead, contacted, qualified, site_visit_scheduled, negotiation, booking_token, documentation, closed_won, closed_lost, initial_contact, site_visit_done, payment_pending</td></tr><tr><td><code>notes</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="patch-api-crm-id-deals-dealid-commission">
+<h3 id="patch-api-crm-id-deals-dealid-commissionsession"><span class="method patch">PATCH</span>/api/crm/{id}/deals/{dealId}/commission<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr><tr><td><code>dealId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>percentage</code></td><td>number</td><td></td><td>min 0; max 100</td></tr><tr><td><code>amount</code></td><td>number</td><td></td><td>min 0</td></tr><tr><td><code>status</code></td><td>string</td><td></td><td>one of: pending, partial, paid</td></tr></table>
+</section>
+<section class="endpoint" id="get-api-crm-follow-ups-upcoming">
+<h3 id="get-api-crm-follow-ups-upcomingsession"><span class="method get">GET</span>/api/crm/follow-ups/upcoming<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="get-api-crm-follow-ups-range">
+<h3 id="get-api-crm-follow-ups-rangesession"><span class="method get">GET</span>/api/crm/follow-ups/range<span class="badge session">Session</span></h3>
+
+
+
+
+</section>
+<section class="endpoint" id="post-api-crm-id-follow-ups">
+<h3 id="post-api-crm-id-follow-upssession"><span class="method post">POST</span>/api/crm/{id}/follow-ups<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>dueAt</code></td><td>string</td><td>yes</td><td>date-time</td></tr><tr><td><code>type</code></td><td>string</td><td></td><td>one of: call, email, meeting, site_visit, whatsapp, other</td></tr><tr><td><code>notes</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="patch-api-crm-id-follow-ups-followupid-complete">
+<h3 id="patch-api-crm-id-follow-ups-followupid-completesession"><span class="method patch">PATCH</span>/api/crm/{id}/follow-ups/{followUpId}/complete<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr><tr><td><code>followUpId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>notes</code></td><td>any</td><td></td><td></td></tr><tr><td><code>outcome</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="get-api-crm-id-communications">
+<h3 id="get-api-crm-id-communicationssession"><span class="method get">GET</span>/api/crm/{id}/communications<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-crm-id-communications">
+<h3 id="post-api-crm-id-communicationssession"><span class="method post">POST</span>/api/crm/{id}/communications<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>type</code></td><td>string</td><td>yes</td><td>one of: call, email, sms, meeting, whatsapp, site_visit, note</td></tr><tr><td><code>direction</code></td><td>string</td><td></td><td>one of: inbound, outbound</td></tr><tr><td><code>summary</code></td><td>string</td><td>yes</td><td>max 500</td></tr><tr><td><code>details</code></td><td>any</td><td></td><td></td></tr><tr><td><code>duration</code></td><td>number</td><td></td><td>min 0; max 100000</td></tr><tr><td><code>outcome</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="patch-api-crm-id-communications-communicationid">
+<h3 id="patch-api-crm-id-communications-communicationid-session"><span class="method patch">PATCH</span>/api/crm/{id}/communications/{communicationId}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr><tr><td><code>communicationId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>type</code></td><td>string</td><td></td><td>one of: call, email, sms, meeting, whatsapp, site_visit, note</td></tr><tr><td><code>direction</code></td><td>string</td><td></td><td>one of: inbound, outbound</td></tr><tr><td><code>summary</code></td><td>string</td><td></td><td>max 500</td></tr><tr><td><code>details</code></td><td>any</td><td></td><td></td></tr><tr><td><code>duration</code></td><td>number</td><td></td><td>min 0; max 100000</td></tr><tr><td><code>outcome</code></td><td>any</td><td></td><td></td></tr></table>
+</section>
+<section class="endpoint" id="delete-api-crm-id-communications-communicationid">
+<h3 id="delete-api-crm-id-communications-communicationid-session"><span class="method delete">DELETE</span>/api/crm/{id}/communications/{communicationId}<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr><tr><td><code>communicationId</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="get-api-crm-id-summary">
+<h3 id="get-api-crm-id-summarysession"><span class="method get">GET</span>/api/crm/{id}/summary<span class="badge session">Session</span></h3>
+
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>id</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#get-api-crm-pipelinesession">GET /api/crm/pipeline</a><a class="h3" href="#get-api-crm-pipeline-bottleneckssession">GET /api/crm/pipeline/bottlenecks</a><a class="h3" href="#get-api-crm-pipeline-exportsession">GET /api/crm/pipeline/export</a><a class="h3" href="#post-api-crm-id-dealssession">POST /api/crm/{id}/deals</a><a class="h3" href="#patch-api-crm-id-deals-dealid-stagesession">PATCH /api/crm/{id}/deals/{dealId}/stage</a><a class="h3" href="#patch-api-crm-id-deals-dealid-commissionsession">PATCH /api/crm/{id}/deals/{dealId}/commission</a><a class="h3" href="#get-api-crm-follow-ups-upcomingsession">GET /api/crm/follow-ups/upcoming</a><a class="h3" href="#get-api-crm-follow-ups-rangesession">GET /api/crm/follow-ups/range</a><a class="h3" href="#post-api-crm-id-follow-upssession">POST /api/crm/{id}/follow-ups</a><a class="h3" href="#patch-api-crm-id-follow-ups-followupid-completesession">PATCH /api/crm/{id}/follow-ups/{followUpId}/comp</a><a class="h3" href="#get-api-crm-id-communicationssession">GET /api/crm/{id}/communications</a><a class="h3" href="#post-api-crm-id-communicationssession">POST /api/crm/{id}/communications</a><a class="h3" href="#patch-api-crm-id-communications-communicationid-session">PATCH /api/crm/{id}/communications/{communicatio</a><a class="h3" href="#delete-api-crm-id-communications-communicationid-session">DELETE /api/crm/{id}/communications/{communicati</a><a class="h3" href="#get-api-crm-id-summarysession">GET /api/crm/{id}/summary</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

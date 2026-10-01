@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>auth — Real Vista Docs</title>
+<meta name="description" content="9 endpoints under /api/auth.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<header class="header">
+<button class="menu-btn" aria-label="Menu">&#9776;</button>
+<a class="logo" href="../index.html">Real Vista<span>Docs</span></a>
+<div class="search"><input id="q" type="search" placeholder="Search docs  ( / )" autocomplete="off" aria-label="Search the docs"><div id="results" class="results"></div></div>
+</header>
+<aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
+<div class="main"><article>
+<h1>auth</h1>
+<p class="lede"><a href="index.html">API reference</a> › auth. 9 endpoints under /api/auth.</p>
+<h2 id="endpoints">Endpoints</h2><section class="endpoint" id="post-api-auth-signup">
+<h3 id="post-api-auth-signuppublic"><span class="method post">POST</span>/api/auth/signup<span class="badge public">Public</span></h3>
+<p>Self-registration. Rate limited.</p>
+
+
+
+</section>
+<section class="endpoint" id="post-api-auth-signin">
+<h3 id="post-api-auth-signinpublic"><span class="method post">POST</span>/api/auth/signin<span class="badge public">Public</span></h3>
+<p>The sign-in endpoint itself. Rate limited.</p>
+
+
+<h4>Body (JSON)</h4><table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>email</code></td><td>string</td><td>yes</td><td>email</td></tr><tr><td><code>password</code></td><td>string</td><td>yes</td><td></td></tr></table>
+</section>
+<section class="endpoint" id="post-api-auth-refresh">
+<h3 id="post-api-auth-refreshpublic"><span class="method post">POST</span>/api/auth/refresh<span class="badge public">Public</span></h3>
+<p>Exchanges a refresh cookie; the cookie is the credential.</p>
+
+
+
+</section>
+<section class="endpoint" id="get-api-auth-csrf">
+<h3 id="get-api-auth-csrfpublic"><span class="method get">GET</span>/api/auth/csrf<span class="badge public">Public</span></h3>
+<p>Echoes the caller its own CSRF cookie value. Carries no authority and reveals nothing a same-origin script could not already read; cross-origin callers cannot read the response.</p>
+
+
+
+</section>
+<section class="endpoint" id="get-api-auth-invite-token">
+<h3 id="get-api-auth-invite-token-public"><span class="method get">GET</span>/api/auth/invite/{token}<span class="badge public">Public</span></h3>
+<p>An invited user has no session and cannot know their workspace — the token supplies it. Returns only the workspace name/logo and the address it was sent to; unknown, expired and used tokens all answer the same way. Rate limited.</p>
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>token</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-auth-invite-token">
+<h3 id="post-api-auth-invite-token-public"><span class="method post">POST</span>/api/auth/invite/{token}<span class="badge public">Public</span></h3>
+<p>Completes account setup. The 32-byte token IS the credential, stored hashed, single-use and expiring. Rate limited.</p>
+
+<h4>Parameters</h4><table><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr><tr><td><code>token</code></td><td>path</td><td>string</td><td>yes</td></tr></table>
+
+</section>
+<section class="endpoint" id="post-api-auth-signout">
+<h3 id="post-api-auth-signoutsession"><span class="method post">POST</span>/api/auth/signout<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+
+</section>
+<section class="endpoint" id="post-api-auth-signout-all">
+<h3 id="post-api-auth-signout-allsession"><span class="method post">POST</span>/api/auth/signout-all<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+
+</section>
+<section class="endpoint" id="get-api-auth-clear-rate-limit">
+<h3 id="get-api-auth-clear-rate-limitpublic"><span class="method get">GET</span>/api/auth/clear-rate-limit<span class="badge public">Public</span></h3>
+<p>Only mounted when NODE_ENV=development — see routes/auth.route.js. Never exists in production, which the route-access test confirms by not finding it.</p>
+
+
+
+</section>
+<div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
+<footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#post-api-auth-signuppublic">POST /api/auth/signup</a><a class="h3" href="#post-api-auth-signinpublic">POST /api/auth/signin</a><a class="h3" href="#post-api-auth-refreshpublic">POST /api/auth/refresh</a><a class="h3" href="#get-api-auth-csrfpublic">GET /api/auth/csrf</a><a class="h3" href="#get-api-auth-invite-token-public">GET /api/auth/invite/{token}</a><a class="h3" href="#post-api-auth-invite-token-public">POST /api/auth/invite/{token}</a><a class="h3" href="#post-api-auth-signoutsession">POST /api/auth/signout</a><a class="h3" href="#post-api-auth-signout-allsession">POST /api/auth/signout-all</a><a class="h3" href="#get-api-auth-clear-rate-limitpublic">GET /api/auth/clear-rate-limit</a></nav></div>
+<script src="../assets/docs.js"></script>
+</body>
+</html>
