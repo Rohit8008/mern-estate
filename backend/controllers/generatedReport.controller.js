@@ -2,6 +2,7 @@ import GeneratedReport from '../models/generatedReport.model.js';
 import ReportTemplate from '../models/reportTemplate.model.js';
 import { errorHandler } from '../utils/error.js';
 import { sendMail } from '../utils/mailer.js';
+import { containsInsensitive } from '../utils/escapeRegex.js';
 
 export const listReports = async (req, res, next) => {
   try {
@@ -11,11 +12,8 @@ export const listReports = async (req, res, next) => {
     const filter = { createdBy: req.user.id };
     if (status) filter.status = status;
     if (search) {
-      filter.$or = [
-        { clientName: { $regex: search, $options: 'i' } },
-        { propertyName: { $regex: search, $options: 'i' } },
-        { templateName: { $regex: search, $options: 'i' } },
-      ];
+      const rx = containsInsensitive(search);
+      filter.$or = [{ clientName: rx }, { propertyName: rx }, { templateName: rx }];
     }
 
     const [reports, total] = await Promise.all([

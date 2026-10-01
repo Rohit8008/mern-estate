@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HiTag, HiPlus, HiTrash } from 'react-icons/hi';
+import { HiTag, HiPlus, HiTrash, HiTrendingUp } from 'react-icons/hi';
 import { Input, Button, EmptyState } from '../design-system';
 import ConfirmDialog from './ConfirmDialog';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
-import { currencySymbol, formatCurrency } from '../utils/currency';
+import { currencySymbol, formatCurrency, formatNumber } from '../utils/currency';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 /**
  * Lead sources and what each one costs.
@@ -14,7 +15,113 @@ import { currencySymbol, formatCurrency } from '../utils/currency';
  * "Facebook", "facebook" and "FB ads" and could never be totalled — and with no
  * cost recorded anywhere, "which channel is worth the money?" had no answer.
  */
+const ROI_PERIODS = [
+  { days: 30, label: 'Last 30 days' },
+  { days: 90, label: 'Last 90 days' },
+  { days: 365, label: 'Last 12 months' },
+];
+
+/**
+ * Which channel is worth the money: leads, wins, spend and return per source.
+ * Reading it needs the analytics permission, so the card is not rendered for
+ * anyone without it. A null cost-per-lead/ROI means no monthly cost is on file
+ * for that source ("we do not know"), which is shown as a dash, never as zero.
+ */
+function SourceRoiCard({ refreshKey }) {
+  const { t } = useTranslation();
+  const [days, setDays] = useState(90);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 86_400_000);
+    apiClient
+      .get(`/lead-sources/roi?startDate=${start.toISOString()}&endDate=${end.toISOString()}`, { silent: true })
+      .then((res) => { if (!cancelled) setData(res?.data || null); })
+      .catch((err) => { if (!cancelled) setError(err?.message || 'Could not load the return by channel'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [days, refreshKey]);
+
+  const dash = <span className='text-slate-300'>&mdash;</span>;
+  const rows = data?.rows || [];
+
+  return (
+    <div className='bg-white rounded-xl border border-slate-200 p-5'>
+      <div className='flex items-center justify-between gap-3 mb-4 flex-wrap'>
+        <div className='flex items-center gap-3'>
+          <div className='w-9 h-9 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center flex-shrink-0'>
+            <HiTrendingUp className='w-5 h-5 text-emerald-600' />
+          </div>
+          <div>
+            <h2 className='text-base font-semibold text-slate-900'>Return by channel</h2>
+            <p className='text-xs text-slate-500'>Leads, wins and revenue against what each source costs.</p>
+          </div>
+        </div>
+        <select
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+          aria-label='Period'
+          className='px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500'
+        >
+          {ROI_PERIODS.map((p) => <option key={p.days} value={p.days}>{p.label}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <p className='text-sm text-slate-400 py-4'>{t('common.loading')}</p>
+      ) : error ? (
+        <p className='text-sm text-rose-600 py-4'>{error}</p>
+      ) : !rows.length ? (
+        <EmptyState icon={HiTrendingUp} title='No leads in this period' body='Once leads arrive with a source, each channel is totalled here.' />
+      ) : (
+        <div className='overflow-x-auto -mx-5 px-5'>
+          <table className='min-w-[40rem] w-full text-sm'>
+            <thead>
+              <tr className='border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wide'>
+                <th className='text-left py-2 pr-3 font-semibold'>Source</th>
+                <th className='text-right py-2 px-3 font-semibold'>Leads</th>
+                <th className='text-right py-2 px-3 font-semibold'>Won</th>
+                <th className='text-right py-2 px-3 font-semibold'>Conv.</th>
+                <th className='text-right py-2 px-3 font-semibold'>Spend</th>
+                <th className='text-right py-2 px-3 font-semibold'>Per lead</th>
+                <th className='text-right py-2 px-3 font-semibold'>Revenue</th>
+                <th className='text-right py-2 pl-3 font-semibold'>ROI</th>
+              </tr>
+            </thead>
+            <tbody className='divide-y divide-slate-100'>
+              {rows.map((r) => (
+                <tr key={r.slug}>
+                  <td className='py-2.5 pr-3 font-medium text-slate-800'>{r.source}</td>
+                  <td className='py-2.5 px-3 text-right tabular-nums'>{formatNumber(r.leads)}</td>
+                  <td className='py-2.5 px-3 text-right tabular-nums'>{formatNumber(r.won)}</td>
+                  <td className='py-2.5 px-3 text-right tabular-nums'>{r.conversionRate}%</td>
+                  <td className='py-2.5 px-3 text-right tabular-nums'>{r.cost > 0 ? formatCurrency(r.cost) : dash}</td>
+                  <td className='py-2.5 px-3 text-right tabular-nums'>{r.costPerLead != null ? formatCurrency(r.costPerLead) : dash}</td>
+                  <td className='py-2.5 px-3 text-right tabular-nums'>{r.revenue > 0 ? formatCurrency(r.revenue) : dash}</td>
+                  <td className={`py-2.5 pl-3 text-right tabular-nums font-medium ${r.roi == null ? '' : r.roi >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {r.roi != null ? `${r.roi}%` : dash}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className='text-xs text-slate-400 mt-3'>
+            Revenue counts deals closed won. Sources with no monthly cost on file show a dash for spend and ROI.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LeadSourcesPanel() {
+  const { can } = usePermissions();
   const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
 
@@ -23,6 +130,8 @@ export default function LeadSourcesPanel() {
   const [draft, setDraft] = useState({ name: '', monthlyCost: '' });
   const [pendingDelete, setPendingDelete] = useState(null);
   const [forcePrompt, setForcePrompt] = useState(null);
+  // Bumped when a cost changes, so the return table reflects the new spend.
+  const [roiKey, setRoiKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +166,7 @@ export default function LeadSourcesPanel() {
       setSources((prev) =>
         prev.map((s) => (s._id === source._id ? { ...s, monthlyCost: Number(monthlyCost) || 0 } : s))
       );
+      setRoiKey((k) => k + 1);
     } catch (err) {
       showError(err?.message || 'Could not save the cost');
     }
@@ -155,6 +265,8 @@ export default function LeadSourcesPanel() {
           </>
         )}
       </div>
+
+      {can('viewAnalytics') && <SourceRoiCard refreshKey={roiKey} />}
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}

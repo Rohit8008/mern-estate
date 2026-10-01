@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import { apiClient } from '../utils/http';
+import { Modal, Spinner } from '../design-system';
 import { 
   HiOutlinePlus, 
   HiOutlinePencil, 
@@ -11,7 +12,9 @@ import {
   HiOutlineX,
   HiOutlineCheck,
   HiOutlineEye,
-  HiOutlineEyeOff
+  HiOutlineEyeOff,
+  HiOutlineUsers,
+  HiOutlineRefresh
 } from 'react-icons/hi';
 
 // --- Local cache helpers ---
@@ -66,6 +69,18 @@ const RoleManagement = () => {
   const [showUserRoleModal, setShowUserRoleModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('');
+  // Members of one role — GET /roles/:id/users
+  const [membersOf, setMembersOf] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState('');
+
+  // Restore built-in roles — GET /roles/initialize-defaults. It is a GET but it
+  // writes: it creates only the defaults that are missing and never touches an
+  // existing role, so running it twice is harmless. Hence the confirm.
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreNotice, setRestoreNotice] = useState(null); // { type, text }
   const roleFormCloseRef = useRef(null);
   const userRoleCloseRef = useRef(null);
 
@@ -214,6 +229,42 @@ const RoleManagement = () => {
     }
   };
 
+  const openMembers = async (role) => {
+    setMembersOf(role);
+    setMembers([]);
+    setMembersError('');
+    setMembersLoading(true);
+    try {
+      const res = await apiClient.get(`/roles/${role._id}/users?limit=100`);
+      setMembers(res?.data?.users || []);
+    } catch (error) {
+      setMembersError(error?.message || 'Could not load the members of this role');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const restoreDefaults = async () => {
+    setConfirmRestore(false);
+    setRestoring(true);
+    setRestoreNotice(null);
+    try {
+      const res = await apiClient.get('/roles/initialize-defaults');
+      const created = res?.data?.createdRoles ?? 0;
+      setRestoreNotice({
+        type: 'success',
+        text: created > 0
+          ? `Restored ${created} default role${created === 1 ? '' : 's'}.`
+          : 'All default roles already exist. Nothing to restore.',
+      });
+      fetchRoles();
+    } catch (error) {
+      setRestoreNotice({ type: 'error', text: error?.message || 'Could not restore the default roles' });
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const openEditRole = (role) => {
     setEditingRole(role);
     setRoleForm({
@@ -301,6 +352,16 @@ const RoleManagement = () => {
                 <h3 className="text-xl font-semibold text-gray-900">Role Management</h3>
                 <p className="text-gray-600">Create and manage custom roles with specific permissions</p>
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRestore(true)}
+                disabled={restoring}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                <HiOutlineRefresh className={`h-4 w-4 mr-2 ${restoring ? 'animate-spin' : ''}`} aria-hidden="true" />
+                Restore default roles
+              </button>
               <button
                 onClick={() => {
                   setEditingRole(null);
@@ -312,7 +373,20 @@ const RoleManagement = () => {
                 <HiOutlinePlus className="h-4 w-4 mr-2" aria-hidden="true" />
                 Create New Role
               </button>
+              </div>
             </div>
+
+            {restoreNotice && (
+              <div
+                role={restoreNotice.type === 'error' ? 'alert' : 'status'}
+                className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${
+                  restoreNotice.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'
+                }`}
+              >
+                <span>{restoreNotice.text}</span>
+                <button type="button" onClick={() => setRestoreNotice(null)} aria-label="Dismiss"><HiOutlineX className="h-4 w-4" /></button>
+              </div>
+            )}
 
             {/* Roles Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -358,7 +432,15 @@ const RoleManagement = () => {
                     </div>
 
                     <div className="mt-6 flex items-center justify-between">
-                      <div className="flex space-x-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openMembers(role)}
+                          className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          <HiOutlineUsers className="h-3 w-3 mr-1" aria-hidden="true" />
+                          Members
+                        </button>
                         <button
                           onClick={() => openEditRole(role)}
                           className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -806,6 +888,47 @@ const RoleManagement = () => {
         confirmLabel='Force Delete'
         onConfirm={executeDelete}
         onCancel={() => setPendingDelete(null)}
+      />
+      {membersOf && (
+        <Modal
+          open
+          onClose={() => setMembersOf(null)}
+          title={`${membersOf.name} members`}
+          description={membersLoading ? 'Loading...' : `${members.length} user${members.length === 1 ? '' : 's'} with this role`}
+        >
+          {membersLoading ? (
+            <div className="py-10 flex justify-center"><Spinner /></div>
+          ) : membersError ? (
+            <p className="text-sm text-red-600 py-6 text-center">{membersError}</p>
+          ) : members.length === 0 ? (
+            <div className="py-8 text-center">
+              <HiOutlineUser className="mx-auto h-10 w-10 text-gray-400" aria-hidden="true" />
+              <p className="mt-2 text-sm text-gray-500">No one has this role yet. Assign it from the Assign Roles tab.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100 -my-2">
+              {members.map((u) => (
+                <li key={u._id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">
+                      {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.username}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                  </div>
+                  <span className="text-xs text-gray-500 capitalize flex-shrink-0">{u.role}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      )}
+      <ConfirmDialog
+        open={confirmRestore}
+        title='Restore default roles?'
+        description='Any built-in role that is missing will be created again. Roles that already exist are left exactly as they are.'
+        confirmLabel='Restore'
+        onConfirm={restoreDefaults}
+        onCancel={() => setConfirmRestore(false)}
       />
     </>
   );

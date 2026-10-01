@@ -62,7 +62,7 @@ describe('create mode', () => {
     act(() => result.current.setField('name', 'Plot 42'));
     await act(async () => { await result.current.submit(submitEvent()); });
 
-    expect(apiClient.post).toHaveBeenCalledWith('/listing/create', expect.objectContaining({ name: 'Plot 42' }));
+    expect(apiClient.post).toHaveBeenCalledWith('/listing/create', expect.objectContaining({ name: 'Plot 42' }), { silent: true });
   });
 
   it('sends only the fields the form owns', async () => {
@@ -154,7 +154,38 @@ describe('edit mode', () => {
 
     await act(async () => { await result.current.submit(submitEvent()); });
 
-    expect(apiClient.post).toHaveBeenCalledWith('/listing/update/l1', expect.objectContaining({ name: 'Plot 7' }));
+    expect(apiClient.post).toHaveBeenCalledWith('/listing/update/l1', expect.objectContaining({ name: 'Plot 7' }), { silent: true });
+  });
+
+  it('guards the save with the version it loaded, and offers a choice on a conflict', async () => {
+    const loadedAt = '2026-09-01T10:00:00.123Z';
+    apiClient.get.mockImplementation((url) =>
+      url.startsWith('/listing/get')
+        ? Promise.resolve({ data: { ...existing, updatedAt: loadedAt } })
+        : Promise.resolve({ data: [] })
+    );
+    apiClient.post.mockRejectedValueOnce({
+      code: 'VERSION_CONFLICT',
+      details: { currentUpdatedAt: '2026-09-01T10:05:00.000Z' },
+    });
+    const { result } = renderHook(() => useListingForm({ mode: 'edit', listingId: 'l1' }));
+    await waitFor(() => expect(result.current.form.name).toBe('Plot 7'));
+
+    await act(async () => { await result.current.submit(submitEvent()); });
+
+    const [, guarded] = apiClient.post.mock.calls[0];
+    expect(guarded.expectedUpdatedAt).toBe(loadedAt);
+    // A conflict is a choice for the person, not an error message, and the
+    // form must not navigate away as if it had saved.
+    expect(result.current.conflict).toEqual({ currentUpdatedAt: '2026-09-01T10:05:00.000Z' });
+    expect(result.current.error).toBe('');
+    expect(navigate).not.toHaveBeenCalled();
+
+    // "Keep mine" resends without the guard.
+    await act(async () => { await result.current.overwrite(); });
+    const [, forced] = apiClient.post.mock.calls[1];
+    expect(forced.expectedUpdatedAt).toBeUndefined();
+    expect(result.current.conflict).toBeNull();
   });
 
   it('reports a load failure instead of showing an empty form as if it were the listing', async () => {

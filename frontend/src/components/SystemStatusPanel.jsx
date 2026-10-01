@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HiServer, HiCheckCircle, HiXCircle, HiRefresh } from 'react-icons/hi';
+import { HiServer, HiCheckCircle, HiXCircle, HiRefresh, HiExternalLink } from 'react-icons/hi';
 import { Button, Badge } from '../design-system';
 import { apiClient } from '../utils/http';
 
@@ -65,9 +65,22 @@ export default function SystemStatusPanel() {
               <p className='text-xs text-slate-500'>Version {status.version} &middot; {status.environment}</p>
             </div>
           </div>
-          <Button variant='secondary' icon={HiRefresh} onClick={load} disabled={loading}>
-            {t('common.refresh')}
-          </Button>
+          <div className='flex items-center gap-2 flex-wrap'>
+            {/* The OpenAPI description for whoever is wiring an integration.
+                Admin-only on the server; the session cookie rides the link. */}
+            <a
+              href={`${apiClient.baseURL}/docs/openapi.json`}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'
+            >
+              <HiExternalLink className='w-4 h-4' aria-hidden='true' />
+              API reference (OpenAPI)
+            </a>
+            <Button variant='secondary' icon={HiRefresh} onClick={load} disabled={loading}>
+              {t('common.refresh')}
+            </Button>
+          </div>
         </div>
 
         <Row label={t('system.version')} value={status.version} />

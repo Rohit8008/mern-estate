@@ -179,3 +179,33 @@ export function buildLeadRow({ row, mapping, rowNumber }) {
 export function leadDedupeKey(values) {
   return phoneKeyOf(values?.phone);
 }
+
+/**
+ * The key an imported row is matched on, against the file and the database.
+ *
+ * A full ten-digit number is the person. Phone is required on every row, but
+ * the importer accepts anything from seven digits — and a short number is not
+ * unique enough to match on by itself (two different landlines can share
+ * their last eight digits), so those rows were never matched at all and every
+ * re-run of the same file created them again. For a short number the key falls
+ * back to the email when there is one, and otherwise to the short number
+ * together with the name.
+ *
+ *   { kind: 'phone', phoneKey }          ten digits
+ *   { kind: 'email', email }             short phone, has an email
+ *   { kind: 'phoneName', phoneKey, name } short phone, no email
+ *
+ * `id` is a string form for in-file dedupe; null when there is nothing to key on.
+ */
+export function leadNaturalKey(values) {
+  const phoneKey = leadDedupeKey(values);
+  if (phoneKey.length >= 10) return { kind: 'phone', phoneKey, id: `p:${phoneKey}` };
+
+  const email = String(values?.email || '').trim().toLowerCase();
+  if (email) return { kind: 'email', email, id: `e:${email}` };
+
+  const name = String(values?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (phoneKey && name) return { kind: 'phoneName', phoneKey, name, id: `pn:${phoneKey}|${name}` };
+
+  return { kind: null, id: null };
+}

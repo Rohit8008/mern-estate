@@ -9,6 +9,7 @@ import {
   unenrollClient,
   clientEnrollments,
 } from '../controllers/sequence.controller.js';
+import { validateBody, sequenceValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -18,11 +19,11 @@ router.use(verifyToken, requireRole('admin', 'employee'));
 // authoring a sequence changes what goes out under the agency's name, so that
 // is admin-only.
 router.get('/', listSequences);
-router.post('/', requireAdmin, createSequence);
-router.patch('/:id', requireAdmin, updateSequence);
+router.post('/', requireAdmin, validateBody(sequenceValidation.create), createSequence);
+router.patch('/:id', requireAdmin, validateBody(sequenceValidation.update), updateSequence);
 router.delete('/:id', requireAdmin, deleteSequence);
 
-router.post('/:id/enroll', enrollClient);
+router.post('/:id/enroll', validateBody(sequenceValidation.enroll), enrollClient);
 router.delete('/:id/enroll/:clientId', unenrollClient);
 
 // What one lead is on. Ownership is checked in the controller.

@@ -17,6 +17,7 @@ import { streamCsv } from '../utils/csvExport.js';
 import { emitEvent } from '../utils/webhooks.js';
 import { runHook } from '../plugins/registry.js';
 import { stopSequencesForClient } from '../jobs/sequences.js';
+import { parsePaging } from '../utils/listQuery.js';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -1027,11 +1028,14 @@ export const deleteCommunication = async (req, res, next) => {
 export const getCommunications = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { limit = 50, offset = 0 } = req.query;
+    if (!mongoose.isValidObjectId(id)) return next(new NotFoundError('Client not found'));
+
+    // Same query names as before (limit/offset), now capped and NaN-safe.
+    const { limit } = parsePaging({ limit: req.query.limit }, { defaultLimit: 50 });
+    const offset = Math.max(Number.parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
     const client = await Client.findOne({ _id: id, isDeleted: { $ne: true } })
-      .select('name communications assignedTo')
-      .populate('communications.createdBy', 'username')
+      .select('assignedTo')
       .lean();
 
     if (!client) {
@@ -1040,17 +1044,32 @@ export const getCommunications = async (req, res, next) => {
 
     assertCanAccessClient(client, req.user);
 
-    // Sort by date descending and paginate
-    const sorted = (client.communications || [])
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    const paginated = sorted.slice(Number(offset), Number(offset) + Number(limit));
+    // Paged in the database. This used to load the client with its entire
+    // communication history, sort it in JavaScript and slice — so a lead with
+    // years of logged calls cost the same to read whether you asked for 5 or
+    // 500. $unwind/$sort rather than $sortArray, which needs MongoDB 5.2 and
+    // SETUP_GUIDE promises 5.0.
+    const _id = new mongoose.Types.ObjectId(id);
+    const [countRow] = await Client.aggregate([
+      { $match: { _id } },
+      { $project: { total: { $size: { $ifNull: ['$communications', []] } } } },
+    ]);
+    const page = await Client.aggregate([
+      { $match: { _id } },
+      { $unwind: '$communications' },
+      { $replaceRoot: { newRoot: '$communications' } },
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $skip: offset },
+      { $limit: limit },
+    ]);
+    // Subdocuments came out of an aggregate, so populate through the model.
+    const communications = await mongoose.model('User').populate(page, { path: 'createdBy', select: 'username' });
 
     res.json({
       success: true,
       data: {
-        total: sorted.length,
-        communications: paginated,
+        total: countRow?.total || 0,
+        communications,
       },
     });
   } catch (error) {

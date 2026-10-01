@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import { getRequestId } from './requestContext.js';
+import { getTenantId } from '../tenancy/tenantContext.js';
 
 // ---------------------------------------------------------------------------
 // OpenObserve configuration
@@ -72,8 +74,22 @@ function scheduleFlush() {
   if (typeof flushTimer.unref === 'function') flushTimer.unref();
 }
 
+/**
+ * Every entry written during a request carries that request's id and
+ * workspace, so one customer's failing request can be pulled out of everyone
+ * else's traffic. An explicit value in `entry` wins.
+ */
+function context() {
+  const ctx = {};
+  const requestId = getRequestId();
+  const tenantId = getTenantId();
+  if (requestId) ctx.request_id = requestId;
+  if (tenantId) ctx.tenant_id = tenantId;
+  return ctx;
+}
+
 function push(stream, entry) {
-  buffers[stream].push({ _timestamp: tsUs(), service: SERVICE, environment: ENV, ...entry });
+  buffers[stream].push({ _timestamp: tsUs(), service: SERVICE, environment: ENV, ...context(), ...entry });
   if (buffers[stream].length >= 50) flushStream(stream); // fire-and-forget
   else scheduleFlush();
 }
@@ -87,7 +103,9 @@ const C = { ERROR:'\x1b[31m', WARN:'\x1b[33m', INFO:'\x1b[36m', DEBUG:'\x1b[90m'
 function consolePrint(level, message, meta) {
   if (process.env.NODE_ENV === 'test') return;
   const ts = new Date().toISOString();
+  const rid = getRequestId();
   const mx = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
+  if (rid) message = `[${rid.slice(0, 8)}] ${message}`;
   process.stdout.write(`${C[level] ?? ''}[${ts}] [${level}] ${message}${mx}${C.RESET}\n`);
 }
 
@@ -146,8 +164,9 @@ export function pushFrontendLogs(entries) {
   entries.forEach(e => push('frontend_logs', { service: 'frontend', ...e }));
 }
 
-process.on('SIGTERM', async () => { await flushLogs(); });
-process.on('SIGINT',  async () => { await flushLogs(); });
+// No SIGTERM/SIGINT handlers here: index.js runs one ordered shutdown and
+// calls flushLogs() as its last step before exit. A handler of our own raced
+// the database disconnect's process.exit and usually lost.
 
 // ---------------------------------------------------------------------------
 // Helper exports  (kept for backward-compat with existing callers)

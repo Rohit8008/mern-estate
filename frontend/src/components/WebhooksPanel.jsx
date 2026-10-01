@@ -16,6 +16,55 @@ import { useNotification } from '../contexts/NotificationContext';
  * value to verify the signature, so it has to be readable off this screen. That
  * is also why the whole panel is admin-only.
  */
+const DELIVERY_TONE = { delivered: 'success', success: 'success', failed: 'error', abandoned: 'error', pending: 'warning', retrying: 'warning' };
+
+/** The recent attempts for one endpoint, so "did my test arrive?" has an answer. */
+function DeliveryLog({ hookId }) {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const res = await apiClient.get(`/webhooks/${hookId}/deliveries?limit=15`, { silent: true });
+      setRows(res?.data?.deliveries || []);
+    } catch (err) {
+      setError(err?.message || 'Could not load deliveries');
+    }
+  }, [hookId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className='mt-3 rounded-lg border border-slate-200 bg-slate-50/60'>
+      <div className='flex items-center justify-between px-3 py-2 border-b border-slate-200'>
+        <span className='text-xs font-semibold text-slate-600'>Recent deliveries</span>
+        <button type='button' onClick={load} className='text-xs text-slate-500 hover:text-slate-800'>Refresh</button>
+      </div>
+      {error ? (
+        <p className='px-3 py-3 text-xs text-rose-700'>{error}</p>
+      ) : !rows ? (
+        <p className='px-3 py-3 text-xs text-slate-400'>Loading…</p>
+      ) : !rows.length ? (
+        <p className='px-3 py-3 text-xs text-slate-500'>Nothing sent yet. Use the paper-plane button to send a test.</p>
+      ) : (
+        <ul className='divide-y divide-slate-200'>
+          {rows.map((d) => (
+            <li key={d._id} className='px-3 py-2 text-xs flex flex-wrap items-center gap-x-3 gap-y-1'>
+              <Badge variant={DELIVERY_TONE[d.status] || 'slate'} size='sm'>{d.status}</Badge>
+              <span className='font-mono text-slate-700'>{d.event}</span>
+              {d.responseStatus != null && <span className='text-slate-500'>HTTP {d.responseStatus}</span>}
+              {d.attempts > 1 && <span className='text-slate-500'>{d.attempts} attempts</span>}
+              <span className='text-slate-400 ml-auto'>{new Date(d.createdAt).toLocaleString()}</span>
+              {d.error && <span className='w-full text-rose-700 break-words'>{d.error}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function WebhooksPanel() {
   const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
@@ -25,6 +74,7 @@ export default function WebhooksPanel() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [logFor, setLogFor] = useState(null);
   const [draft, setDraft] = useState({ name: '', url: '', events: ['*'] });
 
   const load = useCallback(async () => {
@@ -190,6 +240,14 @@ export default function WebhooksPanel() {
                     </button>
                     <button
                       type='button'
+                      onClick={() => setLogFor(logFor === hook._id ? null : hook._id)}
+                      className={`px-2.5 py-2 text-xs rounded-lg border transition-colors ${logFor === hook._id ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-600 hover:bg-slate-100 border-slate-200'}`}
+                      aria-expanded={logFor === hook._id}
+                    >
+                      Deliveries
+                    </button>
+                    <button
+                      type='button'
                       onClick={() => rotate(hook)}
                       className='p-2 text-slate-500 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors'
                       title={t('webhooks.rotateSecret')}
@@ -201,7 +259,7 @@ export default function WebhooksPanel() {
                       onClick={() => toggle(hook)}
                       className='px-2.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors'
                     >
-                      {hook.isActive ? t('webhooks.disabled') : t('webhooks.active')}
+                      {hook.isActive ? 'Disable' : 'Enable'}
                     </button>
                     <button
                       type='button'
@@ -213,6 +271,7 @@ export default function WebhooksPanel() {
                     </button>
                   </div>
                 </div>
+                {logFor === hook._id && <DeliveryLog hookId={hook._id} />}
               </li>
             ))}
           </ul>

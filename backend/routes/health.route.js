@@ -1,4 +1,7 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
+import { getRedis, isRedisConfigured } from '../utils/redis.js';
+import { isShuttingDown } from '../utils/lifecycle.js';
 import databaseConnection from '../config/database.js';
 import { config } from '../config/environment.js';
 import { logger } from '../utils/logger.js';
@@ -17,24 +20,16 @@ router.get('/health', async (req, res) => {
     
     const responseTime = Date.now() - startTime;
     
+    // Up/down and version only. pid, Node version, platform and heap sizes
+    // used to be here — this route is public, and those are reconnaissance,
+    // not health. /metrics (token-gated) carries the numbers.
     const healthStatus = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: config.server.nodeEnv,
+      uptime: Math.round(process.uptime()),
       version: APP_VERSION,
       responseTime: `${responseTime}ms`,
-      database: dbHealth,
-      memory: {
-        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-        external: Math.round(process.memoryUsage().external / 1024 / 1024),
-      },
-      system: {
-        platform: process.platform,
-        nodeVersion: process.version,
-        pid: process.pid,
-      },
+      database: { status: dbHealth.status },
     };
 
     // Determine overall health
@@ -54,25 +49,31 @@ router.get('/health', async (req, res) => {
     sendErrorResponse(res, 503, 'Health check failed', {
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
-      error: error.message,
     });
   }
 });
 
 // Readiness check endpoint
+//
+// Not ready while shutting down (see utils/lifecycle.js), so traffic moves
+// away before the drain. Redis is reported but never makes the instance
+// unready: the app is built to degrade to per-process cache and rate limits
+// without it, and failing readiness would take every healthy instance out of
+// service the moment Redis blinked.
 router.get('/ready', async (req, res) => {
   try {
     const dbStatus = databaseConnection.getStatus();
-    
-    if (dbStatus.isConnected) {
-      sendSuccessResponse(res, { 
-        ready: true, 
-        database: dbStatus 
-      }, 'Service is ready');
+    const redis = isRedisConfigured() ? (getRedis()?.status === 'ready' ? 'connected' : 'degraded') : 'not_configured';
+    const draining = isShuttingDown();
+
+    if (dbStatus.isConnected && !draining) {
+      sendSuccessResponse(res, { ready: true, database: { isConnected: true }, redis }, 'Service is ready');
     } else {
-      sendErrorResponse(res, 503, 'Service is not ready', { 
-        ready: false, 
-        database: dbStatus 
+      sendErrorResponse(res, 503, draining ? 'Shutting down' : 'Service is not ready', {
+        ready: false,
+        draining,
+        database: { isConnected: Boolean(dbStatus.isConnected) },
+        redis,
       });
     }
   } catch (error) {
@@ -80,11 +81,8 @@ router.get('/ready', async (req, res) => {
       message: error.message,
       stack: error.stack,
     });
-    
-    sendErrorResponse(res, 503, 'Readiness check failed', {
-      ready: false,
-      error: error.message,
-    });
+
+    sendErrorResponse(res, 503, 'Readiness check failed', { ready: false });
   }
 });
 
@@ -117,7 +115,6 @@ router.get('/startup', async (req, res) => {
   } catch (error) {
     return res.status(503).json({
       status: 'error',
-      error: error.message,
     });
   }
 });
@@ -136,7 +133,7 @@ router.get('/detailed', async (req, res) => {
         latency: dbHealth.latency,
       };
     } catch (e) {
-      checks.database = { status: 'unhealthy', error: e.message };
+      checks.database = { status: 'unhealthy' };
     }
 
     // Memory check
@@ -188,14 +185,29 @@ router.get('/detailed', async (req, res) => {
     logger.error('Detailed health check failed:', { error: error.message });
     res.status(503).json({
       status: 'error',
-      error: error.message,
       timestamp: new Date().toISOString(),
     });
   }
 });
 
+/**
+ * Process metrics for a scraper. With METRICS_TOKEN set, the scraper must send
+ * `Authorization: Bearer <token>`; heap, CPU and environment are not for
+ * whoever happens to find the URL. Without it the route stays open, as it
+ * always was, so an existing scraper keeps working until the token is set.
+ */
+function metricsAuth(req, res, next) {
+  const expected = process.env.METRICS_TOKEN;
+  if (!expected) return next();
+  const given = (req.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  if (a.length === b.length && timingSafeEqual(a, b)) return next();
+  return sendErrorResponse(res, 401, 'Unauthorized');
+}
+
 // Metrics endpoint (basic)
-router.get('/metrics', (req, res) => {
+router.get('/metrics', metricsAuth, (req, res) => {
   try {
     const metrics = {
       timestamp: new Date().toISOString(),
@@ -218,9 +230,7 @@ router.get('/metrics', (req, res) => {
       stack: error.stack,
     });
     
-    sendErrorResponse(res, 500, 'Failed to retrieve metrics', {
-      error: error.message,
-    });
+    sendErrorResponse(res, 500, 'Failed to retrieve metrics');
   }
 });
 

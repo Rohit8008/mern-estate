@@ -6,6 +6,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import compression from 'compression';
 import hpp from 'hpp';
+import { requestId } from './utils/requestContext.js';
+import { errorEnvelope } from './middleware/errorEnvelope.js';
 
 import observabilityRouter from './routes/observability.route.js';
 
@@ -19,6 +21,7 @@ import ownerRouter from './routes/owner.route.js';
 import buyerRequirementRouter from './routes/buyerRequirement.route.js';
 import roleRouter from './routes/role.route.js';
 import healthRouter from './routes/health.route.js';
+import docsRouter from './routes/docs.route.js';
 import clientRouter from './routes/client.route.js';
 import documentRouter from './routes/document.route.js';
 import taskRouter from './routes/task.route.js';
@@ -85,22 +88,31 @@ export function createApp() {
     app.set('trust proxy', 1);
   }
 
+  // First, so every later log line and every error body carries the id.
+  app.use(requestId);
   app.use(securityHeaders);
+  app.use(requestLogger);
+
+  // Parse BEFORE sanitising. The sanitisers used to run first, when req.body
+  // was still undefined — so `{"email": {"$ne": null}}` reached the
+  // controllers untouched and only query strings were ever cleaned.
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(cookieParser());
+
   // Protect against HTTP Parameter Pollution (e.g. ?role=user&role=admin)
   app.use(hpp());
   app.use(mongoSanitization);
   app.use(xssProtection);
-  app.use(requestLogger);
-
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-  app.use(cookieParser());
 
   // Compress responses (safe to apply globally; keeps SSE/ws unaffected)
   app.use(compression());
 
   app.use(cors(config.cors));
-  app.use(morgan(config.server.isProduction ? 'combined' : 'dev'));
+  // Development console only. In production requestLogger already writes one
+  // structured access entry per request; morgan's 'combined' line was a second
+  // copy of the same request with no request id on it.
+  if (!config.server.isProduction) app.use(morgan('dev'));
 
   if (config.security.enableRateLimiting) {
     app.use('/api/upload', strictRateLimit);
@@ -108,6 +120,10 @@ export function createApp() {
   }
 
   app.use('/api', encryptResponse);
+  // After encryptResponse on purpose: each wraps res.json and the last one
+  // installed runs first, so the code and request id are added to the body
+  // before it is encrypted rather than to the ciphertext envelope.
+  app.use(errorEnvelope);
 
   // Health checks answer before tenant resolution: a load balancer probe has no
   // workspace, and a broken tenant lookup must not take the pod out of service.
@@ -158,6 +174,7 @@ export function createApp() {
   app.use('/api/activity', activityRouter);
   app.use('/api/notifications', notificationRouter);
   app.use('/api/tags', tagRouter);
+  app.use('/api/docs', docsRouter);
   app.use('/api/lead-sources', leadSourceRouter);
   app.use('/api/data-rights', dataRightsRouter);
   app.use('/api/webhooks', webhookRouter);
@@ -231,7 +248,7 @@ export function createApp() {
       </body>
     </html>`);
     }
-    res.status(404).json({ success: false, statusCode: 404, message: 'API route not found' });
+    res.status(404).json({ success: false, statusCode: 404, code: 'NOT_FOUND', message: 'API route not found', requestId: req.id });
   });
 
   app.get('*', (req, res) => {

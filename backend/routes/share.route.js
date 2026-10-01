@@ -7,6 +7,7 @@ import {
 } from '../controllers/share.controller.js';
 import { verifyToken } from '../utils/verifyUser.js';
 import { shareRateLimit } from '../middleware/security.js';
+import { validateBody, shareValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get('/open/:token', shareRateLimit, openShare);
 router.use(verifyToken);
 
 router.get('/', listShares);
-router.post('/', createShare);
-router.post('/:id/revoke', revokeShare);
+router.post('/', validateBody(shareValidation.create), createShare);
+router.post('/:id/revoke', validateBody(shareValidation.empty), revokeShare);
 
 export default router;

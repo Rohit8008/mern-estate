@@ -1,3 +1,5 @@
+import DashboardFollowUps from '../components/crm/DashboardFollowUps';
+import TeamPerformance from '../components/crm/TeamPerformance';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
@@ -903,6 +905,12 @@ export default function AgencyDashboard() {
               </div>
             </>
           )}
+
+          {/* What needs doing this week, and (admins) how the team is doing */}
+          <div className={`grid grid-cols-1 gap-6 ${isAdmin ? 'lg:grid-cols-2' : ''}`}>
+            <DashboardFollowUps />
+            {isAdmin && <TeamPerformance />}
+          </div>
 
           {/* Charts */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>

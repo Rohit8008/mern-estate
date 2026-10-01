@@ -9,6 +9,7 @@ import {
   listDeliveries,
   sendTestEvent,
 } from '../controllers/webhook.controller.js';
+import { validateBody, webhookValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -17,12 +18,12 @@ const router = express.Router();
 router.use(verifyToken, requireAdmin);
 
 router.get('/', listWebhooks);
-router.post('/', createWebhook);
-router.patch('/:id', updateWebhook);
+router.post('/', validateBody(webhookValidation.create), createWebhook);
+router.patch('/:id', validateBody(webhookValidation.update), updateWebhook);
 router.delete('/:id', deleteWebhook);
 
-router.post('/:id/rotate-secret', rotateSecret);
-router.post('/:id/test', sendTestEvent);
+router.post('/:id/rotate-secret', validateBody(webhookValidation.empty), rotateSecret);
+router.post('/:id/test', validateBody(webhookValidation.empty), sendTestEvent);
 router.get('/:id/deliveries', listDeliveries);
 
 export default router;

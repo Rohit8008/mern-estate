@@ -9,6 +9,7 @@ import Listing from '../models/listing.model.js';
 import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../utils/encryption.js';
 import { inHomeTenant } from '../tenancy/tenantContext.js';
 import { notify } from '../utils/notify.js';
+import { parsePaging } from '../utils/listQuery.js';
 
 /**
  * Helper function to decrypt message content if it's encrypted
@@ -130,11 +131,34 @@ export const sendMessage = async (req, res, next) => {
   }
 };
 
+/**
+ * A mailbox, newest first. These used to return the whole mailbox — every
+ * message a person had ever received, decrypted one by one in the request.
+ *
+ * Without `page` the answer stays a bare array (the shape this endpoint has
+ * always had), capped at the newest UNPAGED_MAILBOX_CAP. With `page` it is
+ * `{ success, data, page, limit, total }`. No web or mobile screen calls these
+ * two today — conversations and threads are what they use — so the cap
+ * changes nothing anyone sees.
+ */
+const UNPAGED_MAILBOX_CAP = 500;
+
+async function mailbox(req, res, filter) {
+  if (req.query.page === undefined) {
+    const msgs = await Message.find(filter).sort({ createdAt: -1, _id: -1 }).limit(UNPAGED_MAILBOX_CAP);
+    return res.status(200).json(decryptMessages(msgs));
+  }
+  const { page, limit, skip } = parsePaging(req.query);
+  const [msgs, total] = await Promise.all([
+    Message.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
+    Message.countDocuments(filter),
+  ]);
+  return res.status(200).json({ success: true, data: decryptMessages(msgs), page, limit, total });
+}
+
 export const getInbox = async (req, res, next) => {
   try {
-    const msgs = await Message.find({ receiverId: req.user.id }).sort({ createdAt: -1 });
-    const decryptedMsgs = decryptMessages(msgs);
-    res.status(200).json(decryptedMsgs);
+    await mailbox(req, res, { receiverId: req.user.id });
   } catch (error) {
     next(error);
   }
@@ -142,9 +166,7 @@ export const getInbox = async (req, res, next) => {
 
 export const getSent = async (req, res, next) => {
   try {
-    const msgs = await Message.find({ senderId: req.user.id }).sort({ createdAt: -1 });
-    const decryptedMsgs = decryptMessages(msgs);
-    res.status(200).json(decryptedMsgs);
+    await mailbox(req, res, { senderId: req.user.id });
   } catch (error) {
     next(error);
   }

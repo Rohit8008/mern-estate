@@ -7,7 +7,9 @@ import Transaction from '../models/transaction.model.js';
 import Document from '../models/document.model.js';
 import User from '../models/user.model.js';
 import { errorHandler } from '../utils/error.js';
+import mongoose from 'mongoose';
 import { streamCsv } from '../utils/csvExport.js';
+import { dayStartIn, workspaceTimezone } from '../utils/analyticsScope.js';
 
 /**
  * Reading the workspace audit trail.
@@ -113,20 +115,47 @@ export const listActivity = async (req, res, next) => {
   }
 };
 
-/** Shared by the admin trail and its CSV export. */
-function buildTrailFilter(query) {
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The calendar day after `ymd`, as YYYY-MM-DD. */
+const nextDay = (ymd) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+};
+
+/**
+ * Shared by the admin trail and its CSV export.
+ *
+ * `since`/`until` arrive from a date picker as YYYY-MM-DD and mean whole days
+ * in the workspace's timezone, with `until` INCLUDED. They used to go straight
+ * into `new Date()`, which is midnight UTC at the start of the day — so
+ * filtering "to today" dropped everything logged today, and a malformed date
+ * reached Mongo as an Invalid Date and came back as a 500. A full timestamp is
+ * still accepted as an exact bound; anything unparseable is ignored.
+ */
+export function buildTrailFilter(query, tz = 'Asia/Kolkata') {
   const { entityType, action, userId, since, until, q } = query;
   const filter = {};
 
   if (entityType && ENTITIES[String(entityType)]) filter.entityType = String(entityType);
   if (action) filter.action = String(action);
-  if (userId) filter.createdBy = userId;
+  // An id that cannot be an ObjectId would fail the cast with a 500.
+  if (userId && mongoose.isValidObjectId(String(userId))) filter.createdBy = String(userId);
 
-  if (since || until) {
-    filter.createdAt = {};
-    if (since) filter.createdAt.$gte = new Date(since);
-    if (until) filter.createdAt.$lte = new Date(until);
+  const range = {};
+  if (since) {
+    const from = YMD.test(String(since)) ? dayStartIn(String(since), tz) : new Date(String(since));
+    if (!Number.isNaN(from.getTime())) range.$gte = from;
   }
+  if (until) {
+    if (YMD.test(String(until))) {
+      range.$lt = dayStartIn(nextDay(String(until)), tz);
+    } else {
+      const to = new Date(String(until));
+      if (!Number.isNaN(to.getTime())) range.$lte = to;
+    }
+  }
+  if (Object.keys(range).length) filter.createdAt = range;
 
   if (q) {
     // Escaped: a user-supplied regex must not become a ReDoS or match everything.
@@ -149,9 +178,14 @@ export const searchActivity = async (req, res, next) => {
 
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
     const offset = Math.max(0, Number(req.query.offset) || 0);
-    const filter = buildTrailFilter(req.query);
+    const filter = buildTrailFilter(req.query, workspaceTimezone(req));
 
-    const [items, total] = await Promise.all([
+    // `actions` and `actors` feed the filter dropdowns: what has actually been
+    // recorded in this workspace, rather than a list that drifts from it. Both
+    // are tenant-scoped like every other query here (distinct is covered by
+    // the tenant plugin), and both ignore the current filter so choosing one
+    // option does not empty the list of the others.
+    const [items, total, actions, actorIds] = await Promise.all([
       ActivityLog.find(filter)
         .sort({ createdAt: -1 })
         .skip(offset)
@@ -159,11 +193,21 @@ export const searchActivity = async (req, res, next) => {
         .populate('createdBy', 'username email')
         .lean(),
       ActivityLog.countDocuments(filter),
+      ActivityLog.distinct('action'),
+      ActivityLog.distinct('createdBy'),
     ]);
+    const actors = actorIds.length
+      ? await User.find({ _id: { $in: actorIds } }).select('username email').sort({ username: 1 }).lean()
+      : [];
 
     res.json({
       success: true,
-      data: { total, items, limit, offset, entityTypes: ENTITY_TYPES },
+      data: {
+        total, items, limit, offset,
+        entityTypes: ENTITY_TYPES,
+        actions: actions.sort(),
+        actors: actors.map((u) => ({ _id: u._id, username: u.username, email: u.email })),
+      },
     });
   } catch (err) {
     next(err);
@@ -179,7 +223,7 @@ export const exportActivity = async (req, res, next) => {
   try {
     if (!canReadAllLogs(req)) return next(errorHandler(403, 'Forbidden'));
 
-    const filter = buildTrailFilter(req.query);
+    const filter = buildTrailFilter(req.query, workspaceTimezone(req));
     const cursor = ActivityLog.find(filter)
       .sort({ createdAt: -1 })
       .limit(50_000)

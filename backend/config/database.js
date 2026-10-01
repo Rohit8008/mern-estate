@@ -70,16 +70,9 @@ class DatabaseConnection {
       this.isConnected = true;
     });
 
-    // Graceful shutdown
-    process.on('SIGINT', async () => {
-      await this.disconnect();
-      process.exit(0);
-    });
-
-    process.on('SIGTERM', async () => {
-      await this.disconnect();
-      process.exit(0);
-    });
+    // No signal handlers here. Exiting the moment the database disconnects
+    // dropped every in-flight request; index.js runs the whole shutdown in
+    // order (stop accepting, drain, stop jobs, then this) and exits itself.
   }
 
   async disconnect() {

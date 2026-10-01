@@ -8,6 +8,7 @@ import {
   getPreferences,
   updatePreferences,
 } from '../controllers/notification.controller.js';
+import { validateBody, notificationValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -17,10 +18,10 @@ router.use(verifyToken);
 
 router.get('/', listNotifications);
 router.get('/unread-count', unreadCount);
-router.patch('/read-all', markAllRead);
-router.patch('/:id/read', markRead);
+router.patch('/read-all', validateBody(notificationValidation.empty), markAllRead);
+router.patch('/:id/read', validateBody(notificationValidation.empty), markRead);
 
 router.get('/preferences', getPreferences);
-router.patch('/preferences', updatePreferences);
+router.patch('/preferences', validateBody(notificationValidation.preferences), updatePreferences);
 
 export default router;

@@ -7,6 +7,19 @@ import { config } from '../config/environment.js';
 import { logger } from '../utils/logger.js';
 import { RedisStore } from 'rate-limit-redis';
 import { getRedis } from '../utils/redis.js';
+import jwt from 'jsonwebtoken';
+
+/** The signed-in user's id from the access cookie, or null. Never throws. */
+export function userIdFromAccessCookie(req) {
+  const token = req.cookies?.access_token;
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, config.jwt.secret, { issuer: config.jwt.issuer, audience: config.jwt.audience });
+    return payload?.id ? String(payload.id) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The store every limiter shares.
@@ -47,10 +60,17 @@ export const createRateLimit = (windowMs, max, message, extra = {}) => {
     windowMs,
     max,
     store: rateLimitStore(),
-    message: {
-      success: false,
-      statusCode: 429,
-      message: message || 'Too many requests, please try again later.',
+    // A handler rather than a fixed body, so the 429 carries the same code
+    // and request id as every other error — the limiter answers before
+    // errorEnvelope is reached.
+    handler: (req, res, _next, options) => {
+      res.status(options.statusCode).json({
+        success: false,
+        statusCode: options.statusCode,
+        code: 'RATE_LIMITED',
+        message: message || 'Too many requests, please try again later.',
+        ...(req.id && { requestId: req.id }),
+      });
     },
     standardHeaders: true,
     legacyHeaders: false,
@@ -74,8 +94,15 @@ export const apiRateLimit = createRateLimit(
   config.server.isDevelopment ? 5000 : config.rateLimit.maxRequests,
   'Too many requests. Please wait a moment and try again.',
   {
-    // Key by user ID for authenticated requests so users don't share quotas
-    keyGenerator: (req) => req.user?.id || ipKeyGenerator(req),
+    // Key by user for signed-in requests, so an office behind one IP does
+    // not share a single quota. This limiter runs before any route's
+    // verifyToken, so req.user is never set yet — the id comes from the
+    // access cookie directly. An invalid or expired token simply falls back
+    // to the IP; this decides a bucket, it authenticates nothing.
+    keyGenerator: (req) => {
+      const userId = userIdFromAccessCookie(req);
+      return userId ? `u:${userId}` : ipKeyGenerator(req.ip);
+    },
     skip: (req) => {
       const url = req.originalUrl || req.url || '';
       return url.endsWith('/api/auth/refresh') || url.includes('/api/health/');
@@ -142,8 +169,16 @@ export const securityHeaders = helmet({
 });
 
 // MongoDB injection protection
+/**
+ * Strip Mongo operators (`$ne`, `$gt`, `$where`…) from body, query and params.
+ *
+ * `allowDots`: a dotted key is not an operator, and real bodies have them —
+ * an import's column mapping is keyed by the spreadsheet's own header text
+ * ("Phone no."), which replacing the dot would silently corrupt.
+ */
 export const mongoSanitization = mongoSanitize({
   replaceWith: '_',
+  allowDots: true,
   onSanitize: ({ req, key }) => {
     logger.warn(`MongoDB injection attempt detected: ${key}`, {
       ip: req.ip,
@@ -152,11 +187,19 @@ export const mongoSanitization = mongoSanitize({
   },
 });
 
-// XSS protection
+/**
+ * XSS-escape the query string and route params — values that get echoed into
+ * pages and logs as plain text.
+ *
+ * Deliberately NOT the body. Bodies legitimately carry markup — an email
+ * template's HTML (up to 100 KB), a report template, a note that says "<3 BHK"
+ * — and escaping them on the way in corrupts what the user saved. Output is
+ * where escaping belongs: React escapes everything it renders, and mail
+ * templates are rendered through utils/emailTemplates.js. This middleware
+ * used to run before the body was parsed, so it never touched bodies either;
+ * that behaviour is now intended rather than accidental.
+ */
 export const xssProtection = (req, res, next) => {
-  if (req.body) {
-    req.body = sanitizeObject(req.body);
-  }
   if (req.query) {
     req.query = sanitizeObject(req.query);
   }

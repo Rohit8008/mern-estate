@@ -4,7 +4,7 @@ import { signOut, signOutAll, signin, refreshToken,
 } from '../controllers/auth.controller.js';
 import { getInvite, acceptInvite } from '../controllers/invite.controller.js';
 import { authRateLimit, refreshRateLimit } from '../middleware/security.js';
-import { validateBody, userValidation } from '../middleware/validation.js';
+import { validateBody, userValidation, inviteValidation } from '../middleware/validation.js';
 import { tryVerifyToken, verifyToken } from '../utils/verifyUser.js';
 
 const router = express.Router();
@@ -26,7 +26,7 @@ router.get('/csrf', getCsrfToken);
 // to know which workspace is theirs; the token in the URL supplies both. Rate
 // limited like the other credential-bearing endpoints.
 router.get('/invite/:token', authRateLimit, getInvite);
-router.post('/invite/:token', authRateLimit, acceptInvite);
+router.post('/invite/:token', authRateLimit, validateBody(inviteValidation.accept), acceptInvite);
 
 router.post('/signout', tryVerifyToken, signOut);
 router.post('/signout-all', verifyToken, signOutAll);

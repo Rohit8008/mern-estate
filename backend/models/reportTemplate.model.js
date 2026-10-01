@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { REPORT_TYPES } from '../utils/reportTypes.js';
 
 const reportTemplateSchema = new mongoose.Schema(
   {
@@ -6,7 +7,7 @@ const reportTemplateSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ['property_summary', 'market_analysis', 'investment_report', 'transaction_history', 'client_portfolio', 'monthly_summary'],
+      enum: REPORT_TYPES,
       default: 'property_summary',
     },
     description: { type: String, default: '', maxlength: 1000 },

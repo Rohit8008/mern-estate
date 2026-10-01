@@ -4,11 +4,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiClient, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useTenant } from '../contexts/TenantProvider';
-import { PageHeader, Button } from '../design-system';
-import { HiRefresh, HiPlusSm, HiDownload } from 'react-icons/hi';
+import { PageHeader, Button, Skeleton } from '../design-system';
+import { HiRefresh, HiPlusSm, HiDownload, HiSearch, HiX, HiOutlineInbox } from 'react-icons/hi';
 import { currencySymbol, formatCurrency } from '../utils/currency';
 import DealActivityFeed from '../components/DealActivityFeed';
 import PrintButton from '../components/PrintButton';
+import PipelineBottlenecks from '../components/crm/PipelineBottlenecks';
 import { useTranslation } from 'react-i18next';
 import { localDateString } from '../utils/localDate';
 
@@ -22,6 +23,37 @@ const STAGE_DOT = {
   purple: 'bg-purple-500', amber: 'bg-amber-500', orange: 'bg-orange-500',
   yellow: 'bg-yellow-500', emerald: 'bg-emerald-500', rose: 'bg-rose-500',
 };
+
+/**
+ * Filters over the board already in hand. The pipeline endpoint returns every
+ * open card at once, so narrowing it is a client-side view — nothing here is
+ * sent to the server, and a drag still moves the real deal.
+ *
+ * Only what the payload carries can be filtered on: the client's name, the
+ * deal's value and its expected close date.
+ */
+const EMPTY_FILTERS = { q: '', kind: 'all', close: 'any', minValue: '' };
+
+function matchesFilters(deal, filters, now) {
+  const q = filters.q.trim().toLowerCase();
+  if (q && !String(deal.clientName || '').toLowerCase().includes(q)) return false;
+  if (filters.kind === 'deal' && !deal.dealId) return false;
+  if (filters.kind === 'noDeal' && deal.dealId) return false;
+
+  const min = Number(filters.minValue);
+  if (filters.minValue !== '' && Number.isFinite(min) && (Number(deal.value) || 0) < min) return false;
+
+  if (filters.close !== 'any') {
+    const close = deal.expectedCloseDate ? new Date(deal.expectedCloseDate).getTime() : null;
+    if (filters.close === 'none') return close === null;
+    if (close === null) return false;
+    if (filters.close === 'overdue') return close < now;
+    if (filters.close === 'next30') return close >= now && close <= now + 30 * 24 * 60 * 60 * 1000;
+  }
+  return true;
+}
+
+const FILTER_INPUT = 'h-9 rounded-lg border border-border bg-card text-sm text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-brand-500';
 
 export default function DealsBoard() {
   const { t } = useTranslation();
@@ -43,6 +75,13 @@ export default function DealsBoard() {
   const [addingDealFor, setAddingDealFor] = useState(null); // clientId string
   const [quickDealValue, setQuickDealValue] = useState('');
   const [openHistory, setOpenHistory] = useState(null);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [bottleneckKey, setBottleneckKey] = useState(0);
+  const setFilter = (key) => (e) => {
+    const { value } = e.target;
+    setFilters((f) => ({ ...f, [key]: value }));
+  };
+  const filtering = filters.q !== '' || filters.kind !== 'all' || filters.close !== 'any' || filters.minValue !== '';
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -173,6 +212,33 @@ export default function DealsBoard() {
     return Array.from(map.values()).filter((col) => !col.retired || col.count > 0);
   }, [pipeline, stages]);
 
+  // The board as filtered. Counts and totals are recomputed from the cards
+  // shown, so a column header never claims deals the filter has hidden.
+  const visibleColumns = useMemo(() => {
+    if (!filtering) return columns;
+    const now = Date.now();
+    return columns.map((col) => {
+      const deals = (col.deals || []).filter((d) => matchesFilters(d, filters, now));
+      return {
+        ...col,
+        deals,
+        count: deals.length,
+        totalValue: deals.reduce((sum, d) => sum + (Number(d.value) || 0), 0),
+      };
+    });
+  }, [columns, filters, filtering]);
+
+  const boardTotals = useMemo(() => {
+    const shown = visibleColumns.reduce((n, col) => n + col.count, 0);
+    const all = columns.reduce((n, col) => n + col.count, 0);
+    const value = visibleColumns.reduce((n, col) => n + (Number(col.totalValue) || 0), 0);
+    return { shown, all, value };
+  }, [visibleColumns, columns]);
+
+  // First load: placeholder columns in the workspace's own stages, so the
+  // board keeps its shape instead of flashing empty columns.
+  const firstLoad = loading && pipeline.length === 0;
+
   if (!canAccess) return null;
 
 
@@ -220,7 +286,7 @@ export default function DealsBoard() {
               variant='primary'
               size='sm'
               icon={HiRefresh}
-              onClick={loadPipeline}
+              onClick={() => { loadPipeline(); setBottleneckKey((k) => k + 1); }}
               disabled={loading}
               className={loading ? '[&>svg]:animate-spin' : ''}
             >{t('deals.refresh')}</Button>
@@ -228,16 +294,100 @@ export default function DealsBoard() {
         }
       />
 
+        <div className='no-print'>
+          <PipelineBottlenecks stages={stages} refreshKey={bottleneckKey} />
+        </div>
+
         {error && (
           <div className='bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm'>
             {error}
           </div>
         )}
 
+        {/* Toolbar: narrows the board in place. Not printed — the paper copy is
+            the board as filtered, without the controls. */}
+        <div className='no-print bg-card border border-border rounded-xl p-3 shadow-sm flex flex-wrap items-center gap-2'>
+          <label className='relative flex-1 min-w-[12rem] max-w-xs'>
+            <span className='sr-only'>{t('deals.searchClients')}</span>
+            <HiSearch className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' aria-hidden='true' />
+            <input
+              type='search'
+              value={filters.q}
+              onChange={setFilter('q')}
+              placeholder={t('deals.searchClients')}
+              className={`${FILTER_INPUT} w-full pl-9`}
+            />
+          </label>
+          <label className='flex items-center gap-1.5'>
+            <span className='sr-only'>{t('deals.filterKind')}</span>
+            <select value={filters.kind} onChange={setFilter('kind')} className={FILTER_INPUT}>
+              <option value='all'>{t('deals.kindAll')}</option>
+              <option value='deal'>{t('deals.kindWithDeal')}</option>
+              <option value='noDeal'>{t('deals.kindNoDeal')}</option>
+            </select>
+          </label>
+          <label className='flex items-center gap-1.5'>
+            <span className='sr-only'>{t('deals.filterClose')}</span>
+            <select value={filters.close} onChange={setFilter('close')} className={FILTER_INPUT}>
+              <option value='any'>{t('deals.closeAny')}</option>
+              <option value='overdue'>{t('deals.closeOverdue')}</option>
+              <option value='next30'>{t('deals.closeNext30')}</option>
+              <option value='none'>{t('deals.closeNone')}</option>
+            </select>
+          </label>
+          <label className='flex items-center gap-1.5'>
+            <span className='sr-only'>{t('deals.minValue')}</span>
+            <input
+              type='number'
+              min='0'
+              inputMode='numeric'
+              value={filters.minValue}
+              onChange={setFilter('minValue')}
+              placeholder={`${t('deals.minValue')} (${currencySymbol()})`}
+              className={`${FILTER_INPUT} w-36`}
+            />
+          </label>
+          {filtering && (
+            <Button variant='ghost' size='sm' icon={HiX} onClick={() => setFilters(EMPTY_FILTERS)}>
+              {t('deals.clearFilters')}
+            </Button>
+          )}
+          <span className='ml-auto text-sm text-muted-foreground tabular-nums' aria-live='polite'>
+            {filtering
+              ? t('deals.showingOf', { shown: boardTotals.shown, count: boardTotals.all })
+              : t('deals.cardCount', { count: boardTotals.all })}
+            {' · '}
+            {formatCurrency(boardTotals.value)}
+          </span>
+        </div>
+
         {/* print-stack: the columns run across on screen and stack on paper. */}
-        <div className='print-stack overflow-x-auto pb-2'>
-          <div className='flex gap-3' style={{ minWidth: `${columns.length * 272}px` }}>
-            {columns.map((col) => (
+        <div className='print-stack overflow-x-auto pb-2' aria-busy={loading || undefined}>
+          {firstLoad ? (
+            <div className='flex gap-3' aria-hidden='true'>
+              {(stages.length ? stages : Array.from({ length: 5 }, (_, i) => ({ id: `s${i}` }))).map((stage, i) => (
+                <div key={stage.id} style={{ minWidth: '256px', width: '256px' }}>
+                  <div className='flex items-center gap-2 px-1 py-2 mb-2'>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STAGE_DOT[stage.color] || 'bg-slate-300'}`} />
+                    {stage.label
+                      ? <span className='text-sm font-semibold text-slate-800 truncate'>{stage.label}</span>
+                      : <Skeleton className='h-3 w-24' />}
+                  </div>
+                  <Skeleton className='h-3 w-16 mx-1 mb-3' />
+                  <div className='rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-2 space-y-2 min-h-[120px]'>
+                    {Array.from({ length: (i % 3) + 1 }, (_, j) => (
+                      <div key={j} className='rounded-lg border border-border bg-card p-3 space-y-2'>
+                        <Skeleton className='h-3 w-3/4' />
+                        <Skeleton className='h-3 w-1/3' />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+          <div className='flex gap-3' style={{ minWidth: `${visibleColumns.length * 272}px` }}>
+            {visibleColumns.map((col) => (
               <div key={col.id} style={{ minWidth: '256px', width: '256px' }}>
                 {/* Column header */}
                 <div className='flex items-center gap-2 px-1 py-2 mb-2'>
@@ -351,14 +501,19 @@ export default function DealsBoard() {
                   ))}
 
                   {(!col.deals || col.deals.length === 0) && (
-                    <div className='flex items-center justify-center py-6 text-slate-400'>
-                      <span className='text-xs'>{t('deals.noDeals')}</span>
+                    <div className='flex flex-col items-center justify-center gap-1.5 py-6 text-center text-muted-foreground'>
+                      <HiOutlineInbox className='w-5 h-5 opacity-60' aria-hidden='true' />
+                      <span className='text-xs'>
+                        {filtering ? t('deals.noMatchesInStage') : t('deals.noDealsInStage')}
+                      </span>
+                      {!filtering && <span className='text-[11px] opacity-80'>{t('deals.dropHere')}</span>}
                     </div>
                   )}
                 </div>
               </div>
             ))}
           </div>
+          )}
         </div>
 
       {updating && (

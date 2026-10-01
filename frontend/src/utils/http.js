@@ -108,6 +108,8 @@ export function handleApiError(error, data, httpStatus) {
       // `code` distinguishes CSRF_COOKIE_MISSING from a real permission denial.
       code: data.code || null,
       details: data.details || null,
+      // Quoted back to support: it finds this exact request in the logs.
+      requestId: data.requestId || null,
     };
   }
 
@@ -139,6 +141,7 @@ export async function handleApiResponse(response, silent = false) {
             data,
             url: response.url,
             type: error.type || 'error',
+            requestId: error.requestId || response.headers.get('X-Request-Id') || null,
           }
         }));
       } catch (_) {}

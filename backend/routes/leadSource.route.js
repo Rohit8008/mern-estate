@@ -8,6 +8,7 @@ import {
   deleteLeadSource,
   getSourceRoi,
 } from '../controllers/leadSource.controller.js';
+import { validateBody, leadSourceValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -20,8 +21,8 @@ router.get('/', listLeadSources);
 // analytics permission and editing the catalogue is admin-only.
 router.get('/roi', requirePermission('viewAnalytics'), getSourceRoi);
 
-router.post('/', requireAdmin, createLeadSource);
-router.patch('/:id', requireAdmin, updateLeadSource);
+router.post('/', requireAdmin, validateBody(leadSourceValidation.create), createLeadSource);
+router.patch('/:id', requireAdmin, validateBody(leadSourceValidation.update), updateLeadSource);
 router.delete('/:id', requireAdmin, deleteLeadSource);
 
 export default router;

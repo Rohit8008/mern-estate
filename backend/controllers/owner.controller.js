@@ -3,6 +3,8 @@ import { errorHandler } from '../utils/error.js';
 import { emitToTenant } from '../socket.js';
 import { logFromRequest, diffFields } from '../utils/activity.js';
 import { phoneKeyOf } from '../utils/phoneKey.js';
+import { parsePaging, parseSort } from '../utils/listQuery.js';
+import { containsInsensitive } from '../utils/escapeRegex.js';
 
 export const createOwner = async (req, res, next) => {
   try {
@@ -88,15 +90,43 @@ export const getOwner = async (req, res, next) => {
   }
 };
 
+/** Columns the Owners table can sort by — see parseSort. */
+const OWNER_SORTS = {
+  name: 'name',
+  email: 'email',
+  phone: 'phone',
+  createdAt: 'createdAt',
+};
+
 export const listOwners = async (req, res, next) => {
   try {
     const { q, active } = req.query;
     const filter = { isDeleted: { $ne: true } };
-    if (q) filter.name = { $regex: String(q), $options: 'i' };
+    if (q) {
+      // Escaped: the text is someone's search, not a pattern. Unescaped, a
+      // stray "(" was a 500 and "(a+)+$" a way to stall the database.
+      const rx = containsInsensitive(q);
+      filter.$or = ['name', 'email', 'phone', 'companyName', 'city'].map((field) => ({ [field]: rx }));
+    }
     if (active === 'true') filter.active = true;
     if (active === 'false') filter.active = false;
-    const owners = await Owner.find(filter).sort({ createdAt: -1 }).limit(200);
-    res.status(200).json(owners);
+
+    // Paged only when asked. Without `page` the answer stays a bare array
+    // capped at 200: the mobile app, the listing form's owner picker and three
+    // other screens read it that way, and changing the shape under them would
+    // break every one at once.
+    if (req.query.page === undefined) {
+      const owners = await Owner.find(filter).sort({ createdAt: -1 }).limit(200);
+      return res.status(200).json(owners);
+    }
+
+    const { page, limit, skip } = parsePaging(req.query);
+    const sort = parseSort(req.query.sort, OWNER_SORTS, { createdAt: -1 });
+    const [items, total] = await Promise.all([
+      Owner.find(filter).sort(sort).skip(skip).limit(limit).lean(),
+      Owner.countDocuments(filter),
+    ]);
+    return res.status(200).json({ success: true, data: items, page, limit, total });
   } catch (e) {
     next(e);
   }

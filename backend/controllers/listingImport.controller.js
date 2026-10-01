@@ -25,7 +25,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { logActivity } from '../utils/activity.js';
 import { clearSearchCache } from './listing.controller.js';
-import { assertWithinLimit } from '../tenancy/limits.js';
+import { assertWithinLimit, reserveImportRows } from '../tenancy/limits.js';
 import {
   CORE_IMPORT_FIELDS,
   autoMapHeaders,
@@ -391,13 +391,22 @@ export const commitImport = asyncHandler(async (req, res) => {
     toInsert.push({ entry, doc });
   });
 
+  // The plan's monthly import allowance — the same meter lead import charges,
+  // so the cap is on rows brought in, whichever importer brought them.
+  // Reserved for every row about to be written and released for any that did
+  // not make it, so a failed row does not cost the agency anything.
+  const reserved = toInsert.length + toUpdate.length;
+  const release = await reserveImportRows(reserved);
+  let inserted = 0;
+  let updated = 0;
+  try {
+
   // ── Inserts ────────────────────────────────────────────────────────────────
   // Each document is validated individually first. Mongoose's own insertMany
   // error shapes don't map cleanly back to row numbers, and an import report
   // that can't name the failing row is close to useless — so validation is done
   // here, where the row number is still in hand, and insertMany then only sees
   // documents already known to be well-formed.
-  let inserted = 0;
   if (toInsert.length) {
     const candidates = [];
 
@@ -455,7 +464,6 @@ export const commitImport = asyncHandler(async (req, res) => {
   }
 
   // ── Updates ────────────────────────────────────────────────────────────────
-  let updated = 0;
   if (toUpdate.length) {
     const ops = toUpdate.map((t) => ({
       updateOne: {
@@ -496,6 +504,10 @@ export const commitImport = asyncHandler(async (req, res) => {
         }
       });
     }
+  }
+
+  } finally {
+    await release(reserved - inserted - updated);
   }
 
   outcomes.sort((a, b) => a.rowNumber - b.rowNumber);

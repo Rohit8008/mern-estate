@@ -14,6 +14,8 @@ import { attachInvite, sendInviteEmail } from '../tenancy/invites.js';
 import { erasedUserFields } from './dataRights.controller.js';
 import { clearSessionCookies } from './auth.controller.js';
 import { LEGAL_VERSION } from '../utils/legalVersion.js';
+import { parsePaging, parseSort } from '../utils/listQuery.js';
+import { containsInsensitive } from '../utils/escapeRegex.js';
 
 export const test = (req, res) => {
   res.json({
@@ -666,11 +668,45 @@ export const setUserRole = async (req, res, next) => {
   }
 };
 
+const UNPAGED_USER_CAP = 1000;
+
+/** Columns the users list can sort by — see parseSort. */
+const USER_SORTS = {
+  username: 'username',
+  email: 'email',
+  role: 'role',
+  status: 'status',
+  createdAt: 'createdAt',
+  lastLogin: 'lastLogin',
+};
+
 export const listUsers = async (req, res, next) => {
   try {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
-    const users = await User.find({ isDeleted: { $ne: true } }).select('-password').populate('assignedRole', 'name description isActive');
-    res.status(200).json(users);
+    const filter = { isDeleted: { $ne: true } };
+
+    // Without `page`: the bare array every caller reads (Admin, the assignee
+    // pickers on Tasks/Clients/Properties, the dashboard, the mobile admin
+    // screen), capped at UNPAGED_USER_CAP so it is never unbounded. The largest
+    // plan has 40 seats, so the cap is far above any real workspace — if one
+    // ever reaches it, the pickers need to move to paging, not the cap up.
+    if (req.query.page === undefined) {
+      const users = await User.find(filter)
+        .select('-password')
+        .sort({ createdAt: 1, _id: 1 })
+        .limit(UNPAGED_USER_CAP)
+        .populate('assignedRole', 'name description isActive');
+      return res.status(200).json(users);
+    }
+
+    const { page, limit, skip } = parsePaging(req.query);
+    const sort = parseSort(req.query.sort, USER_SORTS, { createdAt: 1 });
+    const [users, total] = await Promise.all([
+      User.find(filter).select('-password').sort(sort).skip(skip).limit(limit)
+        .populate('assignedRole', 'name description isActive'),
+      User.countDocuments(filter),
+    ]);
+    res.status(200).json({ success: true, data: users, page, limit, total });
   } catch (error) {
     next(error);
   }
@@ -680,7 +716,9 @@ export const searchUsers = async (req, res, next) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 2) return res.status(200).json([]);
-    const regex = { $regex: q, $options: 'i' };
+    // Literal text, not a pattern: a raw "(" used to be a 500 and "(a+)+$" a
+    // way to stall the database (see utils/escapeRegex.js).
+    const regex = containsInsensitive(q);
     const users = await User.find({
       _id: { $ne: req.user.id },
       status: { $ne: 'inactive' },

@@ -88,8 +88,12 @@ export const config = {
         ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining'],
+    // X-CSRF-Token: every write carries it (middleware/csrf.js), so a
+    // cross-origin deployment whose preflight does not allow it rejects every
+    // POST before it reaches the API. X-Request-Id: a client may send its own,
+    // and reads ours back to quote in a bug report.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-Request-Id'],
+    exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining', 'X-Request-Id'],
   },
 
   // Rate limiting configuration
@@ -166,6 +170,16 @@ export const validateConfig = () => {
     if (config.server.isProduction) {
       errors.push('MONGO_URI must be set to a production database in production');
     }
+  }
+
+  // FRONTEND_URL is the production CORS origin and the base of every link in
+  // an email. Not fatal — a same-origin deployment serving frontend/dist needs
+  // no CORS — but without it invite and reset emails link nowhere useful.
+  if (config.server.isProduction && !process.env.FRONTEND_URL) {
+    console.warn(
+      'Warning: FRONTEND_URL not set. Cross-origin browsers will be refused by CORS, ' +
+        'and links in invite and password-reset emails have no host.'
+    );
   }
 
   // Observability. Not fatal — the app runs fine without it — but silence here

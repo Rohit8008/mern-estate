@@ -2,7 +2,7 @@ import express from 'express';
 import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, changePassword, getSavedViews, putSavedViews, getDashboardWidgets, putDashboardWidgets, me, myPermissions, getLegalAcceptance, acceptLegal, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
-import { validateBody, userRouteValidation } from '../middleware/validation.js';
+import { validateBody, userRouteValidation, legalValidation } from '../middleware/validation.js';
 import { authRateLimit } from '../middleware/security.js';
 
 
@@ -12,7 +12,7 @@ router.get('/test', test);
 router.get('/list', verifyToken, requireAdmin, listUsers)
 router.get('/me', verifyToken, me)
 router.get('/legal-acceptance', verifyToken, getLegalAcceptance)
-router.post('/legal-acceptance', verifyToken, acceptLegal)
+router.post('/legal-acceptance', verifyToken, validateBody(legalValidation.accept), acceptLegal)
 router.get('/my-permissions', verifyToken, myPermissions)
 router.get('/security/logs', verifyToken, requireAdmin, async (req, res) => {
   try {

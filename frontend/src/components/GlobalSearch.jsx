@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   HiOutlineSearch, HiOutlineX, HiOutlineHome, HiOutlineUser,
   HiOutlineOfficeBuilding, HiOutlineUserGroup, HiOutlineClipboardList,
@@ -10,6 +11,9 @@ import { useSearchContext } from '../contexts/SearchContext';
 import { useGlobalSearch }  from '../hooks/useGlobalSearch';
 import { apiClient }        from '../utils/http';
 import { useTranslation } from 'react-i18next';
+import { useCommands, matchesCommand } from '../app/commands';
+import { readRecentPages } from '../utils/recentPages';
+import SavedSearchesList from './SavedSearchesList';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -106,6 +110,48 @@ function ResultGroup({ group, startIndex, activeIndex, onHover, onSelect }) {
           onClick={() => onSelect(item, group.entity)}
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * A group of palette commands — an action, a screen, a recent page. Shares the
+ * result list's keyboard index, so arrows move through commands and records as
+ * one list.
+ */
+function CommandGroup({ label, items, startIndex, activeIndex, onHover, onSelect }) {
+  if (!items.length) return null;
+  return (
+    <div role='group' aria-label={label}>
+      <div className="px-4 pt-3 pb-1.5">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</span>
+      </div>
+      {items.map((cmd, i) => {
+        const Icon = cmd.icon || HiOutlineLightningBolt;
+        const active = startIndex + i === activeIndex;
+        return (
+          <button
+            key={cmd.id}
+            type="button"
+            onMouseEnter={() => onHover(startIndex + i)}
+            onClick={() => onSelect(cmd)}
+            className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+          >
+            <span className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+              <Icon className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            </span>
+            <span className="flex-1 min-w-0 text-sm text-slate-800 truncate">{cmd.label}</span>
+            {cmd.hint && <span className="text-xs text-slate-400 truncate max-w-[40%] hidden sm:block">{cmd.hint}</span>}
+            {cmd.shortcut && (
+              <span className="hidden sm:flex items-center gap-1 flex-shrink-0" aria-hidden="true">
+                {cmd.shortcut.split(' ').map((k, j) => (
+                  <kbd key={j} className="px-1.5 py-0.5 border border-slate-200 rounded bg-white font-mono text-[10px] text-slate-500">{k}</kbd>
+                ))}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -217,11 +263,41 @@ export default function GlobalSearch() {
   } = useSearchContext();
 
   const { results, loading } = useGlobalSearch(query, entity);
+  const userId = useSelector((s) => s.user.currentUser?._id);
+  const { create, navigate: goTo, general } = useCommands();
+
+  // Recent pages are re-read on every open so a page visited a moment ago is
+  // already there.
+  const [recentPages, setRecentPages] = useState([]);
+  useEffect(() => {
+    if (isOpen) setRecentPages(readRecentPages(userId));
+  }, [isOpen, userId]);
+
+  /**
+   * With no query: recently visited, then actions, then screens. With a
+   * query: whatever commands match it, as one "Actions" group above the
+   * records, so "new task" or "pipeline" works from the same box as a search.
+   */
+  const commandGroups = useMemo(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      return [
+        { key: 'recent', label: t('commands.recentlyVisited'), items: recentPages.slice(0, 5).map((p) => ({ id: `recent-${p.path}`, label: p.title, hint: p.path, icon: HiOutlineClock, to: p.path })) },
+        { key: 'create', label: t('commands.actions'), items: create },
+        { key: 'go', label: t('commands.goTo'), items: goTo },
+        { key: 'general', label: t('commands.general'), items: general },
+      ].filter((g) => g.items.length > 0);
+    }
+    const matched = [...create, ...goTo, ...general].filter((c) => matchesCommand(c, q)).slice(0, 6);
+    return matched.length ? [{ key: 'matched', label: t('commands.actions'), items: matched }] : [];
+  }, [query, recentPages, create, goTo, general, t]);
+  const commandItems = useMemo(() => commandGroups.flatMap((g) => g.items), [commandGroups]);
   const inputRef  = useRef(null);
   const panelRef  = useRef(null);
   const [activeIdx,   setActiveIdx]   = useState(-1);
   const [showSave,    setShowSave]    = useState(false);
   const [savedOk,     setSavedOk]     = useState(false);
+  const [savedKey,    setSavedKey]    = useState(0);
 
   // Focus when modal opens
   useEffect(() => {
@@ -236,10 +312,13 @@ export default function GlobalSearch() {
   // Reset active index when results change
   useEffect(() => setActiveIdx(-1), [results]);
 
-  // Build flat item list for keyboard navigation
+  // Build flat item list for keyboard navigation: commands first, then records.
   const flatItems = useMemo(
-    () => (results?.groups ?? []).flatMap(g => g.items.map(item => ({ item, entity: g.entity }))),
-    [results]
+    () => [
+      ...commandItems.map((command) => ({ command })),
+      ...(results?.groups ?? []).flatMap(g => g.items.map(item => ({ item, entity: g.entity }))),
+    ],
+    [results, commandItems]
   );
   const totalItems = flatItems.length;
 
@@ -250,6 +329,13 @@ export default function GlobalSearch() {
     close();
     setQuery('');
   }, [query, addHistory, navigate, close, setQuery]);
+
+  const runCommand = useCallback((command) => {
+    close();
+    setQuery('');
+    if (command.to) navigate(command.to);
+    else command.run?.();
+  }, [close, setQuery, navigate]);
 
   const handleKeyDown = useCallback((e) => {
     switch (e.key) {
@@ -264,8 +350,9 @@ export default function GlobalSearch() {
       case 'Enter':
         if (activeIdx >= 0 && flatItems[activeIdx]) {
           e.preventDefault();
-          const { item, entity: ent } = flatItems[activeIdx];
-          handleSelect(item, ent);
+          const { command, item, entity: ent } = flatItems[activeIdx];
+          if (command) runCommand(command);
+          else handleSelect(item, ent);
         } else if (query.trim().length >= 2) {
           // Full search page
           addHistory(query);
@@ -282,12 +369,13 @@ export default function GlobalSearch() {
       default:
         break;
     }
-  }, [activeIdx, totalItems, flatItems, handleSelect, query, addHistory, navigate, close, setQuery, showSave]);
+  }, [activeIdx, totalItems, flatItems, handleSelect, runCommand, query, addHistory, navigate, close, setQuery, showSave]);
 
   const handleSave = useCallback(async (name) => {
     try {
       await apiClient.post('/search/saved', { name, query, entities: entity !== 'all' ? [entity] : [] });
       setSavedOk(true);
+      setSavedKey((k) => k + 1);
       setShowSave(false);
       setTimeout(() => setSavedOk(false), 2000);
     } catch {
@@ -316,8 +404,14 @@ export default function GlobalSearch() {
 
   if (!isOpen) return null;
 
-  // Compute group start indices for keyboard nav
+  // Compute group start indices for keyboard nav. Commands occupy the first
+  // indices, in the same order flatItems lists them.
   let runningIdx = 0;
+  const commandGroupsWithStart = commandGroups.map((g) => {
+    const start = runningIdx;
+    runningIdx += g.items.length;
+    return { group: g, start };
+  });
   const groupsWithStart = (results?.groups ?? []).map(g => {
     const start = runningIdx;
     runningIdx += g.items.length;
@@ -325,7 +419,8 @@ export default function GlobalSearch() {
   });
 
   const hasResults  = groupsWithStart.length > 0;
-  const showEmpty   = !loading && !hasResults;
+  const hasCommands = commandGroupsWithStart.length > 0;
+  const showEmpty   = !loading && !hasResults && (query.trim().length >= 2 ? !hasCommands : true);
 
   return (
     <div
@@ -417,6 +512,27 @@ export default function GlobalSearch() {
 
         {/* Results */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+          {query.trim().length < 2 && (
+            <SavedSearchesList
+              refreshKey={savedKey}
+              onSelect={(s) => {
+                setQuery(s.query);
+                if (s.entities?.length === 1 && ENTITY_TABS.some((tab) => tab.key === s.entities[0])) setEntity(s.entities[0]);
+                inputRef.current?.focus();
+              }}
+            />
+          )}
+          {commandGroupsWithStart.map(({ group, start }) => (
+            <CommandGroup
+              key={group.key}
+              label={group.label}
+              items={group.items}
+              startIndex={start}
+              activeIndex={activeIdx}
+              onHover={setActiveIdx}
+              onSelect={runCommand}
+            />
+          ))}
           {hasResults
             ? groupsWithStart.map(({ group, start }) => (
                 <ResultGroup

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { validateConfig, config } from './config/environment.js';
 import { registerTenancy } from './tenancy/tenantPlugin.js';
-import { logger } from './utils/logger.js';
+import { logger, flushLogs } from './utils/logger.js';
 
 // Tenant scoping is a global Mongoose plugin, and a plugin only applies to
 // schemas compiled AFTER it is registered. This has to run before the first
@@ -12,7 +12,11 @@ registerTenancy(mongoose);
 const { startServer, setupSocket, io, server } = await import('./server.js');
 const { startJobs } = await import('./jobs/index.js');
 const { registerBuiltinRules } = await import('./plugins/builtin.js');
-const { startCacheInvalidationListener } = await import('./utils/cache.js');
+const { startCacheInvalidationListener, stopCacheInvalidationListener } = await import('./utils/cache.js');
+const { stopScheduler } = await import('./jobs/scheduler.js');
+const { default: databaseConnection } = await import('./config/database.js');
+const { closeRedis } = await import('./utils/redis.js');
+const { markShuttingDown } = await import('./utils/lifecycle.js');
 
 validateConfig();
 
@@ -42,15 +46,67 @@ const bootstrap = async () => {
   }
 };
 
-// Process-level hardening
+// ── Shutdown ────────────────────────────────────────────────────────────────
+// One ordered sequence for every way the process ends. The pieces used to
+// race: the database module exited on SIGTERM the instant Mongo disconnected,
+// so requests mid-flight got a reset connection, the logger's own flush lost,
+// and the scheduler's lease was never released.
+//
+//   1. stop accepting connections and let in-flight requests finish
+//   2. stop the scheduler and the cache-invalidation listener
+//   3. close sockets, disconnect the database, flush logs, exit
+//
+// SHUTDOWN_TIMEOUT_MS bounds the wait, so a stuck request cannot hold a
+// deploy forever; the orchestrator's own kill timeout should be longer.
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 10_000;
+let shuttingDown = false;
+
+async function shutdown(reason, exitCode = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  markShuttingDown();
+  logger.info('Shutting down', { reason });
+
+  const force = setTimeout(() => {
+    logger.error('Shutdown timed out; closing remaining connections', { timeoutMs: SHUTDOWN_TIMEOUT_MS });
+    server.closeAllConnections?.();
+  }, SHUTDOWN_TIMEOUT_MS);
+  force.unref();
+
+  try {
+    await new Promise((resolve) => {
+      server.close(() => resolve());
+      // Keep-alive sockets with no request on them would otherwise hold
+      // close() open until they time out on their own.
+      server.closeIdleConnections?.();
+    });
+    stopScheduler();
+    await stopCacheInvalidationListener().catch(() => {});
+    io?.close?.();
+    await closeRedis().catch(() => {});
+    await databaseConnection.disconnect().catch(() => {});
+  } catch (err) {
+    logger.error('Error during shutdown', { message: err.message });
+    exitCode = exitCode || 1;
+  } finally {
+    clearTimeout(force);
+    await flushLogs().catch(() => {});
+    process.exit(exitCode);
+  }
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Process-level hardening: log, then leave through the same door.
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled promise rejection', { reason: String(reason) });
-  server.close(() => process.exit(1));
+  shutdown('unhandledRejection', 1);
 });
 
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught exception', { message: err.message, stack: err.stack });
-  server.close(() => process.exit(1));
+  shutdown('uncaughtException', 1);
 });
 
 bootstrap();

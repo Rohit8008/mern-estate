@@ -290,6 +290,23 @@ export default function LeadImport() {
               {result.skipped?.duplicates || 0} {t('leadImport.alreadyOnFile')} ·{' '}
               {result.skipped?.errors || 0} {t('leadImport.couldNotRead')}
             </p>
+            {/* Rows that passed the preview but the database refused — the
+                file's own unreadable rows are already counted above. */}
+            {result.failed > 0 && (
+              <div className='mt-4 mx-auto max-w-lg text-left rounded-lg border border-rose-200 bg-rose-50 px-4 py-3'>
+                <p className='text-sm font-medium text-rose-700'>
+                  {t('leadImport.couldNotSave', { count: result.failed })}
+                </p>
+                <ul className='mt-1.5 space-y-0.5 text-xs text-rose-700/90'>
+                  {(result.rowErrors || [])
+                    .filter((e) => e.code !== 'INVALID_ROW')
+                    .slice(0, 10)
+                    .map((e) => (
+                      <li key={`${e.row}-${e.code}`}>{t('leadImport.rowError', { row: e.row, error: e.error })}</li>
+                    ))}
+                </ul>
+              </div>
+            )}
             <div className='flex items-center justify-center gap-2 mt-6'>
               <Button variant='secondary' onClick={reset}>{t('leadImport.importAnother')}</Button>
               <Button onClick={() => { window.location.href = '/clients'; }}>

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
+import seoPlugin from './seo/vite-plugin-seo.mjs';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -40,6 +41,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    seoPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.svg'],
@@ -47,7 +49,7 @@ export default defineConfig({
         name: 'Real Vista',
         short_name: 'Real Vista',
         description: 'Real Vista — a CRM for real estate agencies: leads, owners, properties and deals in one workspace.',
-        theme_color: '#4f46e5',
+        theme_color: '#2b6faa',
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',

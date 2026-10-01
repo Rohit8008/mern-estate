@@ -7,6 +7,7 @@ import SellerRoute from '../components/SellerRoute';
 import PermissionRoute from '../components/PermissionRoute';
 import CrmShell from './CrmShell';
 import ActingAwareLayout from './ActingAwareLayout';
+import RouteSeo from './RouteSeo';
 
 // ── Lazy page imports ─────────────────────────────────────────────────────────
 // Public
@@ -80,6 +81,7 @@ function PageLoader() {
 export default function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
+      <RouteSeo />
       <Routes>
         {/* Public */}
         <Route path='/' element={<Home />} />

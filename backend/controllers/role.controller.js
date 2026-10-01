@@ -2,6 +2,7 @@ import Role from '../models/role.model.js';
 import User from '../models/user.model.js';
 import { errorHandler, sendSuccessResponse } from '../utils/error.js';
 import { PERMISSION_GROUPS } from '../utils/permissionCatalogue.js';
+import { containsInsensitive, equalsInsensitive } from '../utils/escapeRegex.js';
 
 // Create a new role
 export const createRole = async (req, res, next) => {
@@ -9,7 +10,7 @@ export const createRole = async (req, res, next) => {
     const { name, description, permissions } = req.body;
     
     // Check if role with same name already exists
-    const existingRole = await Role.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+    const existingRole = await Role.findOne({ name: equalsInsensitive(name) });
     if (existingRole) {
       return next(errorHandler(400, 'Role with this name already exists'));
     }
@@ -36,8 +37,8 @@ export const getRoles = async (req, res, next) => {
 
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: containsInsensitive(search) },
+        { description: containsInsensitive(search) }
       ];
     }
 
@@ -100,7 +101,7 @@ export const updateRole = async (req, res, next) => {
     // Check if new name conflicts with existing roles
     if (name && name !== existingRole.name) {
       const nameConflict = await Role.findOne({ 
-        name: { $regex: new RegExp(`^${name}$`, 'i') },
+        name: equalsInsensitive(name),
         _id: { $ne: req.params.id }
       });
       if (nameConflict) {

@@ -1,29 +1,36 @@
 import Joi from 'joi';
+import { ValidationError } from '../utils/error.js';
 
+/**
+ * Validate the body against a Joi schema, and answer a failure in the same
+ * shape as every other error (utils/error.js) — it used to be a bare
+ * `{ success, message }` with no field, so a form could not say which input
+ * was wrong. Unknown keys are stripped, so a client cannot smuggle fields the
+ * schema does not name into a write.
+ */
 export const validateBody = (schema) => {
-  return (req, res, next) => {
-    try {
-      const { error, value } = schema.validate(req.body, {
-        abortEarly: true,
-        stripUnknown: true,
-      });
+  // Named, so tests/validationCoverage.test.js can find it on a route's stack,
+  // and carrying its schema, so utils/openapi.js can document the body from
+  // the same definition that enforces it — docs that cannot drift.
+  const middleware = function validateBody(req, res, next) {
+    const { error, value } = schema.validate(req.body ?? {}, {
+      abortEarly: true,
+      stripUnknown: true,
+    });
 
-      if (error) {
-        return res.status(400).json({
-          success: false,
-          message: error.details?.[0]?.message || 'Validation failed',
-        });
-      }
-
-      req.body = value;
-      return next();
-    } catch (e) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-      });
+    if (error) {
+      const detail = error.details?.[0];
+      return next(new ValidationError(
+        detail?.message?.replace(/"/g, '') || 'Validation failed',
+        detail?.path?.join('.') || null
+      ));
     }
+
+    req.body = value;
+    return next();
   };
+  middleware.schema = schema;
+  return middleware;
 };
 
 // Owner validation schemas
@@ -101,6 +108,8 @@ export const clientValidation = {
   }),
 
   update: Joi.object({
+    // Optional edit guard: the updatedAt the form loaded (see VersionConflictError).
+    expectedUpdatedAt: Joi.date().iso().optional(),
     name: Joi.string().min(2).max(120).optional(),
     email: Joi.string().email().max(254).optional().allow(''),
     phone: Joi.string().max(30).optional().allow(''),
@@ -570,6 +579,8 @@ export const listingValidation = {
   }),
 
   update: Joi.object({
+    // Optional edit guard: the updatedAt the form loaded (see VersionConflictError).
+    expectedUpdatedAt: Joi.date().iso().optional(),
     name: Joi.string().min(3).max(100).optional(),
     description: Joi.string().max(2000).optional().allow(''),
     address: Joi.string().max(200).optional().allow(''),
@@ -939,3 +950,297 @@ export const calendarEventValidation = {
     reminderMinutes: Joi.number().integer().min(0).max(10080).default(15),
   }),
 };
+
+// ─── Workspace, platform and automation writes ───────────────────────────────
+//
+// These schemas check SHAPE — types, lengths, ids that are ids — and leave the
+// domain rules where they already live, each with a better message than Joi
+// could give: the stage catalogue for pipelines, the screen catalogue for
+// screens, WEBHOOK_EVENTS via cleanEvents, the controllers' own lists of
+// editable and platform-only keys. Where a controller rejects unknown keys
+// itself (tenant config, platform tenant edit) the schema is `.unknown(true)`,
+// so "slug is managed by the platform" still reaches the user instead of the
+// key being stripped silently.
+//
+// A field the controller reads but a schema here does not name is DROPPED by
+// stripUnknown — that is a broken feature, not a safer one. Add the field.
+
+const objectId = Joi.string().hex().length(24);
+const optionalId = objectId.allow(null, '');
+const freeText = (max) => Joi.string().max(max).allow('');
+const looseDate = Joi.alternatives(Joi.date(), Joi.string().allow('')).allow(null);
+// Accept local and internal domains — Joi's default TLD list rejects them.
+const email = Joi.string().email({ tlds: { allow: false } }).max(254);
+
+export const tenantValidation = {
+  // updateTenantConfig rejects platform-only and unknown keys with its own
+  // message, and merges each object into what is stored.
+  updateConfig: Joi.object({
+    name: Joi.string().trim().min(1).max(120),
+    branding: Joi.object(),
+    locale: Joi.object(),
+    workflow: Joi.object(),
+  }).unknown(true),
+  // validateStageSelection (stageCatalogue.js) owns which stages exist,
+  // duplicates and the required end states.
+  updatePipeline: Joi.object({
+    stages: Joi.array().items(Joi.object({
+      key: Joi.string().max(60),
+      label: Joi.string().max(120).allow(''),
+      color: Joi.string().max(40).allow(''),
+    }).unknown(true)),
+  }),
+  // isKnownScreen (screenCatalogue.js) owns which ids exist.
+  updateScreens: Joi.object({
+    screens: Joi.object().pattern(Joi.string().max(60), Joi.boolean()),
+    labels: Joi.object().pattern(Joi.string().max(60), Joi.string().max(200).allow('')),
+  }),
+  updateMail: Joi.object({
+    enabled: Joi.boolean(),
+    host: freeText(255),
+    port: Joi.alternatives(Joi.number().integer().min(1).max(65535), Joi.string().allow('')),
+    secure: Joi.boolean(),
+    user: freeText(255),
+    // Empty means "keep the stored one" — the form cannot show it back.
+    password: freeText(500),
+    from: freeText(254),
+    fromName: freeText(120),
+  }),
+  empty: Joi.object({}),
+};
+
+export const platformValidation = {
+  // provisionTenant validates the slug, plan and admin account itself.
+  createTenant: Joi.object({
+    name: Joi.string().trim().max(120),
+    slug: Joi.string().trim().max(63),
+    adminEmail: email,
+    adminName: freeText(100),
+    adminPassword: Joi.string().max(200).allow(''),
+    plan: Joi.string().max(40),
+    trialDays: Joi.number().integer().min(0).max(365).allow(null, ''),
+    branding: Joi.object(),
+    locale: Joi.object(),
+    features: Joi.object().pattern(Joi.string(), Joi.boolean()),
+    seedSampleData: Joi.boolean(),
+  }),
+  // updateTenant rejects keys outside PLATFORM_EDITABLE with its own message.
+  updateTenant: Joi.object({
+    name: Joi.string().trim().max(120),
+    plan: Joi.string().max(40),
+    status: Joi.string().max(40),
+    trialEndsAt: Joi.date().allow(null, ''),
+    limits: Joi.object().pattern(Joi.string(), Joi.number().min(0).allow(null)),
+    features: Joi.object().pattern(Joi.string(), Joi.boolean()),
+    customDomain: freeText(120),
+    billingEmail: email.allow(''),
+    internalNotes: freeText(2000),
+  }).unknown(true),
+  reason: Joi.object({ reason: freeText(500) }),
+  changePlan: Joi.object({
+    plan: Joi.string().max(40).required(),
+    keepOverrides: Joi.boolean(),
+  }),
+  payInvoice: Joi.object({ reference: freeText(200) }),
+  empty: Joi.object({}),
+};
+
+export const webhookValidation = {
+  // validateWebhookUrl and cleanEvents (WEBHOOK_EVENTS) decide what is allowed.
+  create: Joi.object({
+    name: Joi.string().max(80).allow(''),
+    url: Joi.string().max(2000).allow(''),
+    events: Joi.array().items(Joi.string().max(80)),
+  }),
+  update: Joi.object({
+    name: Joi.string().max(80).allow(''),
+    url: Joi.string().max(2000).allow(''),
+    events: Joi.array().items(Joi.string().max(80)),
+    isActive: Joi.boolean(),
+  }),
+  empty: Joi.object({}),
+};
+
+// cleanSteps in the controller normalises each step.
+const sequenceSteps = Joi.array().max(50).items(Joi.object().unknown(true));
+export const sequenceValidation = {
+  create: Joi.object({
+    name: Joi.string().max(120).allow(''),
+    description: freeText(1000),
+    steps: sequenceSteps,
+  }),
+  update: Joi.object({
+    name: Joi.string().max(120).allow(''),
+    description: freeText(1000),
+    steps: sequenceSteps,
+    isActive: Joi.boolean(),
+  }),
+  enroll: Joi.object({ clientId: objectId.required() }),
+};
+
+export const emailTemplateValidation = {
+  upsert: Joi.object({
+    subject: Joi.string().max(200).allow(''),
+    html: Joi.string().max(100_000).allow(''),
+    isActive: Joi.boolean(),
+  }),
+  draft: Joi.object({
+    subject: Joi.string().max(200).allow(''),
+    html: Joi.string().max(100_000).allow(''),
+  }),
+};
+
+const reportTemplateBody = {
+  name: Joi.string().max(200).allow(''),
+  // Enum left to the model: the UI and the model already disagree on the
+  // list, and that is a decision, not a validation fix.
+  type: Joi.string().max(60),
+  description: freeText(1000),
+  sections: Joi.array().items(Joi.string().max(200)),
+};
+export const reportTemplateValidation = {
+  create: Joi.object(reportTemplateBody),
+  update: Joi.object(reportTemplateBody),
+  send: Joi.object({
+    clientEmail: email.allow(''),
+    clientName: freeText(200),
+    propertyName: freeText(200),
+    notes: freeText(2000),
+    reportHtml: Joi.string().max(500_000).allow(''),
+  }),
+  empty: Joi.object({}),
+};
+
+const generatedReportBody = {
+  templateId: optionalId,
+  templateName: freeText(200),
+  templateType: Joi.string().max(60),
+  templateSections: Joi.array().items(Joi.alternatives(Joi.string().max(200), Joi.object().unknown(true))),
+  clientId: optionalId,
+  clientName: freeText(200),
+  clientEmail: email.allow(''),
+  propertyName: freeText(200),
+  listingId: optionalId,
+  notes: freeText(2000),
+  agentName: freeText(200),
+  reportDate: looseDate,
+  html: Joi.string().max(500_000).allow(''),
+};
+export const generatedReportValidation = {
+  create: Joi.object(generatedReportBody),
+  update: Joi.object({ ...generatedReportBody, status: Joi.string().valid('draft', 'sent') }),
+  send: Joi.object({ clientEmail: email.allow('') }),
+};
+
+export const tagValidation = {
+  create: Joi.object({
+    name: Joi.string().max(40).allow(''),
+    color: Joi.string().max(20),
+    description: freeText(200),
+  }),
+  update: Joi.object({
+    name: Joi.string().max(40).allow(''),
+    color: Joi.string().max(20),
+    description: freeText(200),
+  }),
+  empty: Joi.object({}),
+};
+
+export const leadSourceValidation = {
+  create: Joi.object({
+    name: Joi.string().max(60).allow(''),
+    monthlyCost: Joi.number().min(0).allow(null, ''),
+    description: freeText(200),
+  }),
+  update: Joi.object({
+    name: Joi.string().max(60).allow(''),
+    monthlyCost: Joi.number().min(0).allow(null, ''),
+    isActive: Joi.boolean(),
+    description: freeText(200),
+  }),
+};
+
+export const shareValidation = {
+  // The controller owns "at least one" and "at most 50" with its own messages;
+  // this makes sure each id is an id, so `$in` never receives an operator.
+  create: Joi.object({
+    listingIds: Joi.array().items(objectId),
+    expiryDays: Joi.number().integer().allow(null, ''),
+    label: freeText(120),
+    recipientName: freeText(120),
+    recipientPhone: freeText(30),
+    message: freeText(1000),
+    showPrice: Joi.boolean(),
+    passcode: Joi.string().max(100).allow(''),
+  }),
+  empty: Joi.object({}),
+};
+
+export const searchValidation = {
+  // Strings, so a search log lookup can never be handed an operator object.
+  click: Joi.object({
+    query: freeText(500),
+    entity: freeText(40),
+    id: Joi.string().max(64).allow(''),
+  }),
+  saved: Joi.object({
+    name: Joi.string().max(120).allow(''),
+    query: freeText(500),
+    entities: Joi.array().items(Joi.string().max(40)),
+  }),
+  empty: Joi.object({}),
+};
+
+export const notificationValidation = {
+  // The controller keeps only known notification types (notificationTypes.js)
+  // and the two channel booleans; this only insists on the shape. The mobile
+  // app sends the same body.
+  preferences: Joi.object({
+    notifications: Joi.object().pattern(
+      Joi.string().max(80),
+      Joi.object({ inApp: Joi.boolean(), email: Joi.boolean() }).unknown(true)
+    ),
+    privacy: Joi.object().pattern(Joi.string().max(40), Joi.boolean().allow(null)),
+  }),
+  empty: Joi.object({}),
+};
+
+// ── The last six write routes that had no schema ────────────────────────────
+// Types and shapes only. Each controller still owns its own wording ("Choose
+// a password.", "Select at least one buyer"), so fields it checks itself are
+// optional here — a schema that required them would replace a sentence a
+// person can act on with Joi's "password is required".
+export const inviteValidation = {
+  accept: Joi.object({
+    password: Joi.string().max(200),
+    acceptTerms: Joi.boolean(),
+  }),
+};
+
+export const legalValidation = {
+  accept: Joi.object({
+    // Compared with LEGAL_VERSION by the controller, which answers 409 with
+    // the current version when they differ.
+    version: Joi.string().max(40).allow(''),
+  }),
+};
+
+export const buyerRequirementActionValidation = {
+  status: Joi.object({
+    // Checked against the model's enum by the save; this only rules out a
+    // non-string (an operator object) reaching it.
+    status: Joi.string().max(30).required(),
+  }),
+  match: Joi.object({
+    buyerRequirementId: objectId.required(),
+    propertyId: objectId.required(),
+  }),
+  bulk: Joi.object({
+    ids: Joi.array().items(Joi.string().max(64)).max(500),
+    action: Joi.string().valid('delete', 'status', 'assign'),
+    value: Joi.string().max(64).allow('', null),
+  }),
+};
+
+/** For actions whose input is entirely in the URL — refuses a body that tries to say more. */
+export const emptyBodyValidation = Joi.object({});

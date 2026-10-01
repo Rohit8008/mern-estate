@@ -20,6 +20,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { Button, Input, Modal, PageHeader, EmptyState } from '../design-system';
 import { formatNumber } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
+import DeletedCategoriesPanel from '../components/DeletedCategoriesPanel';
 
 /**
  * The colonies, projects and property groups this agency deals in.
@@ -430,6 +431,12 @@ export default function Categories() {
             />
           ))}
         </div>
+      )}
+
+      {hasPerm('deleteCategory') && (
+        <DeletedCategoriesPanel
+          onRestored={(c) => setCategories((prev) => [c, ...(prev || []).filter((x) => x._id !== c._id)])}
+        />
       )}
 
       {/* ── New category ──────────────────────────────────────────────────── */}

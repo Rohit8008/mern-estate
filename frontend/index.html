@@ -10,7 +10,8 @@
   <meta name="description" content="Real Vista is a CRM for real estate agencies in India: leads, property owners, listings, deals and paperwork in one workspace, with share links you control." />
   <meta name="keywords" content="real estate CRM, estate agency software, property management, lead management, real vista, india" />
   <meta name="author" content="Real Vista" />
-  <meta name="robots" content="index, follow" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="__SITE_URL__/" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -18,9 +19,15 @@
   <meta property="og:title" content="Real Vista — CRM for real estate agencies" />
   <meta property="og:description" content="Real Vista is a CRM for real estate agencies in India: leads, property owners, listings, deals and paperwork in one workspace, with share links you control." />
   <meta property="og:locale" content="en_IN" />
+  <meta property="og:url" content="__SITE_URL__/" />
+  <meta property="og:image" content="__SITE_URL__/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Real Vista — CRM for real estate agencies" />
 
   <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="__SITE_URL__/og-image.png" />
   <meta name="twitter:title" content="Real Vista — CRM for real estate agencies" />
   <meta name="twitter:description" content="Real Vista is a CRM for real estate agencies in India: leads, property owners, listings, deals and paperwork in one workspace, with share links you control." />
 
@@ -45,8 +52,15 @@
     "name": "Real Vista",
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web, Android",
+    "url": "__SITE_URL__/",
+    "image": "__SITE_URL__/og-image.png",
+    "publisher": { "@type": "Organization", "name": "Real Vista", "url": "__SITE_URL__/", "logo": "__SITE_URL__/pwa-512.svg" },
     "description": "CRM for real estate agencies: leads, property owners, listings, deals and paperwork in one workspace."
   }
+  </script>
+
+  <script type="application/ld+json">
+  { "@context": "https://schema.org", "@type": "WebSite", "name": "Real Vista", "url": "__SITE_URL__/", "inLanguage": "en-IN" }
   </script>
 
   <!-- Fonts: self-hosted (see src/fonts.css). Preload only the two faces the

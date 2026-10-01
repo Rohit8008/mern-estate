@@ -4,6 +4,8 @@ import Listing from '../models/listing.model.js';
 import Client from '../models/client.model.js';
 import { errorHandler } from '../utils/error.js';
 import { logActivity } from '../utils/activity.js';
+import { parsePaging, parseSort } from '../utils/listQuery.js';
+import { containsInsensitive } from '../utils/escapeRegex.js';
 
 // When a transaction completes, push a closed_won deal to the linked client.
 // Skipped if the transaction already has a dealRef (deal created this transaction).
@@ -62,13 +64,26 @@ async function syncListingStatus(propertyId, type, status) {
   await Listing.findByIdAndUpdate(propertyId, { status: listingStatus });
 }
 
+/** Columns the Transactions table can sort by — see parseSort. */
+const TRANSACTION_SORTS = {
+  date: 'date',
+  amount: 'amount',
+  status: 'status',
+  type: 'type',
+  property: 'propertyName',
+  client: 'clientName',
+  createdAt: 'createdAt',
+};
+
 export const listTransactions = async (req, res, next) => {
   try {
-    const { q, status, type, page = 1, limit = 20 } = req.query;
+    const { q, status, type } = req.query;
+    const { page, limit, skip } = parsePaging(req.query);
+    const sort = parseSort(req.query.sort, TRANSACTION_SORTS, { date: -1, createdAt: -1 });
     const filter = { isDeleted: { $ne: true } };
 
     if (q) {
-      const rx = new RegExp(q, 'i');
+      const rx = containsInsensitive(q);
       filter.$or = [{ propertyName: rx }, { clientName: rx }];
     }
     if (status) filter.status = status;
@@ -78,13 +93,12 @@ export const listTransactions = async (req, res, next) => {
       filter.agent = req.user.id;
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
     const [items, total] = await Promise.all([
-      Transaction.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      Transaction.find(filter).sort(sort).skip(skip).limit(limit).lean(),
       Transaction.countDocuments(filter),
     ]);
 
-    res.json({ success: true, data: items, page: Number(page), limit: Number(limit), total });
+    res.json({ success: true, data: items, page, limit, total });
   } catch (err) {
     next(err);
   }

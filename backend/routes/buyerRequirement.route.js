@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifyToken } from '../utils/verifyUser.js';
-import { validateBody, buyerRequirementValidation } from '../middleware/validation.js';
+import { validateBody, buyerRequirementValidation, buyerRequirementActionValidation } from '../middleware/validation.js';
 import {
   createBuyerRequirement,
   getBuyerRequirements,
@@ -34,7 +34,7 @@ router.get('/stats', getBuyerStats);
 router.get('/export', exportBuyerRequirements);
 
 // Act on a selection. Scoping is enforced in the controller.
-router.post('/bulk', bulkUpdateBuyerRequirements);
+router.post('/bulk', validateBody(buyerRequirementActionValidation.bulk), bulkUpdateBuyerRequirements);
 
 // Get specific buyer requirement
 router.get('/:id', getBuyerRequirement);
@@ -49,12 +49,12 @@ router.delete('/:id', deleteBuyerRequirement);
 router.get('/:id/matches', findMatchingProperties);
 
 // Add matched property to buyer requirement
-router.post('/matches', addMatchedProperty);
+router.post('/matches', validateBody(buyerRequirementActionValidation.match), addMatchedProperty);
 
 // Remove matched property from buyer requirement
 router.delete('/matches', removeMatchedProperty);
 
 // Update buyer status
-router.patch('/:id/status', updateBuyerStatus);
+router.patch('/:id/status', validateBody(buyerRequirementActionValidation.status), updateBuyerStatus);
 
 export default router;

@@ -13,6 +13,8 @@ import {
   AuthorizationError,
   asyncHandler,
   sendSuccessResponse,
+  VersionConflictError,
+  parseExpectedUpdatedAt,
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 import { notify } from '../utils/notify.js';
@@ -27,6 +29,7 @@ import {
   getListingFacets,
   LIST_PROJECTION,
 } from '../search/listingSearch.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 /** Everything a CRM user may see, on top of the public field set. */
 const STAFF_PROJECTION =
@@ -330,6 +333,10 @@ export const deleteListing = asyncHandler(async (req, res, next) => {
 });
 
 export const updateListing = asyncHandler(async (req, res, next) => {
+  // Optional edit guard: the `updatedAt` the form loaded. Parsed first, so a
+  // malformed value is refused before anything else is looked at.
+  const expectedUpdatedAt = parseExpectedUpdatedAt(req.body.expectedUpdatedAt);
+
   const listing = await Listing.findById(req.params.id);
   if (!listing) throw new NotFoundError('Listing not found!');
   if (req.user.role === 'buyer') throw new AuthorizationError('Buyers are not allowed to update listings!');
@@ -377,7 +384,29 @@ export const updateListing = asyncHandler(async (req, res, next) => {
     if (inferred) updates.propertyCategory = inferred;
   }
 
-  const updatedListing = await Listing.findByIdAndUpdate(req.params.id, updates, { new: true, lean: true });
+  // runValidators: an update skipped the schema's enums and lengths that a
+  // create enforces, so the model's own rules could be bypassed by editing.
+  // 'query' context because update validators have no document `this`.
+  //
+  // With expectedUpdatedAt the filter carries it, so the check and the write
+  // are one atomic operation: if anyone saved in between, nothing matches and
+  // the caller is told, rather than their edit silently replacing the other
+  // one. Without it (the mobile app, older clients) last write wins, as before.
+  const filter = { _id: req.params.id };
+  if (expectedUpdatedAt) filter.updatedAt = expectedUpdatedAt;
+  const updatedListing = await Listing.findOneAndUpdate(filter, updates, {
+    new: true,
+    lean: true,
+    runValidators: true,
+    context: 'query',
+  });
+  if (!updatedListing) {
+    // The listing existed a moment ago, so a miss here is the version check
+    // failing — unless it was deleted in between, which is a plain 404.
+    const current = await Listing.findById(req.params.id).select('updatedAt').lean();
+    if (!current) throw new NotFoundError('Listing not found!');
+    throw new VersionConflictError({ currentUpdatedAt: current.updatedAt });
+  }
   const category = updatedListing?.category || listing?.category;
 
   await emitListingUpdate('updated', updatedListing, category, req.user?.id);
@@ -509,13 +538,13 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
 
   // Additional filters (subset of getListings)
   const city = req.query.city;
-  if (city && city.trim() && city !== 'all') {
-    query.city = { $regex: city.trim(), $options: 'i' };
+  if (city && String(city).trim() && city !== 'all') {
+    query.city = { $regex: escapeRegex(String(city).trim()), $options: 'i' };
   }
 
   const locality = req.query.locality;
-  if (locality && locality.trim() && locality !== 'all') {
-    query.locality = { $regex: locality.trim(), $options: 'i' };
+  if (locality && String(locality).trim() && locality !== 'all') {
+    query.locality = { $regex: escapeRegex(String(locality).trim()), $options: 'i' };
   }
 
   const propertyCategory = req.query.propertyCategory;
@@ -572,7 +601,7 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
   // Basic searchTerm for assigned-only endpoint
   const searchTerm = req.query.searchTerm;
   if (searchTerm && String(searchTerm).trim()) {
-    const safe = String(searchTerm).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const safe = escapeRegex(String(searchTerm).trim());
     const re = new RegExp(safe, 'i');
     query.$or = [{ name: re }, { address: re }, { city: re }, { locality: re }, { areaName: re }, { propertyNo: re }];
   }
@@ -735,8 +764,39 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
     failed: [],
   };
 
+  // Rows that repeat an earlier row in the same file are refused, not created
+  // twice: a pasted sheet with a duplicated block used to double those
+  // properties. The key is the property number when there is one, otherwise
+  // name + address + city — the same thing a person would compare.
+  const keyOf = (data) => {
+    const norm = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return data.propertyNo && norm(data.propertyNo)
+      ? `no:${norm(data.propertyNo)}`
+      : `nac:${norm(data.name)}|${norm(data.address)}|${norm(data.city)}`;
+  };
+  const firstRowFor = new Map();
+  const duplicateOf = new Map();
+  listingsData.forEach((data, i) => {
+    if (!data || !data.name || !data.address) return;
+    const key = keyOf(data);
+    if (firstRowFor.has(key)) duplicateOf.set(i, firstRowFor.get(key));
+    else firstRowFor.set(key, i + 2);
+  });
+
+  // Checked against what this request will actually create, before any of it
+  // is written — this route used to skip the plan's listing cap entirely, so
+  // it was the way around the limit the importer enforces.
+  const willCreate = listingsData.filter((d, i) => d && d.name && d.address && !duplicateOf.has(i)).length;
+  if (willCreate > 0) {
+    await assertWithinLimit(
+      'maxListings',
+      () => Listing.countDocuments({ isDeleted: { $ne: true } }),
+      willCreate
+    );
+  }
+
   for (let i = 0; i < listingsData.length; i++) {
-    const data = listingsData[i];
+    const data = listingsData[i] || {};
     const rowNumber = i + 2; // +2 because row 1 is headers, and arrays are 0-indexed
 
     try {
@@ -746,6 +806,15 @@ export const bulkImportListings = asyncHandler(async (req, res, next) => {
           row: rowNumber,
           name: data.name || 'Unknown',
           error: 'Missing required fields (name, address)',
+        });
+        continue;
+      }
+
+      if (duplicateOf.has(i)) {
+        results.failed.push({
+          row: rowNumber,
+          name: String(data.name),
+          error: `Duplicate of row ${duplicateOf.get(i)} in this file`,
         });
         continue;
       }

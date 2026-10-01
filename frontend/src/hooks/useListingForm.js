@@ -86,6 +86,13 @@ export function useListingForm({ mode, listingId }) {
   // What was loaded (or EMPTY for a new property), to tell edits from nothing.
   const baselineRef = useRef(JSON.stringify(payloadOf(EMPTY)));
   const savedRef = useRef(false);
+  // The version this form was loaded at. Sent with the save so the server can
+  // refuse it if a colleague saved the same property in the meantime.
+  const loadedUpdatedAtRef = useRef(null);
+  // Set when the server says someone else saved first: { currentUpdatedAt }.
+  const [conflict, setConflict] = useState(null);
+  // Bumped to load the property again — "reload their version".
+  const [reloadKey, setReloadKey] = useState(0);
 
   const patch = useCallback((changes, { overwrite = false } = {}) => {
     setForm((prev) => {
@@ -179,6 +186,7 @@ export function useListingForm({ mode, listingId }) {
           imageUrls: listing.imageUrls || [],
         };
         baselineRef.current = JSON.stringify(payloadOf(loaded));
+        loadedUpdatedAtRef.current = listing.updatedAt || null;
         setForm(loaded);
       })
       .catch((err) => {
@@ -190,7 +198,7 @@ export function useListingForm({ mode, listingId }) {
     return () => {
       alive = false;
     };
-  }, [isEdit, listingId]);
+  }, [isEdit, listingId, reloadKey]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c.slug === form.category) || null,
@@ -224,7 +232,9 @@ export function useListingForm({ mode, listingId }) {
   }, [form, selectedCategory]);
 
   const submit = useCallback(
-    async (e) => {
+    // `overwrite`: the person saw the conflict and chose to replace the other
+    // edit, so the save goes without the version guard.
+    async (e, { overwrite = false } = {}) => {
       e?.preventDefault?.();
       const problem = validate();
       if (problem) {
@@ -242,10 +252,16 @@ export function useListingForm({ mode, listingId }) {
         // not mean, and any future field added to a read would silently start
         // being written back.
         const payload = payloadOf(form);
+        if (isEdit && !overwrite && loadedUpdatedAtRef.current) {
+          payload.expectedUpdatedAt = loadedUpdatedAtRef.current;
+        }
 
+        // Silent: the form shows its own error, and a conflict its own dialog,
+        // so the global toast would only say the same thing twice.
         const data = isEdit
-          ? await apiClient.post(`/listing/update/${listingId}`, payload)
-          : await apiClient.post('/listing/create', payload);
+          ? await apiClient.post(`/listing/update/${listingId}`, payload, { silent: true })
+          : await apiClient.post('/listing/create', payload, { silent: true });
+        setConflict(null);
 
         const saved = data?.data || data;
         window.dispatchEvent(
@@ -258,6 +274,10 @@ export function useListingForm({ mode, listingId }) {
         navigate(`/listing/${saved?._id || listingId}`);
         return saved;
       } catch (err) {
+        if (err?.code === 'VERSION_CONFLICT') {
+          setConflict({ currentUpdatedAt: err.details?.currentUpdatedAt || null });
+          return null;
+        }
         // A plan limit answers 402 and its message already says what to do, so
         // it is shown as-is rather than flattened into "could not save".
         setError(err?.message || 'That property could not be saved.');
@@ -268,6 +288,16 @@ export function useListingForm({ mode, listingId }) {
     },
     [form, isEdit, listingId, navigate, validate, showSuccess]
   );
+
+  /** Throw away this form's edits and load what the other person saved. */
+  const reloadLatest = useCallback(() => {
+    setConflict(null);
+    setError('');
+    setReloadKey((k) => k + 1);
+  }, []);
+
+  /** Keep this form's edits and replace the other person's. */
+  const overwrite = useCallback(() => submit(null, { overwrite: true }), [submit]);
 
   const isDirty = !loading && !savedRef.current && JSON.stringify(payloadOf(form)) !== baselineRef.current;
 
@@ -292,6 +322,10 @@ export function useListingForm({ mode, listingId }) {
     loadError,
     submit,
     isEdit,
+    conflict,
+    dismissConflict: () => setConflict(null),
+    reloadLatest,
+    overwrite,
   };
 }
 

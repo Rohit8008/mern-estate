@@ -8,6 +8,8 @@ import Listing from '../models/listing.model.js';
 import Category from '../models/category.model.js';
 import Transaction from '../models/transaction.model.js';
 import { errorHandler } from '../utils/error.js';
+import { parsePaging } from '../utils/listQuery.js';
+import { assertStorageAvailable } from '../tenancy/limits.js';
 import { resolveSafeExtension, safeBaseName, DOCUMENT_TYPES } from '../utils/fileValidation.js';
 import {
   CATEGORY_DOC_TYPES,
@@ -123,6 +125,9 @@ export const uploadDocument = async (req, res, next) => {
     if (wantsPublic && req.user.role !== 'admin') {
       return next(errorHandler(403, 'Only an admin can publish a document to the public page.'));
     }
+    // Before the write, so a refused file never lands on disk.
+    await assertStorageAvailable(file.size, storedDocumentBytes);
+
     const filename = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}_${safeBaseName(file.originalname)}${ext}`;
     await fs.promises.writeFile(path.join(uploadsDir, filename), file.buffer);
 
@@ -150,9 +155,26 @@ export const uploadDocument = async (req, res, next) => {
   }
 };
 
+/**
+ * Bytes the workspace stores as documents — the only uploads whose size the
+ * database records. Soft-deleted documents are left out: deleting is what the
+ * plan-limit message tells people to do to free space, so it has to count,
+ * even though the file itself stays on disk for restore.
+ */
+export async function storedDocumentBytes() {
+  const [row] = await Document.aggregate([
+    { $match: { isDeleted: { $ne: true } } },
+    { $group: { _id: null, total: { $sum: '$size' } } },
+  ]);
+  return row?.total || 0;
+}
+
 export const listDocuments = async (req, res, next) => {
   try {
-    const { kind, clientId, listingId, categoryId, dealId, transactionId, tag, page = 1, limit = 20 } = req.query;
+    const { kind, clientId, listingId, categoryId, dealId, transactionId, tag } = req.query;
+    // Capped and NaN-safe (listQuery): `?limit=1e9` used to return every file
+    // record in the workspace, and `?page=abc` reached Mongo as a NaN skip.
+    const { page, limit, skip } = parsePaging(req.query);
     const filter = { isDeleted: { $ne: true } };
     if (kind) filter['related.kind'] = kind;
     if (clientId) filter['related.clientId'] = clientId;
@@ -190,13 +212,12 @@ export const listDocuments = async (req, res, next) => {
       }
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
     const [items, total] = await Promise.all([
-      Document.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      Document.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       Document.countDocuments(filter),
     ]);
 
-    res.json({ success: true, data: items, page: Number(page), limit: Number(limit), total });
+    res.json({ success: true, data: items, page, limit, total });
   } catch (err) {
     next(err);
   }

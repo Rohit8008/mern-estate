@@ -5,6 +5,20 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { verifyToken } from '../utils/verifyUser.js';
 import { resolveSafeExtension, safeBaseName, IMAGE_TYPES, AUDIO_TYPES } from '../utils/fileValidation.js';
+import { assertStorageAvailable } from '../tenancy/limits.js';
+import { storedDocumentBytes } from '../controllers/document.controller.js';
+
+/**
+ * The plan's storage cap, checked before anything is written.
+ *
+ * Usage counts what the database records sizes for — documents. Images and
+ * voice notes saved here leave no size record behind, so they are not part of
+ * "used"; each upload is still weighed against the cap, which stops a
+ * workspace whose documents already fill its plan from adding more files.
+ * Counting these too needs a size record per stored file, which does not
+ * exist yet.
+ */
+const checkStorage = (bytes) => assertStorageAvailable(bytes, storedDocumentBytes);
 
 const router = express.Router();
 
@@ -45,6 +59,7 @@ router.post('/single', verifyToken, (req, res, next) => {
     }
 
     try {
+      await checkStorage(req.file.size);
       const filename = await persistValidatedFile(req.file, IMAGE_TYPES);
       if (!filename) {
         return res.status(400).json({ success: false, message: 'Only image uploads are allowed' });
@@ -72,6 +87,7 @@ router.post('/multiple', verifyToken, (req, res, next) => {
     }
 
     try {
+      await checkStorage(req.files.reduce((sum, f) => sum + f.size, 0));
       const urls = [];
       for (const f of req.files) {
         const filename = await persistValidatedFile(f, IMAGE_TYPES);
@@ -87,7 +103,7 @@ router.post('/multiple', verifyToken, (req, res, next) => {
   });
 });
 
-router.post('/audio', verifyToken, (req, res) => {
+router.post('/audio', verifyToken, (req, res, next) => {
   memoryAudioUpload.single('audio')(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -99,6 +115,12 @@ router.post('/audio', verifyToken, (req, res) => {
     }
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No audio file provided' });
+    }
+
+    try {
+      await checkStorage(req.file.size);
+    } catch (e) {
+      return next(e); // a plan limit is a 402, not "failed to save"
     }
 
     try {

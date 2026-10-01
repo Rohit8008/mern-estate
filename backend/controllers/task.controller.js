@@ -4,6 +4,7 @@ import Listing from '../models/listing.model.js';
 import { errorHandler } from '../utils/error.js';
 import { logActivity } from '../utils/activity.js';
 import { notify } from '../utils/notify.js';
+import { parsePaging, parseSort } from '../utils/listQuery.js';
 
 function canAccessUser(user, targetUserId) {
   return user.role === 'admin' || String(user.id) === String(targetUserId);
@@ -90,13 +91,26 @@ export const createTask = async (req, res, next) => {
   }
 };
 
+/** Columns the Tasks table can sort by — see parseSort. */
+const TASK_SORTS = {
+  dueAt: 'dueAt',
+  title: 'title',
+  status: 'status',
+  priority: 'priority',
+  createdAt: 'createdAt',
+};
+
 export const listTasks = async (req, res, next) => {
   try {
-    const { q, status, assignedTo, page = 1, limit = 20, kind, clientId, listingId, dueFrom, dueTo } = req.query;
+    const { q, status, priority, assignedTo, kind, clientId, listingId, dueFrom, dueTo } = req.query;
+    const { page, limit, skip } = parsePaging(req.query);
+    const sort = parseSort(req.query.sort, TASK_SORTS, { dueAt: 1 });
     const filter = { isDeleted: { $ne: true } };
 
     if (q) filter.$text = { $search: q };
     if (status) filter.status = status;
+    // String() so a query-string object (?priority[$ne]=x) cannot become an operator.
+    if (priority) filter.priority = String(priority);
     if (kind) filter['related.kind'] = kind;
     if (clientId) filter['related.clientId'] = clientId;
     if (listingId) filter['related.listingId'] = listingId;
@@ -113,13 +127,12 @@ export const listTasks = async (req, res, next) => {
       filter.assignedTo = req.user.id;
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
     const [items, total] = await Promise.all([
-      Task.find(filter).sort({ dueAt: 1 }).skip(skip).limit(Number(limit)).lean(),
+      Task.find(filter).sort(sort).skip(skip).limit(limit).lean(),
       Task.countDocuments(filter),
     ]);
 
-    res.json({ success: true, data: items, page: Number(page), limit: Number(limit), total });
+    res.json({ success: true, data: items, page, limit, total });
   } catch (err) {
     next(err);
   }

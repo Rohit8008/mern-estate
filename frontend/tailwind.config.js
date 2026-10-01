@@ -137,11 +137,33 @@ export default {
           from: { opacity: '0', transform: 'translateY(4px) translateX(-50%)' },
           to: { opacity: '1', transform: 'translateY(0) translateX(-50%)' },
         },
+        // Shell and overlay motion. One easing curve (a soft spring-out) for
+        // everything that enters, so the product moves with one hand.
+        'menu-in': {
+          from: { opacity: '0', transform: 'translateY(-4px) scale(0.98)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'overlay-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        'drawer-in-right': {
+          from: { transform: 'translateX(100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        'drawer-in-left': {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'fade-in': 'fade-in 0.2s ease-out',
+        'menu-in': 'menu-in 0.14s cubic-bezier(0.22, 1, 0.36, 1)',
+        'overlay-in': 'overlay-in 0.18s ease-out',
+        'drawer-in-right': 'drawer-in-right 0.26s cubic-bezier(0.22, 1, 0.36, 1)',
+        'drawer-in-left': 'drawer-in-left 0.26s cubic-bezier(0.22, 1, 0.36, 1)',
       },
     },
   },

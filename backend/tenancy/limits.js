@@ -123,3 +123,110 @@ export async function getLimitUsage(tenant, counts) {
 }
 
 export { LIMITS };
+
+const MB = 1024 * 1024;
+
+/**
+ * The storage cap, checked before a file is written.
+ *
+ * `usedBytesFn` returns what the workspace already stores, in bytes, from
+ * whatever records sizes — today that is the Document collection (`size` is
+ * required there). Passed in rather than queried here so this module does not
+ * import a model, which would compile a schema before the tenant plugin is
+ * registered in a script.
+ *
+ * Whole megabytes on both sides, rounded up: the plan is sold in MB, and a
+ * 300 KB photo still counts as one so the message can say "1 MB" rather than
+ * "0.29". That errs towards refusing a file a few hundred KB early, never late.
+ */
+export async function assertStorageAvailable(bytes, usedBytesFn) {
+  const adding = Math.max(1, Math.ceil(Number(bytes || 0) / MB));
+  return assertWithinLimit('maxStorageMb', async () => Math.ceil(Number((await usedBytesFn()) || 0) / MB), adding);
+}
+
+// ── Monthly import allowance (maxImportRowsPerMonth) ─────────────────────────
+// A separate block from the per-call checks above: an import is the one
+// creation that is metered over time rather than against a standing count, so
+// it needs a stored counter (models/importUsage.model.js) and a reservation
+// that two concurrent imports cannot both slip through.
+
+/** "YYYY-MM" in the workspace's own timezone, so the allowance resets on its 1st. */
+export function importMonthKey(tenant, now = new Date()) {
+  const timeZone = tenant?.timezone || tenant?.settings?.timezone || 'UTC';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' }).formatToParts(now);
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    if (y && m) return `${y}-${m}`;
+  } catch {
+    // An unknown timezone string falls through to UTC.
+  }
+  return now.toISOString().slice(0, 7);
+}
+
+/**
+ * Reserve `rows` of this month's import allowance, atomically, before writing.
+ *
+ * Returns a `release(unused)` to hand back what was reserved but not written —
+ * duplicates the write found late, rows the database refused — so the meter
+ * counts rows that became records, not rows that were attempted.
+ *
+ * Atomic on purpose: "count, compare, then write" lets two imports started
+ * together both see room and both proceed. The update only matches while the
+ * counter has room; when it does not, the upsert collides with the unique
+ * {tenantId, month} index and that collision is the refusal.
+ *
+ * Unlimited plans and script contexts (no workspace) reserve nothing.
+ */
+export async function reserveImportRows(rows, now = new Date()) {
+  const noop = async () => {};
+  const tenant = getTenant();
+  if (!tenant || rows <= 0) return noop;
+
+  const cap = capFor(tenant, 'maxImportRowsPerMonth');
+  if (cap === null) return noop;
+
+  // Imported lazily: limits.js is loaded by scripts and tests that must not
+  // compile a model as a side effect (see CLAUDE.md, "CLI scripts").
+  const { default: ImportUsage } = await import('../models/importUsage.model.js');
+  // The refusal below IS the unique index, so it must exist before the first
+  // reservation. init() resolves once the indexes are built and is cached.
+  await ImportUsage.init();
+  const month = importMonthKey(tenant, now);
+
+  const refuse = async () => {
+    const current = await ImportUsage.findOne({ month }).lean();
+    const used = current?.rows || 0;
+    const meta = LIMITS.maxImportRowsPerMonth;
+    const remaining = Math.max(cap - used, 0);
+    const err = new PlanLimitError(
+      `Importing ${rows.toLocaleString('en-IN')} rows would take you past the ${cap.toLocaleString('en-IN')} ${meta.noun} in your ${tenant.plan} plan — ${remaining.toLocaleString('en-IN')} remaining. ${meta.hint}`,
+      { key: 'maxImportRowsPerMonth', cap, current: used, adding: rows, remaining }
+    );
+    err.details = { limit: cap, used, requested: rows, remaining };
+    logger.info('Plan limit reached', { tenantId: String(tenant._id), plan: tenant.plan, limit: 'maxImportRowsPerMonth', cap, used, requested: rows });
+    throw err;
+  };
+
+  if (rows > cap) return refuse();
+
+  try {
+    await ImportUsage.findOneAndUpdate(
+      { month, rows: { $lte: cap - rows } },
+      { $inc: { rows } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (err) {
+    if (err?.code === 11000) return refuse();
+    throw err;
+  }
+
+  return async (unused) => {
+    const n = Math.max(0, Math.min(Number(unused) || 0, rows));
+    if (!n) return;
+    await ImportUsage.updateOne({ month }, { $inc: { rows: -n } }).catch((e) => {
+      // Over-counting by a few rows is the safe direction; say so and move on.
+      logger.warn('Could not release unused import allowance', { month, unused: n, message: e.message });
+    });
+  };
+}

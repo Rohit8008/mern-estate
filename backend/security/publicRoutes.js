@@ -40,7 +40,7 @@ export const PUBLIC_ROUTES = [
     path: '/api/health/detailed',
     why: 'Dependency status for on-call. Reports up/down only — no data, no configuration values.',
   },
-  { method: 'GET', path: '/api/health/metrics', why: 'Scrape endpoint for the metrics collector.' },
+  { method: 'GET', path: '/api/health/metrics', why: 'Scrape endpoint for the metrics collector; bearer METRICS_TOKEN when set.' },
 
   // ── Signing in ─────────────────────────────────────────────────────────────
   { method: 'POST', path: '/api/auth/signin', why: 'The sign-in endpoint itself. Rate limited.' },

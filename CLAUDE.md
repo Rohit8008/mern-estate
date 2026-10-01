@@ -233,6 +233,50 @@ revocable, optionally passcoded, view-counted. Two rules: `forRecipient()` is an
 (a new Listing column must never become public by being added), and `createShare` re-reads
 listings through `listingScope` so **you cannot share what you cannot see**.
 
+### Errors, request ids and the request pipeline
+Every failure answers one shape: `{ success: false, statusCode, code, message, type?, field?,
+details?, requestId }`. **`code` is the contract, `message` is for a person** — branch on
+`code` (`ERROR_CODES` in `utils/error.js`, plus endpoint-specific ones such as
+`CSRF_TOKEN_INVALID`, `INVITE_REPLACED`, `WORKSPACE_NOT_FOUND`). Throw `AppError` /
+`errorHandler(status, msg)` and let `globalErrorHandler` answer; a hand-written
+`res.status(4xx).json({ success: false, … })` still gets `code` and `requestId` added by
+`middleware/errorEnvelope.js`. In production an unexpected 500 never shows its message — the
+client gets a generic sentence and the request id.
+
+`utils/requestContext.js` gives every request an id (`X-Request-Id`, kept from the caller when
+well-formed). The logger stamps it and the tenant on every line, so a "ref" a user reads out
+finds the log. Order in `app.js` matters and is tested (`tests/requestPipeline.test.js`): the
+body is parsed BEFORE `mongoSanitization` (operators stripped, dotted keys allowed), and the XSS
+rewrite touches query and params only — bodies carry intentional HTML (email templates).
+
+**Shutdown** is one ordered sequence in `index.js` (readiness goes 503, drain, stop scheduler and
+cache listener, close sockets, Redis and Mongo, flush logs). Never add another SIGTERM handler.
+
+### Validation, regexes and docs
+Every POST/PUT/PATCH needs `validateBody(schema)`; `tests/validationCoverage.test.js` fails a
+new write route without one unless it is allowlisted with a reason. `stripUnknown` drops any
+field the schema omits — a field the controller reads but the schema lacks is silently lost.
+User text never goes into a regex raw: use `utils/escapeRegex.js` (`containsInsensitive`,
+`equalsInsensitive`), which also `String()`-coerces query objects. The OpenAPI description is
+generated from the router and those same schemas (`utils/openapi.js`, admin-only at
+`GET /api/docs/openapi.json`, or `npm run docs:openapi` → `docs/openapi.json`) — never hand-edit it.
+
+### Edit conflicts
+Listing and client edits send `expectedUpdatedAt` (the `updatedAt` the form loaded); the server
+makes the write conditional on it and answers **409 `VERSION_CONFLICT`** with
+`details.currentUpdatedAt` when someone saved in between. The form shows `EditConflictNotice`
+(inline, because the listing form has a Leaflet map) — "Load their version" or "Keep mine", which
+resends without the guard. A caller that sends no version (the mobile app, scripts) keeps
+last-write-wins. Client updates stay a document `save()` with `$where`, so pre-save hooks and
+`calculateScore()` still run.
+
+### Imports
+Both importers validate every row first, then write in batches with per-row results
+(`rowErrors` capped at 200). `maxImportRowsPerMonth` is a meter (`models/importUsage.model.js`,
+`reserveImportRows()` in `tenancy/limits.js`): reserve before writing, release what did not land.
+`insertMany` skips `pre('save')`, so the lead importer sets derived fields (phone key, score)
+itself — `tests/leadImportCommit.test.js` compares an imported lead with a saved one.
+
 ### Route access
 Every mounted route must be guarded or listed in `backend/security/publicRoutes.js` with a reason;
 `tests/routeAccess.test.js` walks the live router and fails otherwise. If it fails on a new route,
@@ -320,6 +364,26 @@ Maps: **Leaflet** (react-leaflet) — z-index 400–800; avoid modal overlays on
 | Secondary button | `border border-slate-200 bg-white hover:bg-slate-50 rounded-lg` |
 | Button on dark bg | `border border-white/10 bg-white/10 hover:bg-white/20 text-white` |
 | CTA on dark bg | `bg-brand-600 hover:bg-brand-700 text-white` |
+
+### Shared primitives, lists and the palette
+`frontend/src/design-system` also has Skeleton (`SkeletonRows` for inside a `<Tbody>`), Avatar,
+Tooltip, Dropdown (the menu-button pattern — use it instead of a hand-rolled click-catcher),
+Tabs/TabPanel, Drawer, Pagination, Checkbox/Switch and ColumnToggle. These use the theme tokens
+(`bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`, `bg-secondary`,
+`hover:bg-accent`), so dark mode needs no entry in the override sheet — prefer them over slate
+classes in new code. Modal and Drawer share `useDialog`.
+
+A list page sorts and pages **on the server**: `<Th sortKey sort onSort>` sets the sort, the page
+sends `sort=key:asc|desc&page=&limit=`, and `<Pagination>` reads `total` from the response.
+Sorting a page of results sorts the wrong set — `useTableSort`'s `sorted` is only for lists that
+are already whole. On the backend, read paging and sort through `utils/listQuery.js`
+(`parsePaging` caps `limit` at 500; `parseSort` takes an **allowlist** of sortable fields).
+`/owner/list` and `/buyer-requirements` page only when `page` is passed — without it they still
+return a bare array, which the mobile app and the listing form read.
+
+The ⌘K palette and the keyboard shortcuts share one command list, `app/commands.js`
+(`useCommands`), filtered by screens and permissions — add an action there, not in either
+consumer. A "New …" command links to `?new=1`, and the page opens its own create form.
 
 ### Accent colour
 The accent is a deep petrol blue on a perceptually even OKLCH ramp, defined in

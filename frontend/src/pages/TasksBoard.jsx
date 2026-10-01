@@ -1,15 +1,20 @@
-import React, { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import { PageHeader, Button, Modal } from '../design-system';
+import {
+  PageHeader, Button, Modal, EmptyState, Checkbox, ColumnToggle, Pagination,
+  Table, Thead, Th, Tbody, Tr, Td, SkeletonRows, useRowSelection,
+} from '../design-system';
+import { useColumnPrefs } from '../hooks/useColumnPrefs';
+import BulkActionBar, { BulkSelect, BulkButton } from '../components/BulkActionBar';
 import {
   HiPlus, HiSearch, HiX, HiChevronDown, HiChevronRight,
   HiCheck, HiPencil, HiTrash, HiRefresh, HiClock,
-  HiViewGrid, HiViewList, HiUser, HiCalendar, HiFlag,
-  HiClipboardList, HiExclamation,
+  HiViewGrid, HiViewList, HiCalendar, HiFlag,
+  HiClipboardList, HiExclamation, HiFilter,
 } from 'react-icons/hi';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '../utils/currency';
@@ -32,6 +37,12 @@ const PRIORITY_CONFIG = {
 const STATUS_ORDER = ['todo', 'in_progress', 'review', 'done', 'blocked'];
 const PRIORITY_ORDER = ['urgent', 'high', 'medium', 'low'];
 
+const DEFAULT_SORT = { key: 'dueAt', dir: 'asc' };
+
+// The cards view groups by status, so it needs the whole set in hand rather
+// than a page of it; this is the most it asks for.
+const CARDS_LIMIT = 200;
+
 export default function TasksBoard() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,12 +58,31 @@ export default function TasksBoard() {
   const [view, setView] = useState('cards');
   const [selectedTask, setSelectedTask] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // `?new=1` — the ⌘K palette's "New …" action — opens the create form once,
+  // then drops the flag so a reload or Back does not open it again.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setShowCreateModal(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [creating, setCreating] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showStatusDropdown, setShowStatusDropdown] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [agents, setAgents] = useState([]);
+
+  // Table view: paged and sorted on the server.
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [sort, setSort] = useState(DEFAULT_SORT);
 
   // Filters
   const q = searchParams.get('q') || '';
@@ -65,6 +95,9 @@ export default function TasksBoard() {
     return currentUser.role === 'admin' || currentUser.role === 'employee';
   }, [currentUser, isBuyerViewMode]);
 
+  const isAdmin = currentUser?.role === 'admin';
+  const hasFilters = !!(q || statusFilter || priorityFilter);
+
   const fetchTasks = useCallback(async () => {
     if (!canAccess) return;
     setLoading(true);
@@ -73,18 +106,55 @@ export default function TasksBoard() {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       if (statusFilter) params.set('status', statusFilter);
-      params.set('limit', '200');
+      if (priorityFilter) params.set('priority', priorityFilter);
+      if (view === 'table') {
+        params.set('page', String(page));
+        params.set('limit', String(pageSize));
+        params.set('sort', `${sort.key}:${sort.dir}`);
+      } else {
+        params.set('limit', String(CARDS_LIMIT));
+      }
       const response = await apiClient.get(`/tasks?${params.toString()}`);
       const data = response?.data || response || [];
       setTasks(Array.isArray(data) ? data : []);
+      setTotal(Number(response?.total) || (Array.isArray(data) ? data.length : 0));
     } catch (e) {
       console.error('Failed to load tasks:', e);
       setError(e?.message || 'Failed to load tasks');
       setTasks([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [canAccess, q, statusFilter]);
+  }, [canAccess, q, statusFilter, priorityFilter, view, page, pageSize, sort]);
+
+  // Only an admin can reassign, so only an admin needs the list.
+  useEffect(() => {
+    if (!isAdmin || !canAccess) return;
+    apiClient
+      .get('/user/list')
+      .then((res) => {
+        const users = Array.isArray(res) ? res : res?.data || [];
+        setAgents(users.filter((u) => ['admin', 'employee'].includes(u.role) && u.status === 'active'));
+      })
+      .catch(() => { /* the assign dropdown simply stays empty */ });
+  }, [isAdmin, canAccess]);
+
+  const selection = useRowSelection(useMemo(() => (view === 'table' ? tasks.map((x) => x._id) : []), [tasks, view]));
+
+  const TABLE_COLUMNS = [
+    { key: 'task', label: t('tasks.task'), locked: true },
+    { key: 'status', label: t('tasks.status') },
+    { key: 'priority', label: t('tasks.priority') },
+    { key: 'dueAt', label: t('tasks.dueDate') },
+    { key: 'description', label: t('tasks.description') },
+  ];
+  const { isVisible, toggle: toggleColumn, reset: resetColumns, visibleColumns } = useColumnPrefs('tasks', TABLE_COLUMNS);
+
+  const onSort = (key) => {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+    setPage(1);
+  };
 
   useEffect(() => {
     fetchTasks();
@@ -105,12 +175,42 @@ export default function TasksBoard() {
     return groups;
   }, [tasks]);
 
+  // A different question starts again on its first page.
   const setParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
     setSearchParams(next);
+    setPage(1);
   };
+
+  const clearFilters = () => { setSearchParams(new URLSearchParams()); setPage(1); };
+
+  /**
+   * One request per task, the same PATCH/DELETE the row actions make — there
+   * is no bulk endpoint. allSettled so one forbidden task does not stop the
+   * rest, and the count of failures is said out loud rather than swallowed.
+   */
+  const applyBulk = async (run, { removes = false } = {}) => {
+    const ids = [...selection.selected];
+    if (!ids.length) return;
+    setBulkBusy(true);
+    setError('');
+    const results = await Promise.allSettled(ids.map(run));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed) setError(t('tasksBoard.bulkFailed', { count: failed }));
+    selection.clear();
+    setBulkBusy(false);
+    // Deleting a whole last page would leave an empty one behind.
+    if (removes && page > 1 && failed === 0 && ids.length === tasks.length) {
+      setPage((p) => p - 1);
+    } else {
+      await fetchTasks();
+    }
+  };
+  const bulkComplete = (id) => apiClient.patch(`/tasks/${id}`, { status: 'done' });
+  const bulkDelete = (id) => apiClient.delete(`/tasks/${id}`);
+  const bulkAssign = (userId) => (id) => apiClient.patch(`/tasks/${id}`, { assignedTo: userId });
 
   const toggleGroup = (status) => {
     setCollapsedGroups((prev) => ({ ...prev, [status]: !prev[status] }));
@@ -210,7 +310,7 @@ export default function TasksBoard() {
             <button
               type='button'
               aria-pressed={view === 'cards'}
-              onClick={() => setView('cards')}
+              onClick={() => { setView('cards'); setPage(1); }}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'cards' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
@@ -219,7 +319,7 @@ export default function TasksBoard() {
             <button
               type='button'
               aria-pressed={view === 'table'}
-              onClick={() => setView('table')}
+              onClick={() => { setView('table'); setPage(1); }}
               className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
                 view === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
@@ -271,9 +371,9 @@ export default function TasksBoard() {
               ))}
             </select>
 
-            {(q || statusFilter || priorityFilter) && (
+            {hasFilters && (
               <button
-                onClick={() => setSearchParams(new URLSearchParams())}
+                onClick={clearFilters}
                 className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
               >{t('tasks.clearAll')}</button>
             )}
@@ -291,8 +391,8 @@ export default function TasksBoard() {
           </div>
         )}
 
-        {/* Loading skeleton */}
-        {loading && (
+        {/* Loading skeleton — the table view draws its own rows under its header. */}
+        {loading && view === 'cards' && (
           <div className='p-6'>
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -371,7 +471,15 @@ export default function TasksBoard() {
               );
             })}
 
-            {tasks.length === 0 && !loading && (
+            {tasks.length === 0 && !loading && hasFilters && (
+              <EmptyState
+                icon={HiFilter}
+                title={t('tasksBoard.noMatches')}
+                body={t('tasksBoard.noMatchesBody')}
+                action={<Button variant='secondary' icon={HiX} onClick={clearFilters}>{t('tasksBoard.clearFilters')}</Button>}
+              />
+            )}
+            {tasks.length === 0 && !loading && !hasFilters && (
               <div className='flex flex-col items-center justify-center py-20 text-center'>
                 <div className='w-16 h-16 rounded-2xl bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center mx-auto mb-5'>
                   <HiClipboardList className='w-8 h-8 text-amber-500' aria-hidden='true' />
@@ -384,156 +492,164 @@ export default function TasksBoard() {
           </div>
         )}
 
-        {/* Table View */}
-        {!loading && view === 'table' && (
-          <div className='overflow-x-auto'>
-            <table className='min-w-full text-sm'>
-              <thead className='bg-slate-50/80 sticky top-0 z-10'>
-                <tr className='border-b border-slate-200'>
-                  <th className='text-left pl-4 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[300px]'>{t('tasks.task')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.status')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.priority')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.dueDate')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('tasks.description')}</th>
-                  <th className='text-right px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[100px]'></th>
+        {/* Table View. Flat rather than grouped by status: it is paged and
+            sorted on the server, and a group header on page 3 would only be
+            telling you about the 20 rows beside it. Status is a sortable
+            column instead. */}
+        {view === 'table' && (!loading && tasks.length === 0 ? (
+          hasFilters ? (
+            <EmptyState
+              icon={HiFilter}
+              title={t('tasksBoard.noMatches')}
+              body={t('tasksBoard.noMatchesBody')}
+              action={<Button variant='secondary' icon={HiX} onClick={clearFilters}>{t('tasksBoard.clearFilters')}</Button>}
+            />
+          ) : (
+            <EmptyState
+              icon={HiClipboardList}
+              title={t('tasks.noTasksYet')}
+              body={t('tasks.createYourFirstTaskToStart')}
+              action={<Button variant='primary' icon={HiPlus} onClick={() => setShowCreateModal(true)}>{t('tasks.createYourFirstTask')}</Button>}
+            />
+          )
+        ) : (
+          <div className='p-4 space-y-1'>
+            <div className='flex items-center justify-end pb-2'>
+              <ColumnToggle columns={TABLE_COLUMNS} isVisible={isVisible} onToggle={toggleColumn} onReset={resetColumns} />
+            </div>
+            <Table maxHeight='max-h-[70vh]' className='bg-card'>
+              <Thead sticky>
+                <tr>
+                  <Th className='w-10 pr-0'>
+                    <Checkbox
+                      aria-label={t('tasksBoard.selectAllOnPage')}
+                      checked={selection.headerCheckbox.checked}
+                      indeterminate={selection.headerCheckbox.indeterminate}
+                      onChange={selection.headerCheckbox.onChange}
+                      disabled={selection.headerCheckbox.disabled || loading}
+                    />
+                  </Th>
+                  {isVisible('task') && <Th sortKey='title' sort={sort} onSort={onSort} className='w-[300px]'>{t('tasks.task')}</Th>}
+                  {isVisible('status') && <Th sortKey='status' sort={sort} onSort={onSort}>{t('tasks.status')}</Th>}
+                  {isVisible('priority') && <Th sortKey='priority' sort={sort} onSort={onSort}>{t('tasks.priority')}</Th>}
+                  {isVisible('dueAt') && <Th sortKey='dueAt' sort={sort} onSort={onSort}>{t('tasks.dueDate')}</Th>}
+                  {isVisible('description') && <Th>{t('tasks.description')}</Th>}
+                  <Th className='w-[100px]'><span className='sr-only'>{t('tasksBoard.actions')}</span></Th>
                 </tr>
-              </thead>
-              <tbody className='divide-y divide-slate-100'>
-                {STATUS_ORDER.map((status) => {
-                  const items = groupedTasks.get(status) || [];
-                  if (items.length === 0) return null;
-                  const config = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
-                  const isCollapsed = collapsedGroups[status];
-
+              </Thead>
+              <Tbody>
+                {loading ? (
+                  <SkeletonRows rows={Math.min(pageSize, 10)} columns={visibleColumns.length + 2} />
+                ) : tasks.map((task) => {
+                  const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
+                  const due = formatDueDate(task.dueAt, task.status);
+                  const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
+                  const checked = selection.isSelected(task._id);
                   return (
-                    <React.Fragment key={status}>
-                      {/* Group header row */}
-                      <tr>
-                        <td colSpan={6} className='px-0 py-0'>
+                    <Tr
+                      key={task._id}
+                      selected={checked}
+                      className='group'
+                      onClick={() => setSelectedTask(task)}
+                    >
+                      <Td className='w-10 pr-0'>
+                        {/* Its own click: ticking a row must not also open it. */}
+                        <Checkbox
+                          aria-label={t('tasksBoard.selectTask', { title: task.title })}
+                          checked={checked}
+                          onChange={() => selection.toggle(task._id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </Td>
+                      {isVisible('task') && (
+                        <Td className='pl-4 pr-2'>
+                          <div className='flex items-center gap-3'>
+                            <div className={`w-1 h-8 rounded-full ${config.color} flex-shrink-0`} />
+                            <div className='min-w-0'>
+                              {/* A real button: the row's onClick is mouse-only. */}
+                              <button
+                                type='button'
+                                onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                                className='block max-w-full text-left font-semibold text-foreground text-[13px] truncate group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                              >
+                                {task.title}
+                              </button>
+                            </div>
+                          </div>
+                        </Td>
+                      )}
+                      {isVisible('status') && (
+                        <Td>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${config.color} text-white`}>
+                            {config.label}
+                          </span>
+                        </Td>
+                      )}
+                      {isVisible('priority') && (
+                        <Td>
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${priorityConfig.color} text-white`}>
+                            <priorityConfig.icon className='w-3 h-3' aria-hidden='true' />
+                            {priorityConfig.label}
+                          </span>
+                        </Td>
+                      )}
+                      {isVisible('dueAt') && (
+                        <Td>
+                          {due ? (
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${due.class}`}>
+                              <HiClock className='w-3 h-3' aria-hidden='true' />
+                              {due.text}
+                            </span>
+                          ) : (
+                            <span className='text-muted-foreground text-[13px]'>—</span>
+                          )}
+                        </Td>
+                      )}
+                      {isVisible('description') && (
+                        <Td>
+                          <span className='text-muted-foreground text-[13px] truncate block max-w-[200px]'>
+                            {task.description || '—'}
+                          </span>
+                        </Td>
+                      )}
+                      <Td right>
+                        <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
                           <button
                             type='button'
-                            aria-expanded={!isCollapsed}
-                            onClick={() => toggleGroup(status)}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 ${config.bgLight} border-l-4 ${config.border.replace('border-', 'border-l-')} hover:opacity-90 transition-colors`}
+                            onClick={(e) => { e.stopPropagation(); openEditModal(task); }}
+                            className='p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors'
+                            title={t('tasks.edit')}
+                            aria-label={`Edit ${task.title}`}
                           >
-                            {isCollapsed ? (
-                              <HiChevronRight className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
-                            ) : (
-                              <HiChevronDown className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
-                            )}
-                            <span className={`font-semibold text-sm ${config.textColor}`}>{config.label}</span>
-                            <span className='text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full'>
-                              {items.length}
-                            </span>
+                            <HiPencil className='w-4 h-4' aria-hidden='true' />
                           </button>
-                        </td>
-                      </tr>
-                      {/* Task rows */}
-                      {!isCollapsed && items.map((task) => {
-                        const due = formatDueDate(task.dueAt, task.status);
-                        const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
-                        return (
-                          <tr
-                            key={task._id}
-                            className='group hover:bg-indigo-50/40 transition-colors cursor-pointer'
-                            onClick={() => setSelectedTask(task)}
+                          <button
+                            type='button'
+                            onClick={(e) => { e.stopPropagation(); setPendingDelete(task._id); }}
+                            className='p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors'
+                            title={t('tasks.delete')}
+                            aria-label={`Delete ${task.title}`}
                           >
-                            <td className='pl-4 pr-2 py-3'>
-                              <div className='flex items-center gap-3'>
-                                <div className={`w-1 h-8 rounded-full ${config.color} flex-shrink-0`} />
-                                <div className='min-w-0'>
-                                  {/* A real button: the row's onClick is mouse-only. */}
-                                  <button
-                                    type='button'
-                                    onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                                    className='block max-w-full text-left font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
-                                  >
-                                    {task.title}
-                                  </button>
-                                </div>
-                              </div>
-                            </td>
-                            <td className='px-3 py-3'>
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${config.color} text-white`}>
-                                {config.label}
-                              </span>
-                            </td>
-                            <td className='px-3 py-3'>
-                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${priorityConfig.color} text-white`}>
-                                <priorityConfig.icon className='w-3 h-3' aria-hidden='true' />
-                                {priorityConfig.label}
-                              </span>
-                            </td>
-                            <td className='px-3 py-3'>
-                              {due ? (
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${due.class}`}>
-                                  <HiClock className='w-3 h-3' aria-hidden='true' />
-                                  {due.text}
-                                </span>
-                              ) : (
-                                <span className='text-slate-500 text-[13px]'>—</span>
-                              )}
-                            </td>
-                            <td className='px-3 py-3'>
-                              <span className='text-slate-600 text-[13px] truncate block max-w-[200px]'>
-                                {task.description || '—'}
-                              </span>
-                            </td>
-                            <td className='px-4 py-3 text-right'>
-                              <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
-                                <button
-                                  type='button'
-                                  onClick={(e) => { e.stopPropagation(); openEditModal(task); }}
-                                  className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
-                                  title={t('tasks.edit')}
-                                  aria-label={`Edit ${task.title}`}
-                                >
-                                  <HiPencil className='w-4 h-4' aria-hidden='true' />
-                                </button>
-                                <button
-                                  type='button'
-                                  onClick={(e) => { e.stopPropagation(); setPendingDelete(task._id); }}
-                                  className='p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors'
-                                  title={t('tasks.delete')}
-                                  aria-label={`Delete ${task.title}`}
-                                >
-                                  <HiTrash className='w-4 h-4' aria-hidden='true' />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </React.Fragment>
+                            <HiTrash className='w-4 h-4' aria-hidden='true' />
+                          </button>
+                        </div>
+                      </Td>
+                    </Tr>
                   );
                 })}
-                {tasks.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={6} className='px-4 py-16 text-center'>
-                      <div className='flex flex-col items-center gap-3'>
-                        <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
-                          <HiClipboardList className='w-6 h-6 text-slate-400' aria-hidden='true' />
-                        </div>
-                        <p className='text-slate-500 text-sm'>{t('tasks.noTasksFound')}</p>
-                        <button
-                          onClick={() => setShowCreateModal(true)}
-                          className='text-sm font-medium text-indigo-600 hover:text-indigo-700'
-                        >{t('tasks.createYourFirstTask2')}</button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            {/* Footer summary */}
-            {tasks.length > 0 && (
-              <div className='px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between'>
-                <span className='text-xs text-slate-500'>{tasks.length} task{tasks.length === 1 ? '' : 's'} total</span>
-              </div>
+              </Tbody>
+            </Table>
+            {total > 0 && (
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                onPageChange={(p) => { setPage(p); selection.clear(); }}
+                onPageSizeChange={(n) => { setPageSize(n); setPage(1); }}
+              />
             )}
           </div>
-        )}
+        ))}
       </div>
 
       {/* Task Detail Panel */}
@@ -576,6 +692,35 @@ export default function TasksBoard() {
         onConfirm={() => { handleDeleteTask(pendingDelete); setPendingDelete(null); }}
         onCancel={() => setPendingDelete(null)}
       />
+      <ConfirmDialog
+        open={pendingBulkDelete}
+        title={t('tasksBoard.deleteSelectedTitle', { count: selection.count })}
+        description={t('tasks.thisCannotBeUndone')}
+        confirmLabel={t('tasks.delete')}
+        onConfirm={() => { setPendingBulkDelete(false); applyBulk(bulkDelete, { removes: true }); }}
+        onCancel={() => setPendingBulkDelete(false)}
+      />
+
+      {/* Appears only once rows are ticked, in the table view. */}
+      <BulkActionBar count={selection.count} onClear={selection.clear}>
+        <BulkButton onClick={() => applyBulk(bulkComplete)} disabled={bulkBusy}>
+          <span className='inline-flex items-center gap-1.5'><HiCheck className='w-4 h-4' aria-hidden='true' />{t('tasksBoard.markComplete')}</span>
+        </BulkButton>
+        {isAdmin && (
+          <BulkSelect
+            value=''
+            aria-label={t('tasksBoard.assignSelectedTo')}
+            disabled={bulkBusy}
+            onChange={(e) => { if (e.target.value) applyBulk(bulkAssign(e.target.value)); }}
+          >
+            <option value=''>{t('tasksBoard.assignTo')}</option>
+            {agents.map((agent) => (
+              <option key={agent._id} value={agent._id}>{agent.username}</option>
+            ))}
+          </BulkSelect>
+        )}
+        <BulkButton danger onClick={() => setPendingBulkDelete(true)} disabled={bulkBusy}>{t('tasks.delete')}</BulkButton>
+      </BulkActionBar>
     </div>
   );
 }

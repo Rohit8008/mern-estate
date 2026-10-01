@@ -3,14 +3,15 @@ import Listing from '../models/listing.model.js';
 import { errorHandler } from '../utils/error.js';
 import { listingScope } from '../middleware/permissions.js';
 import { streamCsv } from '../utils/csvExport.js';
+import { parsePaging, parseSort } from '../utils/listQuery.js';
 import mongoose from 'mongoose';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Admins and employees manage buyer requirements org-wide; everyone else (e.g. a buyer's own
 // self-service account) is restricted to requirements they created.
 const isStaff = (user) => user.role === 'admin' || user.role === 'employee';
 
 /** Treat user input as literal text inside a regex query. */
-const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const createBuyerRequirement = async (req, res, next) => {
   try {
@@ -61,11 +62,11 @@ function buildBuyerFilter(req) {
   if (propertyTypeInterest && propertyTypeInterest !== 'all') query.propertyTypeInterest = propertyTypeInterest;
 
   if (preferredCity && preferredCity.trim() && preferredCity !== 'all') {
-    query.preferredCity = { $regex: escapeRegex(preferredCity.trim()), $options: 'i' };
+    query.preferredCity = { $regex: escapeRegex(String(preferredCity).trim()), $options: 'i' };
   }
 
   if (preferredLocality && preferredLocality.trim() && preferredLocality !== 'all') {
-    query.preferredLocality = { $regex: escapeRegex(preferredLocality.trim()), $options: 'i' };
+    query.preferredLocality = { $regex: escapeRegex(String(preferredLocality).trim()), $options: 'i' };
   }
 
   if (assignedAgent && assignedAgent !== 'all') {
@@ -75,15 +76,42 @@ function buildBuyerFilter(req) {
   return query;
 }
 
+/**
+ * Orders the buyer list can be sorted in — see parseSort. Not budget (a free
+ * text field, so its order is alphabetical, not by amount) and not priority
+ * (an enum, which would sort high → low → medium).
+ */
+const BUYER_SORTS = {
+  name: 'buyerName',
+  status: 'status',
+  followUpDate: 'followUpDate',
+  lastContactDate: 'lastContactDate',
+  createdAt: 'createdAt',
+};
+
+const populateBuyer = (q) => q
+  .populate('matchedProperties', 'name price imageUrls address')
+  .populate('createdBy', 'username email')
+  .populate('assignedAgent', 'username email firstName lastName');
+
 export const getBuyerRequirements = async (req, res, next) => {
   try {
-    const buyerRequirements = await BuyerRequirement.find(buildBuyerFilter(req))
-      .sort({ createdAt: -1 })
-      .populate('matchedProperties', 'name price imageUrls address')
-      .populate('createdBy', 'username email')
-      .populate('assignedAgent', 'username email firstName lastName');
+    const filter = buildBuyerFilter(req);
 
-    res.json(buyerRequirements);
+    // Paged only when asked. Without `page` the answer stays the bare array
+    // the mobile app reads, newest first and unpaged, exactly as before.
+    if (req.query.page === undefined) {
+      const buyerRequirements = await populateBuyer(BuyerRequirement.find(filter).sort({ createdAt: -1 }));
+      return res.json(buyerRequirements);
+    }
+
+    const { page, limit, skip } = parsePaging(req.query);
+    const sort = parseSort(req.query.sort, BUYER_SORTS, { createdAt: -1 });
+    const [items, total] = await Promise.all([
+      populateBuyer(BuyerRequirement.find(filter).sort(sort).skip(skip).limit(limit)),
+      BuyerRequirement.countDocuments(filter),
+    ]);
+    return res.json({ success: true, data: items, page, limit, total });
   } catch (error) {
     next(error);
   }
@@ -331,10 +359,13 @@ export const addMatchedProperty = async (req, res, next) => {
       return next(errorHandler(403, 'You can only update your own buyer requirements'));
     }
 
-    // Check if property exists and belongs to user
-    const property = await Listing.findById(propertyId);
-    if (!property || property.userRef.toString() !== req.user.id) {
-      return next(errorHandler(404, 'Property not found or does not belong to you'));
+    // Saveable if the caller can SEE it — the same rule that produced the match
+    // list. Requiring authorship made an admin's save of a colleague's listing
+    // fail on a match the screen had just offered.
+    if (!mongoose.isValidObjectId(propertyId)) return next(errorHandler(400, 'Invalid property'));
+    const property = await Listing.findOne({ _id: propertyId, ...listingScope(req.user), isDeleted: { $ne: true } });
+    if (!property) {
+      return next(errorHandler(404, 'Property not found'));
     }
 
     // Add property to matched properties if not already added
@@ -403,8 +434,13 @@ export const updateBuyerStatus = async (req, res, next) => {
 
 export const getBuyerStats = async (req, res, next) => {
   try {
+    // aggregate() does not cast, so the id has to be an ObjectId to match; and
+    // staff see the whole workspace, as the list does.
+    const match = { isDeleted: { $ne: true } };
+    if (!isStaff(req.user)) match.createdBy = new mongoose.Types.ObjectId(req.user.id);
+
     const stats = await BuyerRequirement.aggregate([
-      { $match: { createdBy: req.user.id, isDeleted: { $ne: true } } },
+      { $match: match },
       {
         $group: {
           _id: null,
@@ -418,7 +454,7 @@ export const getBuyerStats = async (req, res, next) => {
     ]);
 
     const propertyTypeStats = await BuyerRequirement.aggregate([
-      { $match: { createdBy: req.user.id, isDeleted: { $ne: true } } },
+      { $match: match },
       {
         $group: {
           _id: '$propertyType',

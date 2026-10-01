@@ -1,6 +1,6 @@
 import Client from '../models/client.model.js';
 import { phoneKeyOf } from '../utils/phoneKey.js';
-import { errorHandler } from '../utils/error.js';
+import { errorHandler, VersionConflictError, parseExpectedUpdatedAt } from '../utils/error.js';
 import { logFromRequest, diffFields } from '../utils/activity.js';
 import { notify } from '../utils/notify.js';
 import { chooseAssignee } from '../tenancy/leadAssignment.js';
@@ -9,6 +9,7 @@ import { streamCsv, joinNames } from '../utils/csvExport.js';
 import { emitEvent } from '../utils/webhooks.js';
 import mongoose from 'mongoose';
 import { suppress, unsuppressAgentEntry } from '../utils/unsubscribe.js';
+import { parsePaging, parseSort } from '../utils/listQuery.js';
 
 /**
  * Normalise a phone number for comparison.
@@ -155,26 +156,40 @@ export const createClient = async (req, res, next) => {
   }
 };
 
+/** Columns the Clients table can sort by — see parseSort. */
+const CLIENT_SORTS = {
+  name: 'name',
+  score: 'score',
+  temperature: 'temperature',
+  status: 'status',
+  priority: 'priority',
+  budget: 'budget.max',
+  nextFollowUp: 'nextFollowUp',
+  email: 'email',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+};
+
 // List clients with filters; non-admins only see their own
 export const getClients = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page, limit, skip } = parsePaging(req.query);
+    const sort = parseSort(req.query.sort, CLIENT_SORTS, { updatedAt: -1 });
     const filter = buildClientFilter(req);
 
-    const skip = (Number(page) - 1) * Number(limit);
     const [items, total] = await Promise.all([
       // tagIds is populated so the list can render chips without a second
       // request per row.
       Client.find(filter)
-        .sort({ updatedAt: -1 })
+        .sort(sort)
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limit)
         .populate('tagIds', 'name color')
         .lean(),
       Client.countDocuments(filter),
     ]);
 
-    res.json({ success: true, data: items, page: Number(page), limit: Number(limit), total });
+    res.json({ success: true, data: items, page, limit, total });
   } catch (err) {
     next(err);
   }
@@ -212,8 +227,15 @@ export const updateClient = async (req, res, next) => {
       return next(errorHandler(403, 'You cannot reassign clients'));
     }
 
-    const updates = { ...req.body };
+    // Optional edit guard — see updateListing. Not a field of the record, so
+    // it is taken out before the rest is applied to the document.
+    const { expectedUpdatedAt: expectedRaw, ...updates } = req.body;
+    const expectedUpdatedAt = parseExpectedUpdatedAt(expectedRaw);
     if (req.user.role !== 'admin') delete updates.assignedTo;
+
+    if (expectedUpdatedAt && existing.updatedAt?.getTime() !== expectedUpdatedAt.getTime()) {
+      return next(new VersionConflictError({ currentUpdatedAt: existing.updatedAt }));
+    }
 
     const before = existing.toObject();
 
@@ -226,7 +248,23 @@ export const updateClient = async (req, res, next) => {
     if (updates.temperature) existing.temperatureManual = true;
 
     existing.calculateScore();
-    await existing.save();
+
+    // The check above sees the record as it was read; `$where` makes the save
+    // itself conditional too, so a write landing between the read and this
+    // save still cannot be overwritten. A miss surfaces as
+    // DocumentNotFoundError. Still a document save, so pre-save hooks (the
+    // phone key) and the score recalculation run exactly as before.
+    if (expectedUpdatedAt) existing.$where = { updatedAt: expectedUpdatedAt };
+    try {
+      await existing.save();
+    } catch (err) {
+      if (err?.name === 'DocumentNotFoundError') {
+        const current = await Client.findOne({ _id: id, isDeleted: { $ne: true } }).select('updatedAt').lean();
+        if (!current) return next(errorHandler(404, 'Client not found'));
+        return next(new VersionConflictError({ currentUpdatedAt: current.updatedAt }));
+      }
+      throw err;
+    }
     const updated = existing;
 
     logFromRequest(req, {
@@ -391,8 +429,10 @@ export const bulkUpdateClients = async (req, res, next) => {
  */
 export const exportClients = async (req, res, next) => {
   try {
+    // Same order as the table on screen — an export that re-sorts what
+    // someone was looking at reads as a different list.
     const cursor = Client.find(buildClientFilter(req))
-      .sort({ updatedAt: -1 })
+      .sort(parseSort(req.query.sort, CLIENT_SORTS, { updatedAt: -1 }))
       .limit(50_000)
       .populate('assignedTo', 'username email')
       .populate('tagIds', 'name')

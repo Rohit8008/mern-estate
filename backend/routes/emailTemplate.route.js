@@ -7,6 +7,7 @@ import {
   previewEmailTemplate,
   sendTestEmail,
 } from '../controllers/emailTemplate.controller.js';
+import { validateBody, emailTemplateValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -14,10 +15,10 @@ const router = express.Router();
 router.use(verifyToken, requireAdmin);
 
 router.get('/', listEmailTemplates);
-router.post('/preview', previewEmailTemplate);
-router.post('/test', sendTestEmail);
+router.post('/preview', validateBody(emailTemplateValidation.draft), previewEmailTemplate);
+router.post('/test', validateBody(emailTemplateValidation.draft), sendTestEmail);
 
-router.put('/:key', upsertEmailTemplate);
+router.put('/:key', validateBody(emailTemplateValidation.upsert), upsertEmailTemplate);
 router.delete('/:key', deleteEmailTemplate);
 
 export default router;

@@ -7,7 +7,7 @@ import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
   HiOutlineBell, HiOutlinePlus, HiOutlineTrash, HiOutlineCalendar,
 } from 'react-icons/hi';
-import { Modal, PageLoader, EmptyState } from '../design-system';
+import { Modal, EmptyState, Skeleton } from '../design-system';
 import { useTranslation } from 'react-i18next';
 
 /* ─── date helpers ─── */
@@ -254,6 +254,21 @@ export default function Calendar() {
     return { dayTasks, dayFollowUps, dayEvents };
   }, [selected, tasks, followUps, events]);
 
+  /* everything due in the visible month (not the spill-over days around it) */
+  const monthTotal = useMemo(() => {
+    let n = 0;
+    countsByDay.forEach((c, key) => {
+      const [y, m] = key.split('-').map(Number);
+      if (y === monthStart.getFullYear() && m - 1 === monthStart.getMonth()) n += c.task + c.followUp + c.event;
+    });
+    return n;
+  }, [countsByDay, monthStart]);
+
+  // First load of a range: placeholders where the counts will land, so the
+  // grid keeps its shape instead of being swapped for a spinner. A refresh
+  // over data already on screen just dims it.
+  const showSkeleton = loading && tasks.length === 0 && followUps.length === 0;
+
   const days = useMemo(() => {
     const out = []; let d = new Date(gridStart);
     while (d <= gridEnd) { out.push(new Date(d)); d = addDays(d, 1); }
@@ -388,9 +403,6 @@ export default function Calendar() {
           </div>
         )}
 
-        {loading && tasks.length === 0 && followUps.length === 0 ? (
-          <PageLoader message='Loading calendar…' />
-        ) : (
         <div className='grid grid-cols-12 gap-4'>
           {/* ── Calendar grid ── */}
           <div className='col-span-12 xl:col-span-8'>
@@ -404,9 +416,29 @@ export default function Calendar() {
                   disabled={loading}
                   className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold disabled:bg-slate-100'
                 >
-                  {loading ? 'Loading…' : 'Refresh'}
+                  {loading ? t('common.loading') : t('common.refresh')}
                 </button>
               </div>
+
+              {/* A month with nothing in it says so, rather than leaving an
+                  empty grid that could equally mean "still loading". */}
+              {!loading && !error && monthTotal === 0 && (
+                <div className='px-4 py-3 border-b border-border bg-secondary/60 flex items-center gap-3 flex-wrap'>
+                  <HiOutlineCalendar className='w-5 h-5 text-muted-foreground flex-shrink-0' aria-hidden='true' />
+                  <div className='flex-1 min-w-0'>
+                    <p className='text-sm font-medium text-foreground'>
+                      {t('calendar.nothingThisMonth', { month: formatDate(monthStart, { day: undefined, month: 'long', year: 'numeric' }) })}
+                    </p>
+                    <p className='text-xs text-muted-foreground'>{t('calendar.nothingThisMonthBody')}</p>
+                  </div>
+                  <button
+                    type='button'
+                    onClick={openModal}
+                    className='flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-card text-foreground/80 hover:bg-accent text-sm font-medium transition-colors'
+                  >
+                    <HiOutlinePlus className='w-4 h-4' aria-hidden='true' />{t('calendar.addEvent')}</button>
+                </div>
+              )}
 
               <div className='grid grid-cols-7 border-b border-slate-200 bg-slate-50'>
                 {DOW.map((d) => (
@@ -414,7 +446,10 @@ export default function Calendar() {
                 ))}
               </div>
 
-              <div className='grid grid-cols-7'>
+              <div
+                className={`grid grid-cols-7 transition-opacity motion-reduce:transition-none ${loading && !showSkeleton ? 'opacity-60' : ''}`}
+                aria-busy={loading || undefined}
+              >
                 {days.map((d) => {
                   const inMonth  = d.getMonth() === monthStart.getMonth();
                   const key      = ymd(d);
@@ -447,6 +482,9 @@ export default function Calendar() {
                       </div>
 
                       <div className='mt-2 space-y-1'>
+                        {showSkeleton && inMonth && (
+                          <Skeleton className={`h-5 rounded-lg ${d.getDate() % 3 === 0 ? 'w-3/4' : 'w-1/2'}`} />
+                        )}
                         {counts.task > 0 && (
                           <div className='text-[11px] rounded-lg px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 inline-block'>
                             {counts.task} task{counts.task > 1 ? 's' : ''}
@@ -587,7 +625,6 @@ export default function Calendar() {
             </div>
           </div>
         </div>
-        )}
 
       {/* ── Add Event Modal ── */}
       <Modal

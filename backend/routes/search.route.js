@@ -12,6 +12,7 @@ import {
   pinSavedSearch,
   getSearchAnalytics,
 } from '../controllers/search.controller.js';
+import { validateBody, searchValidation } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -21,13 +22,13 @@ router.use(verifyToken);
 // Core search
 router.get('/',         globalSearch);       // GET  /api/search?q=...
 router.get('/suggest',  getSuggestions);     // GET  /api/search/suggest?q=...
-router.post('/click',   trackClick);         // POST /api/search/click
+router.post('/click',   validateBody(searchValidation.click), trackClick);         // POST /api/search/click
 
 // Saved searches
 router.get('/saved',            listSavedSearches);
-router.post('/saved',           createSavedSearch);
+router.post('/saved',           validateBody(searchValidation.saved), createSavedSearch);
 router.delete('/saved/:id',     deleteSavedSearch);
-router.patch('/saved/:id/pin',  pinSavedSearch);
+router.patch('/saved/:id/pin',  validateBody(searchValidation.empty), pinSavedSearch);
 
 // Analytics
 router.get('/analytics', getSearchAnalytics);

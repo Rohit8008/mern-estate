@@ -94,3 +94,15 @@ describe('the type constrains the file', () => {
     expect(checkFileForType('rera', 'image/jpeg')).toMatch(/Other document/);
   });
 });
+
+describe('report types', () => {
+  it('are one list for templates and the reports generated from them', async () => {
+    const { REPORT_TYPES } = await import('../utils/reportTypes.js');
+    const { default: ReportTemplate } = await import('../models/reportTemplate.model.js');
+    const { default: GeneratedReport } = await import('../models/generatedReport.model.js');
+    expect(ReportTemplate.schema.path('type').enumValues).toEqual([...REPORT_TYPES]);
+    expect(GeneratedReport.schema.path('templateType').enumValues).toEqual([...REPORT_TYPES]);
+    // Every type the Reports screen offers must be generatable.
+    ['transaction_history', 'client_portfolio', 'monthly_summary'].forEach((t) => expect(REPORT_TYPES).toContain(t));
+  });
+});

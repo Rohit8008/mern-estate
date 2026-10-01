@@ -5,10 +5,14 @@ import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { toCsv, downloadTextFile } from '../utils/spreadsheet';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { Button, Badge, Input, Select, Textarea, KpiCard, EmptyState, Spinner } from '../design-system';
+import {
+  Button, Badge, Input, Select, Textarea, KpiCard, EmptyState, Spinner,
+  Table, Thead, Th, Tbody, Tr, Td, SkeletonRows, Pagination, ColumnToggle,
+} from '../design-system';
+import { useColumnPrefs } from '../hooks/useColumnPrefs';
 import {
   HiPlus, HiSearch, HiX, HiCurrencyDollar, HiCheck, HiClock,
-  HiDownload, HiPencil, HiTrash, HiHome, HiChevronDown,
+  HiDownload, HiPencil, HiTrash, HiHome, HiChevronDown, HiFilter,
 } from 'react-icons/hi';
 import { currencySymbol, formatCurrency, formatDate } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +34,29 @@ const fmtINR = (n) =>
 
 const fmtDate = (d) =>
   d ? formatDate(d, { day: 'numeric' }) : '—';
+
+const DEFAULT_SORT = { key: 'date', dir: 'desc' };
+
+// The export walks the filtered set in pages this size — the API's cap.
+const EXPORT_PAGE = 500;
+
+/** A fresh blank form. A function, so the default date is today's, not module-load day's. */
+const emptyForm = () => ({
+  property: null,
+  manualPropertyName: '',
+  client: null,
+  manualClientName: '',
+  type: 'sale',
+  amount: '',
+  commissionPercent: '',
+  commission: '',
+  status: 'pending',
+  date: localDateString(),
+  notes: '',
+  coAgent: null,
+  coAgentCommissionPercent: '',
+  coAgentCommission: '',
+});
 
 // ─── EntityPicker ──────────────────────────────────────────────────────────────
 // Searchable async-dropdown linked to real DB records
@@ -131,24 +158,7 @@ function EntityPicker({ label, placeholder, value, onSelect, fetchFn, renderItem
 // ─── TransactionDrawer ─────────────────────────────────────────────────────────
 function TransactionDrawer({ open, onClose, transaction, onSaved }) {
   const { t } = useTranslation();
-  const EMPTY = {
-    property: null,
-    manualPropertyName: '',
-    client: null,
-    manualClientName: '',
-    type: 'sale',
-    amount: '',
-    commissionPercent: '',
-    commission: '',
-    status: 'pending',
-    date: localDateString(),
-    notes: '',
-    coAgent: null,
-    coAgentCommissionPercent: '',
-    coAgentCommission: '',
-  };
-
-  const [form, setForm]   = useState(EMPTY);
+  const [form, setForm]   = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
@@ -191,7 +201,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
         coAgentCommission: transaction.coAgentCommission ?? '',
       });
     } else {
-      setForm(EMPTY);
+      setForm(emptyForm());
     }
     setError('');
   }, [open, transaction]);
@@ -541,22 +551,22 @@ function FilterDropdown({ label, value, options, onChange }) {
         aria-expanded={open}
         className={`px-3 py-2 rounded-lg border text-sm font-medium flex items-center gap-2 transition-colors ${
           active
-            ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            ? 'border-brand-300 bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300 dark:border-brand-800'
+            : 'border-border bg-card text-foreground/80 hover:bg-accent'
         }`}
       >
         {label}: {value}
         <HiChevronDown className='w-4 h-4' aria-hidden='true' />
       </button>
       {open && (
-        <div className='absolute top-full left-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1'>
+        <div className='absolute top-full left-0 mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg z-20 py-1'>
           {options.map((opt) => (
             <button
               key={opt}
               onClick={() => { onChange(opt); setOpen(false); }}
               aria-pressed={value === opt}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${
-                value === opt ? 'bg-slate-100 font-medium text-slate-900' : 'text-slate-700'
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${
+                value === opt ? 'bg-secondary font-medium text-foreground' : 'text-foreground/80'
               }`}
             >
               {opt}
@@ -586,17 +596,52 @@ export default function Transactions() {
   const [deleting, setDeleting]         = useState(false);
   const [deleteError, setDeleteError]   = useState('');
   const [stats, setStats]               = useState({ totalPipeline: 0, totalCommission: 0, completed: 0, pending: 0 });
+  const [page, setPage]                 = useState(1);
+  const [pageSize, setPageSize]         = useState(20);
+  const [sort, setSort]                 = useState(DEFAULT_SORT);
+  const [exporting, setExporting]       = useState(false);
 
-  const buildParams = useCallback(() => {
+  // Sorting and paging happen on the server: ordering the 20 rows in hand
+  // would be ordering the wrong set. Any change to what is being looked at —
+  // a filter, the order, the page size — goes back to the first page, because
+  // page 7 of a different question is meaningless.
+  const changeFilter = (setter) => (value) => { setter(value); setPage(1); };
+  const onSort = (key) => {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+    setPage(1);
+  };
+  const hasFilters = typeFilter !== 'All' || statusFilter !== 'All' || !!searchQuery;
+  const clearFilters = () => { setTypeFilter('All'); setStatusFilter('All'); setSearchQuery(''); setPage(1); };
+
+  const COLUMNS = [
+    { key: 'property',   label: t('transactions.property'), locked: true },
+    { key: 'client',     label: t('transactions.client') },
+    { key: 'type',       label: t('transactions.type') },
+    { key: 'amount',     label: t('transactionsTable.amount') },
+    { key: 'commission', label: t('transactions.commission2') },
+    { key: 'status',     label: t('transactions.status') },
+    { key: 'date',       label: t('transactions.date') },
+  ];
+  const { isVisible, toggle: toggleColumn, reset: resetColumns, visibleColumns } = useColumnPrefs('transactions', COLUMNS);
+
+  /** The filters alone — shared by the table and the export. */
+  const filterParams = useCallback(() => {
     const p = new URLSearchParams();
     if (searchQuery)          p.set('q', searchQuery);
     if (typeFilter !== 'All') p.set('type', typeFilter.toLowerCase());
     if (statusFilter !== 'All') {
       p.set('status', statusFilter.toLowerCase().replaceAll(' ', '_'));
     }
-    p.set('limit', '50');
+    p.set('sort', `${sort.key}:${sort.dir}`);
+    return p;
+  }, [searchQuery, typeFilter, statusFilter, sort]);
+
+  const buildParams = useCallback(() => {
+    const p = filterParams();
+    p.set('page', String(page));
+    p.set('limit', String(pageSize));
     return p.toString();
-  }, [searchQuery, typeFilter, statusFilter]);
+  }, [filterParams, page, pageSize]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -618,21 +663,39 @@ export default function Transactions() {
   }, [canAccess, load, searchQuery]);
 
   /**
-   * Export what the table is currently showing.
-   *
-   * `transactions` is the server-filtered set, so whatever the type, status and
-   * search filters are narrowed to is exactly what lands in the file. Exporting
-   * the unfiltered collection would quietly disagree with the screen.
+   * Export what the table is filtered to — every page of it, in the table's
+   * order, not just the page on screen. Exporting the unfiltered collection
+   * would quietly disagree with the screen; exporting one page would quietly
+   * drop the rest.
    *
    * Amounts and dates go out raw rather than through fmtINR/fmtDate: a
    * spreadsheet needs a number it can sum and a date it can sort, not
    * "\u20b912,50,000" and "3 Aug 2026". Passing them as numbers also keeps them
    * clear of toCsv's formula guard, which only applies to strings.
    */
-  const handleExport = useCallback(() => {
-    if (!transactions.length) {
+  const handleExport = useCallback(async () => {
+    if (!total) {
       showError('Nothing to export. Adjust the filters and try again.');
       return;
+    }
+
+    setExporting(true);
+    let rows = [];
+    try {
+      for (let p = 1; rows.length < total; p += 1) {
+        const params = filterParams();
+        params.set('page', String(p));
+        params.set('limit', String(EXPORT_PAGE));
+        const res = await apiClient.get(`/transactions?${params.toString()}`);
+        const batch = res.data || [];
+        rows = rows.concat(batch);
+        if (batch.length < EXPORT_PAGE) break;
+      }
+    } catch (err) {
+      showError(err?.message || 'Export failed. Please try again.');
+      return;
+    } finally {
+      setExporting(false);
     }
 
     const grid = [
@@ -640,7 +703,7 @@ export default function Transactions() {
         'Property', 'Client', 'Co-agent', 'Type', 'Amount (INR)',
         'Commission (INR)', 'Commission %', 'Status', 'Date',
       ],
-      ...transactions.map((t) => [
+      ...rows.map((t) => [
         t.propertyName || '',
         t.clientName || '',
         t.coAgentName || '',
@@ -654,7 +717,7 @@ export default function Transactions() {
     ];
 
     downloadTextFile(`transactions-${localDateString()}.csv`, toCsv(grid));
-  }, [transactions, showError]);
+  }, [total, filterParams, showError]);
 
   const loadStats = useCallback(() => {
     apiClient.get('/transactions/stats')
@@ -669,13 +732,16 @@ export default function Transactions() {
   }, [canAccess, loadStats]);
 
   const handleDelete = async () => {
-    if (!pendingDelete) return;
+    // A second click while the first is in flight would delete twice.
+    if (!pendingDelete || deleting) return;
     setDeleting(true);
     setDeleteError('');
     try {
       await apiClient.delete(`/transactions/${pendingDelete}`);
       setPendingDelete(null);
-      load();
+      // Deleting the only row on a later page would leave an empty page behind.
+      if (transactions.length === 1 && page > 1) setPage((p) => p - 1);
+      else load();
       loadStats();
     } catch (err) {
       setDeleteError(err?.message || 'Failed to delete. Please try again.');
@@ -700,11 +766,11 @@ export default function Transactions() {
       {/* Page header */}
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
         <div>
-          <h1 className='text-xl font-bold text-slate-900'>{t('transactions.transactions')}</h1>
-          <p className='text-slate-500 text-sm mt-0.5'>{t('transactions.trackAndManageAllPropertyTransactions')}</p>
+          <h1 className='text-xl font-bold text-foreground'>{t('transactions.transactions')}</h1>
+          <p className='text-muted-foreground text-sm mt-0.5'>{t('transactions.trackAndManageAllPropertyTransactions')}</p>
         </div>
         <div className='flex items-center gap-2'>
-          <Button variant='secondary' icon={HiDownload} onClick={handleExport} disabled={!transactions.length}>{t('transactions.export')}</Button>
+          <Button variant='secondary' icon={HiDownload} onClick={handleExport} disabled={!total} loading={exporting}>{t('transactions.export')}</Button>
           <Button variant='primary' icon={HiPlus} onClick={openNew}>{t('transactions.newTransaction')}</Button>
         </div>
       </div>
@@ -718,142 +784,169 @@ export default function Transactions() {
       </div>
 
       {/* Filters */}
-      <div className='bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center gap-3'>
-        <div className='flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 flex-1 min-w-0 max-w-xs focus-within:ring-2 focus-within:ring-brand-500'>
-          <HiSearch className='w-4 h-4 text-slate-400 flex-shrink-0' aria-hidden='true' />
+      <div className='bg-card border border-border rounded-xl p-4 flex flex-wrap items-center gap-3'>
+        <div className='flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card flex-1 min-w-0 max-w-xs focus-within:ring-2 focus-within:ring-brand-500'>
+          <HiSearch className='w-4 h-4 text-muted-foreground flex-shrink-0' aria-hidden='true' />
           <input
             type='text'
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => changeFilter(setSearchQuery)(e.target.value)}
             placeholder={t('transactions.searchByPropertyOrClient')}
             aria-label='Search by property or client'
-            className='bg-transparent outline-none flex-1 text-sm text-slate-700 placeholder:text-slate-500 min-w-0'
+            className='bg-transparent outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground min-w-0'
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700 flex-shrink-0'>
+            <button onClick={() => changeFilter(setSearchQuery)('')} aria-label='Clear search' className='text-muted-foreground hover:text-foreground flex-shrink-0'>
               <HiX className='w-4 h-4' aria-hidden='true' />
             </button>
           )}
         </div>
 
-        <FilterDropdown label={t('transactions.type')}   value={typeFilter}   options={TYPE_OPTS}   onChange={setTypeFilter} />
-        <FilterDropdown label={t('transactions.status')} value={statusFilter} options={STATUS_OPTS} onChange={setStatusFilter} />
+        <FilterDropdown label={t('transactions.type')}   value={typeFilter}   options={TYPE_OPTS}   onChange={changeFilter(setTypeFilter)} />
+        <FilterDropdown label={t('transactions.status')} value={statusFilter} options={STATUS_OPTS} onChange={changeFilter(setStatusFilter)} />
 
-        {(typeFilter !== 'All' || statusFilter !== 'All' || searchQuery) && (
+        {hasFilters && (
           <button
-            onClick={() => { setTypeFilter('All'); setStatusFilter('All'); setSearchQuery(''); }}
-            className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-1'
+            onClick={clearFilters}
+            className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1'
           >
             <HiX className='w-4 h-4' aria-hidden='true' />{t('transactions.clear')}</button>
         )}
+
+        <div className='ml-auto'>
+          <ColumnToggle columns={COLUMNS} isVisible={isVisible} onToggle={toggleColumn} onReset={resetColumns} />
+        </div>
       </div>
 
       {/* Table */}
-      <div className='bg-white border border-slate-200 rounded-xl overflow-hidden'>
-        {loading ? (
-          <div className='flex items-center justify-center py-16'><Spinner /></div>
-        ) : transactions.length === 0 ? (
-          <EmptyState
-            icon={HiCurrencyDollar}
-            title={t('transactions.noTransactionsYet')}
-            body={t('transactions.createYourFirstTransactionToStart')}
-            action={<Button variant='primary' icon={HiPlus} onClick={openNew}>{t('transactions.newTransaction')}</Button>}
-          />
-        ) : (
-          <div className='overflow-x-auto'>
-            <table className='w-full'>
-              <thead className='bg-slate-50 border-b border-slate-200'>
-                <tr>
-                  {['Property', 'Client', 'Type', 'Amount', 'Commission', 'Status', 'Date', ''].map((h) => (
-                    <th key={h} className='text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap'>
-                      {h || <span className='sr-only'>Actions</span>}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className='divide-y divide-slate-100'>
-                {transactions.map((item) => {
-                  const sm = STATUS_META[item.status] || STATUS_META.pending;
-                  return (
-                    <tr key={item._id} className='hover:bg-slate-50 transition-colors'>
-                      <td className='px-4 py-3'>
+      {!loading && transactions.length === 0 ? (
+        <div className='bg-card border border-border rounded-xl'>
+          {hasFilters ? (
+            <EmptyState
+              icon={HiFilter}
+              title={t('transactionsTable.noMatches')}
+              body={t('transactionsTable.noMatchesBody')}
+              action={<Button variant='secondary' icon={HiX} onClick={clearFilters}>{t('transactionsTable.clearFilters')}</Button>}
+            />
+          ) : (
+            <EmptyState
+              icon={HiCurrencyDollar}
+              title={t('transactions.noTransactionsYet')}
+              body={t('transactions.createYourFirstTransactionToStart')}
+              action={<Button variant='primary' icon={HiPlus} onClick={openNew}>{t('transactions.newTransaction')}</Button>}
+            />
+          )}
+        </div>
+      ) : (
+        <div className='bg-card rounded-xl'>
+          <Table maxHeight='max-h-[70vh]' className='bg-card'>
+            <Thead sticky>
+              <tr>
+                {isVisible('property')   && <Th sortKey='property' sort={sort} onSort={onSort}>{t('transactions.property')}</Th>}
+                {isVisible('client')     && <Th sortKey='client'   sort={sort} onSort={onSort}>{t('transactions.client')}</Th>}
+                {isVisible('type')       && <Th sortKey='type'     sort={sort} onSort={onSort}>{t('transactions.type')}</Th>}
+                {isVisible('amount')     && <Th sortKey='amount'   sort={sort} onSort={onSort}>{t('transactionsTable.amount')}</Th>}
+                {/* Commission is computed per deal and has no sort on the server. */}
+                {isVisible('commission') && <Th>{t('transactions.commission2')}</Th>}
+                {isVisible('status')     && <Th sortKey='status'   sort={sort} onSort={onSort}>{t('transactions.status')}</Th>}
+                {isVisible('date')       && <Th sortKey='date'     sort={sort} onSort={onSort}>{t('transactions.date')}</Th>}
+                <Th><span className='sr-only'>{t('transactionsTable.actions')}</span></Th>
+              </tr>
+            </Thead>
+            <Tbody>
+              {loading ? (
+                <SkeletonRows rows={Math.min(pageSize, 10)} columns={visibleColumns.length + 1} />
+              ) : transactions.map((item) => {
+                const sm = STATUS_META[item.status] || STATUS_META.pending;
+                return (
+                  <Tr key={item._id}>
+                    {isVisible('property') && (
+                      <Td>
                         <div className='flex items-center gap-2'>
-                          <div className='w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0'>
-                            <HiHome className='w-4 h-4 text-slate-500' aria-hidden='true' />
+                          <div className='w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0'>
+                            <HiHome className='w-4 h-4 text-muted-foreground' aria-hidden='true' />
                           </div>
-                          <span className='text-sm font-medium text-slate-900 truncate max-w-[160px]'>
+                          <span className='text-sm font-medium text-foreground truncate max-w-[160px]'>
                             {item.propertyName}
                           </span>
                         </div>
-                      </td>
-                      <td className='px-4 py-3'>
+                      </Td>
+                    )}
+                    {isVisible('client') && (
+                      <Td>
                         <div className='flex flex-col gap-0.5'>
                           <div className='flex items-center gap-2'>
-                            <div className='w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0'>
-                              <span className='text-xs font-semibold text-indigo-600'>
+                            <div className='w-7 h-7 rounded-full bg-brand-50 dark:bg-brand-950/50 flex items-center justify-center flex-shrink-0'>
+                              <span className='text-xs font-semibold text-brand-600 dark:text-brand-300'>
                                 {item.clientName?.charAt(0).toUpperCase()}
                               </span>
                             </div>
-                            <span className='text-sm text-slate-700'>{item.clientName}</span>
+                            <span className='text-sm text-foreground/80'>{item.clientName}</span>
                           </div>
                           {item.coAgentName && (
-                            <span className='text-xs text-slate-500 pl-9'>↗ {item.coAgentName}</span>
+                            <span className='text-xs text-muted-foreground pl-9'>↗ {item.coAgentName}</span>
                           )}
                         </div>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <span className='text-sm text-slate-600 capitalize'>{item.type}</span>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <span className='text-sm font-semibold text-slate-900'>{fmtINR(item.amount)}</span>
-                      </td>
-                      <td className='px-4 py-3'>
+                      </Td>
+                    )}
+                    {isVisible('type') && (
+                      <Td><span className='text-sm text-muted-foreground capitalize'>{item.type}</span></Td>
+                    )}
+                    {isVisible('amount') && (
+                      <Td><span className='text-sm font-semibold text-foreground tabular-nums'>{fmtINR(item.amount)}</span></Td>
+                    )}
+                    {isVisible('commission') && (
+                      <Td>
                         <div className='flex items-center gap-1'>
-                          <span className='text-sm font-medium text-emerald-600'>{fmtINR(item.commission)}</span>
+                          <span className='text-sm font-medium text-emerald-600 dark:text-emerald-400 tabular-nums'>{fmtINR(item.commission)}</span>
                           {item.commissionPercent > 0 && (
-                            <span className='text-xs text-slate-500'>({item.commissionPercent}%)</span>
+                            <span className='text-xs text-muted-foreground'>({item.commissionPercent}%)</span>
                           )}
                         </div>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <Badge variant={sm.variant}>{sm.label}</Badge>
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap'>
-                        <span className='text-sm text-slate-500'>{fmtDate(item.date)}</span>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <div className='flex items-center justify-end gap-1'>
-                          <button
-                            onClick={() => openEdit(item)}
-                            className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors'
-                            title={t('transactions.edit')}
-                            aria-label={`Edit transaction for ${item.propertyName}`}
-                          >
-                            <HiPencil className='w-4 h-4' aria-hidden='true' />
-                          </button>
-                          <button
-                            onClick={() => setPendingDelete(item._id)}
-                            className='p-1.5 rounded-lg hover:bg-rose-50 text-slate-500 hover:text-rose-500 transition-colors'
-                            title={t('transactions.delete')}
-                            aria-label={`Delete transaction for ${item.propertyName}`}
-                          >
-                            <HiTrash className='w-4 h-4' aria-hidden='true' />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {total > transactions.length && (
-              <div className='px-4 py-3 border-t border-slate-100 text-xs text-slate-500 text-center'>
-                Showing {transactions.length} of {total} — adjust filters to narrow results
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                      </Td>
+                    )}
+                    {isVisible('status') && (
+                      <Td><Badge variant={sm.variant}>{sm.label}</Badge></Td>
+                    )}
+                    {isVisible('date') && (
+                      <Td><span className='text-sm text-muted-foreground'>{fmtDate(item.date)}</span></Td>
+                    )}
+                    <Td>
+                      <div className='flex items-center justify-end gap-1'>
+                        <button
+                          onClick={() => openEdit(item)}
+                          className='p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors'
+                          title={t('transactions.edit')}
+                          aria-label={`Edit transaction for ${item.propertyName}`}
+                        >
+                          <HiPencil className='w-4 h-4' aria-hidden='true' />
+                        </button>
+                        <button
+                          onClick={() => setPendingDelete(item._id)}
+                          className='p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-muted-foreground hover:text-rose-500 transition-colors'
+                          title={t('transactions.delete')}
+                          aria-label={`Delete transaction for ${item.propertyName}`}
+                        >
+                          <HiTrash className='w-4 h-4' aria-hidden='true' />
+                        </button>
+                      </div>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </Tbody>
+          </Table>
+          {total > 0 && (
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={changeFilter(setPageSize)}
+            />
+          )}
+        </div>
+      )}
 
       <TransactionDrawer
         open={drawerOpen}

@@ -9,9 +9,9 @@ import CameraCapture from '../components/CameraCapture';
 import {
   updateUserStart, updateUserSuccess, updateUserFailure,
   deleteUserFailure, deleteUserStart, deleteUserSuccess,
-  signOutUserStart, signOutUserSuccess, signOutUserFailure,
 } from '../redux/user/userSlice';
-import { apiClient, normalizeImageUrl, setUserSignedOut } from '../utils/http';
+import { apiClient, normalizeImageUrl } from '../utils/http';
+import { signOutAndLeave } from '../utils/session';
 import { formatListingPrice } from '../utils/currency';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
@@ -191,20 +191,7 @@ export default function Profile() {
     }
   };
 
-  const handleSignOut = async () => {
-    setUserSignedOut(true);
-    try {
-      dispatch(signOutUserStart());
-      await apiClient.post('/auth/signout');
-      dispatch(signOutUserSuccess());
-    } catch {
-      dispatch(signOutUserSuccess());
-    } finally {
-      localStorage.removeItem('persist:root');
-      sessionStorage.clear();
-      window.location.href = '/';
-    }
-  };
+  const handleSignOut = () => signOutAndLeave(dispatch);
 
   const handleShowListings = async () => {
     try {

@@ -31,7 +31,8 @@
     "pm2:logs": "pm2 logs mern-estate-api",
     "pm2:monit": "pm2 monit",
     "db:restore": "node scripts/restore.js",
-    "db:backfill-phone-keys": "node scripts/backfillPhoneKeys.js"
+    "db:backfill-phone-keys": "node scripts/backfillPhoneKeys.js",
+    "docs:openapi": "node scripts/generateOpenApi.js"
   },
   "keywords": [],
   "author": "",

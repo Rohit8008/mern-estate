@@ -16,6 +16,7 @@ import OwnerSelector from '../components/listing/OwnerSelector';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
 import PropertyDocuments from '../components/PropertyDocuments';
 import VoiceNotePanel from '../components/VoiceNotePanel';
+import EditConflictNotice from '../components/EditConflictNotice';
 import { Button, Input, Select, Textarea, Spinner, PageHeader, Badge } from '../design-system';
 import { areaUnit, getLocaleConfig } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
@@ -71,6 +72,7 @@ export default function ListingForm({ mode = 'create' }) {
     form, isDirty, setField, patch, setCategoryField, categoryFieldValue,
     categories, selectedCategory, owners, setOwners, propertyTypes, selectedPropertyType,
     loading, saving, error, loadError, submit, isEdit,
+    conflict, reloadLatest, overwrite,
   } = useListingForm({ mode, listingId });
 
   const [mapLayer, setMapLayer] = useState('street');
@@ -489,6 +491,18 @@ export default function ListingForm({ mode = 'create' }) {
       )}
 
       {/* z-[900]: above Leaflet's panes and controls (400–800), below modals (1000). */}
+      {conflict ? (
+        // Where the Save button was: the person just pressed it, and the
+        // choice belongs where their eyes already are.
+        <div className="sticky bottom-4 z-[900] rounded-xl shadow-lg">
+          <EditConflictNotice
+            currentUpdatedAt={conflict.currentUpdatedAt}
+            onReload={reloadLatest}
+            onOverwrite={overwrite}
+            busy={saving}
+          />
+        </div>
+      ) : (
       <div className="sticky bottom-4 z-[900] bg-white border border-slate-200 rounded-xl shadow-lg px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-slate-500">
           {error
@@ -504,6 +518,7 @@ export default function ListingForm({ mode = 'create' }) {
           </Button>
         </div>
       </div>
+      )}
     </form>
   );
 }

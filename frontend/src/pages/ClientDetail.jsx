@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiClient } from '../utils/http';
-import { HiPhone, HiMail, HiChat, HiCalendar, HiPlusSm, HiCheck, HiUserRemove, HiExclamationCircle } from 'react-icons/hi';
+import { HiPhone, HiMail, HiChat, HiCalendar, HiPlusSm, HiCheck, HiUserRemove, HiExclamationCircle, HiPencil, HiTrash } from 'react-icons/hi';
 import { Card, Badge, Input, Select, Textarea, Button, EmptyState } from '../design-system';
 import { currencySymbol, formatCurrency, getLocaleConfig } from '../utils/currency';
 import TagPicker from '../components/TagPicker';
@@ -14,6 +14,10 @@ import ClientPhotos from '../components/ClientPhotos';
 import WhatsAppButton from '../components/WhatsAppButton';
 import { useTranslation } from 'react-i18next';
 import EmailOptOut from '../components/EmailOptOut';
+import EditConflictNotice from '../components/EditConflictNotice';
+import DealCommissionEditor from '../components/crm/DealCommissionEditor';
+import LeadAssignment from '../components/crm/LeadAssignment';
+import InterestedListings from '../components/crm/InterestedListings';
 
 // The workspace's own pipeline (tenant.dealStages) drives these, so the
 // names match the pipeline board. This list only backs a workspace config that
@@ -91,6 +95,10 @@ export default function ClientDetail() {
   const [editingReqs, setEditingReqs] = useState(false);
   const [reqsForm, setReqsForm] = useState({});
   const [reqsSaving, setReqsSaving] = useState(false);
+  // The version the editor opened at, and — when a colleague saved first —
+  // the conflict to resolve. See EditConflictNotice.
+  const [reqsVersion, setReqsVersion] = useState(null);
+  const [reqsConflict, setReqsConflict] = useState(null);
 
   const docQuery = useMemo(() => `?kind=client&clientId=${id}&limit=50`, [id]);
   const taskQuery = useMemo(() => `?kind=client&clientId=${id}&limit=50`, [id]);
@@ -119,18 +127,21 @@ export default function ClientDetail() {
     loadClient(true);
   }, [id]);
 
-  function startEditReqs() {
+  function startEditReqs(from = client) {
     setReqsForm({
-      propertyType: client.propertyType || '',
-      budgetMin: client.budget?.min || '',
-      budgetMax: client.budget?.max || '',
-      preferredLocations: client.preferredLocations?.join(', ') || '',
-      requirements: client.requirements || '',
+      propertyType: from.propertyType || '',
+      budgetMin: from.budget?.min || '',
+      budgetMax: from.budget?.max || '',
+      preferredLocations: from.preferredLocations?.join(', ') || '',
+      requirements: from.requirements || '',
     });
+    setReqsVersion(from.updatedAt || null);
+    setReqsConflict(null);
     setEditingReqs(true);
   }
 
-  async function saveReqs() {
+  // `overwrite`: the person saw the conflict and chose to replace the other edit.
+  async function saveReqs({ overwrite = false } = {}) {
     setReqsSaving(true);
     setFormError('');
     try {
@@ -141,13 +152,31 @@ export default function ClientDetail() {
           ? preferredLocations.split(',').map((s) => s.trim()).filter(Boolean)
           : [],
         budget: { min: Number(budgetMin) || 0, max: Number(budgetMax) || 0, currency: getLocaleConfig().currency },
-      });
+        ...(!overwrite && reqsVersion && { expectedUpdatedAt: reqsVersion }),
+      }, { silent: true });
+      setReqsConflict(null);
       setEditingReqs(false);
       await loadClient();
     } catch (e) {
-      setFormError(e?.message || 'Failed to save requirements');
+      if (e?.code === 'VERSION_CONFLICT') {
+        setReqsConflict({ currentUpdatedAt: e.details?.currentUpdatedAt || null });
+      } else {
+        setFormError(e?.message || 'Failed to save requirements');
+      }
     } finally {
       setReqsSaving(false);
+    }
+  }
+
+  /** Drop the editor's changes and reopen it on what the other person saved. */
+  async function reloadReqs() {
+    try {
+      const res = await apiClient.get(`/clients/${id}`, { silent: true });
+      const fresh = res?.data || res;
+      setClient(fresh);
+      startEditReqs(fresh);
+    } catch (e) {
+      setFormError(e?.message || 'Failed to reload');
     }
   }
 
@@ -226,6 +255,43 @@ export default function ClientDetail() {
       await loadClient();
     } catch (e) {
       setFormError(e?.message || 'Failed to log activity');
+    }
+  }
+
+  // Edit / delete a logged communication. The API lets only its author or an
+  // admin do this, so the buttons are hidden from everyone else rather than
+  // shown and refused.
+  const [editingCommId, setEditingCommId] = useState(null);
+  const [deletingCommId, setDeletingCommId] = useState(null);
+  const canChangeComm = (comm) =>
+    currentUser?.role === 'admin' || (comm.createdBy && String(comm.createdBy) === String(currentUser?._id || currentUser?.id));
+
+  async function handleSaveCommunication(e, comm) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    setFormError('');
+    try {
+      await apiClient.patch(`/crm/${id}/communications/${comm._id}`, {
+        type: form.get('type') || comm.type,
+        direction: form.get('direction') || comm.direction,
+        summary: String(form.get('summary') || '').trim(),
+        details: form.get('details') || '',
+      });
+      setEditingCommId(null);
+      await loadClient();
+    } catch (err) {
+      setFormError(err?.message || 'Failed to update activity');
+    }
+  }
+
+  async function handleDeleteCommunication(comm) {
+    setFormError('');
+    try {
+      await apiClient.delete(`/crm/${id}/communications/${comm._id}`);
+      setDeletingCommId(null);
+      await loadClient();
+    } catch (err) {
+      setFormError(err?.message || 'Failed to delete activity');
     }
   }
 
@@ -514,13 +580,21 @@ export default function ClientDetail() {
                 <h3 className="font-semibold">{t('clientDetail.requirements')}</h3>
                 {!editingReqs && (
                   <button
-                    onClick={startEditReqs}
+                    onClick={() => startEditReqs()}
                     className="text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 border border-indigo-200 rounded transition-colors"
                   >{t('clientDetail.edit')}</button>
                 )}
               </div>
               {editingReqs ? (
                 <div className="space-y-3">
+                  {reqsConflict && (
+                    <EditConflictNotice
+                      currentUpdatedAt={reqsConflict.currentUpdatedAt}
+                      onReload={reloadReqs}
+                      onOverwrite={() => saveReqs({ overwrite: true })}
+                      busy={reqsSaving}
+                    />
+                  )}
                   <Select
                     label={t('clientDetail.propertyType')}
                     value={reqsForm.propertyType}
@@ -569,7 +643,7 @@ export default function ClientDetail() {
                     placeholder={t('clientDetail.3bhkSouthFacingNearSchool')}
                   />
                   <div className="flex gap-2 pt-1">
-                    <Button onClick={saveReqs} disabled={reqsSaving} loading={reqsSaving} size='xs'>
+                    <Button onClick={() => saveReqs()} disabled={reqsSaving} loading={reqsSaving} size='xs'>
                       {reqsSaving ? 'Saving…' : 'Save'}
                     </Button>
                     <Button onClick={() => setEditingReqs(false)} variant='secondary' size='xs'>{t('clientDetail.cancel')}</Button>
@@ -613,6 +687,24 @@ export default function ClientDetail() {
                 manual={client.temperatureManual}
                 score={client.score}
                 onChange={setTemperature}
+              />
+            </Card>
+
+            <Card>
+              <LeadAssignment
+                clientId={client._id}
+                assignee={summary?.client?.assignedTo}
+                isAdmin={currentUser?.role === 'admin'}
+                onChanged={() => loadClient()}
+              />
+            </Card>
+
+            <Card>
+              <InterestedListings
+                clientId={client._id}
+                listings={summary?.interestedListings || []}
+                loading={!summary && saving}
+                onChanged={() => loadClient()}
               />
             </Card>
 
@@ -696,10 +788,7 @@ export default function ClientDetail() {
                       {stageOptionsFor(deal.stage).map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
                     </select>
                   </div>
-                  <div className="text-sm text-slate-600">
-                    <span>Commission: {deal.commission?.percentage}% ({formatCurrency(deal.commission?.amount)})</span>
-                    <span className="ml-3 capitalize">Status: {deal.commission?.status}</span>
-                  </div>
+                  <DealCommissionEditor clientId={id} deal={deal} onSaved={() => loadClient()} />
                   {deal.notes && <p className="text-sm mt-2">{deal.notes}</p>}
                 </div>
               ))}
@@ -789,21 +878,54 @@ export default function ClientDetail() {
 
             {/* Communication History */}
             <div className="space-y-2">
-              {(client.communications || [])
+              {[...(client.communications || [])]
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                .map(comm => (
+                .map(comm => editingCommId === comm._id ? (
+                  <form key={comm._id} onSubmit={(e) => handleSaveCommunication(e, comm)} className="rounded-lg border border-brand-200 bg-white p-3 grid md:grid-cols-4 gap-3">
+                    <Select name="type" defaultValue={comm.type} className='mb-0'>
+                      {COMM_TYPES.map(ct => <option key={ct} value={ct}>{ct}</option>)}
+                    </Select>
+                    <Select name="direction" defaultValue={comm.direction} className='mb-0'>
+                      <option value="outbound">{t('clientDetail.outbound')}</option>
+                      <option value="inbound">{t('clientDetail.inbound')}</option>
+                    </Select>
+                    <Input name="summary" required minLength={2} defaultValue={comm.summary} className="mb-0 md:col-span-2" />
+                    <Textarea name="details" defaultValue={comm.details || ''} className="mb-0 md:col-span-4" rows="2" />
+                    <div className="md:col-span-4 flex justify-end gap-2">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditingCommId(null)}>{t('common.cancel')}</Button>
+                      <Button type="submit" size="sm">{t('common.save')}</Button>
+                    </div>
+                  </form>
+                ) : (
                   <div key={comm._id} className="rounded-lg border border-slate-200 p-3 bg-white">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-1 gap-2">
                       <div className="flex items-center gap-2">
                         <Badge variant={comm.direction === 'inbound' ? 'info' : 'success'} className='capitalize'>
                           {comm.direction}
                         </Badge>
                         <span className="font-medium capitalize">{comm.type}</span>
                       </div>
-                      <span className="text-xs text-slate-500">{new Date(comm.createdAt).toLocaleString()}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-500 mr-1">{new Date(comm.createdAt).toLocaleString()}</span>
+                        {canChangeComm(comm) && deletingCommId !== comm._id && (
+                          <>
+                            <button type="button" onClick={() => setEditingCommId(comm._id)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded" aria-label="Edit entry"><HiPencil className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => setDeletingCommId(comm._id)} className="p-1.5 text-slate-400 hover:text-rose-600 rounded" aria-label="Delete entry"><HiTrash className="w-4 h-4" /></button>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <p className="text-sm">{comm.summary}</p>
                     {comm.details && <p className="text-sm text-slate-600 mt-1">{comm.details}</p>}
+                    {deletingCommId === comm._id && (
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                        <span className="text-sm text-rose-800">Delete this entry? The lead&apos;s last-contact date and score will be recalculated.</span>
+                        <span className="flex gap-2 flex-shrink-0">
+                          <Button size="xs" variant="secondary" onClick={() => setDeletingCommId(null)}>{t('common.cancel')}</Button>
+                          <Button size="xs" variant="danger" onClick={() => handleDeleteCommunication(comm)}>{t('common.delete')}</Button>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               {(!client.communications || client.communications.length === 0) && (

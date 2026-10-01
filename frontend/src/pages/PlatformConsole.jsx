@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   HiOutlineBan,
+  HiOutlineCreditCard,
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamation,
@@ -16,7 +17,7 @@ import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
 import { useActingAs } from '../hooks/useActingAs';
 import { Button, Badge, Input, Select, Spinner, Modal, EmptyState, PageHeader } from '../design-system';
-import { formatDate, formatNumber } from '../utils/currency';
+import { formatCurrency, formatDate, formatNumber } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -268,6 +269,281 @@ function NewWorkspaceModal({ open, onClose, onCreated }) {
   );
 }
 
+// ─── Ask dialog ───────────────────────────────────────────────────────────────
+
+/**
+ * Replaces window.confirm / window.prompt, which are unstyled, block the tab,
+ * and cannot be dismissed with the keyboard consistently. `ask` is
+ * { title, body, label?, optional?, confirmLabel, danger?, onConfirm(value) }.
+ */
+function AskDialog({ ask, onClose }) {
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setValue(''); setBusy(false); }, [ask]);
+
+  if (!ask) return null;
+  const needsText = !!ask.label;
+  const canConfirm = !busy && (!needsText || ask.optional || value.trim());
+
+  async function confirm(e) {
+    e.preventDefault();
+    if (!canConfirm) return;
+    setBusy(true);
+    try {
+      await ask.onConfirm(value.trim());
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={ask.title} size="md">
+      <form onSubmit={confirm} className="space-y-4">
+        {ask.body && <p className="text-sm text-slate-600">{ask.body}</p>}
+        {needsText && (
+          <Input
+            label={ask.label}
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            hint={ask.optional ? 'Optional' : undefined}
+          />
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant={ask.danger ? 'danger' : 'primary'} loading={busy} disabled={!canConfirm}>
+            {ask.confirmLabel || 'Confirm'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+const INVOICE_TONE = {
+  draft: 'slate',
+  issued: 'warning',
+  paid: 'success',
+  void: 'slate',
+  uncollectible: 'error',
+};
+
+/**
+ * One workspace's commercial position: plan, outstanding balance and the
+ * invoice ledger. Billing is by hand (no gateway), so every action here is a
+ * record of something the operator did outside the product.
+ */
+function BillingModal({ tenant, onClose, onChanged, ask }) {
+  const { showSuccess, showError } = useNotification();
+  const [data, setData] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState('');
+  const [keepOverrides, setKeepOverrides] = useState(true);
+  const [busy, setBusy] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!tenant) return;
+    setLoading(true);
+    try {
+      const [billing, list] = await Promise.all([
+        apiClient.get(`/platform/tenants/${tenant.id}/billing`, { silent: true }),
+        apiClient.get('/platform/plans', { silent: true }),
+      ]);
+      setData(billing?.data || null);
+      setPlans(list?.data?.plans || []);
+      setPlan(billing?.data?.plan?.name || tenant.plan);
+    } catch (err) {
+      showError(err?.message || 'Could not load billing.');
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant]);
+
+  useEffect(() => {
+    setData(null);
+    if (tenant) load();
+  }, [tenant, load]);
+
+  async function run(key, fn, done) {
+    setBusy(key);
+    try {
+      await fn();
+      showSuccess(done);
+      await load();
+      onChanged();
+    } catch (err) {
+      showError(err?.message || 'That did not go through.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const changePlan = () =>
+    run(
+      'plan',
+      () => apiClient.post(`/platform/tenants/${tenant.id}/plan`, { plan, keepOverrides }),
+      'Plan updated, and its limits applied.'
+    );
+
+  const raise = () =>
+    run('raise', () => apiClient.post(`/platform/tenants/${tenant.id}/invoices`, {}), 'Invoice raised.');
+
+  function markPaid(inv) {
+    ask({
+      title: `Mark ${inv.number} as paid`,
+      body: 'Record a payment received, however it arrived.',
+      label: 'Payment reference',
+      optional: true,
+      confirmLabel: 'Mark paid',
+      onConfirm: (reference) =>
+        run(inv._id, () => apiClient.post(`/platform/invoices/${inv._id}/pay`, { reference }), 'Recorded as paid.'),
+    });
+  }
+
+  function voidInvoice(inv) {
+    ask({
+      title: `Void ${inv.number}?`,
+      body: 'It stays on the ledger, marked void.',
+      label: 'Reason',
+      confirmLabel: 'Void invoice',
+      danger: true,
+      onConfirm: (reason) =>
+        run(inv._id, () => apiClient.post(`/platform/invoices/${inv._id}/void`, { reason }), 'Invoice voided.'),
+    });
+  }
+
+  const overrides = data?.overrides && Object.keys(data.overrides).length ? Object.entries(data.overrides) : [];
+  const selected = plans.find((p) => p.name === plan);
+  const unchanged = plan === data?.plan?.name;
+
+  return (
+    <Modal
+      open={!!tenant}
+      onClose={onClose}
+      size="2xl"
+      title={tenant ? `Billing · ${tenant.name}` : 'Billing'}
+      description="Invoices are raised and settled by hand and recorded here."
+    >
+      {loading && !data ? (
+        <div className="p-10 flex justify-center"><Spinner size="lg" /></div>
+      ) : !data ? (
+        <EmptyState icon={HiOutlineExclamation} title="Billing could not be loaded" body="Close this and try again." />
+      ) : (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Outstanding</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums text-slate-900">
+                {formatCurrency(data.outstanding)}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Billing state</div>
+              <div className="mt-1 text-xl font-semibold capitalize text-slate-900">{data.billing?.state || 'none'}</div>
+            </div>
+          </div>
+
+          <section className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Plan</h3>
+            <Select label="Plan" value={plan} onChange={(e) => setPlan(e.target.value)}>
+              {plans.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.label} — {p.monthlyPrice ? `${formatCurrency(p.monthlyPrice)} / month` : 'not billed'}
+                </option>
+              ))}
+            </Select>
+            {selected?.description && <p className="text-sm text-slate-500">{selected.description}</p>}
+            {overrides.length > 0 && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">
+                <p className="font-medium">Limits set by hand on this workspace</p>
+                <p className="mt-0.5 text-amber-800">
+                  {overrides.map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ')}
+                </p>
+                <label className="mt-2 flex items-center gap-2">
+                  <input type="checkbox" checked={keepOverrides} onChange={(e) => setKeepOverrides(e.target.checked)} />
+                  Keep these when the plan changes
+                </label>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button onClick={changePlan} loading={busy === 'plan'} disabled={unchanged || !plan}>
+                Apply plan
+              </Button>
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-slate-900">Invoices</h3>
+              <Button size="xs" variant="secondary" icon={HiOutlinePlus} onClick={raise} loading={busy === 'raise'}>
+                Raise invoice
+              </Button>
+            </div>
+            {!data.invoices?.length ? (
+              <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                No invoices yet. Raise one for the current period once the plan is set.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      {['Number', 'Period', 'Amount', 'Status', ''].map((h, i) => (
+                        <th key={h || i} className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.invoices.map((inv) => {
+                      const open = inv.status === 'issued' || inv.status === 'draft';
+                      const overdue = inv.status === 'issued' && inv.dueAt && new Date(inv.dueAt) < new Date();
+                      return (
+                        <tr key={inv._id}>
+                          <td className="px-3 py-2 font-mono text-xs text-slate-700">{inv.number}</td>
+                          <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                            {formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">{formatCurrency(inv.amount)}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant={overdue ? 'error' : INVOICE_TONE[inv.status] || 'slate'} size="sm">
+                              {overdue ? 'overdue' : inv.status}
+                            </Badge>
+                            {inv.status === 'paid' && inv.paidAt && (
+                              <div className="text-xs text-slate-400 mt-0.5">{formatDate(inv.paidAt)}</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            {open && (
+                              <>
+                                <Button size="xs" variant="ghost" loading={busy === inv._id} onClick={() => markPaid(inv)}>
+                                  Mark paid
+                                </Button>
+                                <Button size="xs" variant="ghost" disabled={busy === inv._id} onClick={() => voidInvoice(inv)}>
+                                  Void
+                                </Button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PlatformConsole() {
@@ -283,6 +559,8 @@ export default function PlatformConsole() {
   const [status, setStatus] = useState('all');
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [billingFor, setBillingFor] = useState(null);
+  const [askState, setAsk] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -325,20 +603,21 @@ export default function PlatformConsole() {
    * workspace is logged against the operator's name, and they should know that
    * before they do it rather than discover it in an audit.
    */
-  async function viewWorkspace(tenant) {
-    const ok = window.confirm(
-      `Open ${tenant.name} and see the product as their team sees it?\n\n` +
-        'The view is read-only, and your visit is recorded on their workspace.'
-    );
-    if (!ok) return;
-
-    setBusyId(tenant.id);
-    try {
-      await enter(tenant.id);
-    } catch (err) {
-      showError(err?.message || 'Could not open that workspace.');
-      setBusyId(null);
-    }
+  function viewWorkspace(tenant) {
+    setAsk({
+      title: `Open ${tenant.name}?`,
+      body: 'You will see the product as their team sees it. The view is read-only, and your visit is recorded on their workspace.',
+      confirmLabel: 'Open workspace',
+      onConfirm: async () => {
+        setBusyId(tenant.id);
+        try {
+          await enter(tenant.id);
+        } catch (err) {
+          showError(err?.message || 'Could not open that workspace.');
+          setBusyId(null);
+        }
+      },
+    });
   }
 
   /**
@@ -356,10 +635,13 @@ export default function PlatformConsole() {
       if (sent) {
         showSuccess(`Invitation sent to ${to}.`);
       } else {
-        window.prompt(
-          `Email could not be sent. Copy this link and pass it to ${to} — it expires in 7 days:`,
-          url
-        );
+        navigator.clipboard?.writeText(url).catch(() => {});
+        setAsk({
+          title: 'Email could not be sent',
+          body: `The link is copied to your clipboard. Pass it to ${to} yourself — it works once, for 7 days:\n${url}`,
+          confirmLabel: 'Done',
+          onConfirm: () => {},
+        });
       }
     } catch (err) {
       showError(err?.message || 'Could not send that invitation.');
@@ -371,20 +653,25 @@ export default function PlatformConsole() {
   async function toggleStatus(tenant) {
     const suspending = tenant.status !== 'suspended';
     if (suspending) {
-      const reason = window.prompt(
-        `Suspend ${tenant.name}? Everyone there is locked out until you resume it.\n\nReason (recorded on the workspace):`
-      );
-      if (reason === null) return;
-      setBusyId(tenant.id);
-      try {
-        await apiClient.post(`/platform/tenants/${tenant.id}/suspend`, { reason });
-        showSuccess(`${tenant.name} is suspended.`);
-        load();
-      } catch (err) {
-        showError(err?.message || 'Could not suspend that workspace.');
-      } finally {
-        setBusyId(null);
-      }
+      setAsk({
+        title: `Suspend ${tenant.name}?`,
+        body: 'Everyone there is locked out until you resume it.',
+        label: 'Reason (recorded on the workspace)',
+        confirmLabel: 'Suspend',
+        danger: true,
+        onConfirm: async (reason) => {
+          setBusyId(tenant.id);
+          try {
+            await apiClient.post(`/platform/tenants/${tenant.id}/suspend`, { reason });
+            showSuccess(`${tenant.name} is suspended.`);
+            load();
+          } catch (err) {
+            showError(err?.message || 'Could not suspend that workspace.');
+          } finally {
+            setBusyId(null);
+          }
+        },
+      });
       return;
     }
 
@@ -567,6 +854,13 @@ export default function PlatformConsole() {
                         >{t('platformConsole.invite')}</Button>
                         <Button
                           size="xs"
+                          variant="ghost"
+                          icon={HiOutlineCreditCard}
+                          className="mr-1"
+                          onClick={() => setBillingFor(item)}
+                        >Billing</Button>
+                        <Button
+                          size="xs"
                           variant="secondary"
                           icon={HiOutlineEye}
                           className="mr-2"
@@ -592,6 +886,8 @@ export default function PlatformConsole() {
         )}
       </div>
 
+      <BillingModal tenant={billingFor} onClose={() => setBillingFor(null)} onChanged={load} ask={setAsk} />
+      <AskDialog ask={askState} onClose={() => setAsk(null)} />
       <NewWorkspaceModal open={creating} onClose={() => setCreating(false)} onCreated={load} />
     </div>
   );

@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { HiX } from 'react-icons/hi';
+import { useDialog } from './useDialog';
 
 function cx(...xs) { return xs.filter(Boolean).join(' '); }
 
@@ -11,9 +12,6 @@ const SIZE_CLS = {
   xl:  'max-w-xl',
   '2xl': 'max-w-2xl',
 };
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Every CRM modal goes through here, so its keyboard behaviour is everyone's.
@@ -28,45 +26,7 @@ export default function Modal({ open, onClose, title, description, children, foo
   const panelRef = useRef(null);
   const titleId = useId();
   const descId = useId();
-  // Held in a ref so a parent re-rendering with a new onClose does not re-run
-  // the effect and yank focus back to the first field mid-typing.
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const opener = document.activeElement;
-
-    const handler = (e) => {
-      if (e.key === 'Escape') { onCloseRef.current?.(); return; }
-      if (e.key !== 'Tab' || !panelRef.current) return;
-      const focusable = panelRef.current.querySelectorAll(FOCUSABLE);
-      if (!focusable.length) { e.preventDefault(); return; }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && (document.activeElement === first || !panelRef.current.contains(document.activeElement))) {
-        e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      }
-    };
-    document.addEventListener('keydown', handler);
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-
-    // First field if there is one, else the panel itself — not the close
-    // button, which would make Enter dismiss the form someone came to fill.
-    const panel = panelRef.current;
-    const firstField = panel?.querySelector('input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
-    (firstField || panel)?.focus();
-
-    return () => {
-      document.removeEventListener('keydown', handler);
-      document.body.style.overflow = overflow;
-      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
-    };
-  }, [open]);
+  useDialog(open, onClose, panelRef);
 
   if (!open) return null;
 

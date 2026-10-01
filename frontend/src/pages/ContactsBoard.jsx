@@ -1,16 +1,22 @@
-import React, { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
+import EditConflictNotice from '../components/EditConflictNotice';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
-import { PageHeader, Button, Modal, Input, Select, Textarea } from '../design-system';
+import {
+  PageHeader, Button, Modal, Input, Select, Textarea,
+  Thead, Th, Tbody, Checkbox, ColumnToggle, Pagination, EmptyState,
+  Skeleton, SkeletonRows, useRowSelection,
+} from '../design-system';
+import { useColumnPrefs } from '../hooks/useColumnPrefs';
 import {
   HiPlus, HiSearch, HiX, HiChevronDown, HiChevronRight,
   HiMail, HiPhone, HiCheck, HiPencil, HiTrash, HiRefresh,
   HiViewGrid, HiViewList, HiViewBoards, HiUser, HiCalendar, HiChat, HiUsers, HiEye, HiDownload,
 } from 'react-icons/hi';
-import { currencySymbol, getLocaleConfig } from '../utils/currency';
+import { currencySymbol, getLocaleConfig, formatDate } from '../utils/currency';
 import BulkActionBar, { BulkSelect, BulkButton } from '../components/BulkActionBar';
 import { TagChip } from '../components/TagPicker';
 import { TemperatureChip } from '../components/TemperatureControl';
@@ -32,6 +38,20 @@ const STATUS_CONFIG = {
 
 const STATUS_ORDER = ['lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
+/**
+ * How many leads the cards and board views load. They group by status, and a
+ * group split across pages would show a count that is only true for one page —
+ * so those views load one large slice and say so when there is more, while the
+ * table pages through everything.
+ */
+const GROUPED_VIEW_LIMIT = 200;
+
+/** Parse `?sort=key:dir` into the shape <Th> expects. */
+function parseSortParam(raw) {
+  const [key, dir] = String(raw || '').split(':');
+  return key ? { key, dir: dir === 'desc' ? 'desc' : 'asc' } : null;
+}
+
 export default function ContactsBoard() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -42,6 +62,9 @@ export default function ContactsBoard() {
 
   // Data state
   const [contacts, setContacts] = useState([]);
+  // The size of the whole filtered set, from the server — never the page in hand.
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -50,17 +73,22 @@ export default function ContactsBoard() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  /**
-   * Rows picked for a bulk action.
-   *
-   * Held as a Set of ids rather than a flag on each contact, so re-fetching the
-   * list does not silently clear or resurrect a selection.
-   */
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  // `?new=1` — the ⌘K palette's "New …" action — opens the create form once,
+  // then drops the flag so a reload or Back does not open it again.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setShowCreateModal(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const [agents, setAgents] = useState([]);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
+  const [editConflict, setEditConflict] = useState(null); // { currentUpdatedAt, payload }
+  const [savingEdit, setSavingEdit] = useState(false);
   const [creating, setCreating] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showStatusDropdown, setShowStatusDropdown] = useState(null);
@@ -71,6 +99,22 @@ export default function ContactsBoard() {
   const statusFilter = searchParams.get('status') || '';
   const typeFilter = searchParams.get('contactType') || '';
   const temperatureFilter = searchParams.get('temperature') || '';
+  const hasFilters = Boolean(q || statusFilter || typeFilter || temperatureFilter);
+
+  // Table paging and order live in the URL with the filters, so a sorted,
+  // paged list can be linked to and survives a refresh.
+  const sortParam = searchParams.get('sort') || '';
+  const sort = parseSortParam(sortParam);
+  const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
+  const isTable = view === 'table';
+
+  /**
+   * Rows picked for a bulk action — only rows on screen. A selection that has
+   * been paged or filtered out of view is dropped, so a bulk change can never
+   * reach a lead nobody can see.
+   */
+  const contactIds = useMemo(() => contacts.map((c) => c._id), [contacts]);
+  const selection = useRowSelection(contactIds);
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -88,17 +132,28 @@ export default function ContactsBoard() {
       if (statusFilter) params.set('status', statusFilter);
       if (typeFilter) params.set('contactType', typeFilter);
       if (temperatureFilter) params.set('temperature', temperatureFilter);
-      params.set('limit', '200');
+      if (isTable) {
+        params.set('page', String(page));
+        params.set('limit', String(pageSize));
+        if (sortParam) params.set('sort', sortParam);
+      } else {
+        // This used to be the only request, for every view: the first 200 leads
+        // and no word about the rest, under a footer calling it the total.
+        params.set('limit', String(GROUPED_VIEW_LIMIT));
+      }
       const response = await apiClient.get(`/clients?${params.toString()}`);
       const data = response?.data || response || [];
-      setContacts(Array.isArray(data) ? data : []);
+      const rows = Array.isArray(data) ? data : [];
+      setContacts(rows);
+      setTotal(typeof response?.total === 'number' ? response.total : rows.length);
     } catch (e) {
       setError(e?.message || 'Failed to load contacts');
       setContacts([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [canAccess, q, statusFilter, typeFilter, temperatureFilter]);
+  }, [canAccess, q, statusFilter, typeFilter, temperatureFilter, isTable, page, pageSize, sortParam]);
 
   // Only an admin can reassign, so only an admin needs the list.
   useEffect(() => {
@@ -133,35 +188,14 @@ export default function ContactsBoard() {
     }
   };
 
-  const toggleSelected = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = (ids) => {
-    setSelectedIds((prev) => {
-      const allSelected = ids.every((id) => prev.has(id));
-      if (allSelected) {
-        const next = new Set(prev);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      }
-      return new Set([...prev, ...ids]);
-    });
-  };
-
   /** One request for the whole selection, not one per row. */
   const applyBulk = async (action, value) => {
-    const ids = [...selectedIds];
+    const ids = [...selection.selected];
     if (!ids.length) return;
 
     try {
       const res = await apiClient.post('/clients/bulk', { ids, action, value });
-      setSelectedIds(new Set());
+      selection.clear();
       setPendingBulkDelete(false);
       showSuccess(`${res?.data?.modified ?? ids.length} updated`);
       fetchContacts();
@@ -184,6 +218,7 @@ export default function ContactsBoard() {
       if (statusFilter) params.set('status', statusFilter);
       if (typeFilter) params.set('contactType', typeFilter);
       if (temperatureFilter) params.set('temperature', temperatureFilter);
+      if (sortParam) params.set('sort', sortParam);
 
       const response = await fetchWithRefresh(`/api/clients/export?${params}`);
       if (!response.ok) throw new Error('Export failed');
@@ -206,6 +241,17 @@ export default function ContactsBoard() {
     fetchContacts();
   }, [fetchContacts]);
 
+  // Deleting the last rows of the last page leaves a page that no longer
+  // exists; step back to the one that does rather than showing "no clients".
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(() => {
+    if (!loading && isTable && contacts.length === 0 && total > 0 && page > pageCount) {
+      const next = new URLSearchParams(searchParams);
+      next.set('page', String(pageCount));
+      setSearchParams(next, { replace: true });
+    }
+  }, [loading, isTable, contacts.length, total, page, pageCount, searchParams, setSearchParams]);
+
   // Group contacts by status
   const groupedContacts = useMemo(() => {
     const groups = new Map();
@@ -221,12 +267,43 @@ export default function ContactsBoard() {
     return groups;
   }, [contacts]);
 
+  // Any change to what is being looked at goes back to its first page —
+  // page 4 of the old filter is not a meaningful place in the new one.
   const setParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
+    if (key !== 'page') next.delete('page');
     setSearchParams(next);
   };
+
+  /** Clears the filters but keeps the chosen column order. */
+  const clearFilters = () => {
+    const next = new URLSearchParams();
+    if (sortParam) next.set('sort', sortParam);
+    setSearchParams(next);
+  };
+
+  /** Ascending, then descending, then back to the default order. */
+  const toggleSort = (key) => {
+    if (!sort || sort.key !== key) setParam('sort', `${key}:asc`);
+    else if (sort.dir === 'asc') setParam('sort', `${key}:desc`);
+    else setParam('sort', '');
+  };
+
+  const columns = useMemo(() => [
+    { key: 'name', label: t('contacts.contact'), sortKey: 'name', locked: true },
+    { key: 'email', label: t('contacts.email'), sortKey: 'email' },
+    { key: 'phone', label: t('contacts.phone') },
+    { key: 'status', label: t('contacts.status'), sortKey: 'status' },
+    { key: 'temperature', label: t('contacts.temperature'), sortKey: 'temperature' },
+    { key: 'score', label: t('contacts.score'), sortKey: 'score' },
+    { key: 'nextFollowUp', label: t('contacts.nextFollowUp'), sortKey: 'nextFollowUp', defaultHidden: true },
+    { key: 'notes', label: t('contacts.notes') },
+    { key: 'createdAt', label: t('contacts.added'), sortKey: 'createdAt', defaultHidden: true },
+  ], [t]);
+  const columnPrefs = useColumnPrefs('clients', columns);
+  const shownColumns = columnPrefs.visibleColumns;
 
   const toggleGroup = (status) => {
     setCollapsedGroups((prev) => ({ ...prev, [status]: !prev[status] }));
@@ -276,8 +353,50 @@ export default function ContactsBoard() {
   };
 
   const openEditModal = (contact) => {
+    setEditConflict(null);
     setEditingContact(contact);
     setShowEditModal(true);
+  };
+
+  /**
+   * Save the edit form, guarded by the version the form opened at. A colleague
+   * who saved the same client meanwhile turns this into a choice (see
+   * EditConflictNotice) instead of their edit vanishing under this one.
+   * `overwrite` resends without the guard, once the person has chosen to.
+   */
+  const saveContactEdit = async (payload, { overwrite = false } = {}) => {
+    const id = editingContact._id;
+    setSavingEdit(true);
+    try {
+      const body = overwrite || !editingContact.updatedAt
+        ? payload
+        : { ...payload, expectedUpdatedAt: editingContact.updatedAt };
+      await apiClient.patch(`/clients/${id}`, body, { silent: true });
+      setEditConflict(null);
+      await fetchContacts();
+      setShowEditModal(false);
+      setEditingContact(null);
+      if (selectedContact?._id === id) setSelectedContact((prev) => ({ ...prev, ...payload }));
+    } catch (e) {
+      if (e?.code === 'VERSION_CONFLICT') {
+        setEditConflict({ currentUpdatedAt: e.details?.currentUpdatedAt || null, payload });
+      } else {
+        setError(e?.message || 'Failed to update contact');
+      }
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  /** Drop this form's edits and reopen it on what the other person saved. */
+  const reloadEditingContact = async () => {
+    try {
+      const res = await apiClient.get(`/clients/${editingContact._id}`, { silent: true });
+      setEditingContact(res?.data || res);
+      setEditConflict(null);
+    } catch (e) {
+      setError(e?.message || 'Failed to reload contact');
+    }
   };
 
   if (!canAccess) {
@@ -303,9 +422,9 @@ export default function ContactsBoard() {
       />
 
       {/* Board container */}
-      <div className='bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden'>
+      <div className='bg-card border border-border rounded-xl shadow-sm overflow-hidden'>
         {/* Toolbar */}
-        <div className='px-4 py-3 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center gap-3'>
+        <div className='px-4 py-3 border-b border-border flex flex-col lg:flex-row lg:items-center gap-3'>
           {/* View tabs */}
           <div className='flex items-center gap-1 bg-slate-100 p-1 rounded-lg'>
             <button
@@ -393,11 +512,25 @@ export default function ContactsBoard() {
               <option value='referral_partner'>{t('contacts.referralPartners')}</option>
             </select>
 
-            {(q || statusFilter || typeFilter) && (
+            {/* Temperature counts too — it was missing here, so a temperature
+                filter on its own left no way to clear it. */}
+            {hasFilters && (
               <button
-                onClick={() => setSearchParams(new URLSearchParams())}
+                type='button'
+                onClick={clearFilters}
                 className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
               >{t('contacts.clearAll')}</button>
+            )}
+
+            {isTable && (
+              <div className='ml-auto'>
+                <ColumnToggle
+                  columns={columns}
+                  isVisible={columnPrefs.isVisible}
+                  onToggle={columnPrefs.toggle}
+                  onReset={columnPrefs.reset}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -415,24 +548,39 @@ export default function ContactsBoard() {
           </div>
         )}
 
-        {/* Loading skeleton */}
-        {loading && (
-          <div className='p-6'>
+        {/* Loading skeleton — the table draws its own, inside its header. */}
+        {loading && !isTable && (
+          <div className='p-6' aria-busy='true'>
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className='bg-white border border-slate-200 rounded-xl p-4 animate-pulse'>
+                <div key={i} className='bg-card border border-border rounded-xl p-4'>
                   <div className='flex items-center gap-3 mb-3'>
-                    <div className='w-10 h-10 rounded-full bg-slate-200' />
-                    <div className='flex-1'>
-                      <div className='h-4 bg-slate-200 rounded w-2/3 mb-1' />
-                      <div className='h-3 bg-slate-100 rounded w-1/2' />
+                    <Skeleton className='w-10 h-10 rounded-full' />
+                    <div className='flex-1 space-y-1.5'>
+                      <Skeleton className='h-4 w-2/3' />
+                      <Skeleton className='h-3 w-1/2' />
                     </div>
                   </div>
-                  <div className='h-3 bg-slate-100 rounded w-full mb-2' />
-                  <div className='h-3 bg-slate-100 rounded w-3/4' />
+                  <Skeleton className='h-3 w-full mb-2' />
+                  <Skeleton className='h-3 w-3/4' />
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* The grouped views hold one slice of the list. Say so, rather than
+            letting a count of 200 read as the whole book. */}
+        {!loading && !isTable && total > contacts.length && (
+          <div className='px-4 py-2.5 text-sm bg-amber-50 border-b border-amber-200 text-amber-800 flex flex-wrap items-center gap-x-3 gap-y-1'>
+            <span>{t('contacts.showingFirstOf', { shown: contacts.length, total })}</span>
+            <button
+              type='button'
+              onClick={() => setView('table')}
+              className='font-medium underline underline-offset-2 hover:text-amber-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500'
+            >
+              {t('contacts.seeAllInTable')}
+            </button>
           </div>
         )}
 
@@ -581,7 +729,15 @@ export default function ContactsBoard() {
               );
             })}
 
-            {contacts.length === 0 && !loading && (
+            {contacts.length === 0 && !loading && hasFilters && (
+              <EmptyState
+                icon={HiSearch}
+                title={t('contacts.noMatchingClients')}
+                body={t('contacts.tryDifferentFilters')}
+                action={<Button variant='secondary' size='sm' onClick={clearFilters}>{t('contacts.clearFilters')}</Button>}
+              />
+            )}
+            {contacts.length === 0 && !loading && !hasFilters && (
               <div className='flex flex-col items-center justify-center py-20 text-center'>
                 <div className='w-16 h-16 rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 flex items-center justify-center mx-auto mb-5'>
                   <HiUsers className='w-8 h-8 text-indigo-500' aria-hidden='true' />
@@ -594,196 +750,86 @@ export default function ContactsBoard() {
           </div>
         )}
 
-        {/* Table View */}
-        {!loading && view === 'table' && (
-          <div className='overflow-x-auto'>
-            <table className='min-w-full text-sm'>
-              <thead className='bg-slate-50/80 sticky top-0 z-10'>
-                <tr className='border-b border-slate-200'>
-                  <th className='w-10 pl-4 pr-1 py-3'>
-                    <input
-                      type='checkbox'
-                      aria-label={t('contacts.selectAll')}
-                      checked={contacts.length > 0 && contacts.every((c) => selectedIds.has(c._id))}
-                      onChange={() => toggleSelectAll(contacts.map((c) => c._id))}
-                      className='w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer'
-                    />
-                  </th>
-                  <th className='text-left pl-1 pr-2 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[250px]'>{t('contacts.contact')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('contacts.email')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('contacts.phone')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('contacts.status')}</th>
-                  <th className='text-left px-3 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider'>{t('contacts.notes')}</th>
-                  <th className='text-right px-4 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider w-[100px]'></th>
-                </tr>
-              </thead>
-              <tbody className='divide-y divide-slate-100'>
-                {STATUS_ORDER.map((status) => {
-                  const items = groupedContacts.get(status) || [];
-                  if (items.length === 0) return null;
-                  const config = STATUS_CONFIG[status] || STATUS_CONFIG.lead;
-                  const isCollapsed = collapsedGroups[status];
-
-                  return (
-                    <React.Fragment key={status}>
-                      {/* Group header row */}
-                      <tr>
-                        <td colSpan={7} className='px-0 py-0'>
-                          <button
-                            type='button'
-                            aria-expanded={!isCollapsed}
-                            onClick={() => toggleGroup(status)}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 ${config.bgLight} border-l-4 ${config.border.replace('border-', 'border-l-')} hover:opacity-90 transition-colors`}
-                          >
-                            {isCollapsed ? (
-                              <HiChevronRight className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
-                            ) : (
-                              <HiChevronDown className={`w-4 h-4 ${config.textColor}`} aria-hidden='true' />
-                            )}
-                            <span className={`font-semibold text-sm ${config.textColor}`}>{config.label}</span>
-                            <span className='text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full'>
-                              {items.length}
-                            </span>
-                          </button>
-                        </td>
-                      </tr>
-                      {/* Contact rows */}
-                      {!isCollapsed && items.map((contact) => (
-                        <tr
-                          key={contact._id}
-                          className='group hover:bg-indigo-50/40 transition-colors cursor-pointer'
-                          onClick={() => setSelectedContact(contact)}
-                        >
-                          {/* stopPropagation: ticking a row must not also open it */}
-                          <td className='w-10 pl-4 pr-1 py-3' onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type='checkbox'
-                              aria-label={`Select ${contact.name || 'contact'}`}
-                              checked={selectedIds.has(contact._id)}
-                              onChange={() => toggleSelected(contact._id)}
-                              className='w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer'
-                            />
-                          </td>
-                          <td className='pl-1 pr-2 py-3'>
-                            <div className='flex items-center gap-3'>
-                              <div className={`w-9 h-9 rounded-full ${config.color} flex items-center justify-center text-white text-sm font-semibold flex-shrink-0`}>
-                                {(contact.name?.[0] || '?').toUpperCase()}
-                              </div>
-                              <div className='min-w-0'>
-                                {/* A real button: the row's onClick is mouse-only. */}
-                                <button
-                                  type='button'
-                                  onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
-                                  className='block max-w-full text-left font-semibold text-slate-900 text-[13px] truncate group-hover:text-indigo-700 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
-                                >
-                                  {contact.name}
-                                </button>
-                                {contact.organization && (
-                                  <div className='text-[11px] text-slate-500 truncate'>{contact.organization}</div>
-                                )}
-                                {contact.tagIds?.length > 0 && (
-                                  <div className='flex items-center gap-1 flex-wrap mt-1'>
-                                    {contact.tagIds.map((tag) => (
-                                      <TagChip key={tag._id || tag} tag={tag} />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className='px-3 py-3'>
-                            {contact.email ? (
-                              <a
-                                href={`mailto:${contact.email}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className='text-indigo-600 hover:underline text-[13px] truncate block max-w-[200px]'
-                              >
-                                {contact.email}
-                              </a>
-                            ) : (
-                              <span className='text-slate-500 text-[13px]'>—</span>
-                            )}
-                          </td>
-                          <td className='px-3 py-3' onClick={(e) => e.stopPropagation()}>
-                            {contact.phone ? (
-                              <span className='flex items-center gap-1.5'>
-                                <a
-                                  href={`tel:${contact.phone}`}
-                                  className='text-slate-700 hover:text-indigo-600 text-[13px]'
-                                >
-                                  {contact.phone}
-                                </a>
-                                {/* Compact: the row is dense, and an agent
-                                    scanning the list wants one tap to chat. */}
-                                <WhatsAppButton compact phone={contact.phone} />
-                              </span>
-                            ) : (
-                              <span className='text-slate-500 text-[13px]'>—</span>
-                            )}
-                          </td>
-                          <td className='px-3 py-3'>
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${config.color} text-white`}>
-                              {config.label}
-                            </span>
-                          </td>
-                          <td className='px-3 py-3'>
-                            <span className='text-slate-600 text-[13px] truncate block max-w-[200px]'>
-                              {contact.notes || '—'}
-                            </span>
-                          </td>
-                          <td className='px-4 py-3 text-right'>
-                            <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
-                              <button
-                                type='button'
-                                onClick={(e) => { e.stopPropagation(); openEditModal(contact); }}
-                                className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
-                                title={t('contacts.edit')}
-                                aria-label={`Edit ${contact.name || 'contact'}`}
-                              >
-                                <HiPencil className='w-4 h-4' aria-hidden='true' />
-                              </button>
-                              <button
-                                type='button'
-                                onClick={(e) => { e.stopPropagation(); setPendingDelete(contact._id); }}
-                                className='p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors'
-                                title={t('contacts.delete')}
-                                aria-label={`Delete ${contact.name || 'contact'}`}
-                              >
-                                <HiTrash className='w-4 h-4' aria-hidden='true' />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  );
-                })}
-                {contacts.length === 0 && !loading && (
+        {/* Table View — one flat list, sorted and paged by the server. It used
+            to group rows by status, but a group split across pages shows a
+            count that is only true for the page; sort by Status for that order. */}
+        {isTable && (
+          <>
+            <div className='overflow-auto max-h-[70vh]'>
+              <table className='min-w-full text-sm text-left'>
+                <Thead sticky>
                   <tr>
-                    <td colSpan={6} className='px-4 py-16 text-center'>
-                      <div className='flex flex-col items-center gap-3'>
-                        <div className='w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center'>
-                          <HiUser className='w-6 h-6 text-slate-400' aria-hidden='true' />
-                        </div>
-                        <p className='text-slate-500 text-sm'>{t('contacts.noClientsFound')}</p>
-                        <button
-                          onClick={() => setShowCreateModal(true)}
-                          className='text-sm font-medium text-indigo-600 hover:text-indigo-700'
-                        >{t('contacts.addYourFirstClient2')}</button>
-                      </div>
-                    </td>
+                    <th className='w-10 pl-4 pr-1 py-3'>
+                      <Checkbox
+                        aria-label={t('contacts.selectAll')}
+                        checked={selection.headerCheckbox.checked}
+                        indeterminate={selection.headerCheckbox.indeterminate}
+                        disabled={selection.headerCheckbox.disabled || loading}
+                        onChange={selection.toggleAll}
+                      />
+                    </th>
+                    {shownColumns.map((col) => (
+                      <Th
+                        key={col.key}
+                        sortKey={col.sortKey}
+                        sort={sort}
+                        onSort={col.sortKey ? toggleSort : undefined}
+                        className={col.key === 'name' ? 'pl-1 w-[250px]' : undefined}
+                      >
+                        {col.label}
+                      </Th>
+                    ))}
+                    <th className='w-[100px] px-4 py-3'><span className='sr-only'>{t('contacts.edit')}</span></th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </Thead>
+                <Tbody>
+                  {loading ? (
+                    <SkeletonRows rows={Math.min(pageSize, 10)} columns={shownColumns.length + 2} />
+                  ) : contacts.map((contact) => (
+                    <ContactRow
+                      key={contact._id}
+                      contact={contact}
+                      columns={shownColumns}
+                      selected={selection.isSelected(contact._id)}
+                      onToggleSelected={() => selection.toggle(contact._id)}
+                      onOpen={() => setSelectedContact(contact)}
+                      onEdit={() => openEditModal(contact)}
+                      onDelete={() => setPendingDelete(contact._id)}
+                    />
+                  ))}
+                </Tbody>
+              </table>
 
-            {/* Footer summary */}
-            {contacts.length > 0 && (
-              <div className='px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between'>
-                <span className='text-xs text-slate-500'>{contacts.length} contact{contacts.length === 1 ? '' : 's'} total</span>
+              {!loading && contacts.length === 0 && (
+                hasFilters ? (
+                  <EmptyState
+                    icon={HiSearch}
+                    title={t('contacts.noMatchingClients')}
+                    body={t('contacts.tryDifferentFilters')}
+                    action={<Button variant='secondary' size='sm' onClick={clearFilters}>{t('contacts.clearFilters')}</Button>}
+                  />
+                ) : (
+                  <EmptyState
+                    icon={HiUser}
+                    title={t('contacts.noClientsFound')}
+                    action={<Button variant='primary' size='sm' icon={HiPlus} onClick={() => setShowCreateModal(true)}>{t('contacts.addYourFirstClient2')}</Button>}
+                  />
+                )
+              )}
+            </div>
+
+            {total > 0 && (
+              <div className='px-4 border-t border-border'>
+                <Pagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  onPageChange={(n) => setParam('page', n > 1 ? String(n) : '')}
+                  onPageSizeChange={(n) => { setPageSize(n); setParam('page', ''); }}
+                />
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
@@ -811,11 +857,21 @@ export default function ContactsBoard() {
       {/* Edit Contact Modal */}
       {showEditModal && editingContact && (
         <ContactFormModal
+          // Keyed on the version, so reloading their copy resets the form.
+          key={`${editingContact._id}-${editingContact.updatedAt || ''}`}
           contact={editingContact}
-          onClose={() => { setShowEditModal(false); setEditingContact(null); }}
-          onSubmit={(data) => handleUpdateContact(editingContact._id, data)}
-          loading={false}
+          onClose={() => { setShowEditModal(false); setEditingContact(null); setEditConflict(null); }}
+          onSubmit={(data) => saveContactEdit(data)}
+          loading={savingEdit}
           title={t('contacts.editClient')}
+          notice={editConflict && (
+            <EditConflictNotice
+              currentUpdatedAt={editConflict.currentUpdatedAt}
+              onReload={reloadEditingContact}
+              onOverwrite={() => saveContactEdit(editConflict.payload, { overwrite: true })}
+              busy={savingEdit}
+            />
+          )}
         />
       )}
       <ConfirmDialog
@@ -829,7 +885,7 @@ export default function ContactsBoard() {
 
       <ConfirmDialog
         open={pendingBulkDelete}
-        title={`Delete ${selectedIds.size} client${selectedIds.size === 1 ? '' : 's'}?`}
+        title={`Delete ${selection.count} client${selection.count === 1 ? '' : 's'}?`}
         description={t('contacts.thisActionCannotBeUndone')}
         confirmLabel={t('contacts.delete')}
         onConfirm={() => applyBulk('delete')}
@@ -837,7 +893,7 @@ export default function ContactsBoard() {
       />
 
       {/* Appears only once rows are ticked. */}
-      <BulkActionBar count={selectedIds.size} onClear={() => setSelectedIds(new Set())}>
+      <BulkActionBar count={selection.count} onClear={selection.clear}>
         {isAdmin && (
           <BulkSelect
             value=''
@@ -865,6 +921,167 @@ export default function ContactsBoard() {
         <BulkButton danger onClick={() => setPendingBulkDelete(true)}>{t('contacts.delete')}</BulkButton>
       </BulkActionBar>
     </div>
+  );
+}
+
+/**
+ * One row of the table. Cells follow `columns`, so a column hidden in the
+ * column picker is simply not rendered.
+ *
+ * The row opens the lead on a mouse click; keyboard users reach the same
+ * through the name, which is a real button — a focusable row as well would be
+ * a second tab stop for one action.
+ */
+function ContactRow({ contact, columns, selected, onToggleSelected, onOpen, onEdit, onDelete }) {
+  const { t } = useTranslation();
+  const config = STATUS_CONFIG[contact.status] || STATUS_CONFIG.lead;
+  const dash = <span className='text-slate-500 text-[13px]'>—</span>;
+
+  const cell = (key) => {
+    switch (key) {
+      case 'name':
+        return (
+          <td key={key} className='pl-1 pr-2 py-3'>
+            <div className='flex items-center gap-3'>
+              <div className={`w-9 h-9 rounded-full ${config.color} flex items-center justify-center text-white text-sm font-semibold flex-shrink-0`}>
+                {(contact.name?.[0] || '?').toUpperCase()}
+              </div>
+              <div className='min-w-0'>
+                <button
+                  type='button'
+                  onClick={(e) => { e.stopPropagation(); onOpen(); }}
+                  className='block max-w-full text-left font-semibold text-slate-900 text-[13px] truncate group-hover:text-brand-700 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                >
+                  {contact.name}
+                </button>
+                {contact.organization && (
+                  <div className='text-[11px] text-slate-500 truncate'>{contact.organization}</div>
+                )}
+                {contact.tagIds?.length > 0 && (
+                  <div className='flex items-center gap-1 flex-wrap mt-1'>
+                    {contact.tagIds.map((tag) => (
+                      <TagChip key={tag._id || tag} tag={tag} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+        );
+      case 'email':
+        return (
+          <td key={key} className='px-4 py-3'>
+            {contact.email ? (
+              <a
+                href={`mailto:${contact.email}`}
+                onClick={(e) => e.stopPropagation()}
+                className='text-brand-600 hover:underline text-[13px] truncate block max-w-[200px]'
+              >
+                {contact.email}
+              </a>
+            ) : dash}
+          </td>
+        );
+      case 'phone':
+        return (
+          <td key={key} className='px-4 py-3' onClick={(e) => e.stopPropagation()}>
+            {contact.phone ? (
+              <span className='flex items-center gap-1.5'>
+                <a href={`tel:${contact.phone}`} className='text-slate-700 hover:text-brand-600 text-[13px]'>
+                  {contact.phone}
+                </a>
+                {/* Compact: the row is dense, and an agent
+                    scanning the list wants one tap to chat. */}
+                <WhatsAppButton compact phone={contact.phone} />
+              </span>
+            ) : dash}
+          </td>
+        );
+      case 'status':
+        return (
+          <td key={key} className='px-4 py-3'>
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${config.color} text-white`}>
+              {config.label}
+            </span>
+          </td>
+        );
+      case 'temperature':
+        return (
+          <td key={key} className='px-4 py-3'>
+            {contact.temperature ? <TemperatureChip value={contact.temperature} /> : dash}
+          </td>
+        );
+      case 'score':
+        return (
+          <td key={key} className='px-4 py-3'>
+            <div className='flex items-center gap-2 w-24'>
+              <div className='flex-1 h-1.5 bg-secondary rounded-full overflow-hidden' aria-hidden='true'>
+                <div className='h-full bg-brand-500' style={{ width: `${Math.max(0, Math.min(100, contact.score || 0))}%` }} />
+              </div>
+              <span className='text-xs text-slate-600 tabular-nums'>{contact.score || 0}</span>
+            </div>
+          </td>
+        );
+      case 'nextFollowUp':
+        return (
+          <td key={key} className='px-4 py-3 whitespace-nowrap text-[13px] text-slate-700'>
+            {contact.nextFollowUp ? formatDate(contact.nextFollowUp) : dash}
+          </td>
+        );
+      case 'createdAt':
+        return (
+          <td key={key} className='px-4 py-3 whitespace-nowrap text-[13px] text-slate-600'>
+            {contact.createdAt ? formatDate(contact.createdAt) : dash}
+          </td>
+        );
+      case 'notes':
+        return (
+          <td key={key} className='px-4 py-3'>
+            <span className='text-slate-600 text-[13px] truncate block max-w-[200px]'>{contact.notes || '—'}</span>
+          </td>
+        );
+      default:
+        return <td key={key} />;
+    }
+  };
+
+  return (
+    <tr
+      className={`group transition-colors cursor-pointer ${selected ? 'bg-brand-50/60 dark:bg-brand-950/40' : 'hover:bg-brand-50/40'}`}
+      onClick={onOpen}
+    >
+      {/* stopPropagation: ticking a row must not also open it */}
+      <td className='w-10 pl-4 pr-1 py-3' onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          aria-label={`Select ${contact.name || 'contact'}`}
+          checked={selected}
+          onChange={onToggleSelected}
+        />
+      </td>
+      {columns.map((col) => cell(col.key))}
+      <td className='px-4 py-3 text-right'>
+        <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
+          <button
+            type='button'
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+            title={t('contacts.edit')}
+            aria-label={`Edit ${contact.name || 'contact'}`}
+          >
+            <HiPencil className='w-4 h-4' aria-hidden='true' />
+          </button>
+          <button
+            type='button'
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className='p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors'
+            title={t('contacts.delete')}
+            aria-label={`Delete ${contact.name || 'contact'}`}
+          >
+            <HiTrash className='w-4 h-4' aria-hidden='true' />
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -1010,7 +1227,7 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
 }
 
 // ContactFormModal component (for create and edit)
-function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
+function ContactFormModal({ contact, onClose, onSubmit, loading, title, notice = null }) {
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: contact?.name || '',
@@ -1065,6 +1282,7 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title }) {
       }
     >
       <form id='contact-form' onSubmit={handleSubmit} className='space-y-4'>
+        {notice}
         <Input
           label={t('contacts.name')}
           required
