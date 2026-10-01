@@ -103,7 +103,7 @@ class _ListingFormScreenState extends ConsumerState<ListingFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_draft.isEditing ? 'Edit Property' : 'New Property'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: _goBack),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), tooltip: 'Back', onPressed: _goBack),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(value: (_stepIndex + 1) / _stepTitles.length, minHeight: 4, backgroundColor: AppColors.slate100, color: AppColors.indigo600),

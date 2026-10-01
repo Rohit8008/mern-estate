@@ -45,27 +45,44 @@ class _BuyersListScreenState extends ConsumerState<BuyersListScreen> {
     });
   }
 
+  /// Resets the box and both providers it and the chips feed.
+  void _clearFilters() {
+    _debounce?.cancel();
+    _searchController.clear();
+    ref.read(buyersSearchProvider.notifier).state = '';
+    ref.read(buyersStatusFilterProvider.notifier).state = null;
+  }
+
+  Future<void> _refresh() => ref.read(buyersControllerProvider.notifier).refresh();
+
   @override
   Widget build(BuildContext context) {
     final buyersAsync = ref.watch(buyersControllerProvider);
     final statusFilter = ref.watch(buyersStatusFilterProvider);
+    final filtering = statusFilter != null || ref.watch(buyersSearchProvider).isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Buyer Requirements'),
         actions: [
-          IconButton(icon: const Icon(Icons.add_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BuyerFormScreen()))),
+          IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'Add buyer requirement', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BuyerFormScreen()))),
         ],
       ),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
-            child: AppTextField(hint: 'Search buyers…', prefixIcon: Icons.search_rounded, controller: _searchController, onChanged: _onSearchChanged),
+            child: AppTextField(
+              hint: 'Search buyers…',
+              prefixIcon: Icons.search_rounded,
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onChanged: _onSearchChanged,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
-            height: 40,
+            height: filterChipRowHeight(context),
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -82,16 +99,26 @@ class _BuyersListScreenState extends ConsumerState<BuyersListScreen> {
           Expanded(
             child: buyersAsync.when(
               loading: () => const AppPageLoader(),
-              error: (error, _) => AppErrorState(title: 'Unable to load buyer requirements', onRetry: () => ref.read(buyersControllerProvider.notifier).refresh()),
+              error: (error, _) => AppErrorState(title: 'Unable to load buyer requirements', onRetry: _refresh, onRefresh: _refresh),
               data: (buyers) => buyers.isEmpty
-                  ? AppEmptyState(
-                      icon: Icons.fact_check_outlined,
-                      title: 'No buyer requirements yet',
-                      actionLabel: 'Add requirement',
-                      onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BuyerFormScreen())),
-                    )
+                  ? (filtering
+                      ? AppEmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: 'No matching buyer requirements',
+                          message: 'Nothing matches your search or status filter.',
+                          actionLabel: 'Clear filters',
+                          onAction: _clearFilters,
+                          onRefresh: _refresh,
+                        )
+                      : AppEmptyState(
+                          icon: Icons.fact_check_outlined,
+                          title: 'No buyer requirements yet',
+                          actionLabel: 'Add requirement',
+                          onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BuyerFormScreen())),
+                          onRefresh: _refresh,
+                        ))
                   : RefreshIndicator(
-                      onRefresh: () => ref.read(buyersControllerProvider.notifier).refresh(),
+                      onRefresh: _refresh,
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
                         itemCount: buyers.length,
@@ -179,6 +206,7 @@ class _FilterChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? on : (dark ? AppColors.slate700 : AppColors.slate200))),
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),

@@ -181,7 +181,7 @@ export default function ListingImages({ urls = [], onChange, disabled }) {
                 </div>
               )}
 
-              <div className="absolute inset-x-0 bottom-0 p-2 flex justify-end gap-1 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+              <div className="absolute inset-x-0 bottom-0 p-2 flex justify-end gap-1 bg-gradient-to-t from-black/60 to-transparent hover-reveal transition-opacity">
                 {i !== 0 && (
                   <button
                     type="button"

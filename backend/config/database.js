@@ -1,16 +1,18 @@
 import mongoose from 'mongoose';
 import { config } from './environment.js';
+import { logger } from '../utils/logger.js';
 
 class DatabaseConnection {
   constructor() {
     this.isConnected = false;
     this.connection = null;
+    this.pending = new Map(); // driver requestId -> collection, for slow-query lines
   }
 
   async connect() {
     try {
       if (this.isConnected) {
-        console.log('Database already connected');
+        logger.debug('Database already connected');
         return;
       }
 
@@ -22,13 +24,15 @@ class DatabaseConnection {
         maxPoolSize: config.database.options.maxPoolSize,
         serverSelectionTimeoutMS: config.database.options.serverSelectionTimeoutMS,
         socketTimeoutMS: config.database.options.socketTimeoutMS,
+        // Emits command timings, read by watchSlowQueries().
+        monitorCommands: Number(process.env.SLOW_QUERY_MS ?? 500) > 0,
       };
 
       // Connect to MongoDB
       this.connection = await mongoose.connect(config.database.uri, options);
       this.isConnected = true;
 
-      console.log('Database connected successfully', {
+      logger.info('Database connected', {
         host: this.connection.connection.host,
         port: this.connection.connection.port,
         name: this.connection.connection.name,
@@ -36,9 +40,10 @@ class DatabaseConnection {
 
       // Set up connection event handlers
       this.setupEventHandlers();
+      this.watchSlowQueries();
 
     } catch (error) {
-      console.error('Database connection failed:', {
+      logger.error('Database connection failed', {
         message: error.message,
         stack: error.stack,
       });
@@ -46,27 +51,58 @@ class DatabaseConnection {
     }
   }
 
+  /**
+   * Slow database commands, from the driver's own timings. Nothing else in the
+   * app would tell you an index is missing until a page times out.
+   * SLOW_QUERY_MS (default 500) sets the bar; 0 turns it off.
+   */
+  watchSlowQueries() {
+    const slowMs = Number(process.env.SLOW_QUERY_MS ?? 500);
+    if (!slowMs) return;
+    const client = mongoose.connection.getClient?.();
+    if (!client?.on) return;
+    client.on('commandSucceeded', (e) => {
+      const collection = this.pending.get(e.requestId);
+      this.pending.delete(e.requestId);
+      if (e.duration < slowMs) return;
+      logger.warn('Slow database command', { command: e.commandName, collection, duration_ms: e.duration });
+    });
+    client.on('commandStarted', (e) => {
+      // Only the collection name is kept — never the filter, which holds
+      // names, phone numbers and emails.
+      const collection = e.command?.[e.commandName];
+      if (typeof collection === 'string') {
+        this.pending.set(e.requestId, collection);
+        if (this.pending.size > 5000) this.pending.clear();
+      }
+    });
+    client.on('commandFailed', (e) => {
+      this.pending.delete(e.requestId);
+      logger.error('Database command failed', { command: e.commandName, duration_ms: e.duration, error: e.failure });
+    });
+  }
+
   setupEventHandlers() {
     const db = mongoose.connection;
 
     db.on('connected', () => {
-      console.log('Mongoose connected to MongoDB');
+      logger.info('Mongoose connected to MongoDB');
     });
 
     db.on('error', (error) => {
-      console.error('Mongoose connection error:', {
+      logger.error('Mongoose connection error', {
         message: error.message,
         stack: error.stack,
       });
     });
 
     db.on('disconnected', () => {
-      console.warn('Mongoose disconnected from MongoDB');
+      logger.warn('Mongoose disconnected from MongoDB');
       this.isConnected = false;
     });
 
     db.on('reconnected', () => {
-      console.log('Mongoose reconnected to MongoDB');
+      logger.info('Mongoose reconnected to MongoDB');
       this.isConnected = true;
     });
 
@@ -80,10 +116,10 @@ class DatabaseConnection {
       if (this.isConnected && this.connection) {
         await mongoose.disconnect();
         this.isConnected = false;
-        console.log('Database disconnected successfully');
+        logger.info('Database disconnected');
       }
     } catch (error) {
-      console.error('Error disconnecting from database:', {
+      logger.error('Error disconnecting from database', {
         message: error.message,
         stack: error.stack,
       });
@@ -121,7 +157,7 @@ class DatabaseConnection {
         ...this.getStatus()
       };
     } catch (error) {
-      console.error('Database health check failed:', {
+      logger.error('Database health check failed', {
         message: error.message,
         stack: error.stack,
       });

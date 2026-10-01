@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
 import '../../legal/data/legal_api.dart';
 import '../data/auth_api.dart';
@@ -33,7 +34,15 @@ class AuthController extends StateNotifier<AuthState> {
   /// Throws AppFailure on failure — the login screen owns its own
   /// submitting/error UI rather than this controller tracking it globally.
   Future<void> signIn({required String email, required String password}) async {
-    final user = await _api.signIn(email: email, password: password);
+    final AppUser user;
+    try {
+      user = await _api.signIn(email: email, password: password);
+    } on AppFailure catch (f) {
+      // Never the email: the type and status say enough.
+      appLog.info('login failed', fields: {'failure_type': f.type.name, 'status': f.statusCode});
+      rethrow;
+    }
+    appLog.info('login success', fields: {'role': user.role});
     state = AuthState.authenticated(user, pendingLegalVersion: await _pendingLegalVersion());
   }
 
@@ -100,6 +109,7 @@ class AuthController extends StateNotifier<AuthState> {
       // network blip — clear local state regardless of server outcome.
     }
     await _apiClient.clearSession();
+    appLog.info('logout');
     state = const AuthState.unauthenticated();
   }
 }

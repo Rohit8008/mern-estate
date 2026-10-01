@@ -118,7 +118,7 @@ export default function ClientPhotos({ clientId, photos = [], onChange, readOnly
                 <button
                   type='button'
                   onClick={() => setPendingDelete(photo._id)}
-                  className='absolute top-1 right-1 p-1 rounded-md bg-white/90 text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity'
+                  className='absolute top-1 right-1 p-1 rounded-md bg-white/90 text-rose-600 hover-reveal transition-opacity'
                   aria-label={t('clientPhotos.removePhoto')}
                 >
                   <HiTrash className='w-3.5 h-3.5' aria-hidden='true' />

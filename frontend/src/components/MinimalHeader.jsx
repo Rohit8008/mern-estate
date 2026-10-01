@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -29,6 +29,16 @@ export default function MinimalHeader() {
   const logoUrl = tenant?.branding?.logoUrl;
   const { currentUser } = useSelector((state) => state.user);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close on any navigation (browser back included) and on Escape, rather than
+  // relying on every link inside the menu to remember its onClick.
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
@@ -150,8 +160,10 @@ export default function MinimalHeader() {
             <button
               type='button'
               onClick={() => setMenuOpen((o) => !o)}
-              className='md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors'
+              className='md:hidden w-10 h-10 -mr-2 flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 transition-colors'
               aria-label={t('minimalHeader.toggleMenu')}
+              aria-expanded={menuOpen}
+              aria-controls='public-mobile-menu'
             >
               {menuOpen ? <HiX className='w-5 h-5' /> : <HiMenu className='w-5 h-5' />}
             </button>
@@ -161,12 +173,12 @@ export default function MinimalHeader() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className='md:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-1'>
+        <div id='public-mobile-menu' className='md:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-1'>
           <Link
             to='/'
             onClick={() => setMenuOpen(false)}
             className={classNames(
-              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+              'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors',
               isActive('/') ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
             )}
           >
@@ -176,7 +188,7 @@ export default function MinimalHeader() {
               to='/search'
               onClick={() => setMenuOpen(false)}
               className={classNames(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors',
                 isActive('/search') ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
               )}
             >
@@ -187,7 +199,7 @@ export default function MinimalHeader() {
               to='/dashboard'
               onClick={() => setMenuOpen(false)}
               className={classNames(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors',
+                'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-colors',
                 isActive('/dashboard') ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
               )}
             >
@@ -197,7 +209,7 @@ export default function MinimalHeader() {
             <Link
               to='/profile'
               onClick={() => setMenuOpen(false)}
-              className='flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors'
+              className='flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors'
             >{t('minimalHeader.profile')}</Link>
           )}
           {!currentUser && (

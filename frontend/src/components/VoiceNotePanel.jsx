@@ -55,7 +55,7 @@ function VoiceNoteItem({ note, onDelete, deleting }) {
         type='button'
         onClick={() => onDelete(note._id)}
         disabled={deleting === note._id}
-        className='p-1.5 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50'
+        className='p-1.5 text-slate-300 hover:text-rose-500 hover-reveal transition-all disabled:opacity-50'
         title={t('voiceNote.delete')}
       >
         <HiOutlineTrash className='w-4 h-4' />

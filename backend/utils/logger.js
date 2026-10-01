@@ -1,7 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import { getRequestId } from './requestContext.js';
-import { getTenantId } from '../tenancy/tenantContext.js';
+import { getLogContext } from './logContext.js';
+import { getTenantStore } from '../tenancy/tenantContext.js';
 
 // ---------------------------------------------------------------------------
 // OpenObserve configuration
@@ -27,24 +25,43 @@ const currentLevel = LOG_LEVELS[(process.env.LOG_LEVEL || 'info').toUpperCase()]
 // ---------------------------------------------------------------------------
 // Per-stream buffers  (flush every 3s or when a buffer hits 50 entries)
 // ---------------------------------------------------------------------------
-const STREAMS  = ['backend_logs', 'security_logs', 'audit_logs', 'access_logs', 'frontend_logs'];
+const STREAMS  = ['backend_logs', 'security_logs', 'audit_logs', 'access_logs', 'frontend_logs', 'mobile_logs'];
 const buffers  = Object.fromEntries(STREAMS.map(s => [s, []]));
 let flushTimer = null;
 
 function tsUs() { return Math.floor(Date.now() * 1000); }
 
+// A shipment that fails is reported on stderr — at most once a minute, so an
+// OpenObserve outage cannot turn into a log flood of its own. Before this a
+// wrong password or a full disk on the OO side looked exactly like "no logs".
+let lastShipWarning = 0;
+let droppedSinceWarning = 0;
+function reportShipFailure(stream, count, reason) {
+  droppedSinceWarning += count;
+  const now = Date.now();
+  if (now - lastShipWarning < 60_000) return;
+  lastShipWarning = now;
+  process.stderr.write(JSON.stringify({
+    ts: new Date().toISOString(), level: 'warn', service: SERVICE,
+    message: 'OpenObserve shipment failed; entries dropped (they are still in stdout)',
+    stream, dropped: droppedSinceWarning, reason,
+  }) + '\n');
+  droppedSinceWarning = 0;
+}
+
 async function flushStream(stream) {
   const entries = buffers[stream].splice(0);
   if (!entries.length || !OO_AUTH) return;
   try {
-    await fetch(`${OO_URL}/api/${OO_ORG}/${stream}/_json`, {
+    const res = await fetch(`${OO_URL}/api/${OO_ORG}/${stream}/_json`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: OO_AUTH },
       body:    JSON.stringify(entries),
       signal:  AbortSignal.timeout(5000),
     });
-  } catch {
-    // OO unreachable — logs already written to stdout, silently drop
+    if (!res.ok) reportShipFailure(stream, entries.length, `HTTP ${res.status}`);
+  } catch (err) {
+    reportShipFailure(stream, entries.length, err?.message || 'unreachable');
   }
 }
 
@@ -74,23 +91,72 @@ function scheduleFlush() {
   if (typeof flushTimer.unref === 'function') flushTimer.unref();
 }
 
+// ---------------------------------------------------------------------------
+// Redaction  (every entry, every stream — callers should not have to remember)
+// ---------------------------------------------------------------------------
+// Keys whose values never belong in a log store that every workspace shares.
+const SENSITIVE_KEY = /pass(word|code|wd)?$|secret|token|authorization|cookie|otp|api[_-]?key|private[_-]?key|credential|^pin$|signature/i;
+const MAX_STRING = 8_000;
+const MAX_DEPTH  = 5;
+
+export function redact(value, depth = 0, key = '') {
+  if (key && SENSITIVE_KEY.test(key) && value != null && value !== '') return '[redacted]';
+  if (value == null) return value;
+  if (typeof value === 'string') return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…[truncated]` : value;
+  if (typeof value !== 'object') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Error) {
+    return redact({ name: value.name, message: value.message, code: value.code, stack: value.stack }, depth + 1);
+  }
+  if (depth >= MAX_DEPTH) return '[depth limit]';
+  if (Array.isArray(value)) return value.slice(0, 50).map((v) => redact(v, depth + 1));
+  // Mongoose documents and ObjectIds serialise to what they mean, not their internals.
+  if (typeof value.toHexString === 'function') return value.toHexString();
+  if (typeof value.toObject === 'function') value = value.toObject();
+  const out = {};
+  for (const [k, v] of Object.entries(value)) out[k] = redact(v, depth + 1, k);
+  return out;
+}
+
 /**
- * Every entry written during a request carries that request's id and
- * workspace, so one customer's failing request can be pulled out of everyone
- * else's traffic. An explicit value in `entry` wins.
+ * The routes whose path segment IS a credential — anyone holding the line can
+ * open the share, accept the invite or unsubscribe someone. Named explicitly
+ * rather than guessed, so listing slugs and ObjectIds stay readable.
  */
-function context() {
-  const ctx = {};
-  const requestId = getRequestId();
-  const tenantId = getTenantId();
-  if (requestId) ctx.request_id = requestId;
-  if (tenantId) ctx.tenant_id = tenantId;
-  return ctx;
+const TOKEN_PATHS = [
+  /(\/api\/auth\/invite\/)[^/?]+/,
+  /(\/api\/share\/open\/)[^/?]+/,
+  /(\/api\/unsubscribe\/)[^/?]+/,
+  /(^\/s\/)[^/?]+/,
+];
+
+export function sanitizeUrl(url) {
+  if (!url) return url;
+  const [pathPart, query] = String(url).split('?');
+  const cleanPath = TOKEN_PATHS.reduce((acc, re) => acc.replace(re, '$1:token'), pathPart);
+  if (!query) return cleanPath;
+  const params = new URLSearchParams(query);
+  for (const k of [...params.keys()]) if (SENSITIVE_KEY.test(k)) params.set(k, '[redacted]');
+  return `${cleanPath}?${params.toString()}`;
+}
+
+/** Who and which request a line belongs to, read from async context. */
+function contextFields() {
+  const ctx = getLogContext();
+  const tenant = getTenantStore();
+  const fields = {};
+  if (ctx?.requestId) fields.request_id = ctx.requestId;
+  if (ctx?.job) fields.job = ctx.job;
+  if (tenant?.tenantId) fields.tenant_id = String(tenant.tenantId);
+  const userId = ctx?.userId || tenant?.userId;
+  if (userId) fields.user_id = String(userId);
+  return fields;
 }
 
 function push(stream, entry) {
-  buffers[stream].push({ _timestamp: tsUs(), service: SERVICE, environment: ENV, ...context(), ...entry });
-  if (buffers[stream].length >= 50) flushStream(stream); // fire-and-forget
+  const buffer = buffers[stream];
+  buffer.push({ _timestamp: tsUs(), service: SERVICE, environment: ENV, ...contextFields(), ...redact(entry) });
+  if (buffer.length >= 50) flushStream(stream); // fire-and-forget
   else scheduleFlush();
 }
 
@@ -100,13 +166,25 @@ function push(stream, entry) {
 const C = { ERROR:'\x1b[31m', WARN:'\x1b[33m', INFO:'\x1b[36m', DEBUG:'\x1b[90m',
             SECURITY:'\x1b[35m', AUDIT:'\x1b[32m', ACCESS:'\x1b[37m', RESET:'\x1b[0m' };
 
+// Production writes one JSON object per line, which the host's log capture
+// (Render, PM2, docker) can parse and search even when OpenObserve is down.
+// Development keeps the colour-coded human format.
+const JSON_STDOUT = ENV === 'production' || process.env.LOG_FORMAT === 'json';
+
 function consolePrint(level, message, meta) {
-  if (process.env.NODE_ENV === 'test') return;
+  if (ENV === 'test') return;
+  const safe = redact(meta);
+  if (JSON_STDOUT) {
+    const line = { ts: new Date().toISOString(), level: level.toLowerCase(), message, ...contextFields(), ...safe };
+    const out = level === 'ERROR' || level === 'WARN' ? process.stderr : process.stdout;
+    out.write(JSON.stringify(line) + '\n');
+    return;
+  }
   const ts = new Date().toISOString();
-  const rid = getRequestId();
-  const mx = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
-  if (rid) message = `[${rid.slice(0, 8)}] ${message}`;
-  process.stdout.write(`${C[level] ?? ''}[${ts}] [${level}] ${message}${mx}${C.RESET}\n`);
+  const ctx = contextFields();
+  const rid = ctx.request_id ? ` (${ctx.request_id.slice(0, 8)})` : '';
+  const mx = Object.keys(safe).length ? ' ' + JSON.stringify(safe) : '';
+  process.stdout.write(`${C[level] ?? ''}[${ts}] [${level}]${rid} ${message}${mx}${C.RESET}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,8 +223,10 @@ export const logger = {
     consolePrint('AUDIT', action, details);
     push('audit_logs', { level: 'audit', message: action, ...details });
   },
-  // Dedicated access-log entry with numeric duration for dashboards
+  // Dedicated access-log entry with numeric duration for dashboards. In
+  // production it is also the stdout request line (morgan is dev-only).
   access(data) {
+    if (JSON_STDOUT) consolePrint('ACCESS', `${data.method} ${data.url} ${data.status}`, data);
     push('access_logs', { level: 'access', ...data });
   },
 };
@@ -159,44 +239,34 @@ export async function flushLogs() {
   await Promise.all(STREAMS.map(flushStream));
 }
 
-// Allow external callers to ingest frontend logs directly
-export function pushFrontendLogs(entries) {
-  entries.forEach(e => push('frontend_logs', { service: 'frontend', ...e }));
+/**
+ * Client reports (web and mobile). The server's own stamp — ip, user, the
+ * workspace, the time it arrived — goes last so a client cannot forge it.
+ */
+export function pushClientLogs(stream, entries, stamp = {}) {
+  if (stream !== 'frontend_logs' && stream !== 'mobile_logs') return;
+  entries.forEach((e) => push(stream, { ...e, ...stamp }));
 }
 
-// No SIGTERM/SIGINT handlers here: index.js runs one ordered shutdown and
-// calls flushLogs() as its last step before exit. A handler of our own raced
-// the database disconnect's process.exit and usually lost.
+/** @deprecated use pushClientLogs('frontend_logs', …) */
+export function pushFrontendLogs(entries) {
+  pushClientLogs('frontend_logs', entries, { service: 'frontend' });
+}
+
+process.on('SIGTERM', async () => { await flushLogs(); });
+process.on('SIGINT',  async () => { await flushLogs(); });
 
 // ---------------------------------------------------------------------------
 // Helper exports  (kept for backward-compat with existing callers)
 // ---------------------------------------------------------------------------
-export const requestLogger = (req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const data = {
-      method:        req.method,
-      url:           req.originalUrl,
-      status:        res.statusCode,
-      duration_ms:   duration,
-      ip:            req.ip,
-      user_agent:    req.get('User-Agent'),
-      user_id:       req.user?.id ?? null,
-      content_length: parseInt(res.get('Content-Length') || '0', 10) || 0,
-    };
-    logger.access(data);
-    if (res.statusCode >= 500) logger.error('Request error', data);
-    else if (res.statusCode >= 400) logger.warn('Request warning', data);
-  });
-  next();
-};
+// requestLogger lives in middleware/requestLogger.js (re-exported by
+// middleware/security.js for app.js).
 
 export const logError = (error, req = null, extra = {}) => {
   const data = { error_name: error.name, error_message: error.message, stack: error.stack, ...extra };
   if (req) {
     data.method     = req.method;
-    data.url        = req.originalUrl;
+    data.url        = sanitizeUrl(req.originalUrl);
     data.ip         = req.ip;
     data.user_agent = req.get('User-Agent');
     data.user_id    = req.user?.id ?? null;

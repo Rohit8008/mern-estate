@@ -1,4 +1,5 @@
 import ActivityLog from '../models/activityLog.model.js';
+import { logger } from './logger.js';
 
 /**
  * The workspace audit trail.
@@ -81,7 +82,7 @@ export function logFromRequest(req, entry) {
 
   return logActivity({ ...entry, createdBy, ip: entry.ip ?? requestIp(req) }).catch((err) => {
     // eslint-disable-next-line no-console
-    console.error('[activity] failed to record', entry.entityType, entry.action, err?.message);
+    logger.error('Activity log write failed', { entity_type: entry.entityType, action: entry.action, error: err });
     return null;
   });
 }

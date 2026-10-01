@@ -27,13 +27,17 @@ export default function OfflineIndicator() {
 
   if (showBack) {
     return (
-      <div className='fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-full shadow-lg animate-fade-in'>
+      <div className='fixed bottom-safe-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-full shadow-lg animate-fade-in'>
         <HiOutlineWifi className='w-4 h-4' />{t('offlineIndicator.backOnline')}</div>
     );
   }
 
   return (
-    <div className='fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-500 text-white text-sm font-medium lg:left-64'>
+    <div
+      className='fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 px-4 pt-2.5 bg-amber-500 text-white text-sm font-medium lg:left-64'
+      // Clear of the home indicator on notched phones; 0.625rem elsewhere.
+      style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       <div className='flex items-center gap-2'>
         <HiOutlineWifi className='w-4 h-4 flex-shrink-0' />
         <span>{t('offlineIndicator.youReOfflineShowingCachedData')}</span>
@@ -41,7 +45,7 @@ export default function OfflineIndicator() {
       <button
         type='button'
         onClick={() => window.location.reload()}
-        className='flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-xs font-semibold'
+        className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-xs font-semibold'
       >
         <HiOutlineRefresh className='w-3.5 h-3.5' />{t('offlineIndicator.retry')}</button>
     </div>

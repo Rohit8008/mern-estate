@@ -14,6 +14,7 @@ import AppRoutes from './app/AppRoutes';
 import AppShell from './app/AppShell';
 import AuthBootstrap from './app/AuthBootstrap';
 import CmdKListener from './app/CmdKListener';
+import PageViewLogger from './app/PageViewLogger';
 import LegalAcceptanceGate from './app/LegalAcceptanceGate';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
                     <LegalAcceptanceGate />
                     <ApiErrorToastListener />
                     <CmdKListener />
+                    <PageViewLogger />
                     <GlobalSearch />
                     <AppShell>
                       <AppRoutes />

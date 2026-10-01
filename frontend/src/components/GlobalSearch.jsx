@@ -190,7 +190,7 @@ function EmptyState({ query, history, onHistorySelect, onHistoryRemove, onClearA
               </button>
               <button
                 onClick={() => onHistoryRemove(h)}
-                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-slate-100 text-slate-500 transition-all"
+                className="p-1.5 rounded-lg hover-reveal hover:bg-slate-100 text-slate-500 transition-all"
                 aria-label={t('globalSearch.removeFromHistory')}
               >
                 <HiOutlineX className="w-3 h-3" aria-hidden="true" />

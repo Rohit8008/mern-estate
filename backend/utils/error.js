@@ -1,4 +1,4 @@
-import { logger } from './logger.js';
+import { logger, sanitizeUrl } from './logger.js';
 
 // Custom error classes
 export class AppError extends Error {
@@ -216,17 +216,22 @@ export const globalErrorHandler = (err, req, res, next) => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   const isProduction = process.env.NODE_ENV === 'production';
 
-  logger.error('Error occurred:', {
-    message: err?.message,
-    code: c.code,
+  // A 5xx is ours to fix: full stack in backend_logs. A 4xx is the caller's
+  // (validation, not found, forbidden) and the access line already records it,
+  // so it stays at debug rather than paging anyone.
+  const errorFields = {
+    error_name: err?.name,
+    error_message: err?.message,
+    error_code: c.code,
     status: c.status,
-    stack: err?.stack,
-    url: req.originalUrl,
+    url: sanitizeUrl(req.originalUrl),
     method: req.method,
     ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    userId: req.user?.id,
-  });
+    user_agent: req.get('User-Agent'),
+    user_id: req.user?.id,
+  };
+  if (c.status >= 500) logger.error('Unhandled error', { ...errorFields, stack: err?.stack });
+  else logger.debug('Request error', errorFields);
 
   // An unexpected 500's message is an internal detail — a driver error, a
   // file path, a query fragment. In production the client gets a generic
@@ -256,6 +261,8 @@ export const globalErrorHandler = (err, req, res, next) => {
     }),
     timestamp: new Date().toISOString(),
     path: req.originalUrl,
+    // Quote this in a support request and the exact log lines are one search away.
+    ...(req.id && { requestId: req.id }),
   });
 };
 

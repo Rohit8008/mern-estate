@@ -88,8 +88,16 @@ class _TaskFormScreenState extends ConsumerState<_TaskFormScreen> {
   late String _status = widget.existing?.status ?? 'todo';
   late String _priority = widget.existing?.priority ?? 'medium';
   DateTime? _dueAt;
+  late final _snapshot = TextSnapshot([_titleController]);
   bool _submitting = false;
   String? _error;
+  String? _titleError;
+
+  bool get _dirty =>
+      _snapshot.changed ||
+      _status != (widget.existing?.status ?? 'todo') ||
+      _priority != (widget.existing?.priority ?? 'medium') ||
+      _dueAt != widget.existing?.dueAt;
 
   bool get _isEditing => widget.existing != null;
 
@@ -113,12 +121,17 @@ class _TaskFormScreenState extends ConsumerState<_TaskFormScreen> {
   Future<void> _submit() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      setState(() => _error = 'Title is required.');
+      // On the field, not the box below — that's for server errors.
+      setState(() {
+        _titleError = 'Title is required.';
+        _error = null;
+      });
       return;
     }
     setState(() {
       _submitting = true;
       _error = null;
+      _titleError = null;
     });
     final payload = {
       'title': title,
@@ -156,15 +169,26 @@ class _TaskFormScreenState extends ConsumerState<_TaskFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DiscardGuard(
+      isDirty: () => _dirty,
+      listenable: _snapshot.listenable,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit Task' : 'New Task'),
-        actions: _isEditing ? [IconButton(icon: const Icon(Icons.delete_outline_rounded), onPressed: _delete)] : null,
+        actions: _isEditing ? [IconButton(icon: const Icon(Icons.delete_outline_rounded), tooltip: 'Delete task', onPressed: _delete)] : null,
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          AppTextField(label: 'Title *', controller: _titleController),
+          AppTextField(
+            label: 'Title *',
+            controller: _titleController,
+            errorText: _titleError,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) {
+              if (_titleError != null) setState(() => _titleError = null);
+            },
+          ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
@@ -192,11 +216,12 @@ class _TaskFormScreenState extends ConsumerState<_TaskFormScreen> {
           ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: const TextStyle(color: AppColors.rose600, fontSize: 13)),
+            FormErrorBox(_error!),
           ],
           const SizedBox(height: AppSpacing.xl),
           AppButton(label: _isEditing ? 'Save changes' : 'Create task', onPressed: _submitting ? null : _submit, loading: _submitting, variant: AppButtonVariant.brand, expand: true),
         ],
+      ),
       ),
     );
   }

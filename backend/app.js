@@ -6,7 +6,6 @@ import cors from 'cors';
 import morgan from 'morgan';
 import compression from 'compression';
 import hpp from 'hpp';
-import { requestId } from './utils/requestContext.js';
 import { errorEnvelope } from './middleware/errorEnvelope.js';
 
 import observabilityRouter from './routes/observability.route.js';
@@ -60,6 +59,7 @@ import {
 
 import { config } from './config/environment.js';
 import { globalErrorHandler } from './utils/error.js';
+import { requestContext } from './utils/logContext.js';
 import { encryptResponse } from './middleware/encryptResponse.js';
 import { resolveTenant } from './tenancy/resolveTenant.js';
 import { readOnlyWhileActing } from './tenancy/readOnlyWhileActing.js';
@@ -88,8 +88,9 @@ export function createApp() {
     app.set('trust proxy', 1);
   }
 
-  // First, so every later log line and every error body carries the id.
-  app.use(requestId);
+  // First, so every log line from here on — access, errors, audit — carries
+  // the same request id, echoed back to the client as X-Request-Id.
+  app.use(requestContext);
   app.use(securityHeaders);
   app.use(requestLogger);
 
@@ -109,10 +110,10 @@ export function createApp() {
   app.use(compression());
 
   app.use(cors(config.cors));
-  // Development console only. In production requestLogger already writes one
-  // structured access entry per request; morgan's 'combined' line was a second
-  // copy of the same request with no request id on it.
-  if (!config.server.isProduction) app.use(morgan('dev'));
+  // Development only: in production the structured access line from
+  // requestLogger is the request log, and a second unstructured copy just
+  // doubled stdout volume.
+  if (!config.server.isProduction && process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
   if (config.security.enableRateLimiting) {
     app.use('/api/upload', strictRateLimit);

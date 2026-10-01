@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -90,9 +91,11 @@ export const config = {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     // X-CSRF-Token: every write carries it (middleware/csrf.js), so a
     // cross-origin deployment whose preflight does not allow it rejects every
-    // POST before it reaches the API. X-Request-Id: a client may send its own,
-    // and reads ours back to quote in a bug report.
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-Request-Id'],
+    // POST before it reaches the API. X-Request-Id: a client may send its own.
+    // X-Client: the mobile app identifies itself so encrypted responses are skipped.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-Request-Id', 'X-Client'],
+    // X-Request-Id is readable by the web app so an error it reports carries
+    // the id of the server's own log lines for that request.
     exposedHeaders: ['X-Request-Id'],
   },
 
@@ -185,8 +188,8 @@ export const validateConfig = () => {
   // Observability. Not fatal — the app runs fine without it — but silence here
   // is indistinguishable from health, so say it out loud once at boot.
   if (config.server.isProduction && !(process.env.OPENOBSERVE_USERNAME && process.env.OPENOBSERVE_PASSWORD)) {
-    console.warn(
-      'Warning: OPENOBSERVE_USERNAME/PASSWORD not set. Logs, security events and ' +
+    logger.warn(
+      'OPENOBSERVE_USERNAME/PASSWORD not set. Logs, security events and ' +
         'audit entries are written to stdout only and dropped after that.'
     );
   }
@@ -194,7 +197,7 @@ export const validateConfig = () => {
   // Warn about email configuration for production (not required)
   if (config.server.isProduction) {
     if (!config.email.host || !config.email.auth.user || !config.email.auth.pass) {
-      console.warn('Warning: Email configuration not set. Email features will be disabled.');
+      logger.warn('Email configuration not set; email features are disabled');
     }
   }
 
@@ -203,7 +206,7 @@ export const validateConfig = () => {
     process.exit(1);
   }
 
-  console.log('Configuration validated successfully');
+  logger.info('Configuration validated');
 };
 
 // Export default config

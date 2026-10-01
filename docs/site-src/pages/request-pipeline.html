@@ -32,8 +32,8 @@ description: The order middleware runs in, why that order is load-bearing, the o
 </table>
 
 <h2 id="request-id">Request ids</h2>
-<p><code>utils/requestContext.js</code> gives each request an id. A caller-supplied <code>X-Request-Id</code> is kept if it matches <code>^[A-Za-z0-9_-]{8,64}$</code>; otherwise a UUID is generated. It is set on <code>req.id</code>, returned as the <code>X-Request-Id</code> response header, repeated as <code>requestId</code> in every error body, and stamped by the logger on every line written while the request is in flight (along with the tenant), so a "ref" a user reads out finds the log. <code>getRequestId()</code> works anywhere in the request's async chain.</p>
-<p>It is a separate <code>AsyncLocalStorage</code> from the tenant context on purpose: the id exists before the tenant is resolved (and for routes that have none), and the two must not be able to overwrite each other. Outside a request (jobs, scripts) it is <code>null</code>.</p>
+<p><code>utils/logContext.js</code> gives each request an id (<code>requestContext</code> middleware, mounted first in <code>app.js</code>). A caller-supplied <code>X-Request-Id</code> is kept if it matches <code>^[A-Za-z0-9._:-]{8,64}$</code>; otherwise a UUID is generated. It is set on <code>req.id</code>, returned as the <code>X-Request-Id</code> response header, repeated as <code>requestId</code> in every error body, and stamped by the logger (with the tenant and user) on every line written while the request is in flight, so a "ref" a user reads out finds the log. <code>utils/requestContext.js</code> is a thin wrapper kept for callers that only want <code>getRequestId()</code>; there is one store, not two.</p>
+<p>It is a separate <code>AsyncLocalStorage</code> from the tenant context on purpose: the id exists before the tenant is resolved (and for routes that have none), and the two must not be able to overwrite each other. Jobs and sockets get their own context with <code>runWithLogContext()</code>; outside any context the id is <code>null</code>.</p>
 
 <h2 id="errors">One error shape</h2>
 <p>Every failure answers:</p>

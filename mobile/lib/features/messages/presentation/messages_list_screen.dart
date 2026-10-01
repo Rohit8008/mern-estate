@@ -22,7 +22,7 @@ class MessagesListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Messages'),
-        actions: [IconButton(icon: const Icon(Icons.add_comment_outlined), onPressed: () => _openNewMessageSheet(context, ref))],
+        actions: [IconButton(icon: const Icon(Icons.add_comment_outlined), tooltip: 'New message', onPressed: () => _openNewMessageSheet(context, ref))],
       ),
       body: conversationsAsync.when(
         loading: () => const AppPageLoader(),

@@ -61,7 +61,7 @@ const logSecurityEvent = async (logData) => {
   try {
     await SecurityLog.create(logData);
   } catch (error) {
-    console.error('Failed to log security event:', error);
+    logger.error('Security log write failed', { error });
   }
   logger.security(logData.event || logData.action || 'security_event', logData);
 };

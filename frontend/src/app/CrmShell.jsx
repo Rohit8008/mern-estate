@@ -148,7 +148,8 @@ function NavItem({ item, active, rail, onNavigate }) {
         className={cx(
           'flex items-center rounded-lg text-sm font-medium transition-colors duration-150 group',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
-          rail ? 'justify-center w-10 h-10 mx-auto' : 'gap-2.5 px-3 py-2',
+          rail ? 'justify-center w-10 h-10 mx-auto' : // py-2.5 below lg: the drawer is a touch surface and 36px rows are easy to mis-tap.
+            'gap-2.5 px-3 py-2.5 lg:py-2',
           active
             ? 'crm-nav-active text-white'
             : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
@@ -429,6 +430,23 @@ export default function CrmShell() {
     return () => document.removeEventListener('keydown', onKey);
   }, [sidebarOpen]);
 
+  // Anything that navigates (browser back, a notification link, a link inside
+  // the page) closes the drawer and the notification panel. Relying on each
+  // link's onClick left the drawer covering the new page on a phone.
+  useEffect(() => {
+    setSidebarOpen(false);
+    setNotifOpen(false);
+  }, [location.pathname]);
+
+  // While the drawer is open the page behind it must not scroll under the
+  // user's thumb.
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [sidebarOpen]);
+
   // The "[" shortcut: collapse on a desktop, open the drawer on a phone.
   useEffect(() => {
     const onToggle = () => (isDesktop ? toggleCollapsed() : setSidebarOpen((o) => !o));
@@ -513,7 +531,9 @@ export default function CrmShell() {
 
       {/* ── Sidebar ── */}
       <aside className={cx(
-        'fixed top-0 left-0 h-full w-64 z-50 lg:z-30 flex flex-col',
+        // 100dvh, not h-full: on iOS the collapsing toolbar otherwise hides the
+        // user footer at the bottom of the drawer.
+        'fixed top-0 left-0 h-[100dvh] w-64 max-w-[85vw] z-50 lg:z-30 flex flex-col pb-safe',
         'bg-slate-900 border-r border-white/5 crm-sidebar-dots',
         'transform transition-[transform,width] duration-200 ease-out motion-reduce:transition-none',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
@@ -551,9 +571,9 @@ export default function CrmShell() {
             type='button'
             onClick={closeSidebar}
             aria-label={t('crmShell.closeSidebar')}
-            className='lg:hidden p-1.5 rounded-lg hover:bg-white/10 text-slate-400'
+            className='lg:hidden w-10 h-10 -mr-2 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-400'
           >
-            <HiX className='w-4 h-4' aria-hidden='true' />
+            <HiX className='w-5 h-5' aria-hidden='true' />
           </button>
         </div>
 
@@ -671,7 +691,7 @@ export default function CrmShell() {
               type='button'
               onClick={() => (isDesktop ? toggleCollapsed() : setSidebarOpen(true))}
               aria-expanded={isDesktop ? !collapsed : sidebarOpen}
-              className='p-2 -ml-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 flex-shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+              className='w-10 h-10 sm:w-auto sm:h-auto sm:p-2 -ml-2 sm:-ml-1 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 flex-shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
               aria-label={
                 isDesktop
                   ? t(collapsed ? 'crmShell.expandSidebar' : 'crmShell.collapseSidebar')
@@ -702,7 +722,7 @@ export default function CrmShell() {
               type='button'
               onClick={() => openSearch()}
               aria-label={t('nav.search')}
-              className='md:hidden p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
+              className='md:hidden w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
             >
               <HiOutlineSearch className='w-4 h-4' aria-hidden='true' />
             </button>
@@ -711,7 +731,7 @@ export default function CrmShell() {
             <button
               type='button'
               onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
+              className='w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all'
               aria-label={t('crmShell.toggleDarkMode')}
               title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
@@ -729,7 +749,7 @@ export default function CrmShell() {
               onClick={() => { setNotifOpen(true); ensureLoaded(); }}
               aria-haspopup='dialog'
               aria-expanded={notifOpen}
-              className='p-2 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all relative'
+              className='w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all relative'
               aria-label={unread > 0 ? `${t('nav.notifications')} (${unread})` : t('nav.notifications')}
             >
               <HiOutlineBell className='w-4 h-4' aria-hidden='true' />
@@ -775,7 +795,7 @@ export default function CrmShell() {
         </header>
 
         {/* Page content */}
-        <main ref={mainRef} className='flex-1 px-4 lg:px-6 py-6'>
+        <main ref={mainRef} className='flex-1 px-4 lg:px-6 pt-4 sm:pt-6 pb-safe-6'>
           <Outlet />
         </main>
       </div>

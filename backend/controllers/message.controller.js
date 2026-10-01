@@ -10,6 +10,7 @@ import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../ut
 import { inHomeTenant } from '../tenancy/tenantContext.js';
 import { notify } from '../utils/notify.js';
 import { parsePaging } from '../utils/listQuery.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Helper function to decrypt message content if it's encrypted
@@ -22,7 +23,7 @@ function decryptMessageContent(message) {
       const decryptedContent = decryptMessageWithKey(message.content);
       return { ...message.toObject(), content: decryptedContent };
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
+      logger.error('Message decryption failed', { message_id: String(message?._id || ''), error });
       // Return the message with an error indicator
       return { ...message.toObject(), content: '[Encrypted - Decryption Failed]' };
     }

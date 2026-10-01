@@ -131,6 +131,21 @@ The bugs this fixed: the Roles UI served 31 of 35 permissions, so `createClient`
 `manage_settings`, which was never a permission, so every non-admin was denied forever.
 `tests/permissionCatalogue.test.js` walks the real route files and fails the build on either.
 
+### Logging (OpenObserve)
+`utils/logger.js` is the ONE logger — never `console.*` in app code (only the fatal pre-boot
+lines in `config/environment.js`). It ships batched to OpenObserve streams `backend_logs`,
+`access_logs`, `audit_logs`, `security_logs`, `frontend_logs`, `mobile_logs`, and prints JSON
+lines to stdout in production. Every entry gets `request_id` (from `utils/logContext.js`,
+echoed as `X-Request-Id` and in error bodies), `tenant_id` and `user_id` from async context —
+don't pass them by hand. **Redaction is automatic** (`redact()`: password/token/secret/cookie/otp
+keys, Error objects serialised) and `sanitizeUrl()` masks the token routes it lists — add a new
+route whose path segment is a credential there. `middleware/requestLogger.js` writes the access
+line and an **audit entry for every successful mutating request**, so new controllers are
+audited without extra code. Clients post to `POST /api/observability/logs`; the server stamps
+ip/user/workspace itself and ignores client-supplied values for those. Log recipient domains and
+last-four digits, never full emails, phone numbers or query filters. `tests/logging.test.js`
+pins redaction.
+
 ### Scheduled jobs
 `jobs/scheduler.js` is dependency-free and takes a **lease in Mongo** (`models/jobLock.model.js`),
 so N instances still fire each job once. Register in `jobs/index.js`; a job body runs inside

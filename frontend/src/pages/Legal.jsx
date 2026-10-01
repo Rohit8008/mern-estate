@@ -19,7 +19,7 @@ import { BUSINESS } from '../utils/marketingCopy';
  * that review.
  */
 
-export const LEGAL_UPDATED = '26 September 2026';
+export const LEGAL_UPDATED = '30 September 2026';
 
 const operator = BUSINESS.legalName ? `${BUSINESS.tradeName} (operated by ${BUSINESS.legalName})` : BUSINESS.tradeName;
 
@@ -39,6 +39,7 @@ const PRIVACY = [
       'The records your agency creates in its workspace: properties, owners, leads, buyer requirements, tasks, documents, messages, photos and voice notes.',
       'Security records: when you sign in or out, the IP address, browser and time, including failed sign-in attempts. We keep a list of your signed-in devices so you can end those sessions.',
       'Demo requests: the name, email, phone, agency name, team size and message you type into the form. These are emailed to us and are not stored in our database.',
+      'Diagnostic logs, from the website and the mobile app: errors, failed requests, the screens you open and the actions you take in your workspace (for example "updated a lead"), with your account, the time, your IP address, and your browser or app and device version. They never contain passwords, sign-in tokens or message text, and we use them only to find and fix faults and to show an agency who changed what.',
     ],
     body: 'We do not collect Aadhaar numbers, dates of birth or payment card details.',
   },

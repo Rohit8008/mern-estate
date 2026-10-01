@@ -36,10 +36,12 @@ class LeadDetailScreen extends ConsumerWidget {
               ? [
                   IconButton(
                     icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit lead',
                     onPressed: () => _edit(context, ref, leadAsync.value!),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline_rounded),
+                    tooltip: 'Delete lead',
                     onPressed: () => _delete(context, ref, leadAsync.value!),
                   ),
                 ]

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../domain/lead.dart';
 import '../leads_providers.dart';
@@ -34,8 +34,26 @@ class _LeadFormScreenState extends ConsumerState<LeadFormScreen> {
   late String _priority = widget.existing?.priority ?? 'medium';
   late String _contactType = widget.existing?.contactType ?? 'lead';
 
+  late final _snapshot = TextSnapshot([
+    _nameController,
+    _emailController,
+    _phoneController,
+    _alternatePhoneController,
+    _organizationController,
+    _sourceController,
+    _notesController,
+  ]);
+
   bool _submitting = false;
   String? _errorText;
+  String? _nameError;
+  String? _emailError;
+
+  bool get _dirty =>
+      _snapshot.changed ||
+      _status != (widget.existing?.status ?? 'lead') ||
+      _priority != (widget.existing?.priority ?? 'medium') ||
+      _contactType != (widget.existing?.contactType ?? 'lead');
 
   bool get _isEditing => widget.existing != null;
 
@@ -53,14 +71,23 @@ class _LeadFormScreenState extends ConsumerState<LeadFormScreen> {
 
   Future<void> _submit() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() => _errorText = 'Name is required.');
+    // Field problems show on the field; the box below is for the server.
+    final nameError = name.isEmpty ? 'Name is required.' : null;
+    final emailErr = emailError(_emailController.text);
+    if (nameError != null || emailErr != null) {
+      setState(() {
+        _nameError = nameError;
+        _emailError = emailErr;
+        _errorText = null;
+      });
       return;
     }
 
     setState(() {
       _submitting = true;
       _errorText = null;
+      _nameError = null;
+      _emailError = null;
     });
 
     final payload = {
@@ -91,80 +118,127 @@ class _LeadFormScreenState extends ConsumerState<LeadFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit Lead' : 'New Lead')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          children: [
-            AppTextField(label: 'Name *', hint: 'Full name', controller: _nameController),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
+    return DiscardGuard(
+      isDirty: () => _dirty,
+      listenable: _snapshot.listenable,
+      child: Scaffold(
+        appBar: AppBar(title: Text(_isEditing ? 'Edit Lead' : 'New Lead')),
+        body: SafeArea(
+          child: AutofillGroup(
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.lg),
               children: [
-                Expanded(child: AppTextField(label: 'Phone', controller: _phoneController, keyboardType: TextInputType.phone)),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: AppTextField(label: 'Email', controller: _emailController, keyboardType: TextInputType.emailAddress)),
+                AppTextField(
+                  label: 'Name *',
+                  hint: 'Full name',
+                  controller: _nameController,
+                  errorText: _nameError,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.name],
+                  onChanged: (_) {
+                    if (_nameError != null) setState(() => _nameError = null);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                // Full-width rows: side by side, a phone number or email
+                // truncated at half a phone's width.
+                AppTextField(
+                  label: 'Phone',
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppTextField(
+                  label: 'Email',
+                  controller: _emailController,
+                  errorText: _emailError,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.email],
+                  onChanged: (_) {
+                    if (_emailError != null) setState(() => _emailError = null);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppTextField(
+                  label: 'Alternate phone',
+                  controller: _alternatePhoneController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppTextField(
+                  label: 'Organization',
+                  controller: _organizationController,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.organizationName],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppDropdownField(
+                  label: 'Contact type',
+                  value: _contactType,
+                  items: {for (final t in leadContactTypes) t: leadContactTypeLabel(t)},
+                  onChanged: (v) => setState(() => _contactType = v),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppDropdownField(
+                        label: 'Status',
+                        value: _status,
+                        items: {for (final s in leadStatusOrder) s: leadStatusStyle(s).label},
+                        onChanged: (v) => setState(() => _status = v),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: AppDropdownField(
+                        label: 'Priority',
+                        value: _priority,
+                        items: {for (final p in leadPriorities) p: p[0].toUpperCase() + p.substring(1)},
+                        onChanged: (v) => setState(() => _priority = v),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppTextField(
+                  label: 'Source',
+                  hint: 'e.g. Website, Referral',
+                  controller: _sourceController,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppTextField(
+                  label: 'Notes',
+                  controller: _notesController,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLines: 4,
+                  minLines: 2,
+                ),
+                if (_errorText != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  FormErrorBox(_errorText!),
+                ],
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: _isEditing ? 'Save changes' : 'Create lead',
+                  onPressed: _submitting ? null : _submit,
+                  loading: _submitting,
+                  variant: AppButtonVariant.brand,
+                  expand: true,
+                ),
               ],
             ),
-            const SizedBox(height: AppSpacing.lg),
-            AppTextField(label: 'Alternate phone', controller: _alternatePhoneController, keyboardType: TextInputType.phone),
-            const SizedBox(height: AppSpacing.lg),
-            AppTextField(label: 'Organization', controller: _organizationController),
-            const SizedBox(height: AppSpacing.lg),
-            AppDropdownField(
-              label: 'Contact type',
-              value: _contactType,
-              items: {for (final t in leadContactTypes) t: leadContactTypeLabel(t)},
-              onChanged: (v) => setState(() => _contactType = v),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: AppDropdownField(
-                    label: 'Status',
-                    value: _status,
-                    items: {for (final s in leadStatusOrder) s: leadStatusStyle(s).label},
-                    onChanged: (v) => setState(() => _status = v),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppDropdownField(
-                    label: 'Priority',
-                    value: _priority,
-                    items: {for (final p in leadPriorities) p: p[0].toUpperCase() + p.substring(1)},
-                    onChanged: (v) => setState(() => _priority = v),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            AppTextField(label: 'Source', hint: 'e.g. Website, Referral', controller: _sourceController),
-            const SizedBox(height: AppSpacing.lg),
-            AppTextField(label: 'Notes', controller: _notesController),
-            if (_errorText != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              DecoratedBox(
-                decoration: BoxDecoration(color: AppColors.rose50, borderRadius: BorderRadius.circular(10)),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Text(_errorText!, style: const TextStyle(color: AppColors.rose700, fontSize: 13)),
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              label: _isEditing ? 'Save changes' : 'Create lead',
-              onPressed: _submitting ? null : _submit,
-              loading: _submitting,
-              variant: AppButtonVariant.brand,
-              expand: true,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
-

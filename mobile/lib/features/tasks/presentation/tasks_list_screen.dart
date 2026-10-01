@@ -26,17 +26,18 @@ class TasksListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tasksAsync = ref.watch(tasksListControllerProvider);
     final statusFilter = ref.watch(tasksStatusFilterProvider);
+    Future<void> refresh() => ref.read(tasksListControllerProvider.notifier).refresh();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tasks'),
-        actions: [IconButton(icon: const Icon(Icons.add_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaskFormScreen())))],
+        actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: 'Add task', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaskFormScreen())))],
       ),
       body: Column(
         children: [
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
-            height: 40,
+            height: filterChipRowHeight(context),
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -53,16 +54,26 @@ class TasksListScreen extends ConsumerWidget {
           Expanded(
             child: tasksAsync.when(
               loading: () => const AppPageLoader(),
-              error: (error, _) => AppErrorState(title: 'Unable to load tasks', onRetry: () => ref.read(tasksListControllerProvider.notifier).refresh()),
+              error: (error, _) => AppErrorState(title: 'Unable to load tasks', onRetry: refresh, onRefresh: refresh),
               data: (tasks) => tasks.isEmpty
-                  ? AppEmptyState(
-                      icon: Icons.checklist_rounded,
-                      title: 'No tasks yet',
-                      actionLabel: 'Add task',
-                      onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaskFormScreen())),
-                    )
+                  ? (statusFilter != null
+                      ? AppEmptyState(
+                          icon: Icons.filter_alt_off_outlined,
+                          title: 'No matching tasks',
+                          message: 'No tasks have the status "${taskStatusLabel(statusFilter)}".',
+                          actionLabel: 'Clear filters',
+                          onAction: () => ref.read(tasksStatusFilterProvider.notifier).state = null,
+                          onRefresh: refresh,
+                        )
+                      : AppEmptyState(
+                          icon: Icons.checklist_rounded,
+                          title: 'No tasks yet',
+                          actionLabel: 'Add task',
+                          onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaskFormScreen())),
+                          onRefresh: refresh,
+                        ))
                   : RefreshIndicator(
-                      onRefresh: () => ref.read(tasksListControllerProvider.notifier).refresh(),
+                      onRefresh: refresh,
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
                         itemCount: tasks.length,
@@ -127,6 +138,7 @@ class _FilterChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: selected ? on : (dark ? AppColors.slate700 : AppColors.slate200))),
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Text(label, style: TextStyle(color: selected ? AppColors.white : (dark ? AppColors.slate300 : AppColors.slate600), fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),

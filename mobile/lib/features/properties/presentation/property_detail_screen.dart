@@ -39,10 +39,10 @@ class PropertyDetailScreen extends ConsumerWidget {
         title: const Text('Property'),
         actions: [
           if (listingAsync.valueOrNull != null)
-            IconButton(icon: const Icon(Icons.share_outlined), onPressed: () => _share(listingAsync.value!)),
+            IconButton(icon: const Icon(Icons.share_outlined), tooltip: 'Share', onPressed: () => _share(listingAsync.value!)),
           if (canManage && listingAsync.valueOrNull != null) ...[
-            IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(context, listingAsync.value!)),
-            IconButton(icon: const Icon(Icons.delete_outline_rounded), onPressed: () => _delete(context, ref, listingAsync.value!)),
+            IconButton(icon: const Icon(Icons.edit_outlined), tooltip: 'Edit property', onPressed: () => _edit(context, listingAsync.value!)),
+            IconButton(icon: const Icon(Icons.delete_outline_rounded), tooltip: 'Delete property', onPressed: () => _delete(context, ref, listingAsync.value!)),
           ],
         ],
       ),
@@ -377,8 +377,8 @@ class _OwnerTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (owner.phone != null) IconButton(icon: const Icon(Icons.call_outlined, size: 18), onPressed: () => ContactLauncher.call(owner.phone!)),
-            if (owner.email != null) IconButton(icon: const Icon(Icons.mail_outline_rounded, size: 18), onPressed: () => ContactLauncher.email(owner.email!)),
+            if (owner.phone != null) IconButton(icon: const Icon(Icons.call_outlined, size: 18), tooltip: 'Call owner', onPressed: () => ContactLauncher.call(owner.phone!)),
+            if (owner.email != null) IconButton(icon: const Icon(Icons.mail_outline_rounded, size: 18), tooltip: 'Email owner', onPressed: () => ContactLauncher.email(owner.email!)),
           ],
         ),
       ),

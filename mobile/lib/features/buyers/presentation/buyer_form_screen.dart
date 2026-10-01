@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../buyers_providers.dart';
 import '../domain/buyer_requirement.dart';
@@ -30,8 +30,27 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
   late String _status = widget.existing?.status ?? 'active';
   late String _priority = widget.existing?.priority ?? 'medium';
 
+  late final _snapshot = TextSnapshot([
+    _nameController,
+    _emailController,
+    _phoneController,
+    _locationController,
+    _minPriceController,
+    _maxPriceController,
+    _requirementsController,
+  ]);
+
   bool _submitting = false;
   String? _error;
+  String? _nameError;
+  String? _emailError;
+
+  bool get _dirty =>
+      _snapshot.changed ||
+      _propertyType != (widget.existing?.propertyType ?? 'sale') ||
+      _propertyTypeInterest != (widget.existing?.propertyTypeInterest ?? 'any') ||
+      _status != (widget.existing?.status ?? 'active') ||
+      _priority != (widget.existing?.priority ?? 'medium');
 
   bool get _isEditing => widget.existing != null;
 
@@ -49,13 +68,22 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
 
   Future<void> _submit() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'Buyer name is required.');
+    // Field problems show on the field; _error is for the server.
+    final nameError = name.isEmpty ? 'Buyer name is required.' : null;
+    final emailErr = emailError(_emailController.text);
+    if (nameError != null || emailErr != null) {
+      setState(() {
+        _nameError = nameError;
+        _emailError = emailErr;
+        _error = null;
+      });
       return;
     }
     setState(() {
       _submitting = true;
       _error = null;
+      _nameError = null;
+      _emailError = null;
     });
 
     final payload = {
@@ -90,22 +118,52 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DiscardGuard(
+      isDirty: () => _dirty,
+      listenable: _snapshot.listenable,
+      child: Scaffold(
       appBar: AppBar(title: Text(_isEditing ? 'Edit Buyer Requirement' : 'New Buyer Requirement')),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          AppTextField(label: 'Buyer name *', controller: _nameController),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Expanded(child: AppTextField(label: 'Phone', controller: _phoneController, keyboardType: TextInputType.phone)),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(child: AppTextField(label: 'Email', controller: _emailController, keyboardType: TextInputType.emailAddress)),
-            ],
+          AppTextField(
+            label: 'Buyer name *',
+            controller: _nameController,
+            errorText: _nameError,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.name],
+            onChanged: (_) {
+              if (_nameError != null) setState(() => _nameError = null);
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
-          AppTextField(label: 'Preferred location', controller: _locationController),
+          AppTextField(
+            label: 'Phone',
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.telephoneNumber],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            label: 'Email',
+            controller: _emailController,
+            errorText: _emailError,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.email],
+            onChanged: (_) {
+              if (_emailError != null) setState(() => _emailError = null);
+            },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            label: 'Preferred location',
+            controller: _locationController,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+          ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
@@ -138,14 +196,21 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          AppTextField(label: 'Additional requirements', controller: _requirementsController),
+          AppTextField(
+            label: 'Additional requirements',
+            controller: _requirementsController,
+            textCapitalization: TextCapitalization.sentences,
+            maxLines: 4,
+            minLines: 2,
+          ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: const TextStyle(color: AppColors.rose600, fontSize: 13)),
+            FormErrorBox(_error!),
           ],
           const SizedBox(height: AppSpacing.xl),
           AppButton(label: _isEditing ? 'Save changes' : 'Create buyer requirement', onPressed: _submitting ? null : _submit, loading: _submitting, variant: AppButtonVariant.brand, expand: true),
         ],
+      ),
       ),
     );
   }

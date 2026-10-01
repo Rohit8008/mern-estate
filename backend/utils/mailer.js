@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { getTenantId, runWithoutTenantScope } from '../tenancy/tenantContext.js';
 import { decryptSecret } from './encryption.js';
+import { logger } from './logger.js';
 
 dotenv.config();
 
@@ -100,7 +101,7 @@ async function workspaceTransport(tenantId) {
   } catch {
     // A password we cannot decrypt (rotated key, corrupt value) must not take
     // mail down entirely — fall back to the platform transport instead.
-    console.error('[mailer] could not decrypt SMTP password for workspace', id);
+    logger.error('Mail: could not decrypt workspace SMTP password', { workspace_id: String(id) });
     tenantTransports.set(id, { transport: null, expiresAt: Date.now() + CACHE_TTL_MS });
     return null;
   }
@@ -149,6 +150,15 @@ function formatFrom(entry) {
  * @param {string} [opts.tenantId] workspace to send as; defaults to the current
  *        request's workspace, which is what every in-request caller wants
  */
+// Logs name the recipient's domain, not the address: enough to see that mail
+// to one provider is bouncing, without copying every client's email into a
+// log store shared by all workspaces.
+function emailDomain(to) {
+  const first = Array.isArray(to) ? to[0] : String(to || '').split(',')[0];
+  const at = String(first || '').lastIndexOf('@');
+  return at >= 0 ? String(first).slice(at + 1).trim().toLowerCase().replace(/>$/, '') : null;
+}
+
 export async function sendMail({ to, subject, text, html, replyTo, headers, tenantId = getTenantId() }) {
   // Tests must never open a socket to a real mail server: it makes the suite
   // slow, flaky and dependent on whoever's credentials are in .env.
@@ -160,15 +170,16 @@ export async function sendMail({ to, subject, text, html, replyTo, headers, tena
   const transport = entry?.transport || platformTransport;
 
   if (!transport) {
-    console.warn('[mailer] SMTP not configured. Set SMTP_USER and SMTP_PASS, or configure the workspace mail settings');
+    logger.warn('Mail not sent: SMTP not configured', { to_domain: emailDomain(to), subject });
     return { sent: false, reason: 'not_configured' };
   }
 
   try {
     await transport.sendMail({ from: formatFrom(entry), to, subject, text, html, replyTo, headers });
+    logger.info('Mail sent', { to_domain: emailDomain(to), subject, via: entry ? 'workspace' : 'platform' });
     return { sent: true, via: entry ? 'workspace' : 'platform' };
   } catch (e) {
-    console.error('[mailer] sendMail error', e);
+    logger.error('Mail send failed', { error: e, to_domain: emailDomain(to), subject });
     return { sent: false, reason: 'send_failed', error: e?.message };
   }
 }

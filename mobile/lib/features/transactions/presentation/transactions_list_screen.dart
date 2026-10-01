@@ -59,6 +59,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         actions: [
           IconButton(
               icon: const Icon(Icons.add_rounded),
+              tooltip: 'Add transaction',
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen())))
         ],
       ),

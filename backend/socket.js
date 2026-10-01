@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { runWithTenant } from './tenancy/tenantContext.js';
 import User from './models/user.model.js';
 import { config } from './config/environment.js';
+import { logger } from './utils/logger.js';
 
 export let io;
 
@@ -66,6 +67,7 @@ export function initSocket(httpServer) {
       socket.tenantId = String(payload.tid);
       return next();
     } catch {
+      logger.info('Socket handshake rejected', { reason: 'invalid_or_expired_token', ip: socket.handshake?.address });
       return next(new Error('Invalid or expired token'));
     }
   });

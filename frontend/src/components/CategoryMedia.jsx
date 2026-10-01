@@ -252,7 +252,7 @@ export default function CategoryMedia({ categoryId, canEdit, isAdmin }) {
                       'absolute top-2 right-2 p-1.5 rounded-lg transition-opacity',
                       confirmDeleteId === doc._id
                         ? 'bg-rose-600 text-white opacity-100'
-                        : 'bg-white/90 text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100'
+                        : 'bg-white/90 text-rose-600 hover-reveal'
                     )}
                     title={confirmDeleteId === doc._id ? 'Click again to remove' : 'Remove'}
                   >

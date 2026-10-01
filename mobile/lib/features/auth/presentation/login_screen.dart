@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
@@ -46,6 +47,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     try {
       await ref.read(authControllerProvider.notifier).signIn(email: email, password: password);
+      // Only now do these credentials deserve a "Save password?" prompt.
+      TextInput.finishAutofillContext();
     } on AppFailure catch (f) {
       if (!mounted) return;
       setState(() => _errorText = f.message);
@@ -64,7 +67,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight - AppSpacing.xxxl * 2),
-                child: Column(
+                // Groups email + password so the platform password manager
+                // fills and saves them as one credential.
+                child: AutofillGroup(
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -92,6 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email, AutofillHints.username],
                       prefixIcon: Icons.mail_outline_rounded,
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -100,9 +107,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
                       prefixIcon: Icons.lock_outline_rounded,
                       onSubmitted: (_) => _submit(),
                       suffixIcon: IconButton(
+                        tooltip: _obscurePassword ? 'Show password' : 'Hide password',
                         icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                             size: 20, color: AppColors.slate400),
                         onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -118,19 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     if (_errorText != null) ...[
                       const SizedBox(height: AppSpacing.sm),
-                      DecoratedBox(
-                        decoration: BoxDecoration(color: AppColors.rose50, borderRadius: BorderRadius.circular(10)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline_rounded, size: 18, color: AppColors.rose600),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(child: Text(_errorText!, style: const TextStyle(color: AppColors.rose700, fontSize: 13))),
-                            ],
-                          ),
-                        ),
-                      ),
+                      FormErrorBox(_errorText!),
                     ],
                     const SizedBox(height: AppSpacing.xl),
                     AppButton(
@@ -157,6 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ],
+                  ),
                 ),
               ),
             );

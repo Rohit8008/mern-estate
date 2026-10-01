@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 
@@ -11,9 +12,13 @@ class AppTextField extends StatelessWidget {
     this.hint,
     this.errorText,
     this.controller,
+    this.focusNode,
     this.obscureText = false,
     this.keyboardType,
     this.textInputAction,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofillHints,
+    this.inputFormatters,
     this.prefixIcon,
     this.suffixIcon,
     this.onChanged,
@@ -21,15 +26,20 @@ class AppTextField extends StatelessWidget {
     this.autofocus = false,
     this.enabled = true,
     this.maxLines = 1,
+    this.minLines,
   });
 
   final String? label;
   final String? hint;
   final String? errorText;
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final bool obscureText;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
+  final TextCapitalization textCapitalization;
+  final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
   final IconData? prefixIcon;
   final Widget? suffixIcon;
   final ValueChanged<String>? onChanged;
@@ -37,26 +47,37 @@ class AppTextField extends StatelessWidget {
   final bool autofocus;
   final bool enabled;
   final int maxLines;
+  final int? minLines;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // A multi-line field whose Enter key submits (or does nothing) traps the
+    // user in one paragraph — default those to a real newline key.
+    final multiline = maxLines > 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (label != null) ...[
-          Text(label!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(label!,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
           const SizedBox(height: 6),
         ],
         TextField(
           controller: controller,
+          focusNode: focusNode,
           obscureText: obscureText,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
+          keyboardType: keyboardType ?? (multiline ? TextInputType.multiline : null),
+          textInputAction: textInputAction ?? (multiline ? TextInputAction.newline : null),
+          textCapitalization: textCapitalization,
+          autofillHints: autofillHints,
+          inputFormatters: inputFormatters,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
           autofocus: autofocus,
           enabled: enabled,
           maxLines: maxLines,
+          minLines: minLines,
           decoration: InputDecoration(
             hintText: hint,
             errorText: errorText,

@@ -381,10 +381,10 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
           <span className='text-sm font-semibold text-slate-700 truncate'>{widget.label}</span>
         </div>
         <div className='flex items-center gap-1 flex-shrink-0'>
-          <button onClick={() => onToggleSize(widget.id)} title={widget.span === 'lg' ? 'Make smaller' : 'Make wider'} aria-label={widget.span === 'lg' ? `Make ${widget.label} smaller` : `Make ${widget.label} wider`} className='text-slate-500 hover:text-slate-700 p-1 rounded transition-colors'>
+          <button onClick={() => onToggleSize(widget.id)} title={widget.span === 'lg' ? 'Make smaller' : 'Make wider'} aria-label={widget.span === 'lg' ? `Make ${widget.label} smaller` : `Make ${widget.label} wider`} className='text-slate-500 hover:text-slate-700 p-2 sm:p-1 rounded transition-colors'>
             <HiSwitchHorizontal className='w-4 h-4' aria-hidden='true' />
           </button>
-          <button onClick={() => onRemove(widget.id)} aria-label={`Remove ${widget.label} widget`} className='text-slate-500 hover:text-rose-500 p-1 rounded transition-colors'>
+          <button onClick={() => onRemove(widget.id)} aria-label={`Remove ${widget.label} widget`} className='text-slate-500 hover:text-rose-500 p-2 sm:p-1 rounded transition-colors'>
             <HiX className='w-4 h-4' aria-hidden='true' />
           </button>
         </div>
@@ -1128,11 +1128,11 @@ export default function AgencyDashboard() {
       {/* Add Widget Modal */}
       {showAddWidgetModal && (
         <div className='fixed inset-0 !mt-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4'>
-          <div ref={widgetModalRef} role='dialog' aria-modal='true' aria-labelledby='ad-widget-title' tabIndex={-1} className='bg-white rounded-xl shadow-2xl w-full max-w-lg focus:outline-none'>
+          <div ref={widgetModalRef} role='dialog' aria-modal='true' aria-labelledby='ad-widget-title' tabIndex={-1} className='bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain focus:outline-none'>
             <div className='px-6 py-4 border-b border-slate-200 flex items-center justify-between'>
               <div className='flex items-center gap-2'>
                 {widgetStep === 'preset' && (
-                  <button onClick={() => setWidgetStep('type')} aria-label='Back to widget types' className='p-1 rounded hover:bg-slate-100 text-slate-500'>
+                  <button onClick={() => setWidgetStep('type')} aria-label='Back to widget types' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'>
                     <svg aria-hidden='true' className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' /></svg>
                   </button>
                 )}
@@ -1147,7 +1147,7 @@ export default function AgencyDashboard() {
                   )}
                 </h2>
               </div>
-              <button onClick={() => setShowAddWidgetModal(false)} aria-label='Close' className='p-1 rounded hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
+              <button onClick={() => setShowAddWidgetModal(false)} aria-label='Close' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
             </div>
             <div className='p-6'>
               {widgetStep === 'type' ? (
@@ -1189,10 +1189,10 @@ export default function AgencyDashboard() {
       {/* Invite Modal */}
       {showInviteModal && (
         <div className='fixed inset-0 !mt-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4'>
-          <div ref={inviteModalRef} role='dialog' aria-modal='true' aria-labelledby='ad-invite-title' tabIndex={-1} className='bg-white rounded-xl shadow-2xl w-full max-w-md focus:outline-none'>
+          <div ref={inviteModalRef} role='dialog' aria-modal='true' aria-labelledby='ad-invite-title' tabIndex={-1} className='bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain focus:outline-none'>
             <div className='px-6 py-4 border-b border-slate-200 flex items-center justify-between'>
               <h2 id='ad-invite-title' className='text-lg font-semibold text-slate-900'>{t('agencyDashboard.inviteTeamMember')}</h2>
-              <button onClick={closeInviteModal} aria-label='Close' className='p-1 rounded hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
+              <button onClick={closeInviteModal} aria-label='Close' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
             </div>
             <div className='p-6 space-y-4'>
               {inviteSuccess && (

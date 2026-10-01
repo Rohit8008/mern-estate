@@ -44,6 +44,7 @@ class CrmBottomNavShell extends StatelessWidget {
           body: navigationShell,
           floatingActionButton: FloatingActionButton(
             onPressed: () => showQuickActionSheet(context),
+            tooltip: 'Quick add',
             backgroundColor: AppColors.indigo600,
             child: const Icon(Icons.add_rounded, color: AppColors.white),
           ),
@@ -82,19 +83,45 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.indigo600 : AppColors.slate400;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final color = selected
+        ? (dark ? AppColors.indigo400 : AppColors.indigo600)
+        : (dark ? AppColors.slate500 : AppColors.slate400);
+    // The tab label is already announced via Semantics; the visible text is
+    // excluded so screen readers don't read it twice.
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(selected ? activeIcon : icon, color: color, size: 22),
-              const SizedBox(height: 2),
-              Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-            ],
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(selected ? activeIcon : icon, color: color, size: 22),
+                  const SizedBox(height: 2),
+                  // Four labels share a phone's width with the FAB notch; at
+                  // large accessibility text they'd wrap and push the bar
+                  // out of shape, so cap the growth and ellipsize instead.
+                  MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: 1.3,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

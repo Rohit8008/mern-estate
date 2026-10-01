@@ -1092,7 +1092,7 @@ function ContactRow({ contact, columns, selected, onToggleSelected, onOpen, onEd
       </td>
       {columns.map((col) => cell(col.key))}
       <td className='px-4 py-3 text-right'>
-        <div className='flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
+        <div className='flex items-center justify-end gap-1 hover-reveal transition-opacity'>
           <button
             type='button'
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
@@ -1161,11 +1161,11 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
             )}
           </div>
         </div>
-        <div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity'>
+        <div className='flex items-center gap-1 hover-reveal transition-opacity'>
           <button
             type='button'
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className='p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            className='p-2.5 sm:p-1 rounded-lg sm:rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             title={t('contacts.edit')}
             aria-label={`Edit ${contact.name || 'contact'}`}
           >
@@ -1174,7 +1174,7 @@ function ContactCard({ contact, onSelect, onEdit, onDelete, onStatusChange, show
           <button
             type='button'
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className='p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50'
+            className='p-2.5 sm:p-1 rounded-lg sm:rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50'
             title={t('contacts.delete')}
             aria-label={`Delete ${contact.name || 'contact'}`}
           >

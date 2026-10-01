@@ -93,6 +93,8 @@
 <tr><td><code>TWILIO_ACCOUNT_SID</code> / <code>TWILIO_AUTH_TOKEN</code> / <code>TWILIO_FROM_NUMBER</code></td><td>none</td><td>Optional SMS.</td></tr>
 <tr><td><code>OPENOBSERVE_URL</code></td><td><code>http://localhost:5080</code></td><td>Log shipping and the platform console's log query.</td></tr>
 <tr><td><code>OPENOBSERVE_ORG</code></td><td><code>default</code></td><td></td></tr>
+<tr><td><code>SLOW_REQUEST_MS</code> / <code>SLOW_QUERY_MS</code></td><td><code>2000</code> / <code>500</code></td><td>Requests and database commands slower than this are logged as warnings (<code>SLOW_QUERY_MS=0</code> turns query logging off).</td></tr>
+<tr><td><code>LOG_FORMAT</code></td><td>unset</td><td>Production always writes JSON lines to stdout; set <code>json</code> to get them in development. Log entries are redacted (passwords, tokens, cookies, OTPs) and credential-bearing URLs (invite, share, unsubscribe) are masked before they are stored.</td></tr>
 <tr><td><code>OPENOBSERVE_USERNAME</code> / <code>OPENOBSERVE_PASSWORD</code></td><td>none</td><td>Shipping is gated on these. Unset: logs go to stdout and everything else is dropped (production prints a warning at boot).</td></tr>
 <tr><td><code>LOG_LEVEL</code></td><td><code>info</code></td><td><code>error</code>, <code>warn</code>, <code>info</code>, <code>debug</code>.</td></tr>
 <tr><td><code>CLOUDINARY_CLOUD_NAME</code></td><td>none</td><td>Only read by the system-status report (<code>controllers/systemStatus.controller.js</code>, admin-only <code>GET /api/metrics/system</code>) to say whether uploads look configured; it also accepts <code>VITE_CLOUDINARY_CLOUD_NAME</code>. Uploads themselves are made by the browser.</td></tr>

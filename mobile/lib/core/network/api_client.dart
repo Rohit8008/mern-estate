@@ -7,6 +7,8 @@ import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../logging/app_logger.dart';
+import '../logging/logging_interceptor.dart';
 import 'workspace_store.dart';
 
 /// Wraps Dio with a disk-persisted cookie jar (the backend is 100%
@@ -48,6 +50,7 @@ class ApiClient {
       (dio.httpClientAdapter as dynamic).withCredentials = true;
       dio.interceptors.add(_CsrfInterceptor(dio));
       dio.interceptors.add(_RefreshOn401Interceptor(dio));
+      dio.interceptors.add(LoggingInterceptor());
       return ApiClient._(dio, CookieJar(), WorkspaceStore.memory());
     }
 
@@ -58,6 +61,8 @@ class ApiClient {
     dio.interceptors.add(CookieManager(cookieJar));
     dio.interceptors.add(_CsrfInterceptor(dio));
     dio.interceptors.add(_RefreshOn401Interceptor(dio));
+    // Last, so it records the outcome after refresh/CSRF retries.
+    dio.interceptors.add(LoggingInterceptor());
 
     return ApiClient._(dio, cookieJar, await WorkspaceStore.open(supportDir));
   }
@@ -184,6 +189,9 @@ class _CsrfInterceptor extends Interceptor {
     '/api/auth/csrf',
     '/api/user/password/request-otp',
     '/api/user/password/reset',
+    // Public, rate-limited ingest (backend security/publicRoutes.js). Asking
+    // for a token first would add a request to every log flush.
+    AppLogger.endpoint,
   ];
 
   @override
