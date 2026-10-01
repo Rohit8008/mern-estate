@@ -19,7 +19,7 @@ description: Adding people, choosing what each can do, how access is scoped to c
 <tr><td><code>buyer</code></td><td>No CRM; may not create, edit or delete listings.</td></tr>
 </tbody></table>
 
-<div class="warn"><p><strong>An employee with no custom role can do almost nothing.</strong> The permission check answers 403 "No role assigned. Access denied." and the app's permission context resolves to an empty set, so the CRM screens redirect to "Unauthorized". The single exception is creating listings, which an employee with no role is allowed (category restrictions still apply). Always assign a role right after inviting an employee.</p></div>
+<div class="warn"><p><strong>An employee with no custom role.</strong> When someone signs in as an employee with no role, the server assigns the workspace's system role named "Employee" if one exists (Restore default roles creates it). Only if the workspace has no such role is the employee left with none. Then the strictly-checked screens (clients, owners, categories-write, documents, analytics ...) answer 403 "No role assigned. Access denied." and the app's permission context resolves to an empty set, so those screens redirect to "Unauthorized". <strong>Legacy fallback:</strong> the routes whose permissions became enforced later (listing read/edit/delete, messages, buyer requirements, category reads, owner activate/deactivate) deliberately keep an employee with no usable role (none assigned, or the role is missing or inactive) on today's behaviour rather than locking them out; their scoping still applies. Always assign a role right after inviting an employee.</p></div>
 
 <h2 id="add-people">Add a team member</h2>
 <p>To invite an employee: <strong>Admin Panel</strong> (<code>/admin</code>), Users tab, <em>Create Employee</em>: username, email, optional phone, and the categories they are assigned to. Admin only. Then assign a role in the Roles &amp; Permissions tab.</p>
@@ -71,8 +71,8 @@ description: Adding people, choosing what each can do, how access is scoped to c
 <thead><tr><th>Built-in role</th><th>Permissions it grants</th></tr></thead>
 <tbody>
 <tr><td>Super Admin (system)</td><td>All 35.</td></tr>
-<tr><td>Employee (system)</td><td><code>viewClients</code>, <code>viewOwners</code>, <code>createListing</code>, <code>viewListings</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
-<tr><td>Listing Manager (system)</td><td><code>createOwner</code>, <code>updateOwner</code>, <code>viewOwners</code>, <code>toggleOwnerActive</code>, <code>createListing</code>, <code>updateListing</code>, <code>viewListings</code>, <code>publishListing</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
+<tr><td>Employee (system)</td><td><code>viewClients</code>, <code>viewOwners</code>, <code>createListing</code>, <code>updateListing</code>, <code>viewListings</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>createBuyerRequirement</code>, <code>updateBuyerRequirement</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
+<tr><td>Listing Manager (system)</td><td><code>createOwner</code>, <code>updateOwner</code>, <code>viewOwners</code>, <code>toggleOwnerActive</code>, <code>createListing</code>, <code>updateListing</code>, <code>deleteListing</code>, <code>viewListings</code>, <code>publishListing</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>createBuyerRequirement</code>, <code>updateBuyerRequirement</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
 </tbody></table>
 <p>The built-in roles are defined once in <code>backend/utils/defaultRoles.js</code> (Super Admin, Sales Manager, Listing Manager, Employee, Viewer); both the restore button and <code>npm run db:seed-roles</code> read it, so they create the same five. The table above lists three of them.</p>
 <div class="note"><p>Role documents are cached per process for <strong>60 seconds</strong> (<code>requirePermission</code>), so a permission change can take up to a minute to reach every API call. The app fetches an employee's permissions once per session load (<code>/api/user/my-permissions</code>), so a signed-in employee sees menu changes after a reload.</p></div>
@@ -82,10 +82,10 @@ description: Adding people, choosing what each can do, how access is scoped to c
 <table>
 <thead><tr><th>Group</th><th>Key</th><th>Label</th><th>Enforced today by</th></tr></thead>
 <tbody>
-<tr><td rowspan="4">userManagement</td><td><code>createUser</code></td><td>Create new users</td><td>nothing (inventing users is admin-only)</td></tr>
+<tr><td rowspan="4">userManagement</td><td><code>createUser</code></td><td>Create new users</td><td>Admin Panel create employee (POST /api/user/employee). Admin-only first: the key is also required, but granting it to an employee does not open the route</td></tr>
 <tr><td><code>updateUser</code></td><td>Update user information</td><td>API: assigning a lead (<code>POST /api/clients/:id/assign</code>)</td></tr>
-<tr><td><code>deleteUser</code></td><td>Delete users</td><td>nothing</td></tr>
-<tr><td><code>viewUsers</code></td><td>View user list</td><td>nothing (the user list is admin-only)</td></tr>
+<tr><td><code>deleteUser</code></td><td>Delete users</td><td>Admin delete user (DELETE /api/user/admin/delete/:id). Admin-only first, same as createUser</td></tr>
+<tr><td><code>viewUsers</code></td><td>View user list</td><td>User list (GET /api/user/list). Admin-only first, same as createUser. The user search used to pick a message recipient stays open to staff</td></tr>
 <tr><td rowspan="4">clientManagement</td><td><code>createClient</code></td><td>Create new clients</td><td>API: create lead, lead import. UI: gates create actions</td></tr>
 <tr><td><code>updateClient</code></td><td>Update client information</td><td>API: edit lead, bulk, photos, interested listings, email opt-out</td></tr>
 <tr><td><code>deleteClient</code></td><td>Delete clients</td><td>API: delete lead</td></tr>
@@ -94,31 +94,33 @@ description: Adding people, choosing what each can do, how access is scoped to c
 <tr><td><code>updateOwner</code></td><td>Update owner information</td><td>API: edit owner (including the active flag)</td></tr>
 <tr><td><code>deleteOwner</code></td><td>Delete owners</td><td>API: delete owner</td></tr>
 <tr><td><code>viewOwners</code></td><td>View owner list</td><td>API: list and read owners. UI: Property Owners screen</td></tr>
-<tr><td><code>toggleOwnerActive</code></td><td>Activate/deactivate owners</td><td>nothing (the Activate/Deactivate button uses <code>updateOwner</code>)</td></tr>
+<tr><td><code>toggleOwnerActive</code></td><td>Activate/deactivate owners</td><td>API: changing an owner's <code>active</code> flag (single or bulk) needs it as well as <code>updateOwner</code>; an edit that leaves the flag unchanged does not. UI: owner bulk Activate/Deactivate</td></tr>
 <tr><td rowspan="5">listingManagement</td><td><code>createListing</code></td><td>Create new listings</td><td>API: create listing. UI: Add Property screen</td></tr>
-<tr><td><code>updateListing</code></td><td>Update listing information</td><td>UI route guard on the edit form only. The API decides by ownership and scope</td></tr>
-<tr><td><code>deleteListing</code></td><td>Delete listings</td><td>nothing (API decides by ownership and scope)</td></tr>
-<tr><td><code>viewListings</code></td><td>View listing list</td><td>UI: All Properties screen and route</td></tr>
-<tr><td><code>publishListing</code></td><td>Publish/unpublish listings</td><td>nothing</td></tr>
+<tr><td><code>updateListing</code></td><td>Update listing information</td><td>API: update a listing (still narrowed by ownership and scope). UI: the edit form route</td></tr>
+<tr><td><code>deleteListing</code></td><td>Delete listings</td><td>API: delete and bulk delete (and the admin soft-delete), still narrowed by ownership and scope</td></tr>
+<tr><td><code>viewListings</code></td><td>View listing list</td><td>API: listing list, detail, search, facets and suggestions. UI: All Properties screen and route. "My assigned" is not gated</td></tr>
+<tr><td><code>publishListing</code></td><td>Publish/unpublish listings</td><td>nothing, deliberately: a listing has no publish state (its <code>status</code> is available/sold/rented/under_negotiation), so there is no action to guard</td></tr>
 <tr><td rowspan="4">categoryManagement</td><td><code>createCategory</code></td><td>Create new categories</td><td>API: create category</td></tr>
 <tr><td><code>updateCategory</code></td><td>Update category information</td><td>API: rename, fields, location</td></tr>
 <tr><td><code>deleteCategory</code></td><td>Delete categories</td><td>API: delete, list deleted, restore</td></tr>
-<tr><td><code>viewCategories</code></td><td>View category list</td><td>UI: Categories screen</td></tr>
-<tr><td rowspan="3">messageManagement</td><td><code>viewMessages</code></td><td>View messages</td><td>nothing</td></tr>
-<tr><td><code>sendMessages</code></td><td>Send messages</td><td>nothing</td></tr>
-<tr><td><code>deleteMessages</code></td><td>Delete messages</td><td>nothing</td></tr>
-<tr><td rowspan="4">buyerRequirements</td><td><code>createBuyerRequirement</code></td><td>Create buyer requirements</td><td>nothing</td></tr>
-<tr><td><code>updateBuyerRequirement</code></td><td>Update buyer requirements</td><td>nothing</td></tr>
-<tr><td><code>deleteBuyerRequirement</code></td><td>Delete buyer requirements</td><td>nothing</td></tr>
-<tr><td><code>viewBuyerRequirements</code></td><td>View buyer requirements</td><td>UI: Buyer Requirements screen and route</td></tr>
+<tr><td><code>viewCategories</code></td><td>View category list</td><td>API: category list and by-slug reads. UI: Categories screen</td></tr>
+<tr><td rowspan="3">messageManagement</td><td><code>viewMessages</code></td><td>View messages</td><td>API: inbox, sent, thread, conversations, mark-read</td></tr>
+<tr><td><code>sendMessages</code></td><td>Send messages</td><td>API: send a message</td></tr>
+<tr><td><code>deleteMessages</code></td><td>Delete messages</td><td>nothing, deliberately: there is no message-delete endpoint</td></tr>
+<tr><td rowspan="4">buyerRequirements</td><td><code>createBuyerRequirement</code></td><td>Create buyer requirements</td><td>API: create a buyer requirement. UI: Add button</td></tr>
+<tr><td><code>updateBuyerRequirement</code></td><td>Update buyer requirements</td><td>API: edit, status change, matches, and bulk status or reassign. UI: edit and bulk status controls</td></tr>
+<tr><td><code>deleteBuyerRequirement</code></td><td>Delete buyer requirements</td><td>API: delete and bulk delete. UI: delete buttons</td></tr>
+<tr><td><code>viewBuyerRequirements</code></td><td>View buyer requirements</td><td>API: list, stats, export, detail, matches. UI: Buyer Requirements screen and route</td></tr>
 <tr><td rowspan="6">system</td><td><code>uploadFiles</code></td><td>Upload files</td><td>API: list, upload and delete documents</td></tr>
 <tr><td><code>viewAnalytics</code></td><td>View analytics and reports</td><td>API: lead source ROI. UI: Dashboard, Analytics, Transactions screens</td></tr>
 <tr><td><code>exportData</code></td><td>Export data</td><td>API: lead export, data-rights exports. UI: Client Reports screen</td></tr>
-<tr><td><code>manageRoles</code></td><td>Manage roles and permissions</td><td>nothing (the roles API is admin-only)</td></tr>
+<tr><td><code>manageRoles</code></td><td>Manage roles and permissions</td><td>The whole roles API (<code>router.use</code>). Admin-only first: the key is also required, but granting it to an employee does not open the API</td></tr>
 <tr><td><code>systemSettings</code></td><td>Access system settings</td><td>API: property-type create, update, delete, seed</td></tr>
 <tr><td><code>viewLogs</code></td><td>View system logs</td><td>API: workspace activity search and export; the full trail of any record</td></tr>
 </tbody></table>
-<div class="warn"><p><strong>"Nothing" means the key can be ticked on a role but no code consults it.</strong> This column was derived from every <code>requirePermission(...)</code> call in <code>backend/routes</code>, the <code>canCreateListing</code> middleware, direct <code>hasPermission</code> calls in controllers, and the permission checks in <code>frontend/src/app/AppRoutes.jsx</code> and <code>screenCatalogue.js</code>. Do not rely on ticking or clearing those boxes to restrict anything; the real boundary for listings, buyers, messages and users is the account type plus scoping below.</p></div>
+<div class="note"><p><strong>How to read this column.</strong> It lists every route where the key is checked, derived from <code>requirePermission(...)</code> and <code>requireStaffPermission(...)</code> in <code>backend/routes</code>, direct checks in controllers, <code>canCreateListing</code>, and <code>frontend/src/app/AppRoutes.jsx</code> and <code>screenCatalogue.js</code>. Two keys enforce nothing because there is nothing to guard: <code>publishListing</code> and <code>deleteMessages</code>. Four more (<code>createUser</code>, <code>deleteUser</code>, <code>viewUsers</code>, <code>manageRoles</code>) sit behind an admin-only check as well; admins pass every key, so ticking them for an employee does not open those screens.</p>
+<p><strong>Routes enforced since the permission rollout</strong> use <code>requireStaffPermission</code>. It differs from the strict check in three ways: admins pass; sellers and buyers are not subject to roles (their own-records limits apply); and an employee with no usable role keeps today's access (the legacy fallback above). An employee with a role needs the key, and a missing key answers 403 "Permission denied. Required permission: &lt;key&gt;".</p>
+<p><strong>Existing roles were migrated.</strong> Run <code>npm run db:migrate-permissions</code> once per deployment (see Operations). It adds the newly enforced keys to roles that already held the closest related permission, so people who could do these things before still can. It never removes a permission.</p></div>
 
 <h3 id="how-it-works">How requirePermission works</h3>
 <pre><code>router.get('/', requirePermission('viewClients'), getClients);</code></pre>

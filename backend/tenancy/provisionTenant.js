@@ -76,7 +76,7 @@ const STARTER_ROLES = [
     permissions: {
       viewUsers: false,
       createClient: true, updateClient: true, viewClients: true,
-      createOwner: true, updateOwner: true, viewOwners: true,
+      createOwner: true, updateOwner: true, viewOwners: true, toggleOwnerActive: true,
       createListing: true, updateListing: true, viewListings: true,
       viewCategories: true,
       viewMessages: true, sendMessages: true,
@@ -90,7 +90,7 @@ const STARTER_ROLES = [
     isSystem: false,
     permissions: {
       viewClients: true, viewOwners: true, viewListings: true,
-      viewCategories: true, viewBuyerRequirements: true, viewAnalytics: true,
+      viewCategories: true, viewMessages: true, viewBuyerRequirements: true, viewAnalytics: true,
     },
   },
 ];

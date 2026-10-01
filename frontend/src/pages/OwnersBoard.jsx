@@ -15,6 +15,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BulkActionBar, { BulkButton } from '../components/BulkActionBar';
 import { apiClient } from '../utils/http';
 import { useCrmAccess } from '../hooks/useCrmAccess';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { useColumnPrefs } from '../hooks/useColumnPrefs';
 import {
   PageHeader, Button, SearchBar, Toolbar, ToolbarDivider,
@@ -36,6 +37,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 export default function OwnersBoard() {
   const { t } = useTranslation();
   const { canAccess } = useCrmAccess();
+  const { canAct } = usePermissions();
+  const canToggleActive = canAct('toggleOwnerActive');
 
   const [owners, setOwners]         = useState([]);
   const [total, setTotal]           = useState(0);
@@ -493,8 +496,8 @@ export default function OwnersBoard() {
       />
 
       <BulkActionBar count={selection.count} onClear={selection.clear}>
-        <BulkButton onClick={() => bulkSetActive(true)} disabled={bulkBusy}>{t('owners.bulkActivate')}</BulkButton>
-        <BulkButton onClick={() => bulkSetActive(false)} disabled={bulkBusy}>{t('owners.bulkDeactivate')}</BulkButton>
+        {canToggleActive && <BulkButton onClick={() => bulkSetActive(true)} disabled={bulkBusy}>{t('owners.bulkActivate')}</BulkButton>}
+        {canToggleActive && <BulkButton onClick={() => bulkSetActive(false)} disabled={bulkBusy}>{t('owners.bulkDeactivate')}</BulkButton>}
         <BulkButton danger onClick={() => setBulkDeleteOpen(true)} disabled={bulkBusy}>{t('owners.bulkDelete')}</BulkButton>
       </BulkActionBar>
     </div>

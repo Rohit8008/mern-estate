@@ -9,6 +9,7 @@ import {
 } from 'react-icons/hi';
 import { apiClient, parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import {
   Modal, Input, Select, Textarea, Spinner, Button, EmptyState, Pagination, SkeletonCard, Badge, Checkbox,
 } from '../design-system';
@@ -66,6 +67,10 @@ export default function BuyerRequirements() {
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { canAct } = usePermissions();
+  const canCreateBuyer = canAct('createBuyerRequirement');
+  const canUpdateBuyer = canAct('updateBuyerRequirement');
+  const canDeleteBuyer = canAct('deleteBuyerRequirement');
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [query, setQuery] = useState('');
@@ -407,7 +412,7 @@ export default function BuyerRequirements() {
               >
                 <HiDownload className='w-4 h-4' />{t('buyerRequirements.export')}</button>
 
-              {!isBuyerViewMode && (
+              {!isBuyerViewMode && canCreateBuyer && (
                 <button
                   onClick={() => {
                     setViewingRequirement(null);
@@ -516,7 +521,7 @@ export default function BuyerRequirements() {
               {t('buyerRequirements.selectedCount', { defaultValue: '{{count}} selected', count: selected.size })}
             </span>
             <div className='flex flex-wrap items-center gap-2 sm:ml-auto'>
-              <select
+              {canUpdateBuyer && <select
                 aria-label={t('buyerRequirements.setStatusFor', 'Set status for selected')}
                 disabled={bulkBusy}
                 value=''
@@ -525,10 +530,10 @@ export default function BuyerRequirements() {
               >
                 <option value=''>{t('buyerRequirements.setStatus', 'Set status...')}</option>
                 {STATUSES.map((s) => <option key={s.value} value={s.value}>{t(s.labelKey, s.fallback)}</option>)}
-              </select>
-              <Button variant='danger' icon={HiTrash} disabled={bulkBusy} onClick={() => setPendingBulkDelete(true)}>
+              </select>}
+              {canDeleteBuyer && <Button variant='danger' icon={HiTrash} disabled={bulkBusy} onClick={() => setPendingBulkDelete(true)}>
                 {t('buyerRequirements.delete')}
-              </Button>
+              </Button>}
               <Button variant='secondary' disabled={bulkBusy} onClick={() => setSelected(new Set())}>
                 {t('common.clearAll')}
               </Button>
@@ -873,7 +878,7 @@ export default function BuyerRequirements() {
                 icon={HiUser}
                 title={t('buyerRequirements.noBuyerRequirementsFound')}
                 body={t('buyerRequirements.startByAddingYourFirstBuyer')}
-                action={!isBuyerViewMode && (
+                action={!isBuyerViewMode && canCreateBuyer && (
                   <Button icon={HiPlus} onClick={() => setShowForm(true)}>{t('buyerRequirements.addBuyerRequirement')}</Button>
                 )}
               />
@@ -1006,20 +1011,20 @@ export default function BuyerRequirements() {
                   </button>
                   {!isBuyerViewMode && (
                     <>
-                      <button
+                      {canUpdateBuyer && <button
                         onClick={() => handleEdit(requirement)}
                         className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
                         title={t('buyerRequirements.editRequirement')}
                       >
                         <HiPencil className='w-4 h-4' />
-                      </button>
-                      <button
+                      </button>}
+                      {canDeleteBuyer && <button
                         onClick={() => setPendingDelete(requirement._id)}
                         className='p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200'
                         title={t('buyerRequirements.deleteRequirement')}
                       >
                         <HiTrash className='w-4 h-4' />
-                      </button>
+                      </button>}
                     </>
                   )}
                 </div>

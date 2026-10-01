@@ -75,7 +75,7 @@ function CategoryCard({ category, hasPerm, onDelete, onRename, deleting }) {
               <input
                 autoFocus
                 value={draft}
-                maxLength={50}
+                maxLength={100}
                 disabled={savingName}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={saveName}

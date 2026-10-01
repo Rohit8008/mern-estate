@@ -25,7 +25,7 @@ import {
   commitImport,
 } from '../controllers/listingImport.controller.js';
 import { verifyToken, requireAdmin, tryVerifyToken } from '../utils/verifyUser.js';
-import { canCreateListing } from '../middleware/permissions.js';
+import { canCreateListing, requireStaffPermission } from '../middleware/permissions.js';
 import { validateBody, listingValidation, listingActionValidation } from '../middleware/validation.js';
 
 const router = express.Router();
@@ -37,16 +37,16 @@ const router = express.Router();
 // Sharing specific properties with someone outside the agency now goes through
 // a share link — see routes/share.route.js — which is per-property, expiring,
 // revocable and countable, rather than an open catalogue.
-router.get('/search', verifyToken, searchListings);
-router.get('/facets', verifyToken, getListingFacetCounts);
-router.get('/suggestions', verifyToken, getSearchSuggestions);
+router.get('/search', verifyToken, requireStaffPermission('viewListings'), searchListings);
+router.get('/facets', verifyToken, requireStaffPermission('viewListings'), getListingFacetCounts);
+router.get('/suggestions', verifyToken, requireStaffPermission('viewListings'), getSearchSuggestions);
 router.get('/popular-searches', verifyToken, getPopularSearches);
-router.get('/get/:id', verifyToken, getListing);
+router.get('/get/:id', verifyToken, requireStaffPermission('viewListings'), getListing);
 
 router.post('/create', verifyToken, canCreateListing, validateBody(listingValidation.create), createListing);
-router.delete('/delete/:id', verifyToken, deleteListing);
-router.post('/update/:id', verifyToken, validateBody(listingValidation.update), updateListing);
-router.get('/get', verifyToken, getListings);
+router.delete('/delete/:id', verifyToken, requireStaffPermission('deleteListing'), deleteListing);
+router.post('/update/:id', verifyToken, requireStaffPermission('updateListing'), validateBody(listingValidation.update), updateListing);
+router.get('/get', verifyToken, requireStaffPermission('viewListings'), getListings);
 
 // Agent assignment routes (Admin only)
 router.post('/assign-agent', verifyToken, requireAdmin, validateBody(listingActionValidation.assignAgent), assignListingToAgent);
@@ -56,7 +56,7 @@ router.post('/unassign-agent', verifyToken, requireAdmin, validateBody(listingAc
 router.get('/my-assigned', verifyToken, getMyAssignedListings);
 
 // Soft delete and restore (Admin only)
-router.post('/soft-delete/:id', verifyToken, requireAdmin, softDeleteListing);
+router.post('/soft-delete/:id', verifyToken, requireAdmin, requireStaffPermission('deleteListing'), softDeleteListing);
 router.post('/restore/:id', verifyToken, requireAdmin, restoreListing);
 router.get('/deleted', verifyToken, requireAdmin, listDeletedListings);
 

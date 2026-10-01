@@ -2,6 +2,7 @@ import express from 'express';
 import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, changePassword, getSavedViews, putSavedViews, getDashboardWidgets, putDashboardWidgets, me, myPermissions, getLegalAcceptance, acceptLegal, searchUsers, adminSetEmployeePassword, resendEmployeeInvite} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
+import { requirePermission } from '../middleware/permissions.js';
 import { validateBody, userRouteValidation, legalValidation } from '../middleware/validation.js';
 import { authRateLimit } from '../middleware/security.js';
 import { containsInsensitive } from '../utils/escapeRegex.js';
@@ -10,7 +11,7 @@ import { containsInsensitive } from '../utils/escapeRegex.js';
 const router = express.Router();
 
 router.get('/test', test);
-router.get('/list', verifyToken, requireAdmin, listUsers)
+router.get('/list', verifyToken, requireAdmin, requirePermission('viewUsers'), listUsers)
 router.get('/me', verifyToken, me)
 router.get('/legal-acceptance', verifyToken, getLegalAcceptance)
 router.post('/legal-acceptance', verifyToken, validateBody(legalValidation.accept), acceptLegal)
@@ -47,10 +48,10 @@ router.get('/security/logs', verifyToken, requireAdmin, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch logs' });
   }
 })
-router.post('/employee', verifyToken, requireAdmin, validateBody(userRouteValidation.createEmployee), createEmployee)
+router.post('/employee', verifyToken, requireAdmin, requirePermission('createUser'), validateBody(userRouteValidation.createEmployee), createEmployee)
 router.post('/update/:id', verifyToken, validateBody(userRouteValidation.updateProfile), updateUser)
 router.delete('/delete/:id', verifyToken, deleteUser)
-router.delete('/admin/delete/:id', verifyToken, requireAdmin, adminDeleteUser)
+router.delete('/admin/delete/:id', verifyToken, requireAdmin, requirePermission('deleteUser'), adminDeleteUser)
 router.post('/admin/toggle-status/:id', verifyToken, requireAdmin, validateBody(userRouteValidation.adminToggleUserStatus), adminToggleUserStatus)
 router.post('/admin/set-employee-password/:id', verifyToken, requireAdmin, validateBody(userRouteValidation.adminSetEmployeePassword), adminSetEmployeePassword)
 router.post('/employee/:id/invite', verifyToken, requireAdmin, validateBody(userRouteValidation.resendEmployeeInvite), resendEmployeeInvite)

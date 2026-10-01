@@ -10,6 +10,7 @@
     "make-admin": "node scripts/makeAdmin.js",
     "db:migrate-tenancy": "node scripts/migrateToMultiTenant.js",
     "db:migrate-fields": "node scripts/migrateFieldStores.js",
+    "db:migrate-permissions": "node scripts/migratePermissions.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js --watch",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js --coverage",

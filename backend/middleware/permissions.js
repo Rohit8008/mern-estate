@@ -28,7 +28,7 @@ export const requirePermission = (permission) => {
     );
   }
 
-  return async (req, res, next) => {
+  const guard = async (req, res, next) => {
     try {
       // Super admins have all permissions
       if (req.user.role === 'admin') {
@@ -58,7 +58,67 @@ export const requirePermission = (permission) => {
       next(error);
     }
   };
+  guard.permissionKey = permission; // lets tests read which key a route asks for
+  return guard;
 };
+
+/**
+ * Does this caller hold `permission`, under the rules for routes that were open
+ * to every signed-in person before the permission was enforced?
+ *
+ *   - admin                      -> yes (as everywhere)
+ *   - seller / buyer / other     -> yes. Permissions are a CRM-staff concept;
+ *                                   these callers are bounded by their own
+ *                                   ownership checks in the controller.
+ *   - employee, usable role      -> only if the role grants it
+ *   - employee, NO usable role   -> yes. This is the documented
+ *                                   LEGACY_STAFF_FALLBACK: "no usable role" means
+ *                                   none assigned, or the assigned one is missing
+ *                                   or inactive. verifyToken normally gives such
+ *                                   an employee the system "Employee" role, so
+ *                                   this only applies to a workspace that has
+ *                                   none. Locking them out of routes they have
+ *                                   always used is worse than leaving them on
+ *                                   today's behaviour (scoping still applies).
+ *
+ * The routes that existed as permission-checked before (clients, owners,
+ * categories, documents ...) keep the strict `requirePermission`.
+ */
+export async function staffHasPermission(user, permission) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'employee') return true;
+  if (!user.assignedRole) return true; // LEGACY_STAFF_FALLBACK
+  const role = await getCachedRole(user.assignedRole);
+  if (!role || !role.isActive) return true; // LEGACY_STAFF_FALLBACK
+  return role.hasPermission(permission);
+}
+
+/**
+ * Route guard form of staffHasPermission, for routes that used to be open to
+ * every signed-in user. Same fail-at-load check on the key as requirePermission.
+ */
+export const requireStaffPermission = (permission) => {
+  if (!isPermissionKey(permission)) {
+    throw new Error(
+      `requireStaffPermission('${permission}') is not a known permission. ` +
+      'Add it to utils/permissionCatalogue.js or fix the spelling.'
+    );
+  }
+  const guard = async (req, res, next) => {
+    try {
+      if (await staffHasPermission(req.user, permission)) return next();
+      return next(errorHandler(403, `Permission denied. Required permission: ${permission}`));
+    } catch (error) {
+      next(error);
+    }
+  };
+  guard.permissionKey = permission;
+  return guard;
+};
+
+/** Test hook: drop cached roles so a changed role is seen immediately. */
+export const clearRoleCache = () => roleCache.clear?.();
 
 // Middleware to check if user can create listings
 export const canCreateListing = async (req, res, next) => {

@@ -1,5 +1,6 @@
 import Owner from '../models/owner.model.js';
 import { errorHandler } from '../utils/error.js';
+import { staffHasPermission } from '../middleware/permissions.js';
 import { emitToTenant } from '../socket.js';
 import { logFromRequest, diffFields } from '../utils/activity.js';
 import { phoneKeyOf } from '../utils/phoneKey.js';
@@ -39,6 +40,15 @@ export const updateOwner = async (req, res, next) => {
   try {
     // Read first so the trail can record what the values were before.
     const before = await Owner.findById(req.params.id).lean();
+    // Switching an owner on or off is its own permission. A form that merely
+    // re-sends the unchanged `active` value is an ordinary edit.
+    if (
+      before && typeof req.body?.active === 'boolean' &&
+      (before.active !== false) !== req.body.active &&
+      !(await staffHasPermission(req.user, 'toggleOwnerActive'))
+    ) {
+      return next(errorHandler(403, 'Permission denied. Required permission: toggleOwnerActive'));
+    }
     const updated = await Owner.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updated) return next(errorHandler(404, 'Owner not found'));
     logFromRequest(req, {

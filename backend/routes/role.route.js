@@ -1,5 +1,6 @@
 import express from 'express';
 import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
+import { requirePermission } from '../middleware/permissions.js';
 import { validateBody, roleValidation } from '../middleware/validation.js';
 import {
   createRole,
@@ -26,6 +27,11 @@ function deprecatedInitializeDefaults(req, res, next) {
 // All routes require authentication and admin privileges
 router.use(verifyToken);
 router.use(requireAdmin);
+// Defence in depth: requireAdmin above is the real gate (an admin always passes
+// requirePermission), so granting manageRoles to an employee does NOT open this
+// API. The key is consulted so the gate stays correct if requireAdmin is ever
+// relaxed to "admin or manageRoles".
+router.use(requirePermission('manageRoles'));
 
 // Role management routes
 router.post('/', validateBody(roleValidation.create), createRole);

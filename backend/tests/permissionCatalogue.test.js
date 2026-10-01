@@ -76,7 +76,7 @@ describe('routes only ask for permissions that exist', () => {
 
   it.each(files)('%s', (file) => {
     const src = fs.readFileSync(path.join(routesDir, file), 'utf8');
-    const asked = [...src.matchAll(/requirePermission\(\s*['"]([^'"]+)['"]\s*\)/g)]
+    const asked = [...src.matchAll(/require(?:Staff)?Permission\(\s*['"]([^'"]+)['"]\s*\)/g)]
       .map((m) => m[1]);
 
     const unknown = asked.filter((p) => !isPermissionKey(p));

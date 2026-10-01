@@ -652,7 +652,10 @@ export const myPermissions = async (req, res, next) => {
     if (!user) return next(errorHandler(404, 'User not found!'));
 
     if (!user.assignedRole || !user.assignedRole.isActive) {
-      return res.status(200).json({ permissions: {}, role: user.role, isAdmin: false });
+      // legacyFallback tells the app that the API treats this person as having
+      // today's pre-permission behaviour on the routes that became enforced later
+      // (see staffHasPermission), so the UI should not hide what they can still do.
+      return res.status(200).json({ permissions: {}, role: user.role, isAdmin: false, legacyFallback: user.role === 'employee' });
     }
 
     const perms = {};
@@ -668,6 +671,7 @@ export const myPermissions = async (req, res, next) => {
       role: user.role,
       roleName: user.assignedRole.name,
       isAdmin: false,
+      legacyFallback: false,
     });
   } catch (error) {
     next(error);
