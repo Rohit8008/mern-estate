@@ -12,10 +12,25 @@ import { inHomeTenant } from '../tenancy/tenantContext.js';
 import { logger } from '../utils/logger.js';
 import { attachInvite, sendInviteEmail } from '../tenancy/invites.js';
 import { erasedUserFields } from './dataRights.controller.js';
-import { clearSessionCookies } from './auth.controller.js';
+import { clearSessionCookies, reissueSession } from './auth.controller.js';
 import { LEGAL_VERSION } from '../utils/legalVersion.js';
 import { parsePaging, parseSort } from '../utils/listQuery.js';
 import { containsInsensitive } from '../utils/escapeRegex.js';
+
+// Best-effort audit line for a credential change. Never blocks the response.
+async function logPasswordEvent(req, email, reason) {
+  try {
+    await SecurityLog.create({
+      email,
+      method: 'password',
+      status: 'success',
+      reason,
+      ip: req.ip || req.socket?.remoteAddress || '',
+      userAgent: req.headers?.['user-agent'] || '',
+      path: req.originalUrl || '',
+    });
+  } catch (_) {}
+}
 
 export const test = (req, res) => {
   res.json({
@@ -258,9 +273,13 @@ export const resetPasswordWithOtp = async (req, res, next) => {
     user.passwordResetOtpHash = null;
     user.passwordResetOtpExpires = null;
     user.passwordResetOtpAttempts = 0;
+    // Whoever knew the old password (or held a stolen session) must not stay
+    // signed in: drop every refresh token with the password change.
+    user.refreshTokens = [];
     await user.save();
 
     logger.security?.('password_reset_completed', { userId: String(user._id), ip: req.ip });
+    await logPasswordEvent(req, user.email, 'password_reset_otp');
 
     res.status(200).json({ message: 'Password updated' });
   } catch (e) {
@@ -273,14 +292,17 @@ export const resetPasswordWithOtp = async (req, res, next) => {
  *
  * The Profile form used to post the current password to the OTP reset as if it
  * were the code, which the 6-digit validator rejected every time. This checks
- * the current password instead. Saving bumps passwordChangedAt, so every
- * session — this one included — is signed out, which the caller must expect.
+ * the current password instead. Saving bumps passwordChangedAt, which kills
+ * every other access token, and every stored refresh token is dropped. The
+ * device that made the change is kept signed in with a fresh token pair.
  */
 export const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
-    const user = await User.findById(req.user.id).select('+password');
+    // Pinned to the caller's home workspace: an unpinned lookup while a
+    // platform operator is viewing a customer would find nothing.
+    const user = await inHomeTenant(req, () => User.findById(req.user.id).select('+password'));
     if (!user || user.isDeleted) return next(errorHandler(404, 'User not found'));
 
     // Google-only accounts have no password to check against; they set one
@@ -310,11 +332,21 @@ export const changePassword = async (req, res, next) => {
     }
 
     user.password = newPassword;
-    await user.save();
+    user.refreshTokens = [];
+    await inHomeTenant(req, () => user.save());
 
     logger.security?.('password_changed', { userId: String(user._id), ip: req.ip });
+    await inHomeTenant(req, () => logPasswordEvent(req, user.email, 'password_changed'));
 
-    res.status(200).json({ success: true, message: 'Password changed. Please sign in again.' });
+    // Every other device is now signed out; this one continues on a new pair.
+    await reissueSession(res, {
+      userId: user._id,
+      tenantId: user.tenantId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || '',
+    });
+
+    res.status(200).json({ success: true, message: 'Password changed. Other devices have been signed out.' });
   } catch (e) {
     next(e);
   }
@@ -680,6 +712,17 @@ const USER_SORTS = {
   lastLogin: 'lastLogin',
 };
 
+// invite fields are select:false, so the list cannot tell who is still waiting
+// to accept. One extra indexed-by-_id query marks them (never exposes the hash).
+async function withInvitePending(users) {
+  if (!users.length) return users;
+  const pending = await User.find({ _id: { $in: users.map((u) => u._id) }, inviteTokenHash: { $ne: null } })
+    .select('_id')
+    .lean();
+  const ids = new Set(pending.map((p) => String(p._id)));
+  return users.map((u) => ({ ...u.toJSON(), invitePending: ids.has(String(u._id)) }));
+}
+
 export const listUsers = async (req, res, next) => {
   try {
     if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
@@ -696,7 +739,7 @@ export const listUsers = async (req, res, next) => {
         .sort({ createdAt: 1, _id: 1 })
         .limit(UNPAGED_USER_CAP)
         .populate('assignedRole', 'name description isActive');
-      return res.status(200).json(users);
+      return res.status(200).json(await withInvitePending(users));
     }
 
     const { page, limit, skip } = parsePaging(req.query);
@@ -706,7 +749,7 @@ export const listUsers = async (req, res, next) => {
         .populate('assignedRole', 'name description isActive'),
       User.countDocuments(filter),
     ]);
-    res.status(200).json({ success: true, data: users, page, limit, total });
+    res.status(200).json({ success: true, data: await withInvitePending(users), page, limit, total });
   } catch (error) {
     next(error);
   }
@@ -782,6 +825,7 @@ export const createEmployee = async (req, res, next) => {
     await user.save({ validateBeforeSave: false });
 
     let inviteUrlForAdmin = null;
+    let inviteSent = false;
     try {
       const sent = await sendInviteEmail({
         to: email,
@@ -795,6 +839,7 @@ export const createEmployee = async (req, res, next) => {
       // Returned to the ADMIN so they can pass it on by hand when mail is down.
       // Never logged: the token is the credential.
       inviteUrlForAdmin = sent.url;
+      inviteSent = Boolean(sent.sent);
       if (!sent.sent) {
         logger.warn('Employee invite email not delivered', { email, reason: sent.reason });
       }
@@ -807,7 +852,63 @@ export const createEmployee = async (req, res, next) => {
     }
 
     const { password: pass, inviteTokenHash, ...rest } = user._doc;
-    res.status(201).json({ ...rest, invited: true, inviteUrl: inviteUrlForAdmin });
+    res.status(201).json({ ...rest, invited: true, inviteSent, inviteExpiresAt: user.inviteExpiresAt, inviteUrl: inviteUrlForAdmin });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Re-send an employee's invitation.
+ *
+ * Mirrors the platform console's resend: a fresh token overwrites the hash, so
+ * only the newest link works and a leaked one dies. Only for people who have
+ * not accepted yet (inviteTokenHash is cleared on acceptance).
+ */
+export const resendEmployeeInvite = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+
+    const target = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .select('+inviteTokenHash +inviteExpiresAt +previousInviteTokenHashes');
+    if (!target) return next(errorHandler(404, 'User not found'));
+    if (target.role !== 'employee') return next(errorHandler(403, 'Only employees can be re-invited here'));
+    if (!target.inviteTokenHash) {
+      return next(errorHandler(409, 'This person has already accepted their invitation.'));
+    }
+
+    const token = attachInvite(target, { invitedBy: req.user.id });
+    await target.save({ validateBeforeSave: false });
+
+    let result = { sent: false, url: null };
+    try {
+      result = await sendInviteEmail({
+        to: target.email,
+        token,
+        tenant: req.tenant,
+        inviterName: req.user?.username || null,
+        role: target.role,
+        recipientName: target.firstName || target.username || '',
+        expiresAt: target.inviteExpiresAt,
+      });
+    } catch (err) {
+      logger.warn('Employee invite resend failed', { userId: String(target._id), error: err?.message });
+    }
+
+    logger.security?.('employee_invite_resent', {
+      userId: String(target._id),
+      by: String(req.user.id),
+      delivered: Boolean(result.sent),
+      ip: req.ip,
+    });
+
+    res.status(200).json({
+      success: true,
+      sent: Boolean(result.sent),
+      inviteUrl: result.url || null,
+      expiresAt: target.inviteExpiresAt,
+      message: result.sent ? `Invitation sent to ${target.email}` : 'Invitation created — email could not be sent',
+    });
   } catch (error) {
     next(error);
   }

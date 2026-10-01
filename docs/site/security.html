@@ -165,14 +165,14 @@
 <h2 id="limits">What is not protected</h2>
 <div class="danger"><p>Read this list before relying on a control above.</p></div>
 <ul>
-<li><strong>Password change does not end other sessions.</strong> Neither reset nor change clears stored refresh tokens, and <code>/refresh</code> does not compare with <code>passwordChangedAt</code>. An existing refresh cookie keeps working. Use <code>signout-all</code> after a suspected compromise.</li>
+<li><strong>Password changes end other sessions.</strong> Reset, self-change and an admin setting an employee's password all empty the stored refresh tokens, and <code>/refresh</code> rejects any refresh token issued before <code>passwordChangedAt</code>. A self-change keeps the calling device signed in on a fresh token pair. Access tokens already issued stop working at once for the same reason.</li>
 <li><strong>Isolation is application-level.</strong> There is no per-tenant database, row-level policy or encryption key. A bug that bypasses the plugin (a raw driver call, an aggregation stage the plugin cannot scope) is cross-tenant. The tests and the "throw rather than guess" design reduce this; they do not remove it.</li>
 <li><strong>Share and upload URLs are bearer credentials.</strong> Anyone with a share token sees the shared properties until it expires or is revoked. Passcode guesses are limited only by the per-IP <code>shareRateLimit</code> (60 per 15 minutes). Listing photographs and avatars under <code>/uploads/</code> are served statically with no session (share pages need them); their names are not guessable in practice but they are not access-controlled.</li>
 <li><strong>Webhook SSRF is a guard, not a guarantee.</strong> Literal private addresses are blocked; a public hostname that resolves to a private address is not.</li>
 <li><strong>Cloudinary uploads bypass server validation.</strong> The unsigned preset accepts what Cloudinary accepts. Restrict the preset's folders and formats in Cloudinary.</li>
 <li><strong>Sockets are authenticated at connect time only.</strong> A connection stays up after its access token expires, and a user disabled mid-connection keeps the open socket until it drops.</li>
 <li><strong>Single-instance defaults.</strong> Without <code>REDIS_URL</code>, rate limits and caches are per process (see above). The scheduler is safe on many instances (it takes Mongo leases), the limiter is not.</li>
-<li><strong>Dev-only helpers.</strong> <code>/api/auth/clear-rate-limit</code> exists only when <code>NODE_ENV=development</code> (and only returns a message; it does not reset anything).</li>
+<li><strong>Dev-only helpers.</strong> <code>/api/auth/clear-rate-limit</code> was removed: it only returned a message and never reset anything.</li>
 <li><strong>No MFA, no SSO, no IP allowlists</strong> are implemented. Login protection is the password policy, lockout and rate limiting.</li>
 <li><strong>Backups hold personal data.</strong> Erased records remain in older dumps until the retention count rolls them off (<code>BACKUP_RETENTION_COUNT</code>, default 7).</li>
 <li><strong>A public contact form</strong> (<code>POST /api/contact</code>) and client log ingest (<code>POST /api/observability/logs</code>) accept anonymous input; both are rate limited and neither is CSRF-protected by design.</li>

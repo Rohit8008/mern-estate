@@ -1,7 +1,7 @@
 import { registerJob, startScheduler } from './scheduler.js';
 import { forEachTenant } from '../tenancy/tenantContext.js';
 import { sendTaskReminders, sendFollowUpReminders } from './reminders.js';
-import { resetImportUsage, sweepTrialExpiry } from './workspaceSweeps.js';
+import { sweepTrialExpiry } from './workspaceSweeps.js';
 import { deliverDueWebhooks } from '../utils/webhooks.js';
 import { rescoreLeads } from './leadScoring.js';
 import { sweepOverdueInvoices } from '../tenancy/billing.js';
@@ -55,15 +55,6 @@ export function registerAllJobs() {
   registerJob('sequence-steps', { everyMs: 15 * 60_000, leaseMs: 10 * 60_000 }, async () =>
     summarise('sequence steps fired', await forEachTenant(() => runDueSequenceSteps()))
   );
-
-  // Once a day is enough for both of these, and 02:10 UTC keeps them clear of
-  // the nightly backup window.
-  registerJob('import-usage-reset', { dailyAt: '02:10' }, async () => {
-    const outcome = await forEachTenant((tenant) => resetImportUsage(tenant), {
-      serviceableOnly: false, // a suspended workspace still needs a clean counter
-    });
-    return summarise('import counters rolled', outcome);
-  });
 
   // Overnight, because the recency factor changes by the day rather than by
   // the minute and this touches every open lead in every workspace.

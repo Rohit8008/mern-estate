@@ -44,7 +44,7 @@ cp backend/.env.example backend/.env
 
 # Frontend
 cp frontend/.env.example frontend/.env.local
-# Edit frontend/.env.local — set VITE_FIREBASE_* keys if using image uploads
+# Edit frontend/.env.local — set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET for image uploads
 
 # E2E tests
 cp .env.e2e.example .env.e2e
@@ -56,6 +56,7 @@ cp .env.e2e.example .env.e2e
 ```bash
 cd backend
 npm run make-admin -- --email admin@yourcompany.com --username admin --password Admin@123
+# With several workspaces, say which one: add --workspace <slug>
 ```
 
 ---
@@ -145,8 +146,7 @@ npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm
                              # DESTRUCTIVE. Replaces the database. Also prompts for the
                              # database name, and refuses in production unless
                              # ALLOW_PRODUCTION_RESTORE=true is set as well.
-npm run db:migrate           # Run pending migrations
-npm run db:migrate-tenancy   # One-time: single-tenant -> multi-tenant. Supports --dry-run.
+npm run db:migrate-tenancy   # One-time: converts a pre-multi-tenancy database (no tenantId) to multi-tenant. Supports --dry-run.
 npm run db:migrate-fields    # One-time: propertyTypeFields -> attributes/native columns
 ```
 
@@ -327,6 +327,13 @@ npm run pm2:logs      # Stream live logs
 npm run pm2:monit     # Interactive CPU/memory monitor
 ```
 
+`ecosystem.config.js` runs ONE instance in fork mode: Socket.IO presence is held in
+process memory and no cluster adapter is installed, so cluster mode would split
+connected users across workers. Set `REDIS_URL` to share the response cache and rate
+limits if you do run more instances. PM2 waits for the app's `ready` signal and gives
+a stopping process 15s (`kill_timeout`) to drain; `SHUTDOWN_TIMEOUT_MS` (default 10s)
+must stay below it.
+
 For the frontend, run `npm run build` inside `frontend/` and serve the `dist/` folder with Nginx or a static CDN.
 
 ---
@@ -340,11 +347,12 @@ For the frontend, run `npm run build` inside `frontend/` and serve the `dist/` f
 | `MONGO_URI` | ✅ | MongoDB connection string |
 | `JWT_SECRET` | ✅ | Access token signing key (32+ chars) |
 | `REFRESH_SECRET` | ✅ | Refresh token signing key (32+ chars) |
-| `FRONTEND_URL` | ✅ | CORS allowed origin (e.g. `http://localhost:5173`) |
-| `MESSAGE_ENCRYPTION_KEY` | ✅ | 32-byte hex string for Socket.IO encryption |
+| `FRONTEND_URL` | production | CORS allowed origin with scheme (e.g. `http://localhost:5173`) |
+| `MESSAGE_ENCRYPTION_KEY` | ✅ | Secret for chat and stored-SMTP-password encryption; set once, never rotate |
 | `NODE_ENV` | ✅ | `development` / `production` / `test` |
+| `APP_DOMAIN` or `DEFAULT_TENANT_SLUG` | production | One of the two: subdomain routing, or the single workspace to serve |
 | `PORT` | — | Default `3000` |
-| `SMTP_*` | — | Email (password reset, notifications) |
+| `SMTP_*` | — | Email (`SMTP_HOST/PORT/USER/PASS/FROM`) |
 | `TWILIO_*` | — | SMS notifications |
 
 Generate secure secrets:
@@ -357,13 +365,10 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 | Variable | Required | Description |
 |---|---|---|
-| `VITE_FIREBASE_API_KEY` | ✅ | Firebase project API key |
-| `VITE_FIREBASE_AUTH_DOMAIN` | ✅ | Firebase auth domain |
-| `VITE_FIREBASE_PROJECT_ID` | ✅ | Firebase project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | ✅ | Firebase storage bucket |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | ✅ | Firebase messaging sender ID |
-| `VITE_FIREBASE_APP_ID` | ✅ | Firebase app ID |
+| `VITE_CLOUDINARY_CLOUD_NAME` | for uploads | Cloudinary cloud name (not a secret) |
+| `VITE_CLOUDINARY_UPLOAD_PRESET` | for uploads | Unsigned upload preset |
 | `VITE_API_URL` | — | Leave empty in dev (Vite proxy handles it) |
+| `VITE_SITE_URL` | — | Public origin for canonical/OG/sitemap at build time (default `https://realvista.duckdns.org`) |
 
 ### E2E Tests (`.env.e2e`)
 

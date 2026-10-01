@@ -148,9 +148,8 @@ export default function Profile() {
       }
       setPasswordSuccess(true);
       setPasswordData({ oldPassword: '', newPassword: '' });
-      // The change signs out every session, this one included.
-      showSuccess('Password changed. Please sign in again.');
-      setTimeout(handleSignOut, 1500);
+      // Other devices are signed out by the server; this one gets a fresh session.
+      showSuccess('Password changed. Other devices have been signed out.');
     } catch (err) {
       const message = err?.message || 'Password change failed. Please try again.';
       setPasswordError(message);

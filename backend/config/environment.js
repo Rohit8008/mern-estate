@@ -93,7 +93,7 @@ export const config = {
     // POST before it reaches the API. X-Request-Id: a client may send its own,
     // and reads ours back to quote in a bug report.
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-Request-Id'],
-    exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id'],
   },
 
   // Rate limiting configuration

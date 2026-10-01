@@ -68,7 +68,7 @@
 <p>Deleting a listing is always a <strong>soft delete</strong> (<code>isDeleted</code>, <code>deletedAt</code>). Removing a property from the board hides it from search, facets and lists but does not destroy it.</p>
 <ul>
 <li>To delete: from the board or the property. Anyone who can access the listing can delete it through <code>DELETE /api/listing/delete/:id</code>; admins also have <code>POST /api/listing/soft-delete/:id</code>.</li>
-<li>To restore: admin only. On All Properties open the bin (the Deleted listings dialog) and restore; it lists up to 200, newest deleted first.</li>
+<li>To restore: admin only. On All Properties open the bin (the Deleted listings dialog) and restore; it lists up to 200, newest deleted first. Restoring counts against the plan's <code>maxListings</code> like a new property and answers 402 when the workspace is full.</li>
 </ul>
 <div class="note"><p>Restoring does not re-check the plan's <code>maxListings</code> cap; the cap is enforced when listings are created or imported, not when they are un-deleted.</p></div>
 
@@ -103,7 +103,7 @@
 <thead><tr><th>Task</th><th>How</th><th>Gate</th></tr></thead>
 <tbody>
 <tr><td>Create</td><td><strong>New category</strong>: a name (the address, i.e. slug, is built from it and never changes even if you rename). Names must produce a slug with letters or digits; a name matching a deleted category asks you to restore that one instead.</td><td><code>createCategory</code></td></tr>
-<tr><td>Rename</td><td>Up to 50 characters; the slug stays.</td><td><code>updateCategory</code></td></tr>
+<tr><td>Rename</td><td>Up to 100 characters (the same limit as create and the model); the slug stays.</td><td><code>updateCategory</code></td></tr>
 <tr><td>Edit fields</td><td><strong>Set up</strong> on a card opens <code>/admin/categories/:slug/fields</code>, a route under the admin-only routes in the app (the API itself checks <code>updateCategory</code>).</td><td><code>updateCategory</code></td></tr>
 <tr><td>Set a default map location</td><td><code>POST /api/category/update-location/:id</code>; latitude -90 to 90, longitude -180 to 180.</td><td><code>updateCategory</code></td></tr>
 <tr><td>Delete</td><td>See below.</td><td><code>deleteCategory</code></td></tr>

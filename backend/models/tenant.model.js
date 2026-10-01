@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PLANS } from '../tenancy/plans.js';
 
 /**
  * A tenant is one real estate agency using the product.
@@ -23,7 +24,10 @@ const brandingSchema = new mongoose.Schema(
     // properties, so an agency's palette flows through every component without
     // a rebuild — the approach kpi-dashboard uses for its themes.
     tokens: {
-      brand: { type: String, default: '#4f46e5' },
+      // The product's petrol blue - the same value the frontend falls back to
+      // before config loads. Not stock indigo (#4f46e5), which the design
+      // system bans.
+      brand: { type: String, default: '#2b6faa' },
       brandContrast: { type: String, default: '#ffffff' },
       accent: { type: String, default: '#0ea5e9' },
       sidebar: { type: String, default: '#0f172a' },
@@ -69,12 +73,21 @@ const localeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/*
+ * Schema defaults are the DEFAULT PLAN's figures (`plan` below defaults to
+ * 'trial'), taken from tenancy/plans.js rather than a second list of numbers
+ * that matched no plan. They only apply to a workspace with no stored value;
+ * provisionTenant always writes the plan's limits explicitly, and a stored
+ * value is never touched by a default, so live workspaces are unaffected.
+ */
+const DEFAULT_LIMITS = PLANS.trial.limits;
+
 const limitsSchema = new mongoose.Schema(
   {
-    maxUsers: { type: Number, default: 25 },
-    maxListings: { type: Number, default: 10000 },
-    maxStorageMb: { type: Number, default: 5120 },
-    maxImportRowsPerMonth: { type: Number, default: 50000 },
+    maxUsers: { type: Number, default: DEFAULT_LIMITS.maxUsers },
+    maxListings: { type: Number, default: DEFAULT_LIMITS.maxListings },
+    maxStorageMb: { type: Number, default: DEFAULT_LIMITS.maxStorageMb },
+    maxImportRowsPerMonth: { type: Number, default: DEFAULT_LIMITS.maxImportRowsPerMonth },
   },
   { _id: false }
 );
@@ -250,11 +263,11 @@ const tenantSchema = new mongoose.Schema(
     mail: { type: mailSchema, default: () => ({}) },
 
     /**
-     * Rolling monthly import usage, against limits.maxImportRowsPerMonth.
-     *
-     * The cap existed with nothing to measure it, because there was no job to
-     * reset a counter — so "per month" was never enforced. `periodStart` is the
-     * first of the current UTC month; the monthly job rolls it forward.
+     * DEPRECATED, no longer read or written. Monthly import usage is metered in
+     * the ImportUsage collection (models/importUsage.model.js, one row per
+     * workspace per month) by reserveImportRows() in tenancy/limits.js. This
+     * counter was reset by a job nothing enforced against; the field stays only
+     * so existing documents keep loading.
      */
     importUsage: {
       periodStart: { type: Date, default: null },

@@ -185,6 +185,15 @@ export const SCREEN_CATALOGUE = [
     core: true,
     order: 20,
   },
+  {
+    id: 'auditLog',
+    label: 'Audit Log',
+    section: 'admin',
+    description: 'Who changed what, and when, across the workspace.',
+    requires: 'viewLogs',
+    adminOnly: true,
+    order: 30,
+  },
 ];
 
 const BY_ID = new Map(SCREEN_CATALOGUE.map((s) => [s.id, s]));

@@ -75,8 +75,8 @@ const RoleManagement = () => {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState('');
 
-  // Restore built-in roles — GET /roles/initialize-defaults. It is a GET but it
-  // writes: it creates only the defaults that are missing and never touches an
+  // Restore built-in roles — POST /roles/initialize-defaults (the GET alias is
+  // deprecated). It creates only the defaults that are missing and never touches an
   // existing role, so running it twice is harmless. Hence the confirm.
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -249,7 +249,7 @@ const RoleManagement = () => {
     setRestoring(true);
     setRestoreNotice(null);
     try {
-      const res = await apiClient.get('/roles/initialize-defaults');
+      const res = await apiClient.post('/roles/initialize-defaults', {});
       const created = res?.data?.createdRoles ?? 0;
       setRestoreNotice({
         type: 'success',

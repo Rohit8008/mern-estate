@@ -3,7 +3,7 @@ import {
   HiOutlinePlus, HiOutlineUpload, HiOutlineUsers, HiOutlineUserGroup,
   HiOutlineViewBoards, HiOutlineCollection, HiOutlineClipboardList,
   HiOutlineCalendar, HiOutlineCurrencyDollar, HiOutlineDocumentReport,
-  HiOutlineShieldCheck, HiOutlineCog,
+  HiOutlineShieldCheck, HiOutlineCog, HiOutlineDocumentSearch,
 } from 'react-icons/hi';
 
 /**
@@ -50,6 +50,7 @@ export const SCREEN_REGISTRY = {
   adminPanel:    { icon: HiOutlineShieldCheck,      route: '/admin',
                    matches: ['/admin/categories', '/admin/property-types'] },
   settings:      { icon: HiOutlineCog,              route: '/settings' },
+  auditLog:      { icon: HiOutlineDocumentSearch,   route: '/admin/audit-log' },
 };
 
 /**

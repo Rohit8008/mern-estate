@@ -31,15 +31,4 @@ router.post('/invite/:token', authRateLimit, validateBody(inviteValidation.accep
 router.post('/signout', tryVerifyToken, signOut);
 router.post('/signout-all', verifyToken, signOutAll);
 
-// Development endpoint to clear rate limits
-if (process.env.NODE_ENV === 'development') {
-  router.get('/clear-rate-limit', (req, res) => {
-    // This is a simple way to reset rate limits in development
-    res.json({ 
-      success: true, 
-      message: 'Rate limit cleared. You can now try signing in again.' 
-    });
-  });
-}
-
 export default router;

@@ -6,7 +6,7 @@ description: Install the monorepo, configure the backend and frontend, create yo
 <table>
 <thead><tr><th>Tool</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td>Node.js 20</td><td>CI (<code>.github/workflows/ci.yml</code>) runs on Node 20 and neither <code>package.json</code> declares an <code>engines</code> field. Run the <strong>backend</strong> on Node 20: on Node 25 the <code>jsonwebtoken</code> dependency chain (<code>jwa</code> / <code>buffer-equal-constant-time</code>) uses the removed <code>SlowBuffer</code> API and crashes on require. The Vite frontend ran fine on Node 25 in our tests.</td></tr>
+<tr><td>Node.js 20</td><td>CI (<code>.github/workflows/ci.yml</code>) runs on Node 20. The root and backend <code>package.json</code> declare <code>"engines": {"node": "&gt;=20"}</code> (no upper bound is declared). Run the <strong>backend</strong> on Node 20: on Node 25 the <code>jsonwebtoken</code> dependency chain (<code>jwa</code> / <code>buffer-equal-constant-time</code>) uses the removed <code>SlowBuffer</code> API and crashes on require. The Vite frontend ran fine on Node 25 in our tests.</td></tr>
 <tr><td>MongoDB</td><td>A local <code>mongod</code> is the simplest option. The default <code>MONGO_URI</code> used in docs and the example file is <code>mongodb://127.0.0.1:27017/mern-estate</code>. The unit tests do not need it (they start an in-memory server, see <a href="#tests">Running tests</a>).</td></tr>
 <tr><td>npm</td><td>Each of <code>backend/</code>, <code>frontend/</code> and the repo root has its own <code>package.json</code> and lock file.</td></tr>
 <tr><td>Redis (optional)</td><td>Only needed when you run more than one backend instance. See <code>REDIS_URL</code> below.</td></tr>
@@ -55,11 +55,11 @@ cd ..                   &amp;&amp; npm install   # repo root: Playwright e2e onl
 <tr><td><code>OPENOBSERVE_URL</code>, <code>OPENOBSERVE_ORG</code>, <code>OPENOBSERVE_USERNAME</code>, <code>OPENOBSERVE_PASSWORD</code></td><td>no</td><td>none</td><td>Log shipping. With no username/password, logs go to stdout only.</td></tr>
 <tr><td><code>ENCRYPT_API_RESPONSES</code>, <code>API_RESPONSE_SECRET</code></td><td>no</td><td>off</td><td>Encrypts API responses; the secret must then be set and match the frontend's <code>VITE_API_RESPONSE_SECRET</code>.</td></tr>
 <tr><td><code>UNSUBSCRIBE_SECRET</code>, <code>PUBLIC_API_URL</code></td><td>no</td><td>derived from <code>JWT_SECRET</code></td><td>Signs unsubscribe links in automated emails (never rotate once mail has gone out); <code>PUBLIC_API_URL</code> is for split deployments.</td></tr>
-<tr><td><code>METRICS_TOKEN</code>, <code>SHUTDOWN_TIMEOUT_MS</code>, <code>NOTIFY_TO</code>, <code>PUBLIC_BASE_URL</code></td><td>no</td><td>none</td><td>Read in code (<code>grep process.env backend</code>) but not in <code>.env.example</code>.</td></tr>
+<tr><td><code>METRICS_TOKEN</code>, <code>SHUTDOWN_TIMEOUT_MS</code>, <code>PUBLIC_BASE_URL</code></td><td>no</td><td>none</td><td>Read in code (<code>grep process.env backend</code>) and listed in <code>.env.example</code>. (<code>NOTIFY_TO</code> is no longer read.)</td></tr>
 <tr><td><code>BACKUP_DIR</code>, <code>BACKUP_RETENTION_COUNT</code>, <code>ALLOW_PRODUCTION_RESTORE</code></td><td>no</td><td><code>../backups</code> relative to <code>scripts/</code></td><td>Used by <code>db:backup</code> / <code>db:restore</code>.</td></tr>
 </tbody></table>
 
-<div class="warn"><p>Several keys in <code>.env.example</code> (for example <code>BCRYPT_ROUNDS</code>, <code>SESSION_TIMEOUT</code>, <code>PASSWORD_MIN_LENGTH</code>, <code>ENABLE_SWAGGER</code>, <code>SENTRY_DSN</code>) are not read by any file under <code>backend/</code> outside tests; the file itself says <code>SENTRY_DSN</code> is read by nothing. Treat the table above, which is derived from <code>process.env</code> usage, as the working set.</p></div>
+<div class="note"><p><code>backend/.env.example</code> was trimmed to variables that code under <code>backend/</code> actually reads. If you have an older copy, keys such as <code>BCRYPT_ROUNDS</code>, <code>SESSION_TIMEOUT</code> or <code>ENABLE_SWAGGER</code> do nothing.</p></div>
 
 <h2 id="frontend-env">Frontend environment</h2>
 <p>Copy <code>frontend/.env.example</code> to <code>frontend/.env.local</code>. All variables must start with <code>VITE_</code> and are baked into the bundle at build time, so none of them is a secret.</p>

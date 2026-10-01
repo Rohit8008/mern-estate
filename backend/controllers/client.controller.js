@@ -7,7 +7,9 @@ import { chooseAssignee } from '../tenancy/leadAssignment.js';
 import { runHook } from '../plugins/registry.js';
 import { streamCsv, joinNames } from '../utils/csvExport.js';
 import { emitEvent } from '../utils/webhooks.js';
+import { stopSequencesForClient } from '../jobs/sequences.js';
 import mongoose from 'mongoose';
+import { logger } from '../utils/logger.js';
 import { suppress, unsuppressAgentEntry } from '../utils/unsubscribe.js';
 import { parsePaging, parseSort } from '../utils/listQuery.js';
 
@@ -67,23 +69,27 @@ export const createClient = async (req, res, next) => {
     if (req.query.force !== 'true') {
       const duplicate = await findDuplicateClient(payload);
       if (duplicate) {
+        const shape = {
+          duplicate: {
+            _id: String(duplicate._id),
+            name: duplicate.name,
+            phone: duplicate.phone,
+            email: duplicate.email,
+            status: duplicate.status,
+            assignedTo: duplicate.assignedTo?.username || null,
+            createdAt: duplicate.createdAt,
+          },
+          canForce: true,
+        };
         return res.status(409).json({
           success: false,
           message: `${duplicate.name || 'Someone'} is already on file with that ${
             duplicate.email === String(payload.email || '').trim().toLowerCase() ? 'email' : 'phone number'
           }.`,
-          data: {
-            duplicate: {
-              _id: String(duplicate._id),
-              name: duplicate.name,
-              phone: duplicate.phone,
-              email: duplicate.email,
-              status: duplicate.status,
-              assignedTo: duplicate.assignedTo?.username || null,
-              createdAt: duplicate.createdAt,
-            },
-            canForce: true,
-          },
+          // `details` is where the frontend's error handling surfaces the
+          // choice; `data` is kept for older callers.
+          details: shape,
+          data: shape,
         });
       }
     }
@@ -242,10 +248,16 @@ export const updateClient = async (req, res, next) => {
     // Applied to the document rather than through findByIdAndUpdate, so the
     // score can be recomputed from the new values — budget, priority and
     // interested listings all feed it, and none of them used to trigger it.
-    existing.set(updates);
+    const { temperature: requestedTemperature, ...settable } = updates;
+    existing.set(requestedTemperature === 'auto' ? settable : updates);
 
-    // A person choosing a temperature pins it against later recalculation.
-    if (updates.temperature) existing.temperatureManual = true;
+    // A person choosing a temperature pins it against later recalculation;
+    // 'auto' is the way back - it clears the pin and lets the score decide.
+    if (updates.temperature === 'auto') {
+      existing.temperatureManual = false;
+    } else if (updates.temperature) {
+      existing.temperatureManual = true;
+    }
 
     existing.calculateScore();
 
@@ -308,6 +320,13 @@ export const deleteClient = async (req, res, next) => {
       action: 'client.deleted',
       message: `Deleted ${existing.name || 'client'}`,
     });
+
+    // Awaited, not left for the next tick: a deleted lead must not get another
+    // chase email in the meantime. The scheduler also stops enrollments whose
+    // lead is gone, but that is the backstop, not the promise.
+    await stopSequencesForClient(existing._id, 'lead deleted').catch((err) =>
+      logger.warn('Could not stop sequences for deleted lead', { clientId: String(id), message: err.message })
+    );
 
     emitEvent('lead.deleted', { id: String(id), name: existing.name });
 
@@ -394,6 +413,14 @@ export const bulkUpdateClients = async (req, res, next) => {
     // matches the scope and the audit line could not name what it touched.
     const affected = await Client.find(scope).select('_id name').lean();
     const result = await Client.updateMany(scope, update);
+
+    // Same promise as the single-lead paths: closing or removing a lead stops
+    // its sequences now, not at the next tick.
+    if (action === 'delete' || (action === 'status' && ['won', 'lost'].includes(value))) {
+      await Promise.all(
+        affected.map((c) => stopSequencesForClient(c._id, action === 'delete' ? 'lead deleted' : `lead ${value}`).catch(() => {}))
+      );
+    }
 
     logFromRequest(req, {
       entityType: 'client',

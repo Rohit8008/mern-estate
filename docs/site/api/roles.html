@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>roles — Real Vista Docs</title>
-<meta name="description" content="10 endpoints under /api/roles.">
+<meta name="description" content="11 endpoints under /api/roles.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/docs.css">
@@ -18,7 +18,7 @@
 <aside class="sidebar"><h4>Start</h4><a href="../index.html">Overview</a><a href="../getting-started.html">Getting started</a><h4>Product guide</h4><a href="../leads-and-pipeline.html">Leads and pipeline</a><a href="../listings-and-categories.html">Listings and categories</a><a href="../sharing-and-imports.html">Sharing and imports</a><a href="../team-roles-permissions.html">Team, roles and permissions</a><a href="../workspace-settings.html">Workspace settings</a><h4>Architecture</h4><a href="../architecture.html">System architecture</a><a href="../multi-tenancy.html">Multi-tenancy and platform admin</a><a href="../request-pipeline.html">Request pipeline and errors</a><a href="../background-jobs.html">Background jobs and automation</a><a href="../frontend.html">Frontend</a><h4>Security</h4><a href="../authentication.html">Authentication and sessions</a><a href="../security.html">Security and data protection</a><h4>API</h4><a href="../api-overview.html">API conventions</a><a href="../api/index.html" class="active">API reference</a><h4>Operations</h4><a href="../operations.html">Deploy and operate</a><a href="../mobile.html">Mobile app</a><a href="../faq.html">FAQ and troubleshooting</a></aside>
 <div class="main"><article>
 <h1>roles</h1>
-<p class="lede"><a href="index.html">API reference</a> › roles. 10 endpoints under /api/roles.</p>
+<p class="lede"><a href="index.html">API reference</a> › roles. 11 endpoints under /api/roles.</p>
 <h2 id="endpoints">Endpoints</h2><section class="endpoint" id="post-api-roles">
 <h3 id="post-api-rolessession"><span class="method post">POST</span>/api/roles<span class="badge session">Session</span></h3>
 
@@ -39,6 +39,13 @@
 
 
 
+</section>
+<section class="endpoint" id="post-api-roles-initialize-defaults">
+<h3 id="post-api-roles-initialize-defaultssession"><span class="method post">POST</span>/api/roles/initialize-defaults<span class="badge session">Session</span></h3>
+
+<p>Sends <code>X-CSRF-Token</code> (from <code>GET /api/auth/csrf</code>) because it changes data.</p>
+
+<h4>Body (JSON)</h4><p>Free-form object; the controller reads the fields it needs.</p>
 </section>
 <section class="endpoint" id="get-api-roles-initialize-defaults">
 <h3 id="get-api-roles-initialize-defaultssession"><span class="method get">GET</span>/api/roles/initialize-defaults<span class="badge session">Session</span></h3>
@@ -91,7 +98,7 @@
 </section>
 <div class="pager"><span></span><a href="../index.html"><small>Next</small>Real Vista documentation</a></div>
 <footer>Real Vista documentation. Source in <code>docs/site-src</code>; the API reference is generated from the code.</footer>
-</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#post-api-rolessession">POST /api/roles</a><a class="h3" href="#get-api-rolessession">GET /api/roles</a><a class="h3" href="#get-api-roles-permissionssession">GET /api/roles/permissions</a><a class="h3" href="#get-api-roles-initialize-defaultssession">GET /api/roles/initialize-defaults</a><a class="h3" href="#get-api-roles-id-session">GET /api/roles/{id}</a><a class="h3" href="#put-api-roles-id-session">PUT /api/roles/{id}</a><a class="h3" href="#delete-api-roles-id-session">DELETE /api/roles/{id}</a><a class="h3" href="#post-api-roles-assignsession">POST /api/roles/assign</a><a class="h3" href="#post-api-roles-removesession">POST /api/roles/remove</a><a class="h3" href="#get-api-roles-id-userssession">GET /api/roles/{id}/users</a></nav></div>
+</article><nav class="toc" aria-label="On this page"><b>On this page</b><a class="h2" href="#endpoints">Endpoints</a><a class="h3" href="#post-api-rolessession">POST /api/roles</a><a class="h3" href="#get-api-rolessession">GET /api/roles</a><a class="h3" href="#get-api-roles-permissionssession">GET /api/roles/permissions</a><a class="h3" href="#post-api-roles-initialize-defaultssession">POST /api/roles/initialize-defaults</a><a class="h3" href="#get-api-roles-initialize-defaultssession">GET /api/roles/initialize-defaults</a><a class="h3" href="#get-api-roles-id-session">GET /api/roles/{id}</a><a class="h3" href="#put-api-roles-id-session">PUT /api/roles/{id}</a><a class="h3" href="#delete-api-roles-id-session">DELETE /api/roles/{id}</a><a class="h3" href="#post-api-roles-assignsession">POST /api/roles/assign</a><a class="h3" href="#post-api-roles-removesession">POST /api/roles/remove</a><a class="h3" href="#get-api-roles-id-userssession">GET /api/roles/{id}/users</a></nav></div>
 <script src="../assets/docs.js"></script>
 </body>
 </html>

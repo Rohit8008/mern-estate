@@ -14,7 +14,21 @@
 set -e
 cd "$(dirname "$0")/.."
 
-FLUTTER="${FLUTTER:-$HOME/development/flutter-3.24.5/bin/flutter}"
+# Flutter: $FLUTTER, else `flutter` on PATH, else a known install location.
+# Must be 3.24.5 (see RELEASE.md).
+if [ -z "${FLUTTER:-}" ]; then
+  if command -v flutter >/dev/null 2>&1; then
+    FLUTTER="$(command -v flutter)"
+  else
+    for dir in "$HOME/sdks/flutter-3.24.5" "$HOME/development/flutter-3.24.5"; do
+      if [ -x "$dir/bin/flutter" ]; then FLUTTER="$dir/bin/flutter"; break; fi
+    done
+  fi
+fi
+if [ -z "${FLUTTER:-}" ] || [ ! -x "$FLUTTER" ]; then
+  echo "Flutter not found. Set FLUTTER=/path/to/flutter-3.24.5/bin/flutter, put flutter on PATH, or install it at ~/sdks/flutter-3.24.5 (or ~/development/flutter-3.24.5)." >&2
+  exit 1
+fi
 API_BASE_URL="${API_BASE_URL:-https://realvista.duckdns.org}"
 NOTES="${1:-}"
 

@@ -58,7 +58,11 @@ services:
   #
   # A dump is not a backup until it has been restored. Test one:
   #   docker compose run --rm backup \
-  #     sh -c 'mongorestore --uri="$MONGO_URI" --drop --dryRun /backups/<dir>'
+  #     sh -c 'mongorestore --uri="$MONGO_URI" --gzip --drop --dryRun /backups/<dir>'
+  #
+  # Dumps are gzipped and named backup-YYYY-MM-DDTHH-MM-SS, exactly what
+  # scripts/backup.js writes and scripts/restore.js (--gzip) reads, so
+  # `npm run db:restore -- --list` sees them when BACKUP_DIR points here.
   backup:
     image: mongo:7
     env_file:
@@ -73,9 +77,9 @@ services:
       - |
         set -eu
         while true; do
-          ts=$$(date -u +%Y%m%d-%H%M%S)
+          ts=$$(date -u +%Y-%m-%dT%H-%M-%S)
           echo "[backup] starting $$ts"
-          if mongodump --uri="$$MONGO_URI" --out="/backups/backup-$$ts" --quiet; then
+          if mongodump --uri="$$MONGO_URI" --out="/backups/backup-$$ts" --gzip --quiet; then
             echo "[backup] wrote /backups/backup-$$ts"
           else
             echo "[backup] FAILED for $$ts" >&2

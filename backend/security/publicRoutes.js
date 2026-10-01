@@ -59,12 +59,6 @@ export const PUBLIC_ROUTES = [
     path: '/api/auth/invite/:token',
     why: 'Completes account setup. The 32-byte token IS the credential, stored hashed, single-use and expiring. Rate limited.',
   },
-  {
-    method: 'GET',
-    path: '/api/auth/clear-rate-limit',
-    devOnly: true,
-    why: 'Only mounted when NODE_ENV=development — see routes/auth.route.js. Never exists in production, which the route-access test confirms by not finding it.',
-  },
 
   // ── Workspace identity, needed before sign-in ──────────────────────────────
   {

@@ -1,38 +1,8 @@
-import Tenant from '../models/tenant.model.js';
 import { notify, workspaceAdminIds } from '../utils/notify.js';
-import { runWithoutTenantScope } from '../tenancy/tenantContext.js';
 
 /**
  * Housekeeping that belongs to the workspace rather than to a person.
  */
-
-/** The first instant of the current UTC month. */
-function monthStart(now) {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-}
-
-/**
- * Roll the import counter into a new month.
- *
- * `limits.maxImportRowsPerMonth` was enforced against a counter nothing ever
- * reset, so "per month" was only ever "per lifetime". Runs inside each
- * workspace, so the write is scoped like any other.
- */
-export async function resetImportUsage(tenant, now = new Date()) {
-  const start = monthStart(now);
-  const current = tenant.importUsage?.periodStart;
-
-  if (current && current.getTime() === start.getTime()) return false;
-
-  await runWithoutTenantScope('resetting a workspace import counter by id', () =>
-    Tenant.updateOne(
-      { _id: tenant._id },
-      { $set: { 'importUsage.periodStart': start, 'importUsage.rows': 0 } }
-    )
-  );
-
-  return true;
-}
 
 /**
  * Warn admins before a trial lapses, and once when it has.

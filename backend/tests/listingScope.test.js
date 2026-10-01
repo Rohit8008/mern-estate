@@ -47,11 +47,10 @@ describe('listingScope', () => {
     expect(listingScope(SELLER)).toEqual({ userRef: 'sell1' });
   });
 
-  it('leaves the public catalogue unrestricted for buyers and anonymous visitors', () => {
-    // Field-level redaction, not row filtering, is what protects internal data
-    // on the public browse flow.
-    expect(listingScope(BUYER)).toEqual({});
-    expect(listingScope(undefined)).toEqual({});
+  it('matches nothing for buyers and anonymous visitors', () => {
+    // The property book is not public: an empty filter here meant "everything".
+    expect(listingScope(BUYER)).toEqual({ _id: { $in: [] } });
+    expect(listingScope(undefined)).toEqual({ _id: { $in: [] } });
   });
 
   it('never returns an empty filter for a staff role', () => {

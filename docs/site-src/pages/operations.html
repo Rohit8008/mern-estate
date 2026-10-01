@@ -112,14 +112,14 @@ description: Environment variables, Docker, Render and PM2 deployment, the web-s
 </ul>
 <h3 id="render">Render (<code>render.yaml</code>)</h3>
 <p>Two services: <code>mern-estate-api</code> (Node, <code>cd backend &amp;&amp; npm install</code>, <code>node index.js</code>, health check <code>/api/health/startup</code>, generated <code>JWT_SECRET</code> and <code>REFRESH_SECRET</code>, others set in the dashboard) and <code>mern-estate-client</code> (static site built from <code>frontend/</code>, with <code>/api/*</code> and <code>/uploads/*</code> rewrites to the API and an SPA rewrite to <code>/index.html</code>).</p>
-<div class="warn"><p>The blueprint does not set <code>DEFAULT_TENANT_SLUG</code> or <code>APP_DOMAIN</code>. In production the API exits at boot without one of them, so add it in the dashboard. It also lists <code>EMAIL_FROM</code>, which nothing reads (the mailer reads <code>SMTP_FROM</code>), and sets <code>FRONTEND_URL</code> from the client service's <code>host</code> property, which has no scheme, whereas CORS needs a full origin such as <code>https://...</code>. Check both after the first deploy.</p></div>
+<div class="note"><p>The blueprint declares <code>DEFAULT_TENANT_SLUG</code>, <code>APP_DOMAIN</code> and <code>FRONTEND_URL</code> as dashboard-set variables (<code>sync: false</code>): in production the API exits at boot without one of the first two, and <code>FRONTEND_URL</code> must be a full origin such as <code>https://...</code> (the client service's <code>host</code> property has no scheme, so it is no longer used). <code>MESSAGE_ENCRYPTION_KEY</code> is generated once by Render, and the sender is <code>SMTP_FROM</code>. Not verified by an actual Render deploy.</p></div>
 <h3 id="pm2">PM2 (<code>backend/ecosystem.config.js</code>)</h3>
 <ul>
-<li>App <code>mern-estate-api</code>, <code>script: index.js</code>, <code>instances: 'max'</code>, <code>exec_mode: 'cluster'</code>, <code>max_memory_restart: 1G</code>, <code>--max-old-space-size=1024</code>, <code>kill_timeout: 5000</code>, logs under <code>logs/pm2-*.log</code>. Scripts: <code>npm run pm2:start | pm2:stop | pm2:restart | pm2:logs | pm2:monit</code>.</li>
-<li><code>wait_ready: true</code> is set but the application never calls <code>process.send('ready')</code>, so PM2 falls back to its <code>listen_timeout</code> (10 s). Remove <code>wait_ready</code> or add the signal.</li>
-<li><code>kill_timeout: 5000</code> is shorter than the app's default <code>SHUTDOWN_TIMEOUT_MS</code> (10 s), so PM2 can SIGKILL a drain still in progress. Raise <code>kill_timeout</code> above the app timeout.</li>
-<li>The <code>deploy</code> block holds placeholders (<code>your-server.com</code>, <code>your-username</code>); fill them before using <code>pm2 deploy</code>.</li>
-<li><strong>Cluster mode and Socket.IO.</strong> Neither a Socket.IO adapter nor sticky sessions is configured (<code>backend/package.json</code> has no <code>@socket.io/redis-adapter</code>), and presence is an in-process map. With more than one process an event emitted in one process does not reach sockets held by another. Run one process per host for real-time features, or add an adapter first.</li>
+<li>App <code>mern-estate-api</code>, <code>script: index.js</code>, <code>instances: 1</code>, <code>exec_mode: 'fork'</code>, <code>max_memory_restart: 1G</code>, <code>--max-old-space-size=1024</code>, <code>kill_timeout: 15000</code>, logs under <code>logs/pm2-*.log</code>. Scripts: <code>npm run pm2:start | pm2:stop | pm2:restart | pm2:logs | pm2:monit</code>.</li>
+<li><code>wait_ready: true</code> is honoured: <code>index.js</code> calls <code>process.send?.('ready')</code> once the server is listening (<code>listen_timeout</code> 30 s).</li>
+<li><code>kill_timeout: 15000</code> is longer than the app's default <code>SHUTDOWN_TIMEOUT_MS</code> (10 s), so PM2 does not SIGKILL a drain in progress. Keep it above that value if you raise the timeout.</li>
+<li>The <code>deploy</code> block is marked as a template with placeholders (<code>your-server.com</code>, <code>your-username</code>); fill them before using <code>pm2 deploy</code>.</li>
+<li><strong>Single instance and Socket.IO.</strong> Neither a Socket.IO adapter nor sticky sessions is configured (<code>backend/package.json</code> has no <code>@socket.io/redis-adapter</code>), and presence is an in-process map, so the ecosystem file runs one process in fork mode. Before raising <code>instances</code> or running several hosts, add an adapter.</li>
 </ul>
 <h3 id="nginx">Web server expectations</h3>
 <p>There is no nginx file in the repository; the code defines what a front proxy must do:</p>
@@ -144,7 +144,7 @@ description: Environment variables, Docker, Render and PM2 deployment, the web-s
 <tr><td><code>GET /api/health/detailed</code></td><td>On-call</td><td>Database latency, heap use (warns at 90%), whether SMTP and SMS are configured. <code>503</code> when degraded.</td></tr>
 <tr><td><code>GET /api/health/metrics</code></td><td>Scraper</td><td>Memory, CPU, database state. Bearer <code>METRICS_TOKEN</code> when set.</td></tr>
 </tbody></table>
-<p>The reported <code>version</code> is read from the repository-root <code>VERSION</code> file (the same value for PM2, Docker and bare <code>node</code>). The Docker image copies only <code>backend/</code>, so inside the container the file is not found and the fallback is <code>npm_package_version</code> or <code>0.0.0-unknown</code>.</p>
+<p>The reported <code>version</code> is read from the repository-root <code>VERSION</code> file (the same value for PM2, Docker and bare <code>node</code>). The Dockerfile copies it to <code>/app/VERSION</code> (the resolver looks one level above <code>utils/</code>), so the container reports it too; without the file the fallback is <code>npm_package_version</code> or <code>0.0.0-unknown</code>.</p>
 <h3 id="shutdown">Graceful shutdown</h3>
 <p>One ordered sequence in <code>index.js</code>; never add another SIGTERM handler. On SIGTERM/SIGINT (and after an <code>unhandledRejection</code> or <code>uncaughtException</code>, which exit with code 1): readiness flips to 503; the server stops accepting connections and idle keep-alives are closed; in-flight requests finish; the scheduler and cache listener stop; Socket.IO, Redis and Mongo close; logs are flushed; the process exits. After <code>SHUTDOWN_TIMEOUT_MS</code> (default 10 s) remaining connections are force-closed. Set the orchestrator's kill timeout longer than that.</p>
 
@@ -156,7 +156,7 @@ description: Environment variables, Docker, Render and PM2 deployment, the web-s
 npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm</code></pre></li>
 <li><code>node scripts/purgeWorkspaceData.js --workspace &lt;slug&gt; --confirm</code> empties one workspace's working data but keeps the tenant, its admins and roles. It writes a JSON backup of what it is about to delete first and abandons the purge if that write fails; <code>--dry-run</code> and <code>--keep-users</code> exist.</li>
 </ul>
-<div class="warn"><p><strong>The compose backup is not restorable by <code>db:restore</code> as written.</strong> The compose service runs <code>mongodump</code> <em>without</em> <code>--gzip</code> and names directories <code>backup-YYYYMMDD-HHMMSS</code>, while <code>restore.js</code> always passes <code>--gzip</code> to <code>mongorestore</code>. Restore compose dumps with <code>mongorestore --drop</code> directly (the compose file shows a <code>--dryRun</code> check), or add <code>--gzip</code> to the compose command. A dump is not a backup until it has been restored once.</p></div>
+<div class="note"><p>The compose <code>backup</code> service runs <code>mongodump --gzip</code> and names directories <code>backup-YYYY-MM-DDTHH-MM-SS</code>, the same as <code>backup.js</code>, so <code>db:restore</code> can read them (point <code>BACKUP_DIR</code> at the volume). Dumps taken by an older compose file were not gzipped; restore those with <code>mongorestore --drop</code> directly. A dump is not a backup until it has been restored once.</p></div>
 
 <h2 id="migrations">Migrations and one-time scripts</h2>
 <p>All run from <code>backend/</code>. Scripts load models through <code>scripts/_bootstrap.js</code> (<code>const { models, inWorkspace, close } = await bootstrapScript()</code>), which registers the tenancy plugin first, takes <code>--workspace &lt;slug&gt;</code> and refuses to guess when several workspaces exist. Never import a model directly in a script: the records would have no <code>tenantId</code> and the app could never see them.</p>
@@ -190,7 +190,6 @@ npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm</code></pre></
 <tr><td><code>task-reminders</code>, <code>followup-reminders</code></td><td>every 5 min</td><td>Reminder notifications.</td></tr>
 <tr><td><code>webhook-delivery</code></td><td>every 1 min</td><td>Deliver queued webhooks.</td></tr>
 <tr><td><code>sequence-steps</code></td><td>every 15 min</td><td>Fire due email-sequence steps.</td></tr>
-<tr><td><code>import-usage-reset</code></td><td>daily 02:10</td><td>Roll the import-row meter.</td></tr>
 <tr><td><code>lead-rescore</code></td><td>daily 03:00</td><td>Recompute scores (recency decays). Never touches won/lost leads; keeps manual temperature.</td></tr>
 <tr><td><code>overdue-invoice-sweep</code></td><td>daily 07:30</td><td>Flags <code>billing.state</code>; never suspends a workspace.</td></tr>
 <tr><td><code>trial-expiry-sweep</code></td><td>daily 08:00</td><td>Trial notices.</td></tr>
@@ -201,7 +200,7 @@ npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm</code></pre></
 <ul>
 <li><strong>Without <code>REDIS_URL</code></strong>, the response cache and rate limiter are per process. Correct for one instance; on N instances caches diverge and every limit is N times looser. It is stated at boot rather than assumed.</li>
 <li><strong>With <code>REDIS_URL</code></strong>: limits use a Redis store (key prefix <code>rl:</code>) and cache invalidation publishes to every instance. Call <code>invalidateEverywhere({ prefix })</code> from <code>utils/cache.js</code>, not <code>cache.clearByPrefix()</code>. Redis being down degrades to per-process behaviour and does not fail readiness.</li>
-<li>Scheduled jobs need nothing extra (Mongo leases). Socket.IO needs an adapter or a single process (see PM2 above).</li>
+<li>Scheduled jobs need nothing extra (Mongo leases). Socket.IO needs an adapter, which is not installed; the PM2 config therefore runs a single process (see above).</li>
 <li>Uploads are on local disk (<code>uploads/</code>), so multiple hosts need a shared volume.</li>
 </ul>
 
@@ -244,9 +243,9 @@ npm run db:restore -- --from backup-2026-09-18T02-00-00 --confirm</code></pre></
 
 <h2 id="stale">Stale files and known drift</h2>
 <ul>
-<li><code>DEPLOYMENT.md</code> (Render guide), <code>AUDIT.md</code> and similar top-level documents are marked superseded by this site but still describe Firebase storage and Sentry, both removed from the product. <code>COMMANDS.md</code> still tells you to set <code>VITE_FIREBASE_*</code> keys that nothing reads. Uploads are Cloudinary; observability is OpenObserve.</li>
-<li><code>backend/.env.example</code> lists variables no code reads (<code>BCRYPT_ROUNDS</code>, <code>SESSION_TIMEOUT</code>, <code>PASSWORD_MIN_LENGTH</code>, <code>ENABLE_SECURITY_HEADERS</code>, <code>ENABLE_CORS</code>, <code>SMTP_SECURE</code>, <code>EMAIL_FROM</code>, <code>MAX_FILE_SIZE</code>, <code>UPLOAD_PATH</code>, <code>MAX_FILES_PER_UPLOAD</code>, <code>ENABLE_FILE_LOGGING</code>, <code>ENABLE_AUDIT_LOGGING</code>, <code>ENABLE_REDIS</code>, <code>ENABLE_METRICS</code>, <code>API_VERSION</code>, <code>API_BASE_URL</code>, <code>ENABLE_SWAGGER</code>), and its sample rate limits (<code>60000</code> ms window, 100 / 10 / 20) differ from the code defaults (15 min, 1000 / 20 / 30). Setting them to the example values changes behaviour; setting the unused ones does nothing.</li>
-<li><code>SMTP_FROM</code> is the sender variable the code reads; the example, blueprint and Deployment guide say <code>EMAIL_FROM</code>.</li>
+<li><code>DEPLOYMENT.md</code> (Render guide), <code>AUDIT.md</code> and similar top-level documents are marked superseded by this site but still describe Firebase storage and Sentry, both removed from the product. <code>COMMANDS.md</code> and <code>DOCKER.md</code> were corrected to Cloudinary. Uploads are Cloudinary; observability is OpenObserve.</li>
+<li><code>backend/.env.example</code> was cleaned to the variables the code reads, with the code's default rate limits (15 min window, 1000 / 20 / 30).</li>
+<li><code>SMTP_FROM</code> is the sender variable the code reads; the example and blueprint now say so, but the Deployment guide still says <code>EMAIL_FROM</code>.</li>
 </ul>
 
 <h2 id="drop-user-ttl-index">One-time: drop the old user TTL index</h2>

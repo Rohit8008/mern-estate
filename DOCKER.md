@@ -19,7 +19,7 @@ docker compose up --build
                   └─ /*            →  React SPA (static)
 ```
 
-MongoDB stays on Atlas (external). Uploaded files are persisted via a named Docker volume.
+MongoDB is external (Atlas or your own server). Uploaded files are persisted via a named Docker volume.
 
 ---
 
@@ -27,28 +27,23 @@ MongoDB stays on Atlas (external). Uploaded files are persisted via a named Dock
 
 - Docker Desktop (Mac/Windows) or Docker Engine + Compose plugin (Linux)
 - Your existing `backend/.env` with real values for `MONGO_URI`, `JWT_SECRET`, `REFRESH_SECRET`
-- Firebase project credentials (baked into the frontend bundle at build time)
+- Cloudinary cloud name and an unsigned upload preset (baked into the frontend bundle at build time)
 
 ---
 
 ## First-time setup
 
-### 1. Create the root `.env` for Firebase build args
+### 1. Create the root `.env` for the frontend build args
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in your Firebase values (same ones in `frontend/.env.local`):
+Fill in your Cloudinary values (same ones as in `frontend/.env.local`):
 
 ```env
-VITE_FIREBASE_API_KEY=AIza...
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123...
-VITE_FIREBASE_MEASUREMENT_ID=G-...
+VITE_CLOUDINARY_CLOUD_NAME=your-cloud
+VITE_CLOUDINARY_UPLOAD_PRESET=your-unsigned-preset
 ```
 
 These are read by `docker-compose.yml` as build args and baked into the Vite bundle. They are **not** secret — they're already in the browser bundle.
@@ -71,7 +66,7 @@ OPENOBSERVE_URL=http://192.168.1.x:5080
 > **Why not `localhost:5080` inside Docker?**  
 > Inside a container, `localhost` is the container itself. `host.docker.internal` is a special hostname that resolves to the host machine on Mac and Windows. On Linux, use your machine's IP instead.
 
-Everything else in `backend/.env` (Mongo URI, JWT secrets, Firebase API key, SMTP, etc.) works as-is.
+Everything else in `backend/.env` (Mongo URI, JWT secrets, `MESSAGE_ENCRYPTION_KEY`, `DEFAULT_TENANT_SLUG` or `APP_DOMAIN`, SMTP, etc.) works as-is.
 
 ---
 
@@ -104,11 +99,11 @@ App is available at **http://localhost:3000**.
 |--------|--------------|
 | Backend source code | `docker compose up --build` |
 | Frontend source code | `docker compose up --build` |
-| Firebase env vars (`.env`) | `docker compose build` then `up` |
+| `VITE_*` build args (root `.env`) | `docker compose build` then `up` |
 | `backend/.env` secrets | `docker compose up` (no rebuild — env_file is read at runtime) |
 | `package.json` dependencies | `docker compose build --no-cache` |
 
-Firebase vars are **baked in at build time** — changing `.env` requires a rebuild.  
+`VITE_*` vars are **baked in at build time** — changing `.env` requires a rebuild.  
 Backend secrets are **injected at runtime** via `env_file` — changing `backend/.env` only needs a restart.
 
 ---
@@ -118,6 +113,7 @@ Backend secrets are **injected at runtime** via `env_file` — changing `backend
 | Volume | Mount path | Purpose |
 |--------|-----------|---------|
 | `uploads_data` | `/app/uploads` | User-uploaded files (persists across restarts) |
+| `backups_data` | `/backups` (backup service) | Nightly gzipped `mongodump`s named `backup-YYYY-MM-DDTHH-MM-SS`, the format `npm run db:restore` reads |
 
 To back up uploads:
 
@@ -182,8 +178,8 @@ docker exec -it $(docker compose ps -q app) node scripts/makeAdmin.js
 **`ECONNREFUSED` connecting to OpenObserve**  
 On Linux, `host.docker.internal` is not automatically available. Set `OPENOBSERVE_URL` to your machine's LAN IP in `backend/.env`, or run OpenObserve as a compose service (see above).
 
-**Firebase image uploads fail**  
-The VITE_FIREBASE_* vars were either missing from `.env` at build time or have wrong values. Check the browser console for the Firebase error, then rebuild:
+**Image uploads fail**  
+The `VITE_CLOUDINARY_*` vars were either missing from the root `.env` at build time or have wrong values. Check the browser console for the Cloudinary error, then rebuild:
 ```bash
 docker compose build --no-cache && docker compose up
 ```

@@ -63,6 +63,19 @@ export default function TemperatureControl({ value, manual, score, onChange, rea
         {manual
           ? 'Set by hand — the nightly score will not change it.'
           : `Following the lead score (${score ?? 0}).`}
+        {manual && (
+          <>
+            {' '}
+            <button
+              type='button'
+              onClick={() => onChange('auto')}
+              className='text-brand-600 hover:text-brand-700 underline underline-offset-2'
+            >
+              Auto
+            </button>
+            {' '}(follow the score again)
+          </>
+        )}
       </p>
     </div>
   );

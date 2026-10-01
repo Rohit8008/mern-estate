@@ -1,5 +1,5 @@
 import express from 'express';
-import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, changePassword, getSavedViews, putSavedViews, getDashboardWidgets, putDashboardWidgets, me, myPermissions, getLegalAcceptance, acceptLegal, searchUsers, adminSetEmployeePassword} from '../controllers/user.controller.js';
+import { deleteUser, adminDeleteUser, adminToggleUserStatus, test, updateUser,  getUserListings, getUser, setUserRole, listUsers, createEmployee, getUserPublic, requestPasswordReset, resetPasswordWithOtp, changePassword, getSavedViews, putSavedViews, getDashboardWidgets, putDashboardWidgets, me, myPermissions, getLegalAcceptance, acceptLegal, searchUsers, adminSetEmployeePassword, resendEmployeeInvite} from '../controllers/user.controller.js';
 import SecurityLog from '../models/securityLog.model.js';
 import { requireAdmin, verifyToken } from '../utils/verifyUser.js';
 import { validateBody, userRouteValidation, legalValidation } from '../middleware/validation.js';
@@ -53,6 +53,7 @@ router.delete('/delete/:id', verifyToken, deleteUser)
 router.delete('/admin/delete/:id', verifyToken, requireAdmin, adminDeleteUser)
 router.post('/admin/toggle-status/:id', verifyToken, requireAdmin, validateBody(userRouteValidation.adminToggleUserStatus), adminToggleUserStatus)
 router.post('/admin/set-employee-password/:id', verifyToken, requireAdmin, validateBody(userRouteValidation.adminSetEmployeePassword), adminSetEmployeePassword)
+router.post('/employee/:id/invite', verifyToken, requireAdmin, validateBody(userRouteValidation.resendEmployeeInvite), resendEmployeeInvite)
 router.get('/search', verifyToken, searchUsers)
 router.get('/listings/:id', verifyToken, getUserListings)
 router.get('/:id', verifyToken, getUser)

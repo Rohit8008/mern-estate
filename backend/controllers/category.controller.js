@@ -5,6 +5,7 @@ import { config } from '../config/environment.js';
 import { getTenantScopedCache, invalidateEverywhere } from '../utils/cache.js';
 import { validateCategoryFields, describeFieldErrors } from '../utils/categoryFields.js';
 import { logActivity } from '../utils/activity.js';
+import { CATEGORY_NAME_MAX } from '../middleware/validation.js';
 
 const CACHE_TTL_MS = (Number(config?.cache?.ttl) > 0 ? Number(config.cache.ttl) : 300) * 1000;
 const MAX_CACHE_SIZE = Number(config?.cache?.maxSize) > 0 ? Number(config.cache.maxSize) : 100;
@@ -174,7 +175,7 @@ export const renameCategory = async (req, res, next) => {
   try {
     const name = String(req.body?.name ?? '').trim();
     if (!name) return next(errorHandler(400, 'Give the category a name.'));
-    if (name.length > 50) return next(errorHandler(400, 'Category name cannot exceed 50 characters.'));
+    if (name.length > CATEGORY_NAME_MAX) return next(errorHandler(400, `Category name cannot exceed ${CATEGORY_NAME_MAX} characters.`));
 
     const category = await Category.findById(req.params.id);
     if (!category || category.isDeleted) return next(new NotFoundError('Category not found.'));

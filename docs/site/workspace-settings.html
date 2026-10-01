@@ -55,7 +55,7 @@
 <tr><td><code>sidebarText</code> (Sidebar text)</td><td>Menu labels</td><td><code>#e2e8f0</code></td></tr>
 </tbody></table>
 <p>Colours are six-digit hex values (the field turns red otherwise). The panel has a live preview and a contrast check, and <em>Reset to default</em>. The tokens are written onto <code>:root</code> as CSS variables, so Tailwind classes such as <code>bg-workspace</code> follow the agency's colour with one build serving every workspace. Other fields: agency name (up to 120), product name (shown instead of "Real Vista", up to 60), logo URL, square mark URL (collapsed menu and favicon), support email. Support phone and a login background URL exist in the schema but this panel has no field for them. The product name, logo and support contacts also dress share links and the invite page.</p>
-<div class="note"><p>Schema defaults versus the app fallback differ: the backend branding schema defaults <code>tokens.brand</code> to <code>#4f46e5</code> and <code>tokens.accent</code> to <code>#0ea5e9</code>, while the frontend fallback (used before config loads) is <code>#2b6faa</code>. A workspace that has never saved its colours stores whichever default the schema applied at creation, so its primary colour can differ from the product's petrol blue until an admin saves branding.</p></div>
+<div class="note"><p>The backend branding schema now defaults <code>tokens.brand</code> to <code>#2b6faa</code>, matching the frontend fallback used before config loads. Workspaces created before that change may still store the old default (<code>#4f46e5</code>, stock indigo) until an admin saves branding.</p></div>
 
 <h3 id="locale">Units and formats</h3>
 <table>
@@ -130,7 +130,7 @@
 <li>Toggling a rule keeps its saved options. Option drafts are sent only when you press that rule's Save.</li>
 <li>Hooks defined: <code>listing.beforeSave</code>, <code>listing.afterSave</code>, <code>listing.beforeImport</code>, <code>deal.beforeStageChange</code>, <code>lead.onCreate</code>.</li>
 </ul>
-<div class="warn"><p><strong>Where hooks actually fire today:</strong> <code>listing.beforeSave</code> and <code>listing.afterSave</code> run when a property is <em>created</em> through the API; editing an existing property does not run them. <code>listing.beforeImport</code> is declared and one rule is registered for it, but no import code calls it, so <code>skipRowsWithoutPrice</code> has no effect. <code>deal.beforeStageChange</code> and <code>lead.onCreate</code> do run where described.</p></div>
+<div class="warn"><p><strong>Where hooks actually fire today:</strong> <code>listing.beforeSave</code> and <code>listing.afterSave</code> run when a property is created and when it is edited (on an edit a rule sees the stored record with the changes applied, and a veto answers 400). <code>listing.beforeImport</code> runs for each import row, so <code>skipRowsWithoutPrice</code> skips priceless rows. <code>deal.beforeStageChange</code> and <code>lead.onCreate</code> do run where described.</p></div>
 
 <h2 id="pipeline">Sales pipeline</h2>
 <p>Settings, Sales, "Sales pipeline" (<code>GET</code> / <code>PATCH /api/tenant/pipeline</code>, admin only). The stage vocabulary is fixed in <code>backend/tenancy/stageCatalogue.js</code>; the workspace chooses which stages to use, their order, their label (up to 60 characters) and their colour. Nine stages are on by default; three legacy stages are offered as "Older stage".</p>

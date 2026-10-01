@@ -16,6 +16,13 @@ import {
 
 const router = express.Router();
 
+/** Marks the old state-changing GET as deprecated for any client that looks. */
+function deprecatedInitializeDefaults(req, res, next) {
+  res.set('Deprecation', 'true');
+  res.set('Link', '</api/roles/initialize-defaults>; rel="successor-version"; title="use POST"');
+  next();
+}
+
 // All routes require authentication and admin privileges
 router.use(verifyToken);
 router.use(requireAdmin);
@@ -24,7 +31,10 @@ router.use(requireAdmin);
 router.post('/', validateBody(roleValidation.create), createRole);
 router.get('/', getRoles);
 router.get('/permissions', getAvailablePermissions);
-router.get('/initialize-defaults', initializeDefaultRoles);
+// Creates the built-in roles that are missing. It writes, so POST is the real
+// method; the GET stays only for older clients and is deprecated.
+router.post('/initialize-defaults', validateBody(roleValidation.empty), initializeDefaultRoles);
+router.get('/initialize-defaults', deprecatedInitializeDefaults, initializeDefaultRoles);
 router.get('/:id', getRole);
 router.put('/:id', validateBody(roleValidation.update), updateRole);
 router.delete('/:id', deleteRole);

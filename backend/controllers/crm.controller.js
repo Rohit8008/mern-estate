@@ -18,6 +18,8 @@ import { emitEvent } from '../utils/webhooks.js';
 import { runHook } from '../plugins/registry.js';
 import { stopSequencesForClient } from '../jobs/sequences.js';
 import { parsePaging } from '../utils/listQuery.js';
+import { getTenant } from '../tenancy/tenantContext.js';
+import { resolveStagesForTenant } from '../tenancy/stageCatalogue.js';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -29,6 +31,20 @@ const findActiveClient = (id) =>
 const assertCanAccessClient = (client, user) => {
   if (user.role !== 'admin' && String(client.assignedTo) !== user.id) {
     throw new AppError('Not authorized to access this client', 403);
+  }
+};
+
+/**
+ * A stage must be one this workspace's pipeline actually uses. The Joi schema
+ * only knows the catalogue, so without this a deal could be moved onto a stage
+ * the agency had switched off — one its own board has no column for.
+ */
+const assertStageEnabled = (stage) => {
+  const tenant = getTenant();
+  if (!tenant) return; // no workspace context (scripts) -> catalogue check only
+  const enabled = resolveStagesForTenant(tenant).map((s) => s.id);
+  if (!enabled.includes(stage)) {
+    throw new AppError(`"${stage}" is not a stage in this workspace's pipeline`, 400);
   }
 };
 
@@ -48,6 +64,7 @@ export const addDeal = async (req, res, next) => {
     }
 
     assertCanAccessClient(client, req.user);
+    assertStageEnabled(req.body.stage || 'new_lead');
 
     const deal = {
       listingId: req.body.listingId,
@@ -86,6 +103,14 @@ export const addDeal = async (req, res, next) => {
         createdBy: req.user.id,
       });
     } catch (_) {}
+
+    emitEvent('deal.created', {
+      clientId: String(client._id),
+      clientName: client.name,
+      dealId: String(client.deals[client.deals.length - 1]._id),
+      stage: deal.stage,
+      value: deal.value || 0,
+    });
 
     logger.info('Deal added', { clientId: id, dealId: client.deals[client.deals.length - 1]._id });
 
@@ -190,6 +215,10 @@ export const updateDealStage = async (req, res, next) => {
     if (!deal) {
       return next(new NotFoundError('Deal not found'));
     }
+
+    // Moving a deal that is already on a now-disabled stage to the same stage
+    // is not a change; anything else must land on an enabled stage.
+    if (stage !== deal.stage) assertStageEnabled(stage);
 
     const prevStage = deal.stage;
 

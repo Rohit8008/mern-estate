@@ -392,6 +392,19 @@ export const updateListing = asyncHandler(async (req, res, next) => {
   // are one atomic operation: if anyone saved in between, nothing matches and
   // the caller is told, rather than their edit silently replacing the other
   // one. Without it (the mobile app, older clients) last write wins, as before.
+  // Workspace rules run on edits as well as creates. They see the listing as it
+  // would be after the edit (stored values overlaid with the changes), so a rule
+  // such as "needs a price to publish" is judged on the whole record, not on
+  // whichever fields this request happened to send. Only values a rule actually
+  // changed are written back.
+  const merged = { ...listing.toObject(), ...updates };
+  const ruled = await runHook('listing.beforeSave', { listing: merged, user: req.user, created: false });
+  if (ruled.listing && ruled.listing !== merged) {
+    for (const [key, value] of Object.entries(ruled.listing)) {
+      if (JSON.stringify(value) !== JSON.stringify(merged[key])) updates[key] = value;
+    }
+  }
+
   const filter = { _id: req.params.id };
   if (expectedUpdatedAt) filter.updatedAt = expectedUpdatedAt;
   const updatedListing = await Listing.findOneAndUpdate(filter, updates, {
@@ -408,6 +421,16 @@ export const updateListing = asyncHandler(async (req, res, next) => {
     throw new VersionConflictError({ currentUpdatedAt: current.updatedAt });
   }
   const category = updatedListing?.category || listing?.category;
+
+  await runHook('listing.afterSave', { listing: updatedListing, user: req.user, created: false });
+
+  emitEvent('listing.updated', {
+    id: String(updatedListing._id),
+    name: updatedListing.name,
+    category: updatedListing.category,
+    city: updatedListing.city,
+    price: updatedListing.regularPrice,
+  });
 
   await emitListingUpdate('updated', updatedListing, category, req.user?.id);
   clearSearchCache();
@@ -685,6 +708,15 @@ export const restoreListing = asyncHandler(async (req, res, next) => {
   const listing = await Listing.findById(req.params.id);
   if (!listing) {
     throw new NotFoundError('Listing not found');
+  }
+
+  // A restored listing counts against the plan again. Without this, delete +
+  // restore was a way past maxListings. Restoring one already live is a no-op
+  // and must not be refused.
+  if (listing.isDeleted) {
+    await assertWithinLimit('maxListings', () =>
+      Listing.countDocuments({ isDeleted: { $ne: true } })
+    );
   }
 
   listing.isDeleted = false;

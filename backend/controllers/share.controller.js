@@ -24,6 +24,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { runWithTenant, runWithoutTenantScope } from '../tenancy/tenantContext.js';
 import { listingScope } from '../middleware/permissions.js';
+import { emitEvent } from '../utils/webhooks.js';
 
 /** 30 days, unless the agent says otherwise. */
 const DEFAULT_EXPIRY_DAYS = 30;
@@ -75,6 +76,12 @@ function forRecipient(listing, { showPrice }) {
  * way around the permissions that apply everywhere else.
  */
 export const createShare = asyncHandler(async (req, res) => {
+  // Only staff send properties outside the agency. A buyer or seller account
+  // has no business minting public links to stock, whatever it can see.
+  if (!['admin', 'employee'].includes(req.user?.role)) {
+    throw new AuthorizationError('Only agency staff can create share links.');
+  }
+
   const ids = Array.isArray(req.body?.listingIds) ? req.body.listingIds : [];
   if (!ids.length) throw new ValidationError('Choose at least one property to share.', 'listingIds');
   if (ids.length > 50) throw new ValidationError('A link can carry at most 50 properties.', 'listingIds');
@@ -256,6 +263,18 @@ export const openShare = asyncHandler(async (req, res) => {
   )
     .setOptions({ tenantScope: false })
     .catch(() => {});
+
+  // Tell the workspace's webhooks. Fire and forget: emitEvent only queues rows
+  // and never throws, and a failure here must not cost the visitor the page.
+  // No token, passcode or recipient contact goes out - the token is a credential.
+  runWithTenant({ tenantId }, () =>
+    emitEvent('share.viewed', {
+      shareId: String(share._id),
+      label: share.label,
+      listingCount: share.listingIds.length,
+      viewCount: (share.viewCount || 0) + 1,
+    })
+  ).catch(() => {});
 
   // The workspace's own name and colours, so the page looks like the agency's
   // rather than like a generic listing site.

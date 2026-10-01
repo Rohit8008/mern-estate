@@ -139,9 +139,9 @@ POST /api/user/password/reset         { "email": "owner@acme.in", "otp": "123456
 <li>The code is 6 digits, stored as a SHA-256 hash, valid for 10 minutes. After 5 wrong guesses (<code>MAX_OTP_ATTEMPTS</code>) it is destroyed.</li>
 <li>Every failure on the reset call is the same <code>400</code>: "That code is not valid or has expired."</li>
 <li>Only outside production, and only when no SMTP is configured, the request response includes <code>devOtp</code> so the flow can be tested without a mail server. Never for an address with no account.</li>
-<li>A signed-in user changes their own password with <span class="method post">POST</span> <code>/api/user/password/change</code> (<code>currentPassword</code>, <code>newPassword</code>; the new one must differ). The response says "Please sign in again."</li>
+<li>A signed-in user changes their own password with <span class="method post">POST</span> <code>/api/user/password/change</code> (<code>currentPassword</code>, <code>newPassword</code>; the new one must differ). Every other device is signed out; the calling device stays signed in on a fresh token pair.</li>
 </ul>
-<div class="warn"><p><strong>Known limit.</strong> Neither the reset nor the change clears the user's stored refresh tokens, and <code>/refresh</code> does not compare against <code>passwordChangedAt</code>. An existing refresh cookie can therefore still mint a new access token after a password change. Use <code>signout-all</code> (an admin setting an employee's password through <code>/api/user/admin/set-employee-password/:id</code> does clear them) when a credential may be compromised.</p></div>
+<div class="note"><p>The reset, the self-change and an admin setting an employee's password (<code>/api/user/admin/set-employee-password/:id</code>) all clear the user's stored refresh tokens, and <code>/refresh</code> rejects a refresh token issued before <code>passwordChangedAt</code> (401, and the stored list is emptied). Use <code>signout-all</code> to end sessions without changing the password.</p></div>
 
 <h2 id="invites">Invitations</h2>
 <p>An invitation is how anyone first gets into a workspace, including a brand-new agency's first admin. The recipient has no session and does not know "workspace" is a concept, so the token carries it.</p>

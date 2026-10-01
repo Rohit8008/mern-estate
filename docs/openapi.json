@@ -2657,6 +2657,31 @@
           "500": {
             "$ref": "#/components/responses/Error"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "enum": [
+                          ""
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -3338,6 +3363,72 @@
                 "required": [
                   "newPassword"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/employee/{id}/invite": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "post_user_employee_id_invite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "From GET /api/auth/csrf."
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Most endpoints answer `{ success: true, data }`."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
               }
             }
           }
@@ -4313,6 +4404,25 @@
           "500": {
             "$ref": "#/components/responses/Error"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "acceptTerms": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -4396,34 +4506,6 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "$ref": "#/components/responses/Error"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api/auth/clear-rate-limit": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "operationId": "get_auth_clear_rate_limit",
-        "description": "Public: Only mounted when NODE_ENV=development — see routes/auth.route.js. Never exists in production, which the route-access test confirms by not finding it.",
-        "parameters": [],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Success. Most endpoints answer `{ success: true, data }`."
-          },
-          "400": {
             "$ref": "#/components/responses/Error"
           },
           "404": {
@@ -6329,7 +6411,7 @@
                   "name": {
                     "type": "string",
                     "minLength": 2,
-                    "maxLength": 50
+                    "maxLength": 100
                   },
                   "fields": {
                     "type": "array",
@@ -6413,7 +6495,7 @@
                   "name": {
                     "type": "string",
                     "minLength": 2,
-                    "maxLength": 50
+                    "maxLength": 100
                   }
                 },
                 "required": [
@@ -8763,6 +8845,47 @@
           "500": {
             "$ref": "#/components/responses/Error"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    "maxItems": 500
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "delete",
+                      "status",
+                      "assign"
+                    ]
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      {
+                        "enum": [
+                          ""
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -9156,6 +9279,30 @@
           "500": {
             "$ref": "#/components/responses/Error"
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "buyerRequirementId": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]+$"
+                  },
+                  "propertyId": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]+$"
+                  }
+                },
+                "required": [
+                  "buyerRequirementId",
+                  "propertyId"
+                ]
+              }
+            }
+          }
         }
       },
       "delete": {
@@ -9255,6 +9402,25 @@
           },
           "500": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "maxLength": 30
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
           }
         }
       }
@@ -9417,6 +9583,62 @@
       }
     },
     "/api/roles/initialize-defaults": {
+      "post": {
+        "tags": [
+          "roles"
+        ],
+        "operationId": "post_roles_initialize_defaults",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "From GET /api/auth/csrf."
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Most endpoints answer `{ success: true, data }`."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "roles"
@@ -10450,7 +10672,8 @@
                     "enum": [
                       "hot",
                       "warm",
-                      "cold"
+                      "cold",
+                      "auto"
                     ]
                   },
                   "notes": {
@@ -10833,6 +11056,17 @@
           },
           "500": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
           }
         }
       },

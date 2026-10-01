@@ -45,7 +45,7 @@ describe('catalogue integrity', () => {
       [
         'adminPanel', 'analytics', 'buyers', 'calendar', 'categories', 'clients',
         'createListing', 'dashboard', 'import', 'owners', 'pipeline', 'properties',
-        'reports', 'settings', 'tasks', 'transactions',
+        'reports', 'settings', 'tasks', 'transactions', 'auditLog',
       ].sort()
     );
   });

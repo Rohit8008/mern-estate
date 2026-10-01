@@ -30,7 +30,14 @@ class ApiClient {
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 20),
-      headers: const {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        // Tells the server this client cannot decode `_enc` (encrypted) API
+        // responses, so it sends plaintext even when ENCRYPT_API_RESPONSES is
+        // on. Skipped on web: a custom header there triggers a CORS preflight
+        // the API does not allow, and the web build is a browser that can decode.
+        if (!kIsWeb) 'X-Client': 'mobile',
+      },
     ));
 
     if (kIsWeb) {

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { permissionSchemaFields } from '../utils/permissionCatalogue.js';
+import { DEFAULT_ROLES } from '../utils/defaultRoles.js';
 
 const roleSchema = new mongoose.Schema(
   {
@@ -59,88 +60,10 @@ roleSchema.methods.getActivePermissions = function() {
   );
 };
 
-// Static method to get default roles
-roleSchema.statics.getDefaultRoles = function() {
-  return [
-    {
-      name: 'Super Admin',
-      description: 'Full system access with all permissions',
-      isSystem: true,
-      permissions: {
-        createUser: true,
-        updateUser: true,
-        deleteUser: true,
-        viewUsers: true,
-        createClient: true,
-        updateClient: true,
-        deleteClient: true,
-        viewClients: true,
-        createOwner: true,
-        updateOwner: true,
-        deleteOwner: true,
-        viewOwners: true,
-        toggleOwnerActive: true,
-        createListing: true,
-        updateListing: true,
-        deleteListing: true,
-        viewListings: true,
-        publishListing: true,
-        createCategory: true,
-        updateCategory: true,
-        deleteCategory: true,
-        viewCategories: true,
-        viewMessages: true,
-        sendMessages: true,
-        deleteMessages: true,
-        createBuyerRequirement: true,
-        updateBuyerRequirement: true,
-        deleteBuyerRequirement: true,
-        viewBuyerRequirements: true,
-        uploadFiles: true,
-        viewAnalytics: true,
-        exportData: true,
-        manageRoles: true,
-        systemSettings: true,
-        viewLogs: true
-      }
-    },
-    {
-      name: 'Employee',
-      description: 'Basic employee with limited permissions',
-      isSystem: true,
-      permissions: {
-        viewClients: true,
-        viewOwners: true,
-        createListing: true,
-        viewListings: true,
-        viewCategories: true,
-        viewMessages: true,
-        sendMessages: true,
-        viewBuyerRequirements: true,
-        uploadFiles: true
-      }
-    },
-    {
-      name: 'Listing Manager',
-      description: 'Can manage listings and owners',
-      isSystem: true,
-      permissions: {
-        createOwner: true,
-        updateOwner: true,
-        viewOwners: true,
-        toggleOwnerActive: true,
-        createListing: true,
-        updateListing: true,
-        viewListings: true,
-        publishListing: true,
-        viewCategories: true,
-        viewMessages: true,
-        sendMessages: true,
-        viewBuyerRequirements: true,
-        uploadFiles: true
-      }
-    }
-  ];
+// The built-in roles. One definition, shared with scripts/seedRoles.js.
+roleSchema.statics.getDefaultRoles = function getDefaultRoles() {
+  // Copies, so a caller cannot mutate the shared (frozen) definition.
+  return DEFAULT_ROLES.map((role) => ({ ...role, permissions: { ...role.permissions } }));
 };
 
 

@@ -24,6 +24,7 @@ import {
 } from '../utils/error.js';
 import { logger } from '../utils/logger.js';
 import { logActivity } from '../utils/activity.js';
+import { runHook } from '../plugins/registry.js';
 import { clearSearchCache } from './listing.controller.js';
 import { assertWithinLimit, reserveImportRows } from '../tenancy/limits.js';
 import {
@@ -141,26 +142,41 @@ async function analyzeRows({ rows, mapping, category, startRow }) {
   // database — a sheet that lists the same plot twice is a common mistake.
   const seenInFile = new Map();
 
-  return built.map((entry) => {
+  const analyzed = [];
+  for (const entry of built) {
     const key = dedupeKeyFor(entry.values, category.slug);
     const dbMatch = entry.errors.length ? null : existing.get(key) || null;
     const fileMatch = seenInFile.has(key) ? seenInFile.get(key) : null;
     if (!entry.errors.length) seenInFile.set(key, entry.rowNumber);
 
     let status = 'ready';
+    let skipReason = null;
     if (entry.errors.length) status = 'error';
     else if (fileMatch) status = 'duplicate_in_file';
     else if (dbMatch) status = 'duplicate';
 
-    return {
+    // Workspace rules (listing.beforeImport) may ask for a row to be left out,
+    // e.g. skipRowsWithoutPrice. A veto refuses the whole request as a 400; a
+    // rule that merely skips shows up per row, in preview and commit alike.
+    if (status === 'ready' || status === 'duplicate') {
+      const ruled = await runHook('listing.beforeImport', { row: entry.values, rowNumber: entry.rowNumber });
+      if (ruled?.skip) {
+        status = 'skipped_by_rule';
+        skipReason = ruled.skipReason || 'Skipped by a workspace rule.';
+      }
+    }
+
+    analyzed.push({
       ...entry,
       status,
+      skipReason,
       dedupeKey: key,
       existingId: dbMatch?.id ? String(dbMatch.id) : null,
       existingName: dbMatch?.name || null,
       duplicateOfRow: fileMatch,
-    };
-  });
+    });
+  }
+  return analyzed;
 }
 
 function summarize(analyzed) {
@@ -170,6 +186,7 @@ function summarize(analyzed) {
     duplicates: analyzed.filter((r) => r.status === 'duplicate').length,
     duplicatesInFile: analyzed.filter((r) => r.status === 'duplicate_in_file').length,
     errors: analyzed.filter((r) => r.status === 'error').length,
+    skippedByRule: analyzed.filter((r) => r.status === 'skipped_by_rule').length,
     warnings: analyzed.reduce((n, r) => n + r.warnings.length, 0),
   };
 }
@@ -288,6 +305,7 @@ export const previewImport = asyncHandler(async (req, res) => {
         existingId: r.existingId,
         existingName: r.existingName,
         duplicateOfRow: r.duplicateOfRow,
+        skipReason: r.skipReason || null,
       })),
       elapsedMs: Date.now() - started,
     },
@@ -355,6 +373,11 @@ export const commitImport = asyncHandler(async (req, res) => {
 
     if (entry.status === 'error') {
       outcomes.push({ ...base, outcome: 'skipped', reason: entry.errors.map((e) => e.message).join(' ') });
+      return;
+    }
+
+    if (entry.status === 'skipped_by_rule') {
+      outcomes.push({ ...base, outcome: 'skipped', reason: entry.skipReason });
       return;
     }
 

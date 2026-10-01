@@ -5,6 +5,7 @@ import { listingScope } from '../middleware/permissions.js';
 import { streamCsv } from '../utils/csvExport.js';
 import { parsePaging, parseSort } from '../utils/listQuery.js';
 import mongoose from 'mongoose';
+import { emitEvent } from '../utils/webhooks.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Admins and employees manage buyer requirements org-wide; everyone else (e.g. a buyer's own
@@ -18,6 +19,13 @@ export const createBuyerRequirement = async (req, res, next) => {
     const buyerRequirement = await BuyerRequirement.create({
       ...req.body,
       createdBy: req.user.id,
+    });
+
+    emitEvent('buyer.created', {
+      id: String(buyerRequirement._id),
+      propertyTypeInterest: buyerRequirement.propertyTypeInterest,
+      preferredCity: buyerRequirement.preferredCity,
+      status: buyerRequirement.status,
     });
 
     res.status(201).json(buyerRequirement);

@@ -22,11 +22,22 @@ services:
         generateValue: true
       - key: REFRESH_SECRET
         generateValue: true
+      # Required at boot. Generated once on first deploy and then kept by Render
+      # (existing encrypted messages and SMTP passwords depend on it: never rotate).
+      - key: MESSAGE_ENCRYPTION_KEY
+        generateValue: true
+      # Scheme-qualified public origin of the client, e.g.
+      # https://mern-estate-client.onrender.com. Not wired with fromService:
+      # its `host` property has no scheme, and CORS compares origins exactly.
       - key: FRONTEND_URL
-        fromService:
-          name: mern-estate-client
-          type: web
-          property: host
+        sync: false
+      # Production refuses to boot without one of these two (config/environment.js).
+      # Single-workspace deployment: the slug of the workspace to serve.
+      - key: DEFAULT_TENANT_SLUG
+        sync: false
+      # Subdomain routing (acme.<APP_DOMAIN>); optional if DEFAULT_TENANT_SLUG is set.
+      - key: APP_DOMAIN
+        sync: false
       # Optional - Set these in Render dashboard
       #
       # Observability goes to OpenObserve; utils/sentry.js is a no-op stub kept
@@ -49,15 +60,13 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
-      - key: EMAIL_FROM
+      - key: SMTP_FROM
         sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
       - key: TWILIO_FROM_NUMBER
-        sync: false
-      - key: MESSAGE_ENCRYPTION_KEY
         sync: false
     autoDeploy: true
 

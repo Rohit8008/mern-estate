@@ -3,8 +3,13 @@ module.exports = {
     {
       name: 'mern-estate-api',
       script: 'index.js',
-      instances: 'max', // Use all CPU cores
-      exec_mode: 'cluster',
+      // ONE instance, fork mode. Socket.IO presence and rooms live in process
+      // memory and no cluster adapter (@socket.io/redis-adapter) is installed,
+      // so cluster mode would split connected users across workers that cannot
+      // see each other. To scale out, add the adapter first (see socket.js),
+      // then raise instances and switch exec_mode to 'cluster'.
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'development',
         PORT: 3000,
@@ -32,9 +37,12 @@ module.exports = {
       max_memory_restart: '1G',
       
       // Advanced features
-      kill_timeout: 5000,
+      // Must exceed SHUTDOWN_TIMEOUT_MS (default 10000, see index.js) or PM2
+      // SIGKILLs the process mid-drain.
+      kill_timeout: 15000,
+      // index.js sends process.send('ready') once the server is listening.
       wait_ready: true,
-      listen_timeout: 10000,
+      listen_timeout: 30000,
       
       // Health monitoring
       health_check_grace_period: 3000,
@@ -55,7 +63,9 @@ module.exports = {
     }
   ],
   
-  // Deployment configuration
+  // TEMPLATE ONLY: placeholder host and repo, not used by our deploy (the
+  // server builds in place, see DEPLOYMENT.md). Replace every value before
+  // running `pm2 deploy`, or delete this block.
   deploy: {
     production: {
       user: 'deploy',

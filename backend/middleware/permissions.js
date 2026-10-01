@@ -113,8 +113,12 @@ export const listingScope = (user, { scope = 'all' } = {}) => {
     ],
   });
 
-  // Anonymous / buyer traffic sees the public catalogue only.
-  if (!user || user.role === 'buyer') return {};
+  // Anonymous and buyer traffic sees nothing. The public catalogue was removed
+  // (the property book is not public), but this used to return {} — "no
+  // restriction" — so a signed-in buyer account could still page through every
+  // listing. A filter that matches no document is the safe floor; sharing
+  // outside the agency goes through /api/share instead.
+  if (!user || user.role === 'buyer') return { _id: { $in: [] } };
 
   if (user.role === 'admin') return scope === 'assigned' ? mine() : {};
 

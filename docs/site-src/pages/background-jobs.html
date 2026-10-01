@@ -35,7 +35,6 @@ description: The lease-based scheduler and its jobs, lead scoring, follow-up seq
 <tr><td><code>followup-reminders</code></td><td>every 5 min</td><td>5 min</td><td>For client follow-ups that are due, not completed and not yet reminded: marks <code>reminderSent</code>, notifies the lead's <code>assignedTo</code> with <code>followup.due</code>. Up to 500 clients per workspace per run.</td></tr>
 <tr><td><code>webhook-delivery</code></td><td>every 60 s</td><td>2 min</td><td><code>deliverDueWebhooks()</code>: up to 50 due deliveries per workspace per run. See <a href="#webhooks">webhooks</a>.</td></tr>
 <tr><td><code>sequence-steps</code></td><td>every 15 min</td><td>10 min</td><td><code>runDueSequenceSteps()</code>: up to 100 due enrollments per workspace per run. See <a href="#sequences">sequences</a>.</td></tr>
-<tr><td><code>import-usage-reset</code></td><td>daily 02:10 UTC</td><td>5 min</td><td>Rolls the legacy <code>tenant.importUsage</code> counter into a new UTC month (all workspaces, including suspended: <code>serviceableOnly: false</code>). See the note under <a href="#imports">imports</a>.</td></tr>
 <tr><td><code>lead-rescore</code></td><td>daily 03:00 UTC</td><td>15 min</td><td>Recomputes score and temperature of open leads. See <a href="#scoring">lead scoring</a>.</td></tr>
 <tr><td><code>overdue-invoice-sweep</code></td><td>daily 07:30 UTC</td><td>5 min</td><td>Not per workspace (invoices are vendor-side): sets <code>billing.state = 'past_due'</code> on workspaces with an <code>issued</code> invoice past its due date. Only flags; never suspends. See <a href="multi-tenancy.html#billing">Billing</a>.</td></tr>
 <tr><td><code>trial-expiry-sweep</code></td><td>daily 08:00 UTC</td><td>5 min</td><td>Warns workspace admins with a <code>system.alert</code> notification when a trial has 7, 3 or 1 days left, and once it has lapsed (while within a day of the end). Includes workspaces that just became unserviceable.</td></tr>
@@ -58,12 +57,12 @@ description: The lease-based scheduler and its jobs, lead scoring, follow-up seq
 <tr><td><code>recency</code></td><td>days since last touch (<code>lastContactAt</code>, else <code>updatedAt</code>, else <code>createdAt</code>): 7 days or fewer 20, 30 or fewer 12, 90 or fewer 5, otherwise 0</td></tr>
 </tbody>
 </table>
-<p><code>temperature</code> follows the score (60 and up <code>hot</code>, 30 and up <code>warm</code>, else <code>cold</code>) <strong>unless someone set it by hand</strong>, which sets <code>temperatureManual</code> and pins it. Every recomputation honours the pin, including the nightly job.</p>
+<p><code>temperature</code> follows the score (60 and up <code>hot</code>, 30 and up <code>warm</code>, else <code>cold</code>) <strong>unless someone set it by hand</strong>, which sets <code>temperatureManual</code> and pins it. Every recomputation honours the pin, including the nightly job. Sending <code>temperature: "auto"</code> on a client update clears the pin and lets the score decide again (the Temperature control shows an "Auto" link while a value is pinned).</p>
 <p>It runs on lead creation, on a client update, on a deal stage change, when communications or follow-ups change (several <code>crm.controller.js</code> paths), in lead import, and nightly. The recency factor is why: the score <em>decays</em>, and nothing else would recompute it on a timer, so a lead that was busy last month would keep the score it earned while warm.</p>
 <ul>
 <li>The nightly job (<code>jobs/leadScoring.js</code>) skips <strong>won and lost</strong> leads: their score is history, and rewriting it would quietly change what past reports say.</li>
 <li>It writes only <code>score</code>, <code>scoreFactors</code> and <code>temperature</code> through <code>updateOne</code>, skipping validation and middleware so an unrelated, already-invalid field cannot make it fail.</li>
-<li>It loads at most 1000 open leads per workspace per night (<code>batchSize = 1000</code>, with no sort or cursor). A workspace with more open leads than that is not fully rescored by a single run.</li>
+<li>It walks every open lead in keyset pages of 1000 by <code>_id</code> (<code>batchSize</code>), so a workspace with more open leads than one page is fully rescored. Its write uses <code>timestamps: false</code>: recency falls back to <code>updatedAt</code> when there is no <code>lastContactAt</code>, so bumping it would make every lead look freshly touched.</li>
 </ul>
 
 <h2 id="sequences">Follow-up sequences</h2>
@@ -71,7 +70,7 @@ description: The lease-based scheduler and its jobs, lead scoring, follow-up seq
 <p><code>jobs/sequences.js</code> fires due steps per workspace. The rules it exists to guarantee:</p>
 <ul>
 <li><strong>A step fires exactly once.</strong> The enrollment advances (<code>currentStep</code>, <code>nextStepAt</code>, a history entry) in the same pass, so a retry or a second instance cannot send the same email twice.</li>
-<li><strong>It never chases a closed lead.</strong> Continuing to chase someone who already bought or said no is the worst thing an automation like this can do. <code>stopSequencesForClient()</code> is called synchronously from <code>updateDealStage</code> when a deal becomes <code>closed_won</code> or <code>closed_lost</code>, so the gap between "marked won" and "sent another chase email" does not exist. As a backstop, every due enrollment is re-checked when the job reaches it and stopped if the lead is won, lost or deleted (<code>stoppedReason</code> such as "lead marked won" or "lead removed"), if the sequence was deleted, or if the sequence is paused (<code>isActive = false</code>). Deleting a lead does not call <code>stopSequencesForClient</code>; that case is caught by the job's own check at the next tick.</li>
+<li><strong>It never chases a closed lead.</strong> Continuing to chase someone who already bought or said no is the worst thing an automation like this can do. <code>stopSequencesForClient()</code> is called synchronously from <code>updateDealStage</code> when a deal becomes <code>closed_won</code> or <code>closed_lost</code>, so the gap between "marked won" and "sent another chase email" does not exist. As a backstop, every due enrollment is re-checked when the job reaches it and stopped if the lead is won, lost or deleted (<code>stoppedReason</code> such as "lead marked won" or "lead removed"), if the sequence was deleted, or if the sequence is paused (<code>isActive = false</code>). Deleting a lead (singly or in bulk), and bulk-moving leads to won or lost, call it too; the job's own check is only the backstop.</li>
 <li><strong>A failing step does not wedge the enrollment.</strong> It advances anyway with <code>failed: &lt;message&gt;</code> recorded in the history, so one bad address cannot freeze an enrollment.</li>
 <li><strong>An unsubscribed address gets no email.</strong> The workspace suppression list (<code>EmailSuppression</code>) is checked at send time, every time. Every sequence email ends with who is writing and a working unsubscribe link, and carries <code>List-Unsubscribe</code> and <code>List-Unsubscribe-Post: List-Unsubscribe=One-Click</code> headers (RFC 2369 and RFC 8058, required by Gmail and Yahoo from bulk senders). Task and reminder steps still fire since they go to the agent, not the lead.</li>
 </ul>
@@ -108,7 +107,7 @@ description: The lease-based scheduler and its jobs, lead scoring, follow-up seq
 <tr><td><code>share.viewed</code></td><td>Someone opened a share link</td><td>No <code>emitEvent</code> call found</td></tr>
 </tbody>
 </table>
-<div class="note"><p>The last six events are in the catalogue (and so selectable in the UI) but no controller calls <code>emitEvent</code> for them yet; a subscriber to only those will never receive a delivery. The payload is <code>{ event, sentAt, data }</code> where <code>data</code> is the small object each call site passes (for example <code>{ id, name, phone, source }</code> for a lead).</p></div>
+<div class="note"><p>Every event in the catalogue has a call site: <code>deal.created</code> (adding a deal), <code>listing.updated</code>, <code>task.created</code>, <code>task.completed</code> (status becomes done), <code>buyer.created</code> and <code>share.viewed</code> (a recipient opens a share link; fire and forget, carrying the share id, label and counts but never the token or the recipient's contact details). The payload is <code>{ event, sentAt, data }</code> where <code>data</code> is the small object each call site passes (for example <code>{ id, name, phone, source }</code> for a lead).</p></div>
 
 <h3 id="webhook-signing">Delivery and signing</h3>
 <p>Each attempt is a <code>POST</code> with a 10 s timeout, <code>redirect: 'error'</code> (a redirect to somewhere else is not a delivery), and these headers:</p>
@@ -151,7 +150,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers
 <tr><td><code>listing.afterSave</code></td><td><code>createListing</code>, after the write, with <code>created: true</code>.</td></tr>
 <tr><td><code>deal.beforeStageChange</code></td><td><code>updateDealStage</code> in <code>crm.controller.js</code>, with <code>fromStage</code>, <code>toStage</code>, <code>notes</code>.</td></tr>
 <tr><td><code>lead.onCreate</code></td><td><code>client.controller.js</code> create.</td></tr>
-<tr><td><code>listing.beforeImport</code></td><td>Declared and has a built-in rule, but no call to <code>runHook('listing.beforeImport', ...)</code> exists in the listing import controller, so such a rule currently does nothing.</td></tr>
+<tr><td><code>listing.beforeImport</code></td><td>Run for each row of the listing import (preview and commit alike) once it has been built and is otherwise importable. A rule returning <code>{ skip: true, skipReason }</code> leaves that row out and the reason appears in the per-row result.</td></tr>
 </tbody>
 </table>
 
@@ -165,7 +164,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers
 <tr><td><code>requireNoteOnLoss</code></td><td>deal.beforeStageChange</td><td>Vetoes moving a deal to <code>closed_lost</code> without a note.</td></tr>
 <tr><td><code>blockSkippingToWon</code></td><td>deal.beforeStageChange</td><td>Vetoes jumping from <code>new_lead</code> or <code>contacted</code> straight to <code>closed_won</code>.</td></tr>
 <tr><td><code>tagLeadBySource</code></td><td>lead.onCreate</td><td>Sets the lead's priority from <code>config.priorityBySource</code>, keyed by lowercased source.</td></tr>
-<tr><td><code>skipRowsWithoutPrice</code></td><td>listing.beforeImport</td><td>Marks an imported row with no price as skipped (see the hook note above).</td></tr>
+<tr><td><code>skipRowsWithoutPrice</code></td><td>listing.beforeImport</td><td>Skips an imported row with no price, reason "no price" (see the hook note above).</td></tr>
 </tbody>
 </table>
 
@@ -189,7 +188,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers
 <li><strong><code>insertMany</code> skips <code>pre('save')</code>,</strong> so the lead importer sets derived fields (phone key, score via <code>calculateScore()</code>, assignment per the workspace's rule) itself. <code>tests/leadImportCommit.test.js</code> compares an imported lead with a saved one so the two cannot drift. Each created lead also emits <code>lead.created</code>.</li>
 <li>If a column header or field aliases a native listing column, update <code>NATIVE_FIELD_ALIASES</code> in <strong>both</strong> <code>frontend/src/utils/nativeFieldAliases.js</code> and <code>backend/utils/importMapping.js</code>.</li>
 </ul>
-<div class="note"><p>The <code>import-usage-reset</code> job rolls <code>tenant.importUsage</code>, the older counter on the tenant document. The enforced meter is the <code>ImportUsage</code> collection keyed by <code>{tenantId, month}</code>, where the month in the workspace's own timezone is part of the key, so it resets by changing key rather than by a job. The job is therefore housekeeping for the legacy field.</p></div>
+<div class="note"><p>The enforced import meter is the <code>ImportUsage</code> collection keyed by <code>{tenantId, month}</code>, where the month in the workspace's own timezone is part of the key, so it resets by changing key rather than by a job. The old <code>import-usage-reset</code> job, which only rolled the legacy <code>tenant.importUsage</code> field, has been removed; that field is deprecated and no longer read or written.</p></div>
 
 <h2 id="data-rights">Data rights</h2>
 <p><code>controllers/dataRights.controller.js</code> and <code>routes/dataRights.route.js</code> (<code>/api/data-rights</code>) implement access and erasure. Before this there was no export, no erasure, and a "Delete Account" button that only deactivated while telling the user it removed everything.</p>

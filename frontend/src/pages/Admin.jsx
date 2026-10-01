@@ -43,6 +43,11 @@ export default function Admin() {
   const [categories, setCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
+  // The link from the last invite the admin created or re-sent. Shown once, so
+  // it can be passed on by hand when email is down; it is a credential and is
+  // never stored.
+  const [inviteLink, setInviteLink] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
   const [newUser, setNewUser] = useState({ username: '', email: '', phone: '', assignedCategories: [] });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [logs, setLogs] = useState([]);
@@ -244,6 +249,21 @@ export default function Admin() {
     const roleToSave = managingUser.role === 'admin' ? 'admin' : manageRole;
     await updateUser(managingUser._id, roleToSave, manageCategories);
     setManagingUser((prev) => (prev ? { ...prev, role: roleToSave, assignedCategories: manageCategories } : prev));
+  };
+
+  const resendInvite = async (user) => {
+    if (!isAdmin) return;
+    try {
+      setResendingId(user._id);
+      const data = await apiClient.post(`/user/employee/${user._id}/invite`, {});
+      setInviteLink({ email: user.email, url: data.inviteUrl, sent: Boolean(data.sent), expiresAt: data.expiresAt });
+      showSuccess(data.sent ? `Invitation sent to ${user.email}` : 'New invite link created');
+    } catch (error) {
+      console.error(error);
+      showError('Failed to resend invite');
+    } finally {
+      setResendingId(null);
+    }
   };
 
   const saveManagedPassword = async () => {
@@ -983,10 +1003,23 @@ export default function Admin() {
                   </div>
                 </div>
                 <div className='mt-4'>
-                  <button disabled={creating} onClick={async () => { try { setCreating(true); const data = await apiClient.post('/user/employee', newUser); if (data && data._id) { setUsers((prev) => [data, ...prev]); setNewUser({ username: '', email: '', phone: '', assignedCategories: [] }); } } catch (error) { console.error(error); } finally { setCreating(false); } }} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>
+                  <button disabled={creating} onClick={async () => { try { setCreating(true); const data = await apiClient.post('/user/employee', newUser); if (data && data._id) { setUsers((prev) => [{ ...data, invitePending: true }, ...prev]); setInviteLink({ email: data.email, url: data.inviteUrl, sent: Boolean(data.inviteSent), expiresAt: data.inviteExpiresAt }); setNewUser({ username: '', email: '', phone: '', assignedCategories: [] }); } } catch (error) { console.error(error); } finally { setCreating(false); } }} className='px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium disabled:opacity-50 transition-colors'>
                     {creating ? 'Creating...' : 'Create Employee'}
                   </button>
                 </div>
+                {inviteLink && inviteLink.url && (
+                  <div className='mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3' role='status'>
+                    <p className='text-sm text-slate-800'>
+                      {inviteLink.sent ? `Invitation emailed to ${inviteLink.email}.` : `The email to ${inviteLink.email} could not be sent.`}{' '}
+                      Share this link with them if needed. It works once and expires {inviteLink.expiresAt ? `on ${new Date(inviteLink.expiresAt).toLocaleDateString()}` : 'in 7 days'}; sending a new invite cancels it.
+                    </p>
+                    <div className='mt-2 flex gap-2'>
+                      <input readOnly aria-label='Invite link' className='flex-1 min-w-0 border border-slate-200 bg-white px-3 py-2 rounded-lg text-xs' value={inviteLink.url} onFocus={(e) => e.target.select()} />
+                      <button type='button' onClick={async () => { try { await navigator.clipboard.writeText(inviteLink.url); showSuccess('Invite link copied'); } catch { showError('Copy failed - select the link and copy it manually'); } }} className='px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700'>Copy</button>
+                      <button type='button' onClick={() => setInviteLink(null)} className='px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700'>Dismiss</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
@@ -1043,6 +1076,11 @@ export default function Admin() {
                           <td className='px-3 py-3'>
                             <div className='flex items-center gap-2'>
                               <button onClick={() => openUserManageModal(user)} className='px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors'>{t('admin.manage')}</button>
+                              {user.role === 'employee' && user.invitePending && isAdmin && (
+                                <button disabled={resendingId === user._id} onClick={() => resendInvite(user)} className='px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50 transition-colors'>
+                                  {resendingId === user._id ? 'Sending...' : 'Resend invite'}
+                                </button>
+                              )}
                               {user.role !== 'admin' && (
                                 <button onClick={() => toggleUserStatus(user._id, user.status || 'active')} className={`px-2 py-1 text-xs rounded-lg border transition-colors ${(user.status || 'active') === 'active' ? 'border-orange-200 text-orange-600 hover:bg-orange-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>
                                   {(user.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}

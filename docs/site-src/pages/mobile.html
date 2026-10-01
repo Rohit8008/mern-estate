@@ -48,7 +48,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)</code></pre>
 <li><strong>Terms gate.</strong> After sign-in the app asks the backend whether the current Terms version still needs accepting. If so, the legal-acceptance screen is the only reachable route until accepted (this mirrors <code>LEGAL_VERSION</code>). If the check itself fails or times out (8 seconds) the user is let in and asked next launch: failing open beats locking someone out of their CRM over a status call.</li>
 <li><strong>Socket.IO.</strong> The server authenticates the handshake from the <code>access_token</code> in the <code>Cookie</code> header. <code>socket_io_client</code> does not share Dio's jar, so on native <code>socketCookieHeaders()</code> copies the jar's cookies into an explicit header; on web the browser attaches them itself. The app listens to <code>message:new</code>, <code>conversations:update</code>, <code>listing:update</code>, <code>owners:changed</code> and <code>notification:new</code>.</li>
 </ol>
-<div class="note"><p>The mobile client has <strong>no decoder for encrypted responses</strong>. If the server runs with <code>ENCRYPT_API_RESPONSES=true</code>, every mobile call returns an <code>{ _enc, iv, data }</code> envelope the app cannot parse. Keep it off for a deployment that serves the mobile app.</p></div>
+<div class="note"><p>The mobile client has <strong>no decoder for encrypted responses</strong>, so on native platforms it sends <code>X-Client: mobile</code> and <code>middleware/encryptResponse.js</code> answers those requests in plaintext even when <code>ENCRYPT_API_RESPONSES=true</code>. This needs an app build that includes the header; older builds still break against an encrypting server.</p></div>
 <p>Because the app is cookie-only, a client of this API written elsewhere needs a cookie jar and the CSRF header, not a bearer token.</p>
 
 <h2 id="api-url">Pointing the app at a backend</h2>
@@ -107,7 +107,7 @@ flutter pub run flutter_native_splash:create</code></pre>
 <ol>
 <li>Requires <code>android/key.properties</code>; refuses to run without it, because releases must be signed with the release key.</li>
 <li>Reads <code>version: 1.0.4+5</code> from <code>pubspec.yaml</code>: the part before <code>+</code> is the version, after it the build number.</li>
-<li>Builds with <code>$FLUTTER</code> (default <code>~/development/flutter-3.24.5/bin/flutter</code>; override with <code>FLUTTER=</code>, e.g. a 3.24.5 checkout elsewhere) and <code>--dart-define=API_BASE_URL</code> (default <code>https://realvista.duckdns.org</code>; override with <code>API_BASE_URL=</code>). Then restores the committed <code>pubspec.lock</code> with <code>git checkout</code>, since 3.24.5 re-resolves it.</li>
+<li>Builds with <code>$FLUTTER</code> (the script uses <code>FLUTTER=</code> if set, else <code>flutter</code> on <code>PATH</code>, else <code>~/sdks/flutter-3.24.5</code> or <code>~/development/flutter-3.24.5</code>, and exits with an error if none exist) and <code>--dart-define=API_BASE_URL</code> (default <code>https://realvista.duckdns.org</code>; override with <code>API_BASE_URL=</code>). Then restores the committed <code>pubspec.lock</code> with <code>git checkout</code>, since 3.24.5 re-resolves it.</li>
 <li>Names the file <code>realvista-&lt;version&gt;.apk</code> and writes <code>latest.json</code>:
 <pre><code>{ "version": "1.0.4", "build": 5, "file": "realvista-1.0.4.apk",
   "sizeBytes": 0, "sha256": "...", "releasedAt": "2026-10-01T00:00:00Z", "notes": "..." }</code></pre>

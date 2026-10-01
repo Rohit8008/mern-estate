@@ -420,11 +420,19 @@ export default function ClientDetail() {
 
   const setTemperature = async (temperature) => {
     const previous = client.temperature;
-    setClient((c) => ({ ...c, temperature, temperatureManual: true }));
+    const previousManual = client.temperatureManual;
+    const auto = temperature === 'auto';
+    // 'auto' hands the value back to the score; the server answers with the
+    // recomputed temperature, so wait for it rather than guessing.
+    if (!auto) setClient((c) => ({ ...c, temperature, temperatureManual: true }));
     try {
-      await apiClient.patch(`/clients/${client._id}`, { temperature });
+      const res = await apiClient.patch(`/clients/${client._id}`, { temperature });
+      if (auto) {
+        const saved = res?.data || res;
+        setClient((c) => ({ ...c, temperature: saved?.temperature || c.temperature, temperatureManual: false }));
+      }
     } catch (err) {
-      setClient((c) => ({ ...c, temperature: previous }));
+      setClient((c) => ({ ...c, temperature: previous, temperatureManual: previousManual }));
       showError(err?.message || 'Could not save that');
     }
   };

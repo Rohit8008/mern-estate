@@ -321,10 +321,32 @@ export const refreshToken = asyncHandler(async (req, res, next) => {
   const homeTenantId = String(decoded.tid || req.homeTenantId || req.tenantId);
   const inHome = (fn) => runWithTenant({ tenantId: homeTenantId }, fn);
 
-  const user = await inHome(() => User.findById(decoded.id).select('+refreshTokens'));
+  const user = await inHome(() => User.findById(decoded.id).select('+refreshTokens +passwordChangedAt'));
 
   if (!user) {
     throw new AuthenticationError('User not found');
+  }
+
+  // A refresh token minted before the password last changed is dead, whatever
+  // is left in the stored list. Password change / reset / admin reset also empty
+  // that list; this is the belt to those braces (a token that slipped in during
+  // the change, or a list written by an older build). Same comparison as
+  // verifyToken uses for access tokens.
+  if (user.passwordChangedAt && decoded.iat) {
+    const changedAt = Math.floor(user.passwordChangedAt.getTime() / 1000);
+    if (decoded.iat < changedAt) {
+      await inHome(() => User.findByIdAndUpdate(user._id, { $set: { refreshTokens: [] } }));
+      inHomeTenant(req, () => logSecurityEvent({
+        email: user.email,
+        method: 'refresh_token',
+        status: 'blocked',
+        reason: 'Refresh token issued before the password was changed',
+        ip: clientIP,
+        userAgent: userAgent,
+        path: req.originalUrl,
+      }));
+      throw new AuthenticationError('Password was changed. Please log in again.');
+    }
   }
 
   // SEC-008: Compare against the stored hash, not the raw token.
@@ -395,7 +417,7 @@ export const refreshToken = asyncHandler(async (req, res, next) => {
     path: req.originalUrl,
   }));
 
-  const { password: pass, refreshTokens: userRefreshTokens, ...rest } = user.toObject();
+  const { password: pass, refreshTokens: userRefreshTokens, passwordChangedAt: _pca, ...rest } = user.toObject();
   issueCsrfToken(res);
   res
     .cookie('access_token', accessToken, cookieOptions)

@@ -32,6 +32,10 @@ const bootstrap = async () => {
     setupSocket();
     await startServer();
 
+    // Tells PM2 (wait_ready in ecosystem.config.js) the server is listening.
+    // process.send exists only under a PM2/cluster/fork parent; a no-op otherwise.
+    process.send?.('ready');
+
     // After the server is up: a job that runs before the process can serve
     // traffic has nothing to gain and a failure there should not stop boot.
     startJobs();

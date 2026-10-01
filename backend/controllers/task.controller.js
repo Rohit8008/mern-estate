@@ -4,6 +4,7 @@ import Listing from '../models/listing.model.js';
 import { errorHandler } from '../utils/error.js';
 import { logActivity } from '../utils/activity.js';
 import { notify } from '../utils/notify.js';
+import { emitEvent } from '../utils/webhooks.js';
 import { parsePaging, parseSort } from '../utils/listQuery.js';
 
 function canAccessUser(user, targetUserId) {
@@ -83,6 +84,16 @@ export const createTask = async (req, res, next) => {
         : (doc.description || ''),
       link: '/tasks',
       entity: { type: 'task', id: doc._id },
+    });
+
+    emitEvent('task.created', {
+      id: String(doc._id),
+      title: doc.title,
+      priority: doc.priority,
+      status: doc.status,
+      dueAt: doc.dueAt,
+      assignedTo: String(doc.assignedTo),
+      relatedKind: doc.related?.kind || 'none',
     });
 
     res.status(201).json({ success: true, data: doc });
@@ -202,6 +213,16 @@ export const updateTask = async (req, res, next) => {
           createdBy: req.user.id,
         });
       } catch (_) {}
+    }
+
+    if (updates.status === 'done' && prev.status !== 'done') {
+      emitEvent('task.completed', {
+        id: String(updated._id),
+        title: updated.title,
+        assignedTo: String(updated.assignedTo),
+        relatedKind: updated.related?.kind || 'none',
+        completedBy: String(req.user.id),
+      });
     }
 
     res.json({ success: true, data: updated });

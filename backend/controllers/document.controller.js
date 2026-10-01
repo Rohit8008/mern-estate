@@ -268,9 +268,10 @@ export const getCategoryDocTypes = async (req, res) => {
 /**
  * A colony's published paperwork and photographs.
  *
- * Reachable without signing in, because that is the point: a buyer checking
- * whether a project is RERA registered should not need an account, and colony
- * photographs are marketing.
+ * Requires a session (the route sits behind verifyToken): the property book is
+ * not public, and anything for someone outside the agency goes through a share
+ * link. The name is historical - "public" here means "published by an admin"
+ * (`isPublic`), not "reachable anonymously".
  *
  * Only documents an admin has explicitly published are returned, and only the
  * fields needed to show them — never `uploadedBy`, which names a member of

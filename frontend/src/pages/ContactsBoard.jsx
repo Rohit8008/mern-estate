@@ -90,6 +90,9 @@ export default function ContactsBoard() {
   const [editConflict, setEditConflict] = useState(null); // { currentUpdatedAt, payload }
   const [savingEdit, setSavingEdit] = useState(false);
   const [creating, setCreating] = useState(false);
+  // Set when the server answers 409 because the person is already on file:
+  // the submitted form and the existing lead, so "Create anyway" can resend it.
+  const [duplicateHit, setDuplicateHit] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showStatusDropdown, setShowStatusDropdown] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -309,15 +312,20 @@ export default function ContactsBoard() {
     setCollapsedGroups((prev) => ({ ...prev, [status]: !prev[status] }));
   };
 
-  const handleCreateContact = async (formData) => {
+  const handleCreateContact = async (formData, { force = false } = {}) => {
     setCreating(true);
     setError('');
     try {
-      await apiClient.post('/clients', formData);
+      await apiClient.post(force ? '/clients?force=true' : '/clients', formData, { silent: true });
+      setDuplicateHit(null);
       setShowCreateModal(false);
       await fetchContacts();
     } catch (e) {
-      setError(e?.message || 'Failed to create contact');
+      if (e?.statusCode === 409 && e?.details?.duplicate) {
+        setDuplicateHit({ formData, duplicate: e.details.duplicate, message: e.message });
+      } else {
+        setError(e?.message || 'Failed to create contact');
+      }
     } finally {
       setCreating(false);
     }
@@ -847,10 +855,34 @@ export default function ContactsBoard() {
       {/* Create Contact Modal */}
       {showCreateModal && (
         <ContactFormModal
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={handleCreateContact}
+          onClose={() => { setShowCreateModal(false); setDuplicateHit(null); }}
+          onSubmit={(data) => handleCreateContact(data)}
           loading={creating}
           title={t('contacts.newClient')}
+          notice={duplicateHit && (
+            <div role='alert' className='rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900'>
+              <p className='font-medium'>{duplicateHit.message}</p>
+              <p className='text-xs mt-0.5'>
+                {[duplicateHit.duplicate.name, duplicateHit.duplicate.phone, duplicateHit.duplicate.email, duplicateHit.duplicate.status]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+              <div className='flex gap-2 mt-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='secondary'
+                  disabled={creating}
+                  onClick={() => handleCreateContact(duplicateHit.formData, { force: true })}
+                >
+                  Create anyway
+                </Button>
+                <Button type='button' size='sm' variant='ghost' onClick={() => setDuplicateHit(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         />
       )}
 

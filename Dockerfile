@@ -28,6 +28,10 @@ RUN npm ci --omit=dev
 # Copy backend source
 COPY backend/ ./
 
+# utils/version.js looks for VERSION one level above utils/ (the app root here).
+# It lives at the repo root, outside backend/, so health would say 0.0.0-unknown.
+COPY VERSION ./VERSION
+
 # Copy built frontend into the path the backend expects
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 

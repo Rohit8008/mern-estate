@@ -22,6 +22,7 @@ import SequencesPanel from '../components/SequencesPanel';
 import WorkspaceRulesPanel from '../components/WorkspaceRulesPanel';
 import SearchInsightsPanel from '../components/SearchInsightsPanel';
 import DataRightsPanel from '../components/DataRightsPanel';
+import { useTenant } from '../contexts/TenantProvider';
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 import {
@@ -156,6 +157,60 @@ const TONE = {
   pink:    'bg-pink-50 ring-pink-100 text-pink-600',
   slate:   'bg-slate-100 ring-slate-200 text-slate-600',
 };
+
+/**
+ * How a new lead finds an agent. Stored as `workflow.leadAssignment` and read by
+ * the server when a lead is created without a named owner; until this control
+ * existed the setting could only be changed by editing the database.
+ */
+const LEAD_ASSIGNMENT_OPTIONS = [
+  { value: 'manual', label: 'Manual', hint: 'The person who adds the lead owns it, or names an owner.' },
+  { value: 'round_robin', label: 'Round robin', hint: 'Each new lead goes to the agent with the fewest open leads.' },
+  { value: 'by_locality', label: 'By locality', hint: 'A lead goes to the agent who already owns the most leads in its locality; a new locality falls back to round robin.' },
+];
+
+function LeadAssignmentSetting() {
+  const { tenant, refresh } = useTenant();
+  const { showSuccess, showError } = useNotification();
+  const selectId = useId();
+  const current = tenant?.workflow?.leadAssignment || 'manual';
+  const [saving, setSaving] = useState(false);
+
+  const change = async (value) => {
+    if (value === current) return;
+    setSaving(true);
+    try {
+      await apiClient.patch('/tenant/config', { workflow: { leadAssignment: value } });
+      await refresh?.();
+      showSuccess('Lead assignment updated');
+    } catch (err) {
+      showError(err?.message || 'Could not update lead assignment');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hint = LEAD_ASSIGNMENT_OPTIONS.find((o) => o.value === current)?.hint;
+
+  return (
+    <Card className='mb-6'>
+      <label htmlFor={selectId} className='block text-sm font-semibold text-foreground'>Lead assignment</label>
+      <p className='text-xs text-muted-foreground mt-0.5 mb-2'>How a new lead is given to an agent when nobody is named.</p>
+      <select
+        id={selectId}
+        value={current}
+        disabled={saving}
+        onChange={(e) => change(e.target.value)}
+        className='w-full sm:w-64 rounded-lg border border-border bg-card text-sm text-foreground px-3 py-2 disabled:opacity-60'
+      >
+        {LEAD_ASSIGNMENT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      {hint && <p className='text-xs text-muted-foreground mt-1.5'>{hint}</p>}
+    </Card>
+  );
+}
 
 export default function Settings() {
   const { currentUser } = useSelector((state) => state.user);
@@ -566,7 +621,7 @@ export default function Settings() {
       // non-admins; the role check is repeated here so a hand-typed
       // ?section=webhooks can never mount one for someone else.
       case 'branding':    return isAdmin ? <WorkspaceBrandingPanel /> : null;
-      case 'workspace':   return isAdmin ? <WorkspaceScreensPanel /> : null;
+      case 'workspace':   return isAdmin ? (<><LeadAssignmentSetting /><WorkspaceScreensPanel /></>) : null;
       case 'pipeline':    return isAdmin ? <WorkspacePipelinePanel /> : null;
       case 'leadSources': return isAdmin ? <LeadSourcesPanel /> : null;
       case 'tags':        return isAdmin ? <TagsPanel /> : null;

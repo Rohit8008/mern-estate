@@ -116,7 +116,8 @@ export const clientValidation = {
     alternatePhone: Joi.string().max(30).optional().allow(''),
     status: Joi.string().valid('lead', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost').optional(),
     priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional().allow(''),
-    temperature: Joi.string().valid('hot', 'warm', 'cold').optional(),
+    // 'auto' hands the temperature back to the score (clears the manual pin).
+    temperature: Joi.string().valid('hot', 'warm', 'cold', 'auto').optional(),
     notes: Joi.string().max(2000).optional().allow(''),
     requirements: Joi.string().max(2000).optional().allow(''),
     tags: Joi.array().items(Joi.string().max(40)).max(50).optional(),
@@ -206,6 +207,8 @@ export const roleValidation = {
   remove: Joi.object({
     userId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required(),
   }),
+
+  empty: Joi.object({}),
 };
 
 const DEAL_STAGES = [
@@ -337,6 +340,8 @@ export const userRouteValidation = {
     phone: Joi.string().max(30).optional().allow(''),
     message: Joi.string().max(500).optional().allow(''),
   }),
+
+  resendEmployeeInvite: Joi.object({}),
 
   adminSetEmployeePassword: Joi.object({
     newPassword: Joi.string().min(8).max(128).required(),
@@ -856,24 +861,27 @@ export const messageValidation = {
 };
 
 // Category validation schemas
+// Matches maxlength on the Category model's `name`; one number so they cannot drift.
+export const CATEGORY_NAME_MAX = 100;
+
 export const categoryValidation = {
   create: Joi.object({
     name: Joi.string()
       .min(2)
-      .max(50)
+      .max(CATEGORY_NAME_MAX)
       .required()
       .messages({
         'string.min': 'Category name must be at least 2 characters long',
-        'string.max': 'Category name cannot exceed 50 characters',
+        'string.max': `Category name cannot exceed ${CATEGORY_NAME_MAX} characters`,
         'any.required': 'Category name is required',
       }),
     fields: Joi.array().items(Joi.object().unknown(true)).max(200).optional(),
   }),
 
   rename: Joi.object({
-    name: Joi.string().min(2).max(50).required().messages({
+    name: Joi.string().min(2).max(CATEGORY_NAME_MAX).required().messages({
       'string.min': 'Category name must be at least 2 characters long',
-      'string.max': 'Category name cannot exceed 50 characters',
+      'string.max': `Category name cannot exceed ${CATEGORY_NAME_MAX} characters`,
       'any.required': 'Category name is required',
     }),
   }),

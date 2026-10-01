@@ -53,7 +53,7 @@
 <li>The invitee chooses a password and must accept the Terms of Service and Privacy Policy. The acceptance records the legal version and time. They are then signed in directly, and the email tells them the workspace address to use on later sign-ins.</li>
 <li>An unknown, expired or already-used token all show the same "no longer valid" message, so tokens cannot be probed.</li>
 <li><strong>Only the newest invitation works.</strong> Sending a fresh invite remembers up to four earlier links; opening one of those answers 410 with code <code>INVITE_REPLACED</code> ("A newer invitation was sent to you") so the invitee knows to open the newer email.</li>
-<li>If mail is not configured the invite cannot be delivered. The create call returns the link (<code>inviteUrl</code>) so an admin could pass it on, but the Admin Panel does not display it, and there is no tenant-admin button to re-send an employee invite (the platform console can re-send a workspace's first admin invite only). To unblock someone, an admin can set an employee's password directly (below).</li>
+<li>If mail is not configured the invite cannot be delivered. The create call returns the link (<code>inviteUrl</code>, with <code>inviteSent</code>) and the Admin Panel shows it with a Copy button so an admin can pass it on. Employees who have not accepted show a <strong>Resend invite</strong> button (<code>POST /api/user/employee/:id/invite</code>, admin only), which mints a new link and kills the old one. An admin can also set an employee's password directly (below).</li>
 </ul>
 
 <h3 id="manage-users">Manage existing users</h3>
@@ -83,7 +83,7 @@
 <li><strong>Members:</strong> open a role to list its members (<code>GET /api/roles/:id/users</code>).</li>
 <li><strong>Edit:</strong> a role marked <code>isSystem</code> cannot be renamed or deactivated; its permissions can still be edited.</li>
 <li><strong>Delete:</strong> system roles cannot be deleted. A role with members answers 400 "Cannot delete role. N user(s) are assigned…"; confirming a force delete (<code>?force=true</code>) unassigns everyone and then soft-deletes the role. Those employees are left with no role, which locks them out of most of the CRM (see the warning above).</li>
-<li><strong>Restore default roles:</strong> the button calls <code>GET /api/roles/initialize-defaults</code> (a GET that writes), which creates any of the three built-in roles that do not already exist by name and leaves existing ones untouched.</li>
+<li><strong>Restore default roles:</strong> the button calls <code>POST /api/roles/initialize-defaults</code>, which creates any of the five built-in roles that do not already exist by name and leaves existing ones untouched. The old <code>GET</code> on the same path still works as a deprecated alias (it answers with a <code>Deprecation</code> header).</li>
 </ul>
 <table>
 <thead><tr><th>Built-in role</th><th>Permissions it grants</th></tr></thead>
@@ -92,7 +92,7 @@
 <tr><td>Employee (system)</td><td><code>viewClients</code>, <code>viewOwners</code>, <code>createListing</code>, <code>viewListings</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
 <tr><td>Listing Manager (system)</td><td><code>createOwner</code>, <code>updateOwner</code>, <code>viewOwners</code>, <code>toggleOwnerActive</code>, <code>createListing</code>, <code>updateListing</code>, <code>viewListings</code>, <code>publishListing</code>, <code>viewCategories</code>, <code>viewMessages</code>, <code>sendMessages</code>, <code>viewBuyerRequirements</code>, <code>uploadFiles</code></td></tr>
 </tbody></table>
-<p>The seed script <code>npm run db:seed-roles</code> defines a longer set (Super Admin, Sales Manager, Listing Manager, Employee, Viewer) and is the way to get "Sales Manager" and "Viewer"; the in-app restore button only knows the three above.</p>
+<p>The built-in roles are defined once in <code>backend/utils/defaultRoles.js</code> (Super Admin, Sales Manager, Listing Manager, Employee, Viewer); both the restore button and <code>npm run db:seed-roles</code> read it, so they create the same five. The table above lists three of them.</p>
 <div class="note"><p>Role documents are cached per process for <strong>60 seconds</strong> (<code>requirePermission</code>), so a permission change can take up to a minute to reach every API call. The app fetches an employee's permissions once per session load (<code>/api/user/my-permissions</code>), so a signed-in employee sees menu changes after a reload.</p></div>
 
 <h2 id="catalogue">The permission catalogue (35)</h2>
@@ -158,7 +158,7 @@
 <tr><td>admin</td><td>All in the workspace.</td></tr>
 <tr><td>employee</td><td>Listings whose <code>assignedAgent</code> is them, which they created (<code>userRef</code>), or which sit in one of their <strong>assigned categories</strong>.</td></tr>
 <tr><td>seller</td><td>Only what they created.</td></tr>
-<tr><td>buyer</td><td>No filter is applied by this function (it returns an empty filter for buyers and anonymous callers).</td></tr>
+<tr><td>buyer</td><td>Nothing: the function returns a filter that matches no listing for buyers and anonymous callers (the property book is not public). Only admins and employees can create share links.</td></tr>
 </tbody></table>
 <p>Single-record access (<code>canAccessListing</code>) follows the same rules; for updates and voice notes the assigned agent also counts. An employee can create a listing only in an assigned category. <strong>Assigned categories</strong> are set when the employee is created and changed with <em>Manage</em>. Use <code>POST /api/listing/assign-agent</code> (admin-only) to give a specific agent a specific listing.</p>
 <h3 id="lead-scope">Leads, tasks and the rest</h3>
@@ -183,7 +183,7 @@
 <li>While a platform operator is "acting as" a workspace, their session is read-only, and security logs about their session are written to their own workspace, not the customer's. See <a href="multi-tenancy.html">Multi-tenancy</a>.</li>
 <li>When logs are shipped to OpenObserve (see <a href="getting-started.html#backend-env">environment variables</a>), audit and security entries are also shipped; with no credentials they go to stdout only.</li>
 </ul>
-<p>The audit-log page has a route but no menu entry in the app; open it by address. Its route requires the admin account type even though the API also accepts <code>viewLogs</code>.</p>
+<p>The audit-log page has an <strong>Audit Log</strong> entry in the Admin section of the menu (screen id <code>auditLog</code>, admin plus <code>viewLogs</code>). Its route requires the admin account type even though the API also accepts <code>viewLogs</code>.</p>
 
 <h2 id="checklist">Checklist: onboarding an agent</h2>
 <ol>
