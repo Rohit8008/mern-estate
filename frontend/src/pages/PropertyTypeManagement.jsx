@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { HiOutlineOfficeBuilding } from 'react-icons/hi';
+import { HiOutlineOfficeBuilding, HiHome, HiOfficeBuilding, HiMap, HiCog, HiCube, HiPlus } from 'react-icons/hi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { apiClient } from '../utils/http';
 import { useNotification } from '../contexts/NotificationContext';
-import { PageLoader, Modal, EmptyState, Button } from '../design-system';
+import { PageLoader, Modal, EmptyState, Button, PageHeader } from '../design-system';
 import { useTranslation } from 'react-i18next';
 
 const CATEGORIES = [
@@ -14,6 +14,17 @@ const CATEGORIES = [
   { value: 'industrial', label: 'Industrial' },
   { value: 'other', label: 'Other' },
 ];
+
+// A type's picture is drawn from its category. The stored `icon` is an emoji
+// from before the CRM settled on HeroIcons; it is kept on the record but no
+// longer shown or asked for.
+const CATEGORY_ICON = {
+  residential: HiHome,
+  commercial: HiOfficeBuilding,
+  land: HiMap,
+  industrial: HiCog,
+  other: HiCube,
+};
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
@@ -29,7 +40,7 @@ let cachedPropertyTypes = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export default function PropertyTypeManagement() {
+export default function PropertyTypeManagement({ embedded = false }) {
   const { t } = useTranslation();
   const [propertyTypes, setPropertyTypes] = useState(cachedPropertyTypes || []);
   const [loading, setLoading] = useState(!cachedPropertyTypes);
@@ -249,42 +260,33 @@ export default function PropertyTypeManagement() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
-        <div>
-          <h1 className='text-xl font-bold text-slate-900'>{t('propertyType.propertyTypes')}</h1>
-          <p className='text-sm text-slate-500 mt-0.5'>
-            {propertyTypes.length} type{propertyTypes.length !== 1 && 's'} configured
-          </p>
-        </div>
-        <div className='flex gap-3'>
-          <button
-            onClick={handleSeedDefaults}
-            className='px-4 py-2 text-sm font-medium border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors'
-          >{t('propertyType.seedDefaults')}</button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className='px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
-          >{t('propertyType.newType')}</button>
-        </div>
-      </div>
+      {/* On its own route it needs a title; inside the admin tabs the tab is the title. */}
+      {!embedded && <PageHeader title={t('propertyType.propertyTypes')} description='The kinds of property your workspace lists, and the fields each one collects.' />}
 
-      {/* Category Tabs */}
-      <div className='flex gap-2 overflow-x-auto pb-1'>
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat.value}
-            onClick={() => setActiveCategory(cat.value)}
-            aria-pressed={activeCategory === cat.value}
-            className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-              activeCategory === cat.value
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
+      {/* Toolbar: filter by category on the left, actions on the right */}
+      <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm'>
+        <div className='flex flex-wrap items-center gap-1.5' role='group' aria-label='Filter by category'>
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat.value}
+              type='button'
+              onClick={() => setActiveCategory(cat.value)}
+              aria-pressed={activeCategory === cat.value}
+              className={`px-3 py-1.5 text-sm font-medium rounded-full whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                activeCategory === cat.value
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+        <span className='text-sm text-slate-500 ml-1'>{propertyTypes.length} configured</span>
+        <div className='ml-auto flex items-center gap-2'>
+          <Button variant='secondary' size='sm' onClick={handleSeedDefaults}>{t('propertyType.seedDefaults')}</Button>
+          <Button size='sm' icon={HiPlus} onClick={() => setShowCreateModal(true)}>New type</Button>
+        </div>
       </div>
 
       {/* Empty State */}
@@ -320,7 +322,14 @@ export default function PropertyTypeManagement() {
               {/* Card Header */}
               <div className='flex items-center justify-between p-5'>
                 <div className='flex items-center gap-4 min-w-0'>
-                  <span className='text-3xl flex-shrink-0' aria-hidden='true'>{type.icon}</span>
+                  {(() => {
+                    const TypeIcon = CATEGORY_ICON[type.category] || HiCube;
+                    return (
+                      <span className='w-11 h-11 rounded-xl bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0' aria-hidden='true'>
+                        <TypeIcon className='w-6 h-6 text-slate-600' />
+                      </span>
+                    );
+                  })()}
                   <div className='min-w-0'>
                     <div className='flex items-center gap-2 flex-wrap'>
                       <h3 className='text-lg font-semibold text-slate-900'>{type.name}</h3>
@@ -609,17 +618,7 @@ export default function PropertyTypeManagement() {
               placeholder={t('propertyType.briefDescription')}
             />
           </div>
-          <div className='grid grid-cols-2 gap-4'>
-            <div>
-              <label htmlFor='pt-create-icon' className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.icon')}</label>
-              <input
-                id='pt-create-icon'
-                type='text'
-                value={formData.icon}
-                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                className='w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-center text-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
-              />
-            </div>
+          <div>
             <div>
               <label htmlFor='pt-create-category' className='block text-sm font-medium text-slate-700 mb-1'>{t('propertyType.category')}</label>
               <select

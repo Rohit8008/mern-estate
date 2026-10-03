@@ -12,7 +12,9 @@ function cx(...xs) { return xs.filter(Boolean).join(' '); }
  */
 export function Table({ children, className, maxHeight }) {
   return (
-    <div className={cx('rounded-xl border border-slate-200', maxHeight ? cx('overflow-auto', maxHeight) : 'overflow-x-auto')}>
+    // `relative`: an absolutely positioned child (a visually-hidden header label)
+    // is clipped by the scroll box only when the box is its containing block.
+    <div className={cx('relative rounded-xl border border-slate-200', maxHeight ? cx('overflow-auto', maxHeight) : 'overflow-x-auto')}>
       <table className={cx('w-full text-sm text-left', className)}>
         {children}
       </table>

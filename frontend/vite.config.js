@@ -5,17 +5,21 @@ import { VitePWA } from 'vite-plugin-pwa';
 import seoPlugin from './seo/vite-plugin-seo.mjs';
 
 // https://vitejs.dev/config/
+// Where the dev server forwards /api and /uploads. Override when something else
+// already holds port 3000: VITE_PROXY_TARGET=http://localhost:3001 npm run dev
+const API_TARGET = process.env.VITE_PROXY_TARGET || 'http://localhost:3000';
+
 export default defineConfig({
   server: {
     host: true,
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: API_TARGET,
         secure: false,
       },
       '/uploads': {
-        target: 'http://localhost:3000',
+        target: API_TARGET,
         secure: false,
       },
     },
