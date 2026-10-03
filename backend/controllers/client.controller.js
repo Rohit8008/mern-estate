@@ -33,7 +33,7 @@ const phoneKey = phoneKeyOf;
  * Runs across the whole workspace, not just the caller's own leads: the point
  * is to catch the case where a colleague already owns this person.
  */
-async function findDuplicateClient({ phone, email }) {
+export async function findDuplicateClient({ phone, email }) {
   const clauses = [];
 
   const key = phoneKey(phone);
@@ -209,11 +209,39 @@ export const getClients = async (req, res, next) => {
   }
 };
 
+/**
+ * Is this person already a client? GET /api/clients/lookup?phone=&email=
+ * The buyer form asks while the phone number is being typed, so a requirement is
+ * attached to the existing client rather than starting a second record.
+ * Workspace-wide on purpose, like the duplicate check on create.
+ */
+export const lookupClient = async (req, res, next) => {
+  try {
+    const found = await findDuplicateClient({ phone: req.query.phone, email: req.query.email });
+    if (!found) return res.json({ success: true, data: null });
+    res.json({
+      success: true,
+      data: {
+        _id: String(found._id),
+        name: found.name,
+        phone: found.phone,
+        email: found.email,
+        status: found.status,
+        assignedTo: found.assignedTo?.username || null,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getClientById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const doc = await Client.findOne({ _id: id, isDeleted: { $ne: true } })
       .populate('tagIds', 'name color')
+      // The property each deal is about, so the deal list can name it.
+      .populate('deals.listingId', 'name city address status regularPrice')
       .lean();
     if (!doc) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(doc.assignedTo) !== req.user.id) {

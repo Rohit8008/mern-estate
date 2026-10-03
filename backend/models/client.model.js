@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { phoneKeyOf } from '../utils/phoneKey.js';
+import { phoneKeyOf, buyerPhoneOf } from '../utils/phoneKey.js';
 import EmailSuppression from './emailSuppression.model.js';
 
 // Deal Pipeline Schema - tracks property deals with clients
@@ -208,6 +208,21 @@ const clientSchema = new mongoose.Schema(
     lostReason: { type: String, maxlength: 500 },
     lostAt: { type: Date },
 
+    // Every change of `status` that a deal caused. `status` is one overwritten
+    // value, so this is what answers "was this client ever won?" once they come
+    // back with a new requirement and are reopened. Written only by the CRM
+    // controller; never accepted from a request body.
+    statusHistory: [
+      {
+        _id: false,
+        from: { type: String },
+        to: { type: String },
+        at: { type: Date, default: Date.now },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        reason: { type: String, maxlength: 500 },
+      },
+    ],
+
     // Soft delete
     /**
      * Workspace tags, by id.
@@ -289,6 +304,37 @@ clientSchema.pre('save', function syncPhoneKey(next) {
     this.phoneKey = phoneKeyOf(this.phone);
   }
   next();
+});
+
+/*
+ * Buyer requirements keep a copy of their client's name, phone and email (their
+ * list, search, export and the mobile app read those fields directly). The copy
+ * is a cache, and this is what keeps it right: whoever saves the client, the
+ * linked requirements follow. Done here rather than in one controller so no
+ * route, script or future importer can change a client and leave them stale.
+ */
+clientSchema.pre('save', function flagContactChange(next) {
+  this.$locals.contactChanged = !this.isNew && this.isModified('name phone email');
+  next();
+});
+
+clientSchema.post('save', async function syncBuyerCopies(doc) {
+  if (!doc.$locals?.contactChanged) return;
+  doc.$locals.contactChanged = false;
+  // Looked up now, not imported: the model imports this one, and a script must
+  // not compile it before the tenancy plugin is registered.
+  const BuyerRequirement = mongoose.models.BuyerRequirement;
+  if (!BuyerRequirement) return;
+  await BuyerRequirement.updateMany(
+    { clientId: doc._id, erasedAt: null },
+    {
+      $set: {
+        buyerName: String(doc.name || '').slice(0, 100),
+        buyerPhone: buyerPhoneOf(doc.phone),
+        buyerEmail: doc.email || '',
+      },
+    }
+  );
 });
 
 // Pre-save middleware to update nextFollowUp

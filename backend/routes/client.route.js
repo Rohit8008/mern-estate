@@ -13,6 +13,7 @@ import {
   removeInterestedListing,
   bulkUpdateClients,
   exportClients,
+  lookupClient,
   addClientPhoto,
   deleteClientPhoto,
   optOutClientEmail,
@@ -30,6 +31,7 @@ router.post('/', requirePermission('createClient'), validateBody(clientValidatio
 
 // Export the filtered set. Declared before '/:id' so "export" is not read as
 // an id. Gated on exportData, which is what that permission is for.
+router.get('/lookup', requirePermission('viewClients'), lookupClient);
 router.get('/export', requirePermission('exportData'), exportClients);
 
 // Act on a selection. `updateClient` is the floor; reassignment and deletion

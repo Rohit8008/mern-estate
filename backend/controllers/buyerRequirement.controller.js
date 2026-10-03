@@ -1,6 +1,9 @@
 import BuyerRequirement from '../models/buyerRequirement.model.js';
 import Listing from '../models/listing.model.js';
-import { errorHandler } from '../utils/error.js';
+import Client from '../models/client.model.js';
+import { errorHandler, ValidationError } from '../utils/error.js';
+import { findDuplicateClient } from './client.controller.js';
+import { buyerPhoneOf } from '../utils/phoneKey.js';
 import { listingScope } from '../middleware/permissions.js';
 import { streamCsv } from '../utils/csvExport.js';
 import { parsePaging, parseSort } from '../utils/listQuery.js';
@@ -14,10 +17,47 @@ const isStaff = (user) => user.role === 'admin' || user.role === 'employee';
 
 /** Treat user input as literal text inside a regex query. */
 
+/** Staff see every client; anyone else only the ones assigned to them. */
+const canSeeClient = (user, assignedTo) =>
+  user.role === 'admin' || String(assignedTo?._id || assignedTo) === String(user.id);
+
+/**
+ * Which client a requirement belongs to.
+ *   • clientId named  → that client, which must exist and be one the caller can see.
+ *   • clientId null   → deliberately not linked.
+ *   • clientId absent → the client already on file with this phone or email, if
+ *     the caller can see them, so typing a known person's number attaches to
+ *     them instead of leaving a second, unconnected record. No match is not an
+ *     error: a walk-in need not be a lead.
+ */
+async function resolveClientId(req, body) {
+  if (body.clientId === null) return null;
+  if (body.clientId) {
+    const client = await Client.findOne({ _id: body.clientId, isDeleted: { $ne: true } })
+      .select('assignedTo name phone email').lean();
+    if (!client || !canSeeClient(req.user, client.assignedTo)) {
+      throw new ValidationError('That client was not found.', 'clientId');
+    }
+    return client;
+  }
+  const match = await findDuplicateClient({ phone: body.buyerPhone, email: body.buyerEmail });
+  return match && canSeeClient(req.user, match.assignedTo) ? match : null;
+}
+
+/**
+ * The linked client's details, in the shape a requirement stores them. The
+ * client is the source; what was typed in the form is only a convenience.
+ */
+const contactCopyOf = (client) => client
+  ? { clientId: client._id, buyerName: String(client.name || '').slice(0, 100), buyerPhone: buyerPhoneOf(client.phone), buyerEmail: client.email || '' }
+  : { clientId: null };
+
 export const createBuyerRequirement = async (req, res, next) => {
   try {
+    const client = await resolveClientId(req, req.body);
     const buyerRequirement = await BuyerRequirement.create({
       ...req.body,
+      ...contactCopyOf(client),
       createdBy: req.user.id,
     });
 
@@ -41,7 +81,7 @@ export const createBuyerRequirement = async (req, res, next) => {
 function buildBuyerFilter(req) {
   const {
     search, propertyType, status, priority,
-    preferredCity, preferredLocality, assignedAgent, propertyTypeInterest,
+    preferredCity, preferredLocality, assignedAgent, propertyTypeInterest, clientId,
   } = req.query;
 
   const query = { isDeleted: { $ne: true } };
@@ -64,6 +104,9 @@ function buildBuyerFilter(req) {
     ];
   }
 
+  // String()-coerced and shape-checked: a query value is user input, and an
+  // object here would be a Mongo operator.
+  if (clientId && mongoose.isValidObjectId(String(clientId))) query.clientId = String(clientId);
   if (propertyType && propertyType !== 'all') query.propertyType = propertyType;
   if (status && status !== 'all') query.status = status;
   if (priority && priority !== 'all') query.priority = priority;
@@ -245,9 +288,16 @@ export const updateBuyerRequirement = async (req, res, next) => {
       return next(errorHandler(403, 'You can only update your own buyer requirements'));
     }
 
+    const update = { ...req.body };
+    // Only re-resolve when the caller touched the link: an edit that leaves it
+    // alone must not re-attach a requirement someone unlinked on purpose.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'clientId')) {
+      Object.assign(update, contactCopyOf(await resolveClientId(req, req.body)));
+    }
+
     const updatedBuyerRequirement = await BuyerRequirement.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      update,
       { new: true, runValidators: true }
     );
 

@@ -9,7 +9,7 @@ import mongoose from 'mongoose';
 import Client from '../models/client.model.js';
 import Transaction from '../models/transaction.model.js';
 import Listing from '../models/listing.model.js';
-import { errorHandler, AppError, NotFoundError } from '../utils/error.js';
+import { errorHandler, AppError, NotFoundError, ValidationError, ConflictError } from '../utils/error.js';
 import { notify } from '../utils/notify.js';
 import { logger } from '../utils/logger.js';
 import { logActivity, diffFields } from '../utils/activity.js';
@@ -17,6 +17,7 @@ import { streamCsv } from '../utils/csvExport.js';
 import { emitEvent } from '../utils/webhooks.js';
 import { runHook } from '../plugins/registry.js';
 import { stopSequencesForClient } from '../jobs/sequences.js';
+import { listingScope } from '../middleware/permissions.js';
 import { parsePaging } from '../utils/listQuery.js';
 import { getTenant } from '../tenancy/tenantContext.js';
 import { resolveStagesForTenant } from '../tenancy/stageCatalogue.js';
@@ -54,6 +55,34 @@ const assertStageEnabled = (stage) => {
  * Add a new deal to a client
  * POST /api/crm/:id/deals
  */
+const CLOSED_STATUSES = ['won', 'lost'];
+const isClosedDeal = (d) => ['closed_won', 'closed_lost'].includes(d.stage);
+
+/**
+ * Change a client's overall status and keep the old one on the record.
+ * `status` is overwritten, `statusHistory` is not — a client who was won, then
+ * came back, is still visibly a repeat customer.
+ */
+function setClientStatus(client, to, userId, reason) {
+  if (client.status === to) return false;
+  client.statusHistory.push({ from: client.status, to, by: userId, reason });
+  client.status = to;
+  return true;
+}
+
+/**
+ * A property the caller may attach to a deal. Same rule as sharing: you cannot
+ * link what you cannot see, and a deleted property is not there to link.
+ */
+async function findLinkableListing(user, listingId) {
+  const scope = listingScope(user);
+  const filter = { _id: listingId, isDeleted: { $ne: true } };
+  const listing = await Listing.findOne(Object.keys(scope).length ? { $and: [filter, scope] } : filter)
+    .select('name status type');
+  if (!listing) throw new ValidationError('That property was not found.', 'listingId');
+  return listing;
+}
+
 export const addDeal = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -66,8 +95,13 @@ export const addDeal = async (req, res, next) => {
     assertCanAccessClient(client, req.user);
     assertStageEnabled(req.body.stage || 'new_lead');
 
+    // Default the deal's type from the property when it has one.
+    const listing = req.body.listingId ? await findLinkableListing(req.user, req.body.listingId) : null;
+    const dealType = req.body.type || (listing?.type === 'rent' ? 'rent' : 'sale');
+
     const deal = {
-      listingId: req.body.listingId,
+      listingId: listing?._id,
+      type: dealType,
       stage: req.body.stage || 'new_lead',
       value: req.body.value || 0,
       expectedCloseDate: req.body.expectedCloseDate,
@@ -91,7 +125,33 @@ export const addDeal = async (req, res, next) => {
     }
 
     client.deals.push(deal);
+
+    // A returning client: a new deal means they are active again. Their first
+    // win (`convertedAt`), their deals and transactions stay; the lost reason
+    // moves into statusHistory before it is cleared.
+    const previousStatus = client.status;
+    const previousLostReason = client.lostReason;
+    const reopened = CLOSED_STATUSES.includes(previousStatus)
+      && setClientStatus(client, 'qualified', req.user.id, 'Reopened for a new deal');
+    if (reopened) {
+      client.lostAt = undefined;
+      client.lostReason = undefined;
+      client.calculateScore();
+    }
     await client.save();
+
+    if (reopened) {
+      try {
+        await logActivity({
+          entityType: 'client',
+          entityId: client._id,
+          action: 'client_reopened',
+          message: `Reopened for a new deal (was ${previousStatus})`,
+          meta: { from: previousStatus, to: client.status, lostReason: previousLostReason || '' },
+          createdBy: req.user.id,
+        });
+      } catch (_) {}
+    }
 
     try {
       await logActivity({
@@ -196,6 +256,65 @@ export const getFollowUpsRange = async (req, res, next) => {
 };
 
 /**
+ * Link a property to a deal that was opened without one (or change it).
+ * PATCH /api/crm/:id/deals/:dealId/listing
+ *
+ * A won deal has already moved its property to sold/rented and raised a
+ * transaction, so linking afterwards must repair both. Swapping a won deal to a
+ * different property is refused: that would leave the first one marked sold.
+ */
+export const setDealListing = async (req, res, next) => {
+  try {
+    const { id, dealId } = req.params;
+    const client = await findActiveClient(id);
+    if (!client) return next(new NotFoundError('Client not found'));
+    assertCanAccessClient(client, req.user);
+
+    const deal = client.deals.id(dealId);
+    if (!deal) return next(new NotFoundError('Deal not found'));
+
+    const { listingId, type } = req.body;
+    const won = deal.stage === 'closed_won';
+    if (won && deal.listingId && String(deal.listingId) !== String(listingId)) {
+      return next(new ConflictError('This deal is already won against another property.'));
+    }
+    if (won && !listingId) {
+      return next(new ConflictError('A won deal needs its property.'));
+    }
+
+    const listing = listingId ? await findLinkableListing(req.user, listingId) : null;
+    const previous = deal.listingId;
+    deal.listingId = listing?._id || undefined;
+    if (type) deal.type = type;
+    await client.save();
+
+    // A won deal that had no property: the sale is now about this one.
+    if (won && listing) {
+      const soldStatus = ['rent', 'lease'].includes(deal.type) ? 'rented' : 'sold';
+      await Listing.findByIdAndUpdate(listing._id, { status: soldStatus });
+      if (deal.transactionRef) {
+        await Transaction.findByIdAndUpdate(deal.transactionRef, { property: listing._id, propertyName: listing.name });
+      }
+    }
+
+    try {
+      await logActivity({
+        entityType: 'client',
+        entityId: client._id,
+        action: 'deal_property_linked',
+        message: listing ? `Deal linked to ${listing.name}` : 'Property removed from deal',
+        meta: { dealId, listingId: listing ? String(listing._id) : null, previous: previous ? String(previous) : null },
+        createdBy: req.user.id,
+      });
+    } catch (_) {}
+
+    res.json({ success: true, data: client });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Update deal stage
  * PATCH /api/crm/:id/deals/:dealId/stage
  */
@@ -253,8 +372,8 @@ export const updateDealStage = async (req, res, next) => {
     let newTxId = null;
     let prevListingStatus = 'available';
     if (stage === 'closed_won') {
-      client.status = 'won';
-      client.convertedAt = new Date();
+      setClientStatus(client, 'won', req.user.id, 'Deal won');
+      client.convertedAt = client.convertedAt || new Date(); // first conversion
 
       // Stop any running sequence now rather than at the next tick — the gap
       // between "marked won" and "sent another chase email" is exactly the gap
@@ -298,9 +417,18 @@ export const updateDealStage = async (req, res, next) => {
         }
       }
     } else if (stage === 'closed_lost') {
-      client.status = 'lost';
-      client.lostAt = new Date();
-      client.lostReason = notes || 'Deal lost';
+      // Losing one deal does not make a client lost if they have another deal
+      // open, and a client who has bought before goes back to "won", not "lost".
+      const others = client.deals.filter((d) => String(d._id) !== String(deal._id));
+      if (others.some((d) => !isClosedDeal(d))) {
+        // another deal is still open: the client's status stays as it is
+      } else if (others.some((d) => d.stage === 'closed_won')) {
+        setClientStatus(client, 'won', req.user.id, 'Latest deal lost; earlier deal was won');
+      } else {
+        setClientStatus(client, 'lost', req.user.id, notes || 'Deal lost');
+        client.lostAt = new Date();
+        client.lostReason = notes || 'Deal lost';
+      }
 
       // Chasing someone who has already said no is the worst thing an
       // automation like this can do.

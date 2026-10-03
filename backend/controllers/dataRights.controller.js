@@ -138,9 +138,11 @@ export const exportContactData = async (req, res, next) => {
     const record = await Model.findById(id).lean();
     if (!record) return next(errorHandler(404, 'Contact not found'));
 
-    const [documents, activity] = await Promise.all([
+    const [documents, activity, requirements] = await Promise.all([
       Document.find({ 'related.clientId': id }).select('-path').lean(),
       ActivityLog.find({ entityId: id }).limit(5000).lean(),
+      // What a client has asked for is held about them too.
+      kind === 'client' ? BuyerRequirement.find({ clientId: id }).lean() : [],
     ]);
 
     logFromRequest(req, {
@@ -161,6 +163,7 @@ export const exportContactData = async (req, res, next) => {
       subject: { kind, id: String(id) },
       record: clean(record),
       documents: documents.map(clean),
+      ...(kind === 'client' ? { requirements: requirements.map(clean) } : {}),
       activity: activity.map(clean),
     }, null, 2));
   } catch (err) {
@@ -330,6 +333,15 @@ export const eraseContact = async (req, res, next) => {
       { _id: id },
       { $set: { ...spec.fields, erasedAt: new Date(), erasedBy: req.user.id } }
     );
+
+    // Requirements linked to an erased client carry a copy of their name,
+    // phone and email, and are theirs too.
+    if (kind === 'client') {
+      await BuyerRequirement.updateMany(
+        { clientId: id, erasedAt: null },
+        { $set: { ...ERASABLE_CONTACTS.buyer.fields, erasedAt: new Date(), erasedBy: req.user.id } }
+      );
+    }
 
     // Documents about them are their personal data too, so they go with it.
     const docFilter = kind === 'client' ? { 'related.clientId': id } : { 'related.kind': kind, 'related.clientId': id };

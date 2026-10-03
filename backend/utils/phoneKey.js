@@ -18,3 +18,16 @@ export function phoneKeyOf(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
+
+/**
+ * A client's phone as a buyer requirement stores it: optional leading +, then
+ * digits, no leading zero — the shape the requirement's own validation accepts.
+ * A client phone is free text ("+91 98765-43210", "098765 43210"), so copying it
+ * across unchanged would make the requirement fail validation the next time it
+ * is edited. Empty in, empty out.
+ */
+export function buyerPhoneOf(phone) {
+  const raw = String(phone || '').trim();
+  const digits = raw.replace(/\D/g, '').replace(/^0+/, '');
+  return digits ? `${raw.startsWith('+') ? '+' : ''}${digits}` : '';
+}

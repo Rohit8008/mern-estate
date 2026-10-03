@@ -8,6 +8,15 @@ const buyerRequirementSchema = new mongoose.Schema(
       trim: true,
       maxlength: 150,
     },
+    // The person this requirement belongs to. The buyer* fields below are a copy
+    // kept for display and for records that predate the link; null means "not
+    // linked to a client" (a walk-in who has not been added as a lead).
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Client',
+      default: null,
+      index: true,
+    },
     buyerEmail: {
       type: String,
       trim: true,

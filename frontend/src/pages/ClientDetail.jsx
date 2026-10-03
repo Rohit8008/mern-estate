@@ -18,6 +18,9 @@ import EditConflictNotice from '../components/EditConflictNotice';
 import DealCommissionEditor from '../components/crm/DealCommissionEditor';
 import LeadAssignment from '../components/crm/LeadAssignment';
 import InterestedListings from '../components/crm/InterestedListings';
+import ListingPicker from '../components/crm/ListingPicker';
+import DealProperty from '../components/crm/DealProperty';
+import ClientRequirements from '../components/crm/ClientRequirements';
 
 // The workspace's own pipeline (tenant.dealStages) drives these, so the
 // names match the pipeline board. This list only backs a workspace config that
@@ -78,6 +81,7 @@ export default function ClientDetail() {
   const [saving, setSaving] = useState(false);     // background refetch after mutations
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
+  const [dealListing, setDealListing] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
 
   const [timeline, setTimeline] = useState([]);
@@ -190,11 +194,14 @@ export default function ClientDetail() {
       value: Number(form.get('value')) || 0,
       notes: form.get('notes') || '',
       commissionPercentage: Number(form.get('commission')) || 0,
+      type: form.get('type') || 'sale',
+      ...(dealListing ? { listingId: dealListing._id } : {}),
     };
     setFormError('');
     try {
       await apiClient.post(`/crm/${id}/deals`, payload);
       formEl.reset();
+      setDealListing(null);
       await loadClient();
     } catch (e) {
       setFormError(e?.message || 'Failed to add deal');
@@ -484,6 +491,9 @@ export default function ClientDetail() {
             >
               {client.status}
             </Badge>
+            {(client.deals || []).filter((d) => d.stage === 'closed_won').length > 0 && client.status !== 'won' && (
+              <Badge variant="brand">Repeat client</Badge>
+            )}
             <Badge
               variant={client.priority === 'urgent' ? 'error' : client.priority === 'high' ? 'warning' : 'default'}
               className='capitalize'
@@ -768,6 +778,8 @@ export default function ClientDetail() {
         {/* Deals Tab */}
         {activeTab === 'deals' && (
           <div className="space-y-4">
+            <Card><ClientRequirements clientId={id} /></Card>
+
             {/* Add Deal Form */}
             <Card>
               <h3 className="font-semibold mb-3">{t('clientDetail.addNewDeal')}</h3>
@@ -778,6 +790,14 @@ export default function ClientDetail() {
                 <Input name="value" type="number" placeholder={t('clientDetail.dealValue')} className='mb-0' />
                 <Input name="commission" type="number" placeholder={t('clientDetail.commission')} max="100" className='mb-0' />
                 <Input name="notes" placeholder={t('clientDetail.notes')} className='mb-0' />
+                <Select name="type" className='mb-0' aria-label="Deal type" defaultValue="sale">
+                  <option value="sale">Sale</option>
+                  <option value="rent">Rent</option>
+                  <option value="lease">Lease</option>
+                </Select>
+                <div className='md:col-span-3'>
+                  <ListingPicker value={dealListing} onChange={setDealListing} label="Property (optional)" />
+                </div>
                 <Button type="submit" icon={HiPlusSm} className='md:col-span-4 justify-center'>{t('clientDetail.addDeal')}</Button>
               </form>
             </Card>
@@ -796,6 +816,7 @@ export default function ClientDetail() {
                       {stageOptionsFor(deal.stage).map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
                     </select>
                   </div>
+                  <DealProperty clientId={id} deal={deal} onSaved={() => loadClient()} />
                   <DealCommissionEditor clientId={id} deal={deal} onSaved={() => loadClient()} />
                   {deal.notes && <p className="text-sm mt-2">{deal.notes}</p>}
                 </div>

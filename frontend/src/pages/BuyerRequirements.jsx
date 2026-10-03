@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import BuyerClientLink from '../components/crm/BuyerClientLink';
 import {
   HiPlus, HiSearch, HiUser, HiPhone, HiMail, HiLocationMarker,
   HiHome, HiCurrencyDollar, HiCalendar, HiPencil, HiTrash, HiEye,
@@ -115,6 +116,7 @@ export default function BuyerRequirements() {
     buyerName: '',
     buyerEmail: '',
     buyerPhone: '',
+    clientId: null,
     preferredLocation: '',
     propertyType: 'sale',
     minPrice: '',
@@ -130,6 +132,36 @@ export default function BuyerRequirements() {
 
   // Form state
   const [formData, setFormData] = useState(emptyForm);
+  // The linked client's name for display, whether picked just now or loaded.
+  const [clientName, setClientName] = useState('');
+  const [alsoCreateClient, setAlsoCreateClient] = useState(false);
+  const [declinedClient, setDeclinedClient] = useState(false);
+  // What the requirement was linked to when the form opened — an edit that
+  // leaves the link alone must not send it (and re-run the server's check).
+  const initialClientId = useRef(null);
+
+  // "Add requirement" from a client's page: /buyers?new=1&client=<id>.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    const clientParam = searchParams.get('client');
+    setSearchParams({}, { replace: true });
+    (async () => {
+      if (clientParam) {
+        try {
+          const res = await apiClient.get(`/clients/${clientParam}`, { silent: true });
+          const c = res?.data;
+          if (c) {
+            setFormData({ ...emptyForm, clientId: c._id, buyerName: c.name || '', buyerPhone: c.phone || '', buyerEmail: c.email || '' });
+            setClientName(c.name || '');
+          }
+        } catch (_) { /* the form still opens, unlinked */ }
+      }
+      initialClientId.current = null;
+      setShowForm(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Typing settles before it becomes a request, and a new search starts from
   // page 1 — page 4 of a narrower result is usually empty.
@@ -204,6 +236,41 @@ export default function BuyerRequirements() {
     try {
       const payload = cleanPayload(formData);
       const isEditing = !!editingId;
+
+      // "Also add as a client" goes through the normal client create (limits,
+      // assignment rules, duplicate check). A 409 means they already exist.
+      if (!isEditing && !payload.clientId && alsoCreateClient) {
+        try {
+          const made = await apiClient.post('/clients', {
+            name: payload.buyerName,
+            phone: payload.buyerPhone,
+            ...(payload.buyerEmail ? { email: payload.buyerEmail } : {}),
+          }, { silent: true });
+          payload.clientId = made?.data?._id || made?._id || null;
+        } catch (err) {
+          const existing = err?.details?.duplicate?._id;
+          if (!existing) {
+            setError(err?.message || 'Could not add them as a client.');
+            return;
+          }
+          payload.clientId = existing;
+        }
+      }
+      // Absent lets the server attach the client already on file with this
+      // phone; an explicit null ("Not them", or an unlink) stops it doing so.
+      // A linked requirement takes its contact details from the client, so a
+      // pre-existing copy is not sent back for validation.
+      if (isEditing && formData.clientId) {
+        delete payload.buyerName;
+        delete payload.buyerPhone;
+        delete payload.buyerEmail;
+      }
+      if (isEditing) {
+        if (payload.clientId === initialClientId.current) delete payload.clientId;
+      } else if (payload.clientId === null && !declinedClient) {
+        delete payload.clientId;
+      }
+
       const url = isEditing ? `/api/buyer-requirements/${editingId}` : '/api/buyer-requirements';
       const method = isEditing ? 'PUT' : 'POST';
 
@@ -217,6 +284,8 @@ export default function BuyerRequirements() {
         setShowForm(false);
         setEditingId(null);
         setFormData(emptyForm);
+        setAlsoCreateClient(false);
+        setDeclinedClient(false);
         fetchBuyerRequirements();
       } else {
         const errData = await parseJsonSafely(response);
@@ -237,6 +306,7 @@ export default function BuyerRequirements() {
       buyerName: requirement.buyerName || '',
       buyerEmail: requirement.buyerEmail || '',
       buyerPhone: requirement.buyerPhone || '',
+      clientId: requirement.clientId || null,
       preferredLocation: requirement.preferredLocation || '',
       propertyType: requirement.propertyType || 'sale',
       minPrice: requirement.minPrice || '',
@@ -249,6 +319,9 @@ export default function BuyerRequirements() {
       timeline: requirement.timeline || '',
       notes: requirement.notes || '',
     });
+    initialClientId.current = requirement.clientId || null;
+    setClientName('');
+    setAlsoCreateClient(false);
     setShowForm(true);
   };
 
@@ -256,6 +329,8 @@ export default function BuyerRequirements() {
     setShowForm(false);
     setEditingId(null);
     setFormData(emptyForm);
+    setAlsoCreateClient(false);
+    setDeclinedClient(false);
   };
 
 
@@ -655,6 +730,12 @@ export default function BuyerRequirements() {
                 <div className='text-slate-500'>{t('buyerRequirements.phone')}</div>
                 <div className='font-medium text-slate-900'>{viewingRequirement.buyerPhone || '-'}</div>
               </div>
+              {viewingRequirement.clientId && (
+                <div>
+                  <div className='text-slate-500'>Client</div>
+                  <Link to={`/clients/${viewingRequirement.clientId}`} className='font-medium text-brand-700 hover:underline'>View client record</Link>
+                </div>
+              )}
               <div>
                 <div className='text-slate-500'>{t('buyerRequirements.email')}</div>
                 <div className='font-medium text-slate-900'>{viewingRequirement.buyerEmail || '-'}</div>
@@ -721,12 +802,32 @@ export default function BuyerRequirements() {
                   <h3 className='text-base font-semibold text-slate-900 flex items-center gap-2'>
                     <HiUser className='w-5 h-5 text-slate-900' />{t('buyerRequirements.buyerInformation')}</h3>
 
+                  <BuyerClientLink
+                    clientId={formData.clientId}
+                    clientName={clientName}
+                    phone={formData.buyerPhone}
+                    email={formData.buyerEmail}
+                    isNew={!editingId}
+                    alsoCreate={alsoCreateClient}
+                    onAlsoCreate={setAlsoCreateClient}
+                    onDecline={() => setDeclinedClient(true)}
+                    onChange={(c) => {
+                      setClientName(c?.name || '');
+                      setFormData((f) => c
+                        ? { ...f, clientId: c._id, buyerName: c.name || f.buyerName, buyerPhone: c.phone || f.buyerPhone, buyerEmail: c.email || f.buyerEmail }
+                        : { ...f, clientId: null });
+                      if (!c) setDeclinedClient(true);
+                    }}
+                  />
+
                   <Input
                     id='buyerName'
                     label={t('buyerRequirements.buyerName')}
                     type='text'
                     required
                     value={formData.buyerName}
+                    readOnly={!!formData.clientId}
+                    hint={formData.clientId ? 'Taken from the client — edit it on their page.' : undefined}
                     onChange={(e) => setFormData({...formData, buyerName: e.target.value})}
                   />
 
@@ -735,6 +836,7 @@ export default function BuyerRequirements() {
                     label={t('buyerRequirements.email')}
                     type='email'
                     value={formData.buyerEmail}
+                    readOnly={!!formData.clientId}
                     onChange={(e) => setFormData({...formData, buyerEmail: e.target.value})}
                   />
 
@@ -744,6 +846,7 @@ export default function BuyerRequirements() {
                     type='tel'
                     required
                     value={formData.buyerPhone}
+                    readOnly={!!formData.clientId}
                     onChange={(e) => setFormData({...formData, buyerPhone: e.target.value})}
                   />
                 </div>

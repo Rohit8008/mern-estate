@@ -223,11 +223,18 @@ const DEAL_STAGES = [
 export const crmValidation = {
   addDeal: Joi.object({
     listingId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().allow(null, ''),
+    type: Joi.string().valid('sale', 'rent', 'lease').optional(),
     stage: Joi.string().valid(...DEAL_STAGES).optional(),
     value: Joi.number().min(0).optional(),
     expectedCloseDate: Joi.date().iso().optional().allow(null, ''),
     notes: Joi.string().max(2000).optional().allow(''),
     commissionPercentage: Joi.number().min(0).max(100).optional(),
+  }),
+
+  // The property a deal is about. null clears it.
+  setDealListing: Joi.object({
+    listingId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().allow(null),
+    type: Joi.string().valid('sale', 'rent', 'lease').optional(),
   }),
 
   updateDealStage: Joi.object({
@@ -658,6 +665,7 @@ export const listingValidation = {
 // Buyer requirement validation schemas
 export const buyerRequirementValidation = {
   create: Joi.object({
+    clientId: Joi.string().hex().length(24).optional().allow(null),
     buyerName: Joi.string()
       .min(2)
       .max(100)
@@ -770,6 +778,7 @@ export const buyerRequirementValidation = {
   }),
 
   update: Joi.object({
+    clientId: Joi.string().hex().length(24).optional().allow(null),
     buyerName: Joi.string()
       .min(2)
       .max(100)

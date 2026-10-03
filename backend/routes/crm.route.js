@@ -12,6 +12,7 @@ import { validateBody, crmValidation } from '../middleware/validation.js';
 import {
   addDeal,
   updateDealStage,
+  setDealListing,
   updateCommission,
   getPipeline,
   exportDeals,
@@ -53,6 +54,9 @@ router.get('/pipeline/export', exportDeals);
 
 // Add a deal to a client
 router.post('/:id/deals', canEditClient, validateBody(crmValidation.addDeal), addDeal);
+
+// Link (or unlink) the property a deal is about
+router.patch('/:id/deals/:dealId/listing', canEditClient, validateBody(crmValidation.setDealListing), setDealListing);
 
 // Update deal stage
 router.patch('/:id/deals/:dealId/stage', canEditClient, validateBody(crmValidation.updateDealStage), updateDealStage);
