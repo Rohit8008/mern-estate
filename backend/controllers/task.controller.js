@@ -1,7 +1,8 @@
 import Task from '../models/task.model.js';
 import Client from '../models/client.model.js';
 import Listing from '../models/listing.model.js';
-import { errorHandler } from '../utils/error.js';
+import User from '../models/user.model.js';
+import { errorHandler, ValidationError } from '../utils/error.js';
 import { logActivity } from '../utils/activity.js';
 import { notify } from '../utils/notify.js';
 import { emitEvent } from '../utils/webhooks.js';
@@ -11,6 +12,21 @@ function canAccessUser(user, targetUserId) {
   return user.role === 'admin' || String(user.id) === String(targetUserId);
 }
 
+/** A whole-day bound: `2026-10-05` is the start (or end) of that day, anything fuller is taken as given. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+function parseDueBound(raw, name, endOfDay) {
+  const text = String(raw);
+  const date = new Date(DATE_ONLY.test(text) && endOfDay ? `${text}T23:59:59.999Z` : text);
+  if (Number.isNaN(date.getTime())) throw new ValidationError(`${name} is not a valid date.`, name);
+  return date;
+}
+
+/** Who a task is going to must be a real, active person in this workspace. */
+async function assertAssignable(userId) {
+  const user = await User.findOne({ _id: userId, role: { $in: ['admin', 'employee'] } }).select('status');
+  if (!user || user.status === 'inactive') throw new ValidationError('That person cannot be assigned tasks.', 'assignedTo');
+}
+
 export const createTask = async (req, res, next) => {
   try {
     const payload = req.body || {};
@@ -18,6 +34,7 @@ export const createTask = async (req, res, next) => {
     // Non-admins can only assign to themselves
     const assignedTo = payload.assignedTo || req.user.id;
     if (!canAccessUser(req.user, assignedTo)) return next(errorHandler(403, 'Forbidden'));
+    if (String(assignedTo) !== String(req.user.id)) await assertAssignable(assignedTo);
 
     // Validate related entity access for employees
     if (payload.related?.kind === 'client' && payload.related?.clientId) {
@@ -128,12 +145,21 @@ export const listTasks = async (req, res, next) => {
 
     if (dueFrom || dueTo) {
       filter.dueAt = {};
-      if (dueFrom) filter.dueAt.$gte = new Date(String(dueFrom));
-      if (dueTo) filter.dueAt.$lte = new Date(String(dueTo));
+      if (dueFrom) filter.dueAt.$gte = parseDueBound(dueFrom, 'dueFrom', false);
+      if (dueTo) filter.dueAt.$lte = parseDueBound(dueTo, 'dueTo', true);
+    }
+    // `due=none` is the unscheduled pile; `due=overdue` is past due and not finished.
+    if (req.query.due === 'none') filter.dueAt = null;
+    if (req.query.due === 'overdue') {
+      filter.dueAt = { $lt: new Date() };
+      filter.status = { $ne: 'done' };
     }
 
     if (req.user.role === 'admin') {
-      if (assignedTo) filter.assignedTo = assignedTo;
+      if (assignedTo) {
+        if (!/^[0-9a-fA-F]{24}$/.test(String(assignedTo))) throw new ValidationError('assignedTo is not a valid id.', 'assignedTo');
+        filter.assignedTo = String(assignedTo);
+      }
     } else {
       filter.assignedTo = req.user.id;
     }
@@ -142,6 +168,15 @@ export const listTasks = async (req, res, next) => {
       Task.find(filter).sort(sort).skip(skip).limit(limit).lean(),
       Task.countDocuments(filter),
     ]);
+
+    // Who each task is with, by name. Added beside `assignedTo` (still the id)
+    // so nothing that reads the id — the mobile app, the palette — changes.
+    const ids = [...new Set(items.map((t) => String(t.assignedTo)))];
+    const people = ids.length
+      ? await User.find({ _id: { $in: ids } }).select('username firstName lastName').lean()
+      : [];
+    const nameOf = new Map(people.map((u) => [String(u._id), [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username]));
+    for (const t of items) t.assigneeName = nameOf.get(String(t.assignedTo)) || '';
 
     res.json({ success: true, data: items, page, limit, total });
   } catch (err) {
@@ -175,6 +210,7 @@ export const updateTask = async (req, res, next) => {
 
     const updates = { ...req.body };
     if (req.user.role !== 'admin') delete updates.assignedTo;
+    if (updates.assignedTo && String(updates.assignedTo) !== String(doc.assignedTo)) await assertAssignable(updates.assignedTo);
 
     const prev = {
       status: doc.status,
@@ -213,6 +249,19 @@ export const updateTask = async (req, res, next) => {
           createdBy: req.user.id,
         });
       } catch (_) {}
+    }
+
+    // Handing a task to someone is the moment they need to hear about it.
+    if (updates.assignedTo && String(updates.assignedTo) !== String(doc.assignedTo)) {
+      notify({
+        to: updated.assignedTo,
+        actorId: req.user.id,
+        type: 'task.assigned',
+        title: `Task assigned to you: ${updated.title}`,
+        body: updated.dueAt ? `Due ${new Date(updated.dueAt).toISOString().slice(0, 10)}` : (updated.description || ''),
+        link: '/tasks',
+        entity: { type: 'task', id: updated._id },
+      });
     }
 
     if (updates.status === 'done' && prev.status !== 'done') {

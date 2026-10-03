@@ -18,6 +18,8 @@ import {
 } from 'react-icons/hi';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '../utils/currency';
+import WeekPlanner from '../components/tasks/WeekPlanner';
+import { DUE_PRESETS, dueQuery, localISODate, weekStartOf, addDays } from '../utils/taskDates';
 
 const STATUS_CONFIG = {
   todo: { label: 'To Do', color: 'bg-slate-400', textColor: 'text-slate-600', bgLight: 'bg-slate-50', border: 'border-slate-200' },
@@ -88,6 +90,18 @@ export default function TasksBoard() {
   const q = searchParams.get('q') || '';
   const statusFilter = searchParams.get('status') || '';
   const priorityFilter = searchParams.get('priority') || '';
+  // When it is due: a preset (today / week / next7 / overdue / none) or a custom
+  // from–to range. Who it is with: an admin can pick anyone on the team.
+  const duePreset = searchParams.get('due') || '';
+  const fromParam = searchParams.get('from') || '';
+  const toParam = searchParams.get('to') || '';
+  const assigneeFilter = searchParams.get('assignee') || '';
+
+  // The week the planner is showing, as its Monday.
+  const [weekStart, setWeekStart] = useState(() => weekStartOf(new Date()));
+  const weekKey = localISODate(weekStart);
+  // The date a new task starts with, when it is made from a day on the planner.
+  const [createDue, setCreateDue] = useState('');
 
   const canAccess = useMemo(() => {
     if (!currentUser) return false;
@@ -96,7 +110,7 @@ export default function TasksBoard() {
   }, [currentUser, isBuyerViewMode]);
 
   const isAdmin = currentUser?.role === 'admin';
-  const hasFilters = !!(q || statusFilter || priorityFilter);
+  const hasFilters = !!(q || statusFilter || priorityFilter || duePreset || assigneeFilter);
 
   const fetchTasks = useCallback(async () => {
     if (!canAccess) return;
@@ -107,6 +121,12 @@ export default function TasksBoard() {
       if (q) params.set('q', q);
       if (statusFilter) params.set('status', statusFilter);
       if (priorityFilter) params.set('priority', priorityFilter);
+      if (isAdmin && assigneeFilter) params.set('assignedTo', assigneeFilter);
+      // The planner shows its own week; the date filters belong to the other views.
+      const range = view === 'week'
+        ? { dueFrom: weekKey, dueTo: localISODate(addDays(weekStart, 6)) }
+        : dueQuery({ preset: duePreset, from: fromParam, to: toParam });
+      Object.entries(range).forEach(([k, v]) => params.set(k, v));
       if (view === 'table') {
         params.set('page', String(page));
         params.set('limit', String(pageSize));
@@ -126,7 +146,7 @@ export default function TasksBoard() {
     } finally {
       setLoading(false);
     }
-  }, [canAccess, q, statusFilter, priorityFilter, view, page, pageSize, sort]);
+  }, [canAccess, q, statusFilter, priorityFilter, isAdmin, assigneeFilter, duePreset, fromParam, toParam, weekKey, weekStart, view, page, pageSize, sort]);
 
   // Only an admin can reassign, so only an admin needs the list.
   useEffect(() => {
@@ -147,6 +167,7 @@ export default function TasksBoard() {
     { key: 'status', label: t('tasks.status') },
     { key: 'priority', label: t('tasks.priority') },
     { key: 'dueAt', label: t('tasks.dueDate') },
+    ...(isAdmin ? [{ key: 'assignee', label: 'Assigned to' }] : []),
     { key: 'description', label: t('tasks.description') },
   ];
   const { isVisible, toggle: toggleColumn, reset: resetColumns, visibleColumns } = useColumnPrefs('tasks', TABLE_COLUMNS);
@@ -222,6 +243,7 @@ export default function TasksBoard() {
     try {
       await apiClient.post('/tasks', formData);
       setShowCreateModal(false);
+      setCreateDue('');
       await fetchTasks();
     } catch (e) {
       setError(e?.message || 'Failed to create task');
@@ -325,6 +347,15 @@ export default function TasksBoard() {
               }`}
             >
               <HiViewList className='w-4 h-4' aria-hidden='true' />{t('tasks.table')}</button>
+            <button
+              type='button'
+              aria-pressed={view === 'week'}
+              onClick={() => { setView('week'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                view === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <HiCalendar className='w-4 h-4' aria-hidden='true' />Week</button>
           </div>
 
           <div className='h-6 w-px bg-slate-200 hidden lg:block' />
@@ -371,6 +402,20 @@ export default function TasksBoard() {
               ))}
             </select>
 
+            {isAdmin && (
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setParam('assignee', e.target.value)}
+                aria-label='Filter by assignee'
+                className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-slate-300 outline-none transition-all'
+              >
+                <option value=''>Everyone</option>
+                {agents.map((a) => (
+                  <option key={a._id} value={a._id}>{[a.firstName, a.lastName].filter(Boolean).join(' ') || a.username}</option>
+                ))}
+              </select>
+            )}
+
             {hasFilters && (
               <button
                 onClick={clearFilters}
@@ -379,6 +424,42 @@ export default function TasksBoard() {
             )}
           </div>
         </div>
+
+        {/* When it is due — not shown on the planner, which has its own week */}
+        {view !== 'week' && (
+          <div className='px-4 py-2 border-b border-slate-100 flex flex-wrap items-center gap-2' role='group' aria-label='Filter by due date'>
+            <HiCalendar className='w-4 h-4 text-slate-400' aria-hidden='true' />
+            {[...DUE_PRESETS, 'custom'].map((p) => {
+              const label = { today: 'Today', week: 'This week', next7: 'Next 7 days', overdue: 'Overdue', none: 'No date', custom: 'Custom' }[p];
+              const on = duePreset === p;
+              return (
+                <button
+                  key={p}
+                  type='button'
+                  aria-pressed={on}
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.delete('from');
+                    next.delete('to');
+                    if (on) next.delete('due'); else next.set('due', p);
+                    setSearchParams(next);
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >{label}</button>
+              );
+            })}
+            {duePreset === 'custom' && (
+              <span className='flex items-center gap-2 text-sm text-slate-600'>
+                <input type='date' value={fromParam} max={toParam || undefined} onChange={(e) => setParam('from', e.target.value)} aria-label='Due from' className='px-2 py-1 rounded-lg border border-slate-200 text-sm' />
+                <span aria-hidden='true'>to</span>
+                <input type='date' value={toParam} min={fromParam || undefined} onChange={(e) => setParam('to', e.target.value)} aria-label='Due to' className='px-2 py-1 rounded-lg border border-slate-200 text-sm' />
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -408,6 +489,19 @@ export default function TasksBoard() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Week planner */}
+        {view === 'week' && (
+          <WeekPlanner
+            tasks={tasks}
+            weekStart={weekStart}
+            onWeekChange={(d) => setWeekStart(weekStartOf(d))}
+            onAdd={(iso) => { setCreateDue(iso); setShowCreateModal(true); }}
+            onOpen={setSelectedTask}
+            onToggleDone={(task) => handleUpdateTask(task._id, { status: task.status === 'done' ? 'todo' : 'done' })}
+            showAssignee={isAdmin}
+          />
         )}
 
         {/* Cards View */}
@@ -446,6 +540,7 @@ export default function TasksBoard() {
                     <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'>
                       {items.map((task) => (
                         <TaskCard
+                          showAssignee={isAdmin}
                           key={task._id}
                           task={task}
                           onSelect={() => setSelectedTask(task)}
@@ -533,6 +628,7 @@ export default function TasksBoard() {
                   {isVisible('status') && <Th sortKey='status' sort={sort} onSort={onSort}>{t('tasks.status')}</Th>}
                   {isVisible('priority') && <Th sortKey='priority' sort={sort} onSort={onSort}>{t('tasks.priority')}</Th>}
                   {isVisible('dueAt') && <Th sortKey='dueAt' sort={sort} onSort={onSort}>{t('tasks.dueDate')}</Th>}
+                  {isAdmin && isVisible('assignee') && <Th>Assigned to</Th>}
                   {isVisible('description') && <Th>{t('tasks.description')}</Th>}
                   <Th className='w-[100px]'><span className='sr-only'>{t('tasksBoard.actions')}</span></Th>
                 </tr>
@@ -605,6 +701,9 @@ export default function TasksBoard() {
                           )}
                         </Td>
                       )}
+                      {isAdmin && isVisible('assignee') && (
+                        <Td><span className='text-[13px]'>{task.assigneeName || '—'}</span></Td>
+                      )}
                       {isVisible('description') && (
                         <Td>
                           <span className='text-muted-foreground text-[13px] truncate block max-w-[200px]'>
@@ -667,7 +766,11 @@ export default function TasksBoard() {
       {/* Create Task Modal */}
       {showCreateModal && (
         <TaskFormModal
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => { setShowCreateModal(false); setCreateDue(''); }}
+          defaultDue={createDue}
+          agents={agents}
+          isAdmin={isAdmin}
+          currentUserId={currentUser?._id || currentUser?.id}
           onSubmit={handleCreateTask}
           loading={creating}
           title={t('tasks.createNewTask')}
@@ -678,6 +781,9 @@ export default function TasksBoard() {
       {showEditModal && editingTask && (
         <TaskFormModal
           task={editingTask}
+          agents={agents}
+          isAdmin={isAdmin}
+          currentUserId={currentUser?._id || currentUser?.id}
           onClose={() => { setShowEditModal(false); setEditingTask(null); }}
           onSubmit={(data) => handleUpdateTask(editingTask._id, data)}
           loading={false}
@@ -726,7 +832,7 @@ export default function TasksBoard() {
 }
 
 // TaskCard component
-function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatusDropdown, setShowStatusDropdown, formatDueDate }) {
+function TaskCard({ showAssignee, task, onSelect, onEdit, onDelete, onStatusChange, showStatusDropdown, setShowStatusDropdown, formatDueDate }) {
   const { t } = useTranslation();
   const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
   const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
@@ -797,6 +903,11 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
             {due.text}
           </span>
         )}
+        {showAssignee && task.assigneeName && (
+          <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-slate-600 bg-slate-100'>
+            {task.assigneeName}
+          </span>
+        )}
       </div>
 
       {/* Status badge with dropdown */}
@@ -849,7 +960,7 @@ function TaskCard({ task, onSelect, onEdit, onDelete, onStatusChange, showStatus
 }
 
 // TaskFormModal component (for create and edit)
-function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
+function TaskFormModal({ task, onClose, onSubmit, loading, title, defaultDue = '', agents = [], isAdmin = false, currentUserId }) {
   const { t } = useTranslation();
   const uid = useId();
   const fid = (name) => `${uid}-${name}`;
@@ -858,12 +969,16 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
     description: task?.description || '',
     status: task?.status || 'todo',
     priority: task?.priority || 'medium',
-    dueAt: task?.dueAt ? new Date(task.dueAt).toISOString().split('T')[0] : '',
+    dueAt: task?.dueAt ? new Date(task.dueAt).toISOString().split('T')[0] : defaultDue,
+    assignedTo: String(task?.assignedTo || currentUserId || ''),
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const data = { ...formData };
+    // Only an admin can hand a task to someone else; for anyone else the field
+    // is not offered and the server keeps it with them.
+    if (!isAdmin || !data.assignedTo) delete data.assignedTo;
     if (data.dueAt) {
       data.dueAt = new Date(data.dueAt).toISOString();
     } else {
@@ -915,6 +1030,23 @@ function TaskFormModal({ task, onClose, onSubmit, loading, title }) {
             </select>
           </div>
         </div>
+        {isAdmin && agents.length > 0 && (
+          <div>
+            <label htmlFor={fid('assignee')} className='block text-sm font-medium text-slate-700 mb-1'>Assign to</label>
+            <select
+              id={fid('assignee')}
+              value={formData.assignedTo}
+              onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+              className='w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 outline-none transition-all bg-white'
+            >
+              {agents.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {[a.firstName, a.lastName].filter(Boolean).join(' ') || a.username}{String(a._id) === String(currentUserId) ? ' (you)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label htmlFor={fid('due')} className='block text-sm font-medium text-slate-700 mb-1'>{t('tasks.dueDate')}</label>
           <input
