@@ -22,6 +22,9 @@ export default {
     '**/tests/**/*.spec.js',
   ],
 
+  // Environment variables the app refuses to boot without, set before any import
+  setupFiles: ['./tests/env.js'],
+
   // Setup files run before each test file
   setupFilesAfterEnv: ['./tests/setup.js'],
 

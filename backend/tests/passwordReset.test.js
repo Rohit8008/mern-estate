@@ -75,7 +75,12 @@ describe('requesting a code tells you nothing about who has an account', () => {
     expect(unknown.status).toBe(200);
     expect(known.body.message).toBe(unknown.body.message);
     // Same fields, not merely the same message — an extra key is a tell too.
-    expect(Object.keys(known.body).sort()).toEqual(Object.keys(unknown.body).sort());
+    // `devOtp` is the one deliberate exception: it is returned only outside
+    // production and only when no mail transport is configured (a developer's
+    // machine, or CI), so the code can be read without an inbox. With mail
+    // configured it is absent, which is what a real deployment looks like.
+    const shape = (body) => Object.keys(body).filter((k) => k !== 'devOtp').sort();
+    expect(shape(known.body)).toEqual(shape(unknown.body));
   });
 
   it('never says "user not found"', async () => {

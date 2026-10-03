@@ -44,6 +44,9 @@ beforeAll(async () => {
   // Create in-memory MongoDB instance
   mongoServer = await MongoMemoryServer.create();
   const mongoUri = mongoServer.getUri();
+  // Same reason, and a safer default besides: whatever MONGO_URI a .env holds,
+  // the suite only ever talks to its own in-memory server.
+  process.env.MONGO_URI = mongoUri;
 
   // Connect to in-memory database
   await mongoose.connect(mongoUri, {
