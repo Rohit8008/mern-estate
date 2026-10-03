@@ -4,14 +4,16 @@ import { getTenantStore } from '../tenancy/tenantContext.js';
 // ---------------------------------------------------------------------------
 // OpenObserve configuration
 // ---------------------------------------------------------------------------
-const OO_URL      = process.env.OPENOBSERVE_URL      || 'http://localhost:5080';
-const OO_ORG      = process.env.OPENOBSERVE_ORG      || 'default';
-const OO_USERNAME = process.env.OPENOBSERVE_USERNAME  || '';
-const OO_PASSWORD = process.env.OPENOBSERVE_PASSWORD  || '';
-
-const OO_AUTH = OO_USERNAME
-  ? 'Basic ' + Buffer.from(`${OO_USERNAME}:${OO_PASSWORD}`).toString('base64')
-  : null;
+// Read at use, not at import. config/environment.js imports this module BEFORE it
+// calls dotenv.config(), so constants captured here saw an empty environment
+// whenever the settings lived in .env: shipping was silently off while
+// the startup check (which runs after dotenv) reported nothing wrong.
+const ooUrl  = () => process.env.OPENOBSERVE_URL || 'http://localhost:5080';
+const ooOrg  = () => process.env.OPENOBSERVE_ORG || 'default';
+const ooAuth = () => {
+  const user = process.env.OPENOBSERVE_USERNAME || '';
+  return user ? 'Basic ' + Buffer.from(`${user}:${process.env.OPENOBSERVE_PASSWORD || ''}`).toString('base64') : null;
+};
 
 const SERVICE = 'backend';
 const ENV     = process.env.NODE_ENV || 'development';
@@ -51,11 +53,12 @@ function reportShipFailure(stream, count, reason) {
 
 async function flushStream(stream) {
   const entries = buffers[stream].splice(0);
-  if (!entries.length || !OO_AUTH) return;
+  const auth = ooAuth();
+  if (!entries.length || !auth) return;
   try {
-    const res = await fetch(`${OO_URL}/api/${OO_ORG}/${stream}/_json`, {
+    const res = await fetch(`${ooUrl()}/api/${ooOrg()}/${stream}/_json`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: OO_AUTH },
+      headers: { 'Content-Type': 'application/json', Authorization: auth },
       body:    JSON.stringify(entries),
       signal:  AbortSignal.timeout(5000),
     });
@@ -70,7 +73,7 @@ async function flushStream(stream) {
  *
  * Two properties this needs, both learned the hard way:
  *
- *  * **Nothing to ship, nothing to schedule.** Without OO_AUTH `flushStream`
+ *  * **Nothing to ship, nothing to schedule.** Without credentials `flushStream`
  *    returns immediately, so arming a timer only creates work that does
  *    nothing. Buffers still drain at the 50-entry mark, so they stay bounded.
  *
@@ -81,7 +84,7 @@ async function flushStream(stream) {
  *    intermittently with "Jest has detected the following 1 open handle".
  */
 function scheduleFlush() {
-  if (flushTimer || !OO_AUTH) return;
+  if (flushTimer || !ooAuth()) return;
 
   flushTimer = setTimeout(async () => {
     flushTimer = null;
