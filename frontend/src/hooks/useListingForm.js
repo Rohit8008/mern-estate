@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/http';
 import { NATIVE_FIELD_ALIASES } from '../utils/nativeFieldAliases';
 import { isCategoryFieldActive } from '../utils/categoryFieldRules';
+import { getLocaleConfig } from '../utils/currency';
 import { useNotification } from '../contexts/NotificationContext';
 
 /**
@@ -70,6 +71,28 @@ const NATIVE_MIRRORS = {
   furnishing: (v) => ({ furnished: Boolean(v) && !/^un/i.test(String(v)) }),
 };
 
+/**
+ * Square feet in one of a category's own "Area Unit" options. Bigha, Biswa and
+ * Marla vary by state, so they are left out rather than guessed — an area in
+ * one of those is not copied into the built-in size column.
+ */
+const PLOT_UNIT_SQFT = {
+  'Sq Ft': 1,
+  'Sq Yards': 9,
+  'Sq Meters': 10.7639,
+  Acres: 43560,
+  Hectares: 107639,
+  Guntha: 1089,
+  Kanal: 5445,
+};
+
+/** Category fields the form already asks for elsewhere (the top-level Type). */
+const COVERED_BY_FORM = new Set(['transactionType']);
+
+/** True when the category's plot area can stand in for the built-in Area input. */
+export const plotAreaDrivesSize = (attributes) =>
+  !attributes?.plotAreaUnit || attributes.plotAreaUnit in PLOT_UNIT_SQFT;
+
 export function useListingForm({ mode, listingId }) {
   const navigate = useNavigate();
   const isEdit = mode === 'edit';
@@ -124,16 +147,26 @@ export function useListingForm({ mode, listingId }) {
    */
   const setCategoryField = useCallback((key, value) => {
     const nativeKey = NATIVE_FIELD_ALIASES[key];
-    setForm((prev) =>
-      nativeKey
-        ? { ...prev, [nativeKey]: value }
-        : {
-            ...prev,
-            ...(NATIVE_MIRRORS[key] ? NATIVE_MIRRORS[key](value) : {}),
-            attributes: { ...prev.attributes, [key]: value },
-          }
-    );
+    setForm((prev) => {
+      if (nativeKey) return { ...prev, [nativeKey]: value };
+      const attributes = { ...prev.attributes, [key]: value };
+      let next = { ...prev, ...(NATIVE_MIRRORS[key] ? NATIVE_MIRRORS[key](value) : {}), attributes };
+      // A land category's Plot Area is the property's size. Copy it into the
+      // built-in size columns so the form need not ask for the area twice and
+      // total value (area × rate), sorting and filtering still work.
+      if (key === 'plotArea' || key === 'plotAreaUnit') {
+        const perUnit = PLOT_UNIT_SQFT[attributes.plotAreaUnit || 'Sq Ft'];
+        const area = Number(attributes.plotArea);
+        if (perUnit && Number.isFinite(area)) {
+          const sqft = Math.round(area * perUnit);
+          next = { ...next, areaSqFt: sqft };
+          if (getLocaleConfig().areaUnit === 'sqyard') next.sqYard = Math.round((sqft / 9) * 100) / 100;
+        }
+      }
+      return next;
+    });
   }, []);
+
 
   /** The value to show for a category field, wherever it happens to live. */
   const categoryFieldValue = useCallback(
@@ -205,6 +238,12 @@ export function useListingForm({ mode, listingId }) {
     [categories, form.category]
   );
 
+  // The category's fields minus those the form already asks for itself.
+  const categoryFields = useMemo(
+    () => (selectedCategory?.fields || []).filter((f) => !COVERED_BY_FORM.has(f.key)),
+    [selectedCategory]
+  );
+
   // The server infers `propertyCategory` (residential / commercial / land) from
   // this, so it is not merely descriptive — it drives how the property is
   // classified in filters and reporting.
@@ -220,7 +259,7 @@ export function useListingForm({ mode, listingId }) {
       return 'The offer price has to be below the regular price.';
     }
     const valueOf = (key) => (NATIVE_FIELD_ALIASES[key] ? form[NATIVE_FIELD_ALIASES[key]] : form.attributes?.[key]);
-    const missing = (selectedCategory?.fields || [])
+    const missing = categoryFields
       .filter((f) => f.required && isCategoryFieldActive(f, valueOf))
       .filter((f) => {
         const v = valueOf(f.key);
@@ -229,7 +268,7 @@ export function useListingForm({ mode, listingId }) {
       .map((f) => f.label);
     if (missing.length) return `${missing.join(', ')} ${missing.length > 1 ? 'are' : 'is'} required for this category.`;
     return '';
-  }, [form, selectedCategory]);
+  }, [form, categoryFields]);
 
   const submit = useCallback(
     // `overwrite`: the person saw the conflict and chose to replace the other
@@ -313,6 +352,7 @@ export function useListingForm({ mode, listingId }) {
     selectedCategory,
     owners,
     setOwners,
+    categoryFields,
     propertyTypes,
     selectedPropertyType,
     loading,

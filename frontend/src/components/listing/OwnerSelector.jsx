@@ -71,7 +71,7 @@ export default function OwnerSelector({ owners, selectedIds, onChange, onOwnerCr
       // Selected straight away — creating an owner from inside the property
       // form always means "and this property is theirs".
       const id = String(owner._id);
-      onChange(selected.map(String).includes(id) ? selected : [...selected, id]);
+      onChange(selected.has(id) ? [...selected] : [...selected, id]);
       setDraft({ name: '', email: '', phone: '', companyName: '' });
       setAdding(false);
     } catch (err) {

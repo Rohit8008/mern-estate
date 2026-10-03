@@ -12,6 +12,7 @@ import { useAddressGeocoding } from '../hooks/useAddressGeocoding';
 import { useTenant } from '../contexts/TenantProvider';
 import ListingMapPicker from '../components/listing/ListingMapPicker';
 import ListingImages from '../components/listing/ListingImages';
+import { plotAreaDrivesSize } from '../hooks/useListingForm';
 import OwnerSelector from '../components/listing/OwnerSelector';
 import DynamicCategoryFields from '../components/DynamicCategoryFields';
 import PropertyDocuments from '../components/PropertyDocuments';
@@ -70,7 +71,7 @@ export default function ListingForm({ mode = 'create' }) {
 
   const {
     form, isDirty, setField, patch, setCategoryField, categoryFieldValue,
-    categories, selectedCategory, owners, setOwners, propertyTypes, selectedPropertyType,
+    categories, selectedCategory, categoryFields, owners, setOwners, propertyTypes, selectedPropertyType,
     loading, saving, error, loadError, submit, isEdit,
     conflict, reloadLatest, overwrite,
   } = useListingForm({ mode, listingId });
@@ -81,8 +82,12 @@ export default function ListingForm({ mode = 'create' }) {
 
   // Fields the chosen category supplies itself; the matching built-in inputs
   // are hidden so the form does not ask the same thing twice.
-  const categoryKeys = new Set((selectedCategory?.fields || []).map((f) => f.key));
-  const categoryHasRequired = (selectedCategory?.fields || []).some((f) => f.required);
+  const categoryKeys = new Set(categoryFields.map((f) => f.key));
+  const categoryHasRequired = categoryFields.some((f) => f.required);
+  // A land category's Plot Area is the size, so the built-in Area input would
+  // ask for it a second time. Beds and baths mean nothing on a plot.
+  const areaFromCategory = categoryKeys.has('plotArea') && plotAreaDrivesSize(form.attributes);
+  const isLand = categorySegment(form.category)?.[0] === 'land';
 
   // Property types that fit the category (a Factory is not residential).
   const segment = categorySegment(form.category);
@@ -370,13 +375,15 @@ export default function ListingForm({ mode = 'create' }) {
             value={form.discountPrice}
             onChange={(e) => setField('discountPrice', Number(e.target.value))}
           />
-          <Input
-            label={`Area (${unit.label})`}
-            type="number"
-            min={0}
-            value={areaValue}
-            onChange={(e) => setAreaValue(Number(e.target.value))}
-          />
+          {!areaFromCategory && (
+            <Input
+              label={`Area (${unit.label})`}
+              type="number"
+              min={0}
+              value={areaValue}
+              onChange={(e) => setAreaValue(Number(e.target.value))}
+            />
+          )}
           <Input
             label={`Rate per ${unit.label}`}
             type="number"
@@ -397,7 +404,7 @@ export default function ListingForm({ mode = 'create' }) {
               setField('totalValue', v);
             }}
           />
-          {!categoryKeys.has('bedrooms') && (
+          {!isLand && !categoryKeys.has('bedrooms') && (
             <Input
               label={t('listingForm.bedrooms')}
               type="number"
@@ -407,7 +414,7 @@ export default function ListingForm({ mode = 'create' }) {
               onChange={(e) => setField('bedrooms', Number(e.target.value))}
             />
           )}
-          {!categoryKeys.has('bathrooms') && (
+          {!isLand && !categoryKeys.has('bathrooms') && (
             <Input
               label={t('listingForm.bathrooms')}
               type="number"
@@ -441,15 +448,15 @@ export default function ListingForm({ mode = 'create' }) {
       </Section>
 
       {/* ── Category fields ──────────────────────────────────────────────── */}
-      {selectedCategory?.fields?.length > 0 && (
+      {categoryFields.length > 0 && (
         <Section
           title={`${selectedCategory.name} details`}
           description={t('listingForm.extraFieldsYourWorkspaceCollectsFor')}
         >
           <DynamicCategoryFields
-            fields={selectedCategory.fields}
+            fields={categoryFields}
             values={Object.fromEntries(
-              selectedCategory.fields.map((f) => [f.key, categoryFieldValue(f.key)])
+              categoryFields.map((f) => [f.key, categoryFieldValue(f.key)])
             )}
             onChange={setCategoryField}
           />
