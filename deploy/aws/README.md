@@ -54,3 +54,14 @@ ALB `HTTPCode_Target_5XX_Count` and `UnHealthyHostCount`; ALB `TargetResponseTim
 ## Rough cost (estimates, verify before committing)
 
 Stage 1: roughly a t3.small/medium EC2 plus Atlas. Stage 2: Fargate 0.5 vCPU/1 GB x2 tasks, ALB, a small ElastiCache node, NAT gateway (often the surprise line), CloudFront and S3, plus Atlas M10 and up. See `docs/site-src/pages/aws.html` for ranges.
+
+## Automatic deploys (GitHub Actions)
+
+`.github/workflows/deploy.yml` deploys `main` to this server after CI passes. It
+SSHes in and runs `deploy/aws/deploy.sh <sha>`, which fast-forwards the checkout,
+builds the frontend into `dist.new` on the box, swaps it in (old build kept as
+`dist.prev`), restarts PM2, waits for `/api/health/live`, and rolls back if the
+API does not come up. Add the secrets listed at the top of the workflow
+(`EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`, optionally `EC2_KNOWN_HOSTS`, `EC2_PORT`);
+until `EC2_HOST` and `EC2_SSH_KEY` exist the job skips itself. Run it by hand from
+the Actions tab (**Deploy ▸ Run workflow**) to redeploy or to try it out.

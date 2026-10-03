@@ -1,0 +1,127 @@
+# Deploy to the AWS server.
+#
+# Runs after CI passes on main (a failing build never ships), or by hand from the
+# Actions tab. It does not build anything itself: the server builds its own
+# frontend, because the VITE_* values live in a file on that box. This job only
+# opens an SSH session and runs deploy/aws/deploy.sh there, which fast-forwards
+# the checkout, rebuilds, restarts PM2, checks health and rolls back on failure.
+#
+# One-time setup — Settings ▸ Secrets and variables ▸ Actions:
+#   secrets   EC2_HOST        public DNS or IP of the instance
+#             EC2_USER        ssh user (ec2-user)
+#             EC2_SSH_KEY     private key that can log in as that user
+#             EC2_KNOWN_HOSTS (optional) output of `ssh-keyscan -t ed25519 <host>`;
+#                             without it the host key is fetched on each run
+#             EC2_PORT        (optional) defaults to 22
+#   variable  DEPLOY_HEALTH_URL (optional) e.g. https://realvista.duckdns.org/api/health/live
+#                             checked from outside after the deploy
+# Until EC2_HOST and EC2_SSH_KEY exist the job skips itself rather than failing.
+#
+# Create a "production" environment (Settings ▸ Environments) and add required
+# reviewers if you want a click-to-approve gate before each deploy.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Deploys queue; they never overlap and a running one is never cancelled halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    environment: production
+    # CI must have passed, on a push to main — not a pull request.
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' ||
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_PORT: ${{ secrets.EC2_PORT }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+    steps:
+      - name: Check deploy secrets
+        id: gate
+        run: |
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "::notice::EC2_HOST / EC2_SSH_KEY are not set — skipping deploy. See the header of .github/workflows/deploy.yml."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The commit being deployed — its deploy script is the one that runs.
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: Set up SSH
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          PORT="${EC2_PORT:-22}"
+          if [ -n "$EC2_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            for i in 1 2 3 4 5; do
+              ssh-keyscan -T 15 -p "$PORT" -t ed25519,ecdsa,rsa "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+              sleep 5
+            done
+          fi
+          test -s ~/.ssh/known_hosts
+
+      # SSH to this box drops now and then, so the whole run is retried. The
+      # script is idempotent: a second attempt just redoes steps that are cheap.
+      - name: Deploy
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          PORT="${EC2_PORT:-22}"
+          # Sent as a file, not piped to `bash -s`: a child process (npm, git)
+          # reading stdin would otherwise swallow the rest of the script.
+          B64="$(base64 -w0 deploy/aws/deploy.sh)"
+          REMOTE="echo '$B64' | base64 -d > \$HOME/.deploy-run.sh && bash \$HOME/.deploy-run.sh '$SHA'"
+          for attempt in 1 2 3 4 5; do
+            echo "::group::Attempt $attempt"
+            status=0
+            ssh -i ~/.ssh/deploy_key -p "$PORT" \
+              -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+              "${EC2_USER:-ec2-user}@${EC2_HOST}" "$REMOTE" || status=$?
+            echo "::endgroup::"
+            [ "$status" -eq 0 ] && exit 0
+            # 255 is ssh itself failing (timeout, dropped link). Anything else is
+            # the script's own verdict — it has already rolled back, so stop.
+            if [ "$status" -ne 255 ]; then
+              echo "::error::Deploy failed on the server (exit $status); it rolled back."
+              exit "$status"
+            fi
+            sleep 15
+          done
+          echo "::error::Could not reach the server over SSH after 5 attempts."
+          exit 1
+
+      - name: Check the public site
+        if: steps.gate.outputs.ready == 'true' && vars.DEPLOY_HEALTH_URL != ''
+        run: curl -fsS --retry 5 --retry-delay 5 --retry-all-errors --max-time 15 "${{ vars.DEPLOY_HEALTH_URL }}"
+
+      - name: Clean up the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
