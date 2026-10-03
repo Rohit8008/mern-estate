@@ -36,8 +36,11 @@ export default defineConfig({
           const has = (...pkgs) => pkgs.some((p) => id.includes(`/node_modules/${p}/`));
           // prop-types is imported by react-apexcharts AND by the entry graph; if it
           // lands in vendor-charts the entry statically imports 580 KB of charts.
-          if (has('react', 'react-dom', 'react-router-dom', 'react-router', '@remix-run', 'scheduler', 'prop-types', 'react-is', 'object-assign')) return 'vendor-react';
-          if (has('@reduxjs/toolkit', 'react-redux', 'redux-persist', 'redux', 'redux-thunk', 'immer', 'reselect', 'use-sync-external-store')) return 'vendor-redux';
+          // Redux shares the React chunk: react-redux and use-sync-external-store need
+          // React at evaluation time, and a separate chunk produced a vendor-react <->
+          // vendor-redux import cycle that left React undefined (white screen).
+          if (has('react', 'react-dom', 'react-router-dom', 'react-router', '@remix-run', 'scheduler', 'prop-types', 'react-is', 'object-assign',
+            '@reduxjs/toolkit', 'react-redux', 'redux-persist', 'redux', 'redux-thunk', 'immer', 'reselect', 'use-sync-external-store')) return 'vendor-react';
           if (has('leaflet', 'react-leaflet', '@react-leaflet')) return 'vendor-maps';
           if (has('apexcharts', 'react-apexcharts')) return 'vendor-charts';
           if (has('xlsx')) return 'vendor-xlsx';
@@ -81,7 +84,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,svg,png,woff2}'],
+        // index.html must be precached: navigateFallback below binds to it, and
+        // without it the service worker throws non-precached-url on install.
+        globPatterns: ['**/*.{js,css,svg,png,woff2}', 'index.html'],
         maximumFileSizeToCacheInBytes: 1.5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         // Heavy, rarely-used chunks are fetched on demand and cached at runtime
