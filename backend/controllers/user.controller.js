@@ -540,9 +540,18 @@ export const getUser = async (req, res, next) => {
     const user = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
 
     if (!user) return next(errorHandler(404, 'User not found!'));
-  
+
+    // The full document (role, assigned role, categories, status, address...) is for
+    // the person it describes and for admins. Everyone else gets the same short
+    // contact card as /public/:id.
+    const isSelf = String(user._id) === String(req.user.id);
+    if (!isSelf && req.user.role !== 'admin') {
+      const { _id, username, email, avatar, phone, role, createdAt } = user;
+      return res.status(200).json({ _id, username, email, avatar, phone, role, createdAt });
+    }
+
     const { password: pass, ...rest } = user._doc;
-  
+
     res.status(200).json(rest);
   } catch (error) {
     next(error);

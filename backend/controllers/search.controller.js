@@ -10,6 +10,7 @@ import {
 import SavedSearch from '../models/savedSearch.model.js';
 import SearchLog   from '../models/searchLog.model.js';
 import { errorHandler } from '../utils/error.js';
+import { listingScope, userHasPermission } from '../middleware/permissions.js';
 
 // Priority order when entity filter is not specified
 const ALL_ENTITIES = ['listings', 'clients', 'owners', 'buyers', 'tasks', 'users'];
@@ -101,14 +102,14 @@ async function getListingSuggestions(q, user) {
   const prefix  = new RegExp(`^${escapeRe(q)}`, 'i');
   const contains = new RegExp(escapeRe(q), 'i');
 
-  const abac = user?.role === 'employee' && user.assignedCategories?.length
-    ? { category: { $in: user.assignedCategories } }
-    : {};
+  // listingScope is the one definition of which listings this caller may see; the
+  // old category-only filter let sellers and category-less employees read everything.
+  const abac = listingScope(user);
 
   const [names, cities, localities] = await Promise.all([
     Listing.find({ isDeleted: { $ne: true }, ...abac, name: prefix }).select('name').limit(4).lean(),
-    Listing.distinct('city', { isDeleted: { $ne: true }, city: contains }),
-    Listing.distinct('locality', { isDeleted: { $ne: true }, locality: contains }),
+    Listing.distinct('city', { isDeleted: { $ne: true }, ...abac, city: contains }),
+    Listing.distinct('locality', { isDeleted: { $ne: true }, ...abac, locality: contains }),
   ]);
 
   return [
@@ -120,9 +121,12 @@ async function getListingSuggestions(q, user) {
 
 async function getClientSuggestions(q, user) {
   if (!user) return [];
+  // Same rules as the client list: viewClients, and non-admins only their own leads.
+  if (!(await userHasPermission(user, 'viewClients'))) return [];
   const Client = (await import('../models/client.model.js')).default;
   const regex  = new RegExp(`^${escapeRe(q)}`, 'i');
   const must   = { isDeleted: { $ne: true }, $or: [{ name: regex }, { phone: regex }] };
+  if (user.role !== 'admin') must.assignedTo = String(user.id);
 
   const docs = await Client.find(must).select('name phone').limit(3).lean();
   return docs.map(d => ({ text: d.name, type: 'client', meta: d.phone, priority: 3 }));

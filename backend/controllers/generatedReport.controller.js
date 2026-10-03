@@ -2,6 +2,7 @@ import GeneratedReport from '../models/generatedReport.model.js';
 import ReportTemplate from '../models/reportTemplate.model.js';
 import { errorHandler } from '../utils/error.js';
 import { sendMail } from '../utils/mailer.js';
+import { stripActiveHtml } from '../utils/htmlSafety.js';
 import { containsInsensitive } from '../utils/escapeRegex.js';
 
 export const listReports = async (req, res, next) => {
@@ -129,7 +130,7 @@ export const sendReport = async (req, res, next) => {
     const result = await sendMail({
       to: email,
       subject,
-      html: report.html,
+      html: stripActiveHtml(report.html),
       text,
     });
 

@@ -26,7 +26,6 @@ const UNVALIDATED = [
   { method: 'POST', path: '/api/upload/audio', why: 'multipart audio upload; fileValidation checks type and size' },
   { method: 'POST', path: '/api/documents/upload', why: 'multipart document upload; documentTypes and fileValidation check it' },
   { method: 'POST', path: '/api/clients/:id/photos', why: 'multipart photo upload' },
-  { method: 'POST', path: '/api/listing/:id/voice-notes', why: 'multipart voice note upload' },
 
   // ── Imports: spreadsheet rows with workspace-defined columns ──
   { method: 'POST', path: '/api/listing/import/suggest-mapping', why: 'listing import is being reworked separately; headers are free text by nature' },

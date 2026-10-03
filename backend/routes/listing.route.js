@@ -74,7 +74,7 @@ router.post('/import/commit', verifyToken, requireAdmin, commitImport);
 router.post('/bulk-import', verifyToken, requireAdmin, validateBody(listingActionValidation.bulkImport), bulkImportListings);
 
 // Voice notes
-router.post('/:id/voice-notes', verifyToken, addVoiceNote);
+router.post('/:id/voice-notes', verifyToken, validateBody(listingActionValidation.voiceNote), addVoiceNote);
 router.delete('/:id/voice-notes/:noteId', verifyToken, deleteVoiceNote);
 
 export default router;

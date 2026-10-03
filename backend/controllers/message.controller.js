@@ -10,6 +10,7 @@ import { encryptMessageWithKey, decryptMessageWithKey, isEncrypted } from '../ut
 import { inHomeTenant } from '../tenancy/tenantContext.js';
 import { notify } from '../utils/notify.js';
 import { parsePaging } from '../utils/listQuery.js';
+import { listingScope } from '../middleware/permissions.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -55,7 +56,8 @@ export const sendMessage = async (req, res, next) => {
     let finalContent = String(content).trim();
     try {
       if (listingId) {
-        const listing = await Listing.findById(listingId).lean();
+        // Only a listing the sender may see: the details are copied into the message body.
+        const listing = await Listing.findOne({ _id: listingId, ...listingScope(req.user) }).lean();
         if (listing) {
           const price = listing.offer ? listing.discountPrice : listing.regularPrice;
           const priceSuffix = listing.type === 'rent' ? ' / month' : '';

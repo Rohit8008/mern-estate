@@ -12,6 +12,7 @@ import User              from '../models/user.model.js';
 import { buildFuzzyRegex } from '../utils/search.js';
 import { searchListings as runListingSearch } from './listingSearch.js';
 import { fmtPrice } from './parser.js';
+import { userHasPermission, staffHasPermission } from '../middleware/permissions.js';
 
 const DEFAULT_LIMIT = 5;
 
@@ -87,6 +88,8 @@ export async function searchListings(parsed, user, limit = DEFAULT_LIMIT) {
 export async function searchClients(parsed, user, limit = DEFAULT_LIMIT) {
   const { remaining, filters } = parsed;
   if (!remaining || remaining.length < 2) return emptyGroup('clients', 'Leads / Clients', 'client');
+  // GET /api/client asks for viewClients; the palette must not be a way around it.
+  if (!(await userHasPermission(user, 'viewClients'))) return emptyGroup('clients', 'Leads / Clients', 'client');
 
   // Same rule the list endpoint enforces (client.controller.js): an admin sees
   // the workspace, everyone else sees only what is assigned to them. The palette
@@ -130,6 +133,8 @@ export async function searchClients(parsed, user, limit = DEFAULT_LIMIT) {
 export async function searchOwners(parsed, user, limit = DEFAULT_LIMIT) {
   const { remaining } = parsed;
   if (!remaining || remaining.length < 2) return emptyGroup('owners', 'Property Owners', 'owner');
+  // Same strict permission as GET /api/owner/list: sellers and roles without it get nothing.
+  if (!(await userHasPermission(user, 'viewOwners'))) return emptyGroup('owners', 'Property Owners', 'owner');
 
   const regex = buildFuzzyRegex(remaining, { fuzzyLevel: 'medium' });
   const docs = await Owner.find({
@@ -160,11 +165,15 @@ export async function searchOwners(parsed, user, limit = DEFAULT_LIMIT) {
 export async function searchBuyers(parsed, user, limit = DEFAULT_LIMIT) {
   const { remaining, filters } = parsed;
   if (!remaining || remaining.length < 2) return emptyGroup('buyers', 'Buyer Requirements', 'buyer');
+  // Same rule as the /api/buyer-requirements routes.
+  if (!(await staffHasPermission(user, 'viewBuyerRequirements'))) return emptyGroup('buyers', 'Buyer Requirements', 'buyer');
 
   const regex = buildFuzzyRegex(remaining, { fuzzyLevel: 'medium' });
 
+  // Non-staff (sellers) only ever see requirements they created, as in the controller.
   const must = {};
   if (user.role === 'employee') must.assignedAgent = actorId(user);
+  else if (user.role !== 'admin') must.createdBy = actorId(user);
 
   const docs = await BuyerRequirement.find({
     ...must,

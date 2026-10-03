@@ -100,6 +100,21 @@ export async function staffHasPermission(user, permission) {
 }
 
 /**
+ * Strict form of the check requirePermission performs, for code that is not a
+ * route guard (search fan-out, suggestions): admin yes; anyone without a usable
+ * assigned role no. Unlike staffHasPermission there is no legacy fallback and
+ * sellers are NOT waved through — use it where the matching route uses the
+ * strict requirePermission.
+ */
+export async function userHasPermission(user, permission) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (!user.assignedRole) return false;
+  const role = await getCachedRole(user.assignedRole);
+  return !!role && role.isActive !== false && roleAllows(role, permission);
+}
+
+/**
  * Route guard form of staffHasPermission, for routes that used to be open to
  * every signed-in user. Same fail-at-load check on the key as requirePermission.
  */

@@ -288,6 +288,14 @@ export const listingActionValidation = {
   bulkImport: Joi.object({
     listings: Joi.array().items(Joi.object().unknown(true)).min(1).max(100).required(),
   }),
+
+  // The recording is uploaded to Cloudinary by the client; only its https URL is
+  // stored. A bare `url` string let `javascript:` and external-tracker URLs in.
+  voiceNote: Joi.object({
+    url: Joi.string().uri({ scheme: ['https'] }).max(2000).required(),
+    label: Joi.string().max(200).allow('').optional(),
+    duration: Joi.number().min(0).max(86400).optional(),
+  }),
 };
 
 // Property type validation schemas

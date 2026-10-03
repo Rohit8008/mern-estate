@@ -6,6 +6,26 @@ import { errorHandler } from '../utils/error.js';
 import { logActivity } from '../utils/activity.js';
 import { parsePaging, parseSort } from '../utils/listQuery.js';
 import { containsInsensitive } from '../utils/escapeRegex.js';
+import { listingScope } from '../middleware/permissions.js';
+
+/**
+ * A transaction pushes side effects onto the listing it names (status -> sold /
+ * rented) and the client it names (a closed_won deal). Those ids come from the
+ * request body, so the caller must be able to see both: otherwise any employee
+ * could flip a colleague's listing to sold or write a deal onto a lead they do
+ * not own. Throws 403 when either is out of scope; skips ids that are absent.
+ */
+export async function assertCanReference(user, { property, client }) {
+  if (property) {
+    const ok = await Listing.exists({ _id: property, ...listingScope(user) });
+    if (!ok) throw errorHandler(403, 'You do not have access to that property');
+  }
+  if (client) {
+    const scope = user.role === 'admin' ? {} : { assignedTo: user.id };
+    const ok = await Client.exists({ _id: client, isDeleted: { $ne: true }, ...scope });
+    if (!ok) throw errorHandler(403, 'You do not have access to that client');
+  }
+}
 
 // When a transaction completes, push a closed_won deal to the linked client.
 // Skipped if the transaction already has a dealRef (deal created this transaction).
@@ -107,6 +127,7 @@ export const listTransactions = async (req, res, next) => {
 export const createTransaction = async (req, res, next) => {
   try {
     const body = req.body;
+    await assertCanReference(req.user, { property: body.property, client: body.client });
     const doc = await Transaction.create({
       property: body.property || null,
       propertyName: body.propertyName,
@@ -155,6 +176,8 @@ export const updateTransaction = async (req, res, next) => {
 
     // Strip fields the client must never overwrite
     const { dealRef: _dr, agent: _ag, isDeleted: _id, ...safeBody } = req.body;
+
+    await assertCanReference(req.user, { property: safeBody.property, client: safeBody.client });
 
     // Fetch pre-update state so we can revert the old listing if property changes
     const pre = await Transaction.findOne(ownershipFilter).select('property').lean();

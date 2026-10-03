@@ -1,6 +1,7 @@
 import ReportTemplate from '../models/reportTemplate.model.js';
 import { errorHandler } from '../utils/error.js';
 import { sendMail } from '../utils/mailer.js';
+import { escapeHtml, stripActiveHtml } from '../utils/htmlSafety.js';
 
 export const listTemplates = async (req, res, next) => {
   try {
@@ -76,7 +77,9 @@ export const incrementUsage = async (req, res, next) => {
 
 export const sendReport = async (req, res, next) => {
   try {
-    const template = await ReportTemplate.findById(req.params.id);
+    // Own templates only, like every other handler here: findById let anyone send
+    // (and bump usage on) a colleague's template.
+    const template = await ReportTemplate.findOne({ _id: req.params.id, createdBy: req.user.id });
     if (!template) return next(errorHandler(404, 'Template not found'));
 
     const { clientEmail, clientName, propertyName, notes, reportHtml } = req.body;
@@ -88,12 +91,14 @@ export const sendReport = async (req, res, next) => {
     const result = await sendMail({
       to: clientEmail,
       subject,
-      html: reportHtml || `<p>Dear ${clientName || 'Client'},</p><p>Please find your property report for <strong>${propertyName}</strong>.</p>`,
+      html: reportHtml
+        ? stripActiveHtml(reportHtml)
+        : `<p>Dear ${escapeHtml(clientName || 'Client')},</p><p>Please find your property report for <strong>${escapeHtml(propertyName || template.name)}</strong>.</p>`,
       text,
     });
 
     // Increment usage
-    await ReportTemplate.findByIdAndUpdate(req.params.id, {
+    await ReportTemplate.findByIdAndUpdate(template._id, {
       $inc: { usageCount: 1 },
       lastUsed: new Date(),
     });

@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyToken } from '../utils/verifyUser.js';
+import { verifyToken, requireRole } from '../utils/verifyUser.js';
 import {
   listReports,
   getReport,
@@ -13,6 +13,9 @@ import { validateBody, generatedReportValidation } from '../middleware/validatio
 const router = express.Router();
 
 router.use(verifyToken);
+// Client reports are CRM staff work; a seller account has no use for them and
+// /send relays mail from the agency's own domain.
+router.use(requireRole('admin', 'employee'));
 
 router.get('/', listReports);
 router.get('/:id', getReport);
