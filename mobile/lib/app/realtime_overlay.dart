@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import '../core/push/chat_notifications.dart';
 import '../core/push/push_providers.dart';
 import '../core/realtime/socket_provider.dart';
 import 'router/app_router.dart';
@@ -70,6 +71,14 @@ class _RealtimeOverlayState extends ConsumerState<RealtimeOverlay> {
       ref.invalidate(unreadNotificationsProvider);
       ref.read(goRouterProvider).push('/notifications');
     }
+    // App open: show chat pushes as notifications too (skipped for the chat on
+    // screen), and open the conversation when one is tapped.
+    FirebaseMessaging.onMessage.listen((m) {
+      if (m.data['type'] == 'chat') ChatNotifications.show(m.data);
+    });
+    ChatNotifications.onOpenChat = (id, name) =>
+        ref.read(goRouterProvider).push('/chat/$id?name=${Uri.encodeQueryComponent(name)}');
+    ChatNotifications.handleLaunch();
     FirebaseMessaging.onMessageOpenedApp.listen(open);
     open(await FirebaseMessaging.instance.getInitialMessage());
   }

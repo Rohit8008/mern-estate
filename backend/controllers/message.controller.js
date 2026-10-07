@@ -1,4 +1,5 @@
-import { sendPush } from '../utils/push.js';
+import { sendChatPush } from '../utils/push.js';
+import { resolveDelivery } from '../utils/notificationTypes.js';
 import mongoose from 'mongoose';
 import Message from '../models/message.model.js';
 import { errorHandler } from '../utils/error.js';
@@ -120,17 +121,6 @@ export const sendMessage = async (req, res, next) => {
         { _id: pending._id },
         { $set: { title: `New messages from ${who}`, body: preview, createdAt: new Date(), updatedAt: new Date() } }
       );
-      // The refresh above bypasses notify(), which is what sends pushes, so
-      // without this only the first message of a conversation reached a closed
-      // app. `tag` makes the phone replace the previous banner from this sender
-      // instead of stacking one per message.
-      sendPush([String(receiverId)], {
-        title: `New message from ${who}`,
-        body: preview,
-        link: `/messages?user=${req.user.id}`,
-        notificationId: String(pending._id),
-        tag: `msg:${req.user.id}`,
-      });
     } else {
       notify({
         to: receiverId,
@@ -141,6 +131,20 @@ export const sendMessage = async (req, res, next) => {
         link: `/messages?user=${req.user.id}`,
         actorId: req.user.id,
       }).catch(() => {});
+    }
+
+    // The phone, like a chat app: every message arrives on its own, with the
+    // sender's name and the text, and the app stacks them per conversation.
+    // Separate from the bell row above (one per sender), which is only the
+    // history list. Respects the receiver's "new message" setting.
+    const receiverPrefs = await User.findById(receiverId).select('preferences').lean();
+    if (resolveDelivery(receiverPrefs?.preferences?.notifications, 'message.received').inApp) {
+      sendChatPush(String(receiverId), {
+        senderId: String(req.user.id),
+        senderName: who,
+        text: preview,
+        messageId: String(msg?._id || ''),
+      });
     }
     res.status(201).json(decrypted);
   } catch (error) {

@@ -104,7 +104,11 @@ export async function notify({
         // preference as the in-app row: someone who turned this type off in
         // the app is not buzzed about it. Not awaited: FCM is slower than the
         // request that raised this.
-        sendPush([String(user._id)], { title, body, link, notificationId: String(doc._id) });
+        // Chat messages push from the message controller (one per message, in
+        // the app's own conversation style), not from here.
+        if (type !== 'message.received') {
+          sendPush([String(user._id)], { title, body, link, notificationId: String(doc._id) });
+        }
 
         // Push straight to any open tab so the bell updates without a poll.
         emitToUser(user._id, 'notification:new', {

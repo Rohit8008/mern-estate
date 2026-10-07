@@ -14,6 +14,8 @@ import '../../features/leads/presentation/leads_list_screen.dart';
 import '../../features/properties/presentation/properties_list_screen.dart';
 import '../../shared/widgets/app_states.dart';
 import 'crm_bottom_nav_shell.dart';
+import '../../features/messages/domain/chat_user.dart';
+import '../../features/messages/presentation/chat_thread_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import 'go_router_refresh_notifier.dart';
 import 'more_screen.dart';
@@ -67,6 +69,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/more', builder: (context, state) => const MoreScreen()),
       // Where a tapped push notification lands.
       GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
+      // A tapped chat notification: straight into that conversation.
+      GoRoute(
+        path: '/chat/:id',
+        builder: (context, state) => ChatThreadScreen(
+          otherUser: ChatUser(id: state.pathParameters['id']!, username: state.uri.queryParameters['name'] ?? 'Chat'),
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => CrmBottomNavShell(navigationShell: navigationShell),
         branches: [

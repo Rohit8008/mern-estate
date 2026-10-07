@@ -13,6 +13,9 @@ import 'core/logging/app_logger.dart';
 import 'core/logging/provider_logging_observer.dart';
 import 'core/network/api_client.dart';
 import 'core/network/providers.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+import 'core/push/chat_notifications.dart';
 import 'core/push/push_providers.dart';
 import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
@@ -45,6 +48,10 @@ Future<void> _run(DateTime launchedAt) async {
   final apiClient = await ApiClient.create(baseUrl: Env.apiBaseUrl);
   appLog.start(sender: dioLogSender(apiClient.dio));
   final pushAvailable = await PushService.initFirebase();
+  if (pushAvailable) {
+    FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
+    await ChatNotifications.init();
+  }
 
   runApp(ProviderScope(
     overrides: [

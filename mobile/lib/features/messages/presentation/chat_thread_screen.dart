@@ -1,3 +1,4 @@
+import '../../../core/push/chat_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -23,8 +24,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   bool _sending = false;
 
   @override
+  void dispose() {
+    if (ChatNotifications.activeChatId == widget.otherUser.id) ChatNotifications.activeChatId = null;
+    _inputController.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
+    ChatNotifications.activeChatId = widget.otherUser.id;
+    ChatNotifications.clear(widget.otherUser.id);
     _markRead();
   }
 
@@ -43,12 +53,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (days == 0) return 'Today';
     if (days == 1) return 'Yesterday';
     return DateFormat(local.year == now.year ? 'EEE, d MMM' : 'd MMM yyyy').format(local);
-  }
-
-  @override
-  void dispose() {
-    _inputController.dispose();
-    super.dispose();
   }
 
   Future<void> _send() async {

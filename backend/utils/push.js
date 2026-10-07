@@ -69,7 +69,7 @@ function isDeadToken(status, body) {
   return status === 404 || code === 'UNREGISTERED' || code === 'INVALID_ARGUMENT';
 }
 
-async function sendOne(token, { title, body, data, tag }) {
+async function sendOne(token, { title, body, data, tag, dataOnly = false }) {
   const acct = loadAccount();
   const res = await fetch(`https://fcm.googleapis.com/v1/projects/${acct.project_id}/messages:send`, {
     method: 'POST',
@@ -77,15 +77,53 @@ async function sendOne(token, { title, body, data, tag }) {
     body: JSON.stringify({
       message: {
         token,
-        notification: { title, body },
+        // A data-only message is built into a notification by the app itself,
+        // which is what lets a chat stack per sender instead of one banner each.
+        ...(dataOnly ? {} : { notification: { title, body } }),
         data,
-        android: { priority: 'HIGH', notification: { channel_id: 'realvista_default', ...(tag ? { tag } : {}) } },
+        android: dataOnly
+          ? { priority: 'HIGH' }
+          : { priority: 'HIGH', notification: { channel_id: 'realvista_default', ...(tag ? { tag } : {}) } },
       },
     }),
   });
   if (res.ok) return { ok: true };
   const json = await res.json().catch(() => ({}));
   return { ok: false, dead: isDeadToken(res.status, json), status: res.status };
+}
+
+/**
+ * A chat message, as data the app turns into a conversation notification.
+ * The text travels through Google's push service; nothing else about the
+ * conversation does.
+ */
+export async function sendChatPush(userId, { senderId, senderName, text, messageId }) {
+  try {
+    if (!isPushConfigured()) return 0;
+    const devices = await DeviceToken.find({ user: userId }).select('token').lean();
+    if (!devices.length) return 0;
+    const data = {
+      type: 'chat',
+      senderId: String(senderId),
+      senderName: String(senderName).slice(0, 80),
+      text: String(text).slice(0, 500),
+      messageId: String(messageId || ''),
+      sentAt: String(Date.now()),
+    };
+    let delivered = 0;
+    const dead = [];
+    for (const { token } of devices) {
+      const result = await sendOne(token, { data, dataOnly: true });
+      if (result.ok) delivered += 1;
+      else if (result.dead) dead.push(token);
+      else logger.warn('Chat push not delivered', { status: result.status });
+    }
+    if (dead.length) await DeviceToken.deleteMany({ token: { $in: dead } });
+    return delivered;
+  } catch (err) {
+    logger.error('Chat push failed', { message: err.message });
+    return 0;
+  }
 }
 
 /**
