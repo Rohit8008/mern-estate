@@ -1,3 +1,4 @@
+import { sendPush } from '../utils/push.js';
 import mongoose from 'mongoose';
 import Message from '../models/message.model.js';
 import { errorHandler } from '../utils/error.js';
@@ -119,6 +120,17 @@ export const sendMessage = async (req, res, next) => {
         { _id: pending._id },
         { $set: { title: `New messages from ${who}`, body: preview, createdAt: new Date(), updatedAt: new Date() } }
       );
+      // The refresh above bypasses notify(), which is what sends pushes, so
+      // without this only the first message of a conversation reached a closed
+      // app. `tag` makes the phone replace the previous banner from this sender
+      // instead of stacking one per message.
+      sendPush([String(receiverId)], {
+        title: `New message from ${who}`,
+        body: preview,
+        link: `/messages?user=${req.user.id}`,
+        notificationId: String(pending._id),
+        tag: `msg:${req.user.id}`,
+      });
     } else {
       notify({
         to: receiverId,

@@ -69,7 +69,7 @@ function isDeadToken(status, body) {
   return status === 404 || code === 'UNREGISTERED' || code === 'INVALID_ARGUMENT';
 }
 
-async function sendOne(token, { title, body, data }) {
+async function sendOne(token, { title, body, data, tag }) {
   const acct = loadAccount();
   const res = await fetch(`https://fcm.googleapis.com/v1/projects/${acct.project_id}/messages:send`, {
     method: 'POST',
@@ -79,7 +79,7 @@ async function sendOne(token, { title, body, data }) {
         token,
         notification: { title, body },
         data,
-        android: { priority: 'HIGH', notification: { channel_id: 'realvista_default' } },
+        android: { priority: 'HIGH', notification: { channel_id: 'realvista_default', ...(tag ? { tag } : {}) } },
       },
     }),
   });
@@ -90,10 +90,10 @@ async function sendOne(token, { title, body, data }) {
 
 /**
  * @param {string[]} userIds
- * @param {{title: string, body?: string, link?: string, notificationId?: string}} message
+ * @param {{title: string, body?: string, link?: string, notificationId?: string, tag?: string}} message
  * @returns {Promise<number>} how many devices accepted it
  */
-export async function sendPush(userIds, { title, body = '', link = '', notificationId = '' }) {
+export async function sendPush(userIds, { title, body = '', link = '', notificationId = '', tag = '' }) {
   try {
     if (!isPushConfigured() || !userIds?.length) return 0;
     const devices = await DeviceToken.find({ user: { $in: userIds } }).select('token').lean();
@@ -104,7 +104,7 @@ export async function sendPush(userIds, { title, body = '', link = '', notificat
     let delivered = 0;
     const dead = [];
     for (const { token } of devices) {
-      const result = await sendOne(token, { title: String(title).slice(0, 120), body: String(body).slice(0, 240), data });
+      const result = await sendOne(token, { title: String(title).slice(0, 120), body: String(body).slice(0, 240), data, tag });
       if (result.ok) delivered += 1;
       else if (result.dead) dead.push(token);
       else logger.warn('Push not delivered', { status: result.status });
