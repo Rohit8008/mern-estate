@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { sendMail } from '../utils/mailer.js';
-import { escapeHtml } from '../utils/search.js';
+import { renderEmail } from '../utils/emailLayout.js';
 
 const router = express.Router();
 
@@ -32,48 +32,29 @@ router.post('/', contactLimiter, async (req, res) => {
 
   const OWNER_EMAIL = process.env.SMTP_USER || 'mittalrohit701@gmail.com';
 
-  // Every value below is typed by a stranger and lands in an HTML email — one
-  // of them in an auto-reply to whatever address they typed. Unescaped, the
-  // form sent attacker-written HTML from our domain to any inbox.
-  const safe = {
-    name: escapeHtml(name.trim()).slice(0, 120),
-    email: escapeHtml(email.trim()).slice(0, 254),
-    phone: escapeHtml(phone || '').slice(0, 30),
-    company: escapeHtml(company.trim()).slice(0, 150),
-    teamSize: escapeHtml(teamSize || '').slice(0, 20),
-    message: escapeHtml(message || '').slice(0, 2000),
-  };
+  // renderEmail escapes every value, so stranger-typed text can't inject markup.
 
   // Notify owner. The request exists nowhere else, so if this fails the
   // visitor is told so rather than being told "received" for a lost lead.
+  const ownerMail = renderEmail({
+    preheader: `${name.trim().slice(0, 120)} from ${company.trim().slice(0, 150)} wants a demo`,
+    heading: 'New demo request',
+    paragraphs: ['Someone wants to see Real Vista CRM in action. Reply to this email to answer them directly.'],
+    details: [
+      ['Name', name.trim().slice(0, 120)],
+      ['Email', email.trim().slice(0, 254)],
+      ['Phone', (phone || '').slice(0, 30)],
+      ['Company', company.trim().slice(0, 150)],
+      ['Team size', (teamSize || '').slice(0, 20)],
+      ['Message', (message || '').slice(0, 2000)],
+    ],
+    footer: 'Sent by the Real Vista website contact form.',
+  });
   const notified = await sendMail({
     to: OWNER_EMAIL,
     subject: `New Demo Request — ${company.trim().slice(0, 150)} (${name.trim().slice(0, 120)})`,
     replyTo: email.trim(),
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
-        <h2 style="color:#1e293b;margin-bottom:4px">New Demo Request</h2>
-        <p style="color:#64748b;margin-top:0;margin-bottom:24px">Someone wants to see Real Vista CRM in action.</p>
-        <table style="width:100%;border-collapse:collapse">
-          ${[
-            ['Name',       safe.name],
-            ['Email',      safe.email],
-            ['Phone',      safe.phone || '—'],
-            ['Company',    safe.company],
-            ['Team Size',  safe.teamSize || '—'],
-            ['Message',    safe.message || '—'],
-          ].map(([k, v]) => `
-            <tr>
-              <td style="padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;font-size:13px;width:120px;font-weight:600">${k}</td>
-              <td style="padding:10px 12px;border:1px solid #e2e8f0;color:#1e293b;font-size:14px">${v}</td>
-            </tr>`).join('')}
-        </table>
-        <div style="margin-top:24px;padding:16px;background:#eef2ff;border-radius:8px">
-          <p style="margin:0;color:#4338ca;font-size:13px">
-            Reply to this email or call <strong>${safe.phone || 'number not provided'}</strong> to follow up.
-          </p>
-        </div>
-      </div>`,
+    ...ownerMail,
   });
 
   if (!notified?.sent) {
@@ -89,16 +70,15 @@ router.post('/', contactLimiter, async (req, res) => {
   await sendMail({
     to: email,
     subject: `We got your request — Real Vista`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
-        <h2 style="color:#1e293b">Thanks for your request</h2>
-        <p style="color:#475569">We've received your demo request and will get back to you within <strong>24 hours</strong>.</p>
-        <p style="color:#475569">In the meantime, feel free to reach us directly:</p>
-        <ul style="color:#475569">
-          <li>Email: <a href="mailto:${OWNER_EMAIL}" style="color:#4f46e5">${OWNER_EMAIL}</a></li>
-        </ul>
-        <p style="color:#94a3b8;font-size:12px;margin-top:32px">Real Vista — CRM for real estate agencies. We use these details only to arrange your demo. Reply "delete" and we will remove them.</p>
-      </div>`,
+    ...renderEmail({
+      preheader: "We've received your demo request.",
+      heading: 'Thanks for your request',
+      paragraphs: [
+        "We've received your demo request and will get back to you within 24 hours.",
+        `In the meantime you can reach us at ${OWNER_EMAIL}.`,
+      ],
+      footer: 'Real Vista — CRM for real estate agencies. We use these details only to arrange your demo. Reply "delete" and we will remove them.',
+    }),
   });
 
   res.status(200).json({ success: true, message: 'Request received! We will be in touch within 24 hours.' });

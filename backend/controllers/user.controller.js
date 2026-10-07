@@ -1,6 +1,7 @@
 import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
 import { sendMail, isMailConfigured } from '../utils/mailer.js';
+import { renderEmail } from '../utils/emailLayout.js';
 import SecurityLog from '../models/securityLog.model.js';
 import User from '../models/user.model.js';
 import { errorHandler } from '../utils/error.js';
@@ -181,12 +182,15 @@ export const requestPasswordReset = async (req, res, next) => {
       // Deliberately not awaited: awaiting it makes a real address take an SMTP
       // round trip longer than an unknown one, which is the same leak measured
       // with a stopwatch instead of read off the status code.
-      sendMail({
-        to: email,
-        subject: 'Your password reset OTP',
-        text: `Your OTP is ${otp}. It expires in 10 minutes.`,
-        html: `<p>Your OTP is <b>${otp}</b>. It expires in 10 minutes.</p>`,
-      }).catch(() => {});
+      const mail = renderEmail({
+        preheader: `Your Real Vista password reset code is ${otp}`,
+        heading: 'Reset your password',
+        paragraphs: ['Use this code to reset your password. It expires in 10 minutes and works once.'],
+        code: otp,
+        notes: ["Didn't ask for this? You can ignore this email; your password stays the same. Never share this code with anyone."],
+        footer: 'Sent by Real Vista because a password reset was requested for this address.',
+      });
+      sendMail({ to: email, subject: 'Your Real Vista password reset code', ...mail }).catch(() => {});
     } else {
       logger.security?.('password_reset_unknown_address', { email: maskEmail(email), ip: req.ip });
     }

@@ -4,6 +4,7 @@ import { emitToUser } from '../socket.js';
 import { sendMail } from './mailer.js';
 import { resolveDelivery, isNotificationType } from './notificationTypes.js';
 import { resolveTemplate } from './emailTemplates.js';
+import { renderEmail } from './emailLayout.js';
 import { logger } from './logger.js';
 
 /**
@@ -120,11 +121,22 @@ export async function notify({
           link: link ? absoluteLink(link) : '',
         });
 
+        // No custom wording and no caller-supplied HTML: use the standard
+        // layout so every notification looks like the rest of our mail.
+        const fallback = renderEmail({
+          preheader: body || title,
+          heading: title,
+          greeting: user.username ? `Hi ${user.username},` : '',
+          paragraphs: body ? [body] : [],
+          button: link && absoluteLink(link) ? { label: 'Open in Real Vista', url: absoluteLink(link) } : null,
+          footer: 'You get this because of your notification settings in Real Vista.',
+        });
+
         const result = await sendMail({
           to: user.email,
           subject: custom?.subject || email?.subject || title,
-          text: email?.text || `${title}\n\n${body}`.trim(),
-          html: custom?.html || email?.html,
+          text: email?.text || fallback.text,
+          html: custom?.html || email?.html || fallback.html,
         });
 
         if (result?.sent) {

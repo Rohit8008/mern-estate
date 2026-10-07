@@ -1,7 +1,8 @@
 import ReportTemplate from '../models/reportTemplate.model.js';
 import { errorHandler } from '../utils/error.js';
 import { sendMail } from '../utils/mailer.js';
-import { escapeHtml, stripActiveHtml } from '../utils/htmlSafety.js';
+import { renderEmail } from '../utils/emailLayout.js';
+import { stripActiveHtml } from '../utils/htmlSafety.js';
 
 export const listTemplates = async (req, res, next) => {
   try {
@@ -93,7 +94,11 @@ export const sendReport = async (req, res, next) => {
       subject,
       html: reportHtml
         ? stripActiveHtml(reportHtml)
-        : `<p>Dear ${escapeHtml(clientName || 'Client')},</p><p>Please find your property report for <strong>${escapeHtml(propertyName || template.name)}</strong>.</p>`,
+        : renderEmail({
+            heading: `Property report: ${propertyName || template.name}`,
+            greeting: `Dear ${clientName || 'Client'},`,
+            paragraphs: [`Please find your property report for ${propertyName || template.name}.`, ...(notes ? [`Notes: ${notes}`] : [])],
+          }).html,
       text,
     });
 

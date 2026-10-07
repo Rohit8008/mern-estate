@@ -21,6 +21,7 @@
 import crypto from 'crypto';
 import { config } from '../config/environment.js';
 import { sendMail } from '../utils/mailer.js';
+import { renderEmail } from '../utils/emailLayout.js';
 import { logger } from '../utils/logger.js';
 import { workspaceBaseUrl } from './workspaceUrl.js';
 
@@ -89,9 +90,6 @@ export function inviteUrl(token, tenant) {
  * console shows them the link to pass on by hand. The token is already stored,
  * so nothing is lost.
  */
-const escapeHtml = (v) =>
-  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-
 const ROLE_LINE = {
   admin: 'as an administrator, so you can set up the workspace and invite your team',
   employee: 'as a team member',
@@ -115,63 +113,24 @@ export function buildInviteEmail({ url, workspace, workspaceSlug = '', inviterNa
     ? `${inviterName} invited you to ${workspace} on ${product}`
     : `You're invited to ${workspace} on ${product}`;
 
-  const text = [
-    hello,
-    '',
-    `${who} to join ${workspace} on ${product}${roleLine}.`,
-    '',
-    `${product} is where the agency keeps its properties, leads, deals and follow-ups in one place, on the web and on Android.`,
-    '',
-    'Accept the invitation and choose your password:',
-    url,
-    '',
-    `This link works once and expires on ${expires}.`,
-    ...(workspaceSlug ? ['', `To sign in later, enter the workspace "${workspaceSlug}" on the sign-in screen.`] : []),
-    "If you weren't expecting this invitation, you can ignore this email; no account is active until you accept.",
-  ].join('\n');
-
-  const e = escapeHtml;
-  const html = `<!doctype html>
-<html><body style="margin:0;padding:0;background:#f3f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a">
-<div style="display:none;max-height:0;overflow:hidden">${e(who)} to join ${e(workspace)}. Accept by ${e(expires)}.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f4;padding:32px 16px">
-  <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0">
-      <tr><td style="padding:28px 32px 0">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="width:36px;height:36px;border-radius:10px;background:${colour};color:#fff;font-weight:700;font-size:16px;text-align:center;vertical-align:middle">${e(workspace.charAt(0).toUpperCase())}</td>
-          <td style="padding-left:10px;font-weight:700;font-size:15px">${e(workspace)}</td>
-        </tr></table>
-      </td></tr>
-      <tr><td style="padding:24px 32px 0">
-        <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:700">You're invited to ${e(workspace)}</h1>
-        <p style="margin:14px 0 0;font-size:15px;line-height:1.6;color:#334155">${e(hello)}</p>
-        <p style="margin:8px 0 0;font-size:15px;line-height:1.6;color:#334155">
-          ${inviterName ? `<strong>${e(inviterName)}</strong> has invited you` : 'You have been invited'} to join
-          <strong>${e(workspace)}</strong> on ${product}${e(roleLine)}.
-        </p>
-        <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#64748b">
-          ${product} keeps the agency's properties, leads, deals and follow-ups in one place, on the web and on Android.
-        </p>
-      </td></tr>
-      <tr><td style="padding:24px 32px 0">
-        <a href="${e(url)}" style="display:inline-block;background:${colour};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:999px">Accept invitation</a>
-        <p style="margin:12px 0 0;font-size:13px;color:#64748b">You'll choose your password, then go straight into the workspace.</p>
-        ${workspaceSlug ? `<p style="margin:14px 0 0;padding:10px 14px;background:#f1f5f9;border-radius:10px;font-size:13px;color:#334155">To sign in later, enter the workspace <strong style="font-family:ui-monospace,Menlo,monospace">${e(workspaceSlug)}</strong> on the sign-in screen, on the web or in the Android app.</p>` : ''}
-      </td></tr>
-      <tr><td style="padding:24px 32px 28px">
-        <p style="margin:0;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12.5px;line-height:1.6;color:#64748b">
-          The button works once and expires on <strong>${e(expires)}</strong>. If it doesn't open, paste this into your browser:<br>
-          <a href="${e(url)}" style="color:${colour};word-break:break-all">${e(url)}</a>
-        </p>
-        <p style="margin:12px 0 0;font-size:12.5px;line-height:1.6;color:#94a3b8">
-          Weren't expecting this? You can ignore this email. No account is active until the invitation is accepted.
-        </p>
-      </td></tr>
-    </table>
-  </td></tr>
-</table>
-</body></html>`;
+  const { html, text } = renderEmail({
+    brand: workspace,
+    accent: colour,
+    preheader: `${who} to join ${workspace}. Accept by ${expires}.`,
+    heading: `You're invited to ${workspace}`,
+    greeting: hello,
+    paragraphs: [
+      `${who} to join ${workspace} on ${product}${roleLine}.`,
+      `${product} keeps the agency's properties, leads, deals and follow-ups in one place, on the web and on Android.`,
+      ...(workspaceSlug ? [`To sign in later, enter the workspace "${workspaceSlug}" on the sign-in screen, on the web or in the Android app.`] : []),
+    ],
+    button: { label: 'Accept invitation', url },
+    notes: [
+      `You'll choose your password, then go straight into the workspace. The link works once and expires on ${expires}.`,
+      "Weren't expecting this? You can ignore this email. No account is active until the invitation is accepted.",
+    ],
+    footer: `Sent by ${product} on behalf of ${workspace}`,
+  });
 
   return { subject, text, html };
 }
