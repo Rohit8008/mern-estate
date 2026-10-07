@@ -42,6 +42,31 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
     ref.invalidate(unreadNotificationsProvider);
   }
 
+  /// Swipe-to-delete. Optimistic; if the server refuses, the list is reloaded
+  /// so the row comes back rather than silently disagreeing with it.
+  Future<void> delete(AppNotification n) async {
+    _replace((list) => [for (final x in list) if (x.id != n.id) x]);
+    try {
+      await ref.read(notificationsApiProvider).delete(n.id);
+    } catch (_) {
+      await refresh();
+      return;
+    }
+    ref.invalidate(unreadNotificationsProvider);
+  }
+
+  Future<void> clearAll() async {
+    final before = state.valueOrNull;
+    _replace((_) => const []);
+    try {
+      await ref.read(notificationsApiProvider).clearAll();
+    } catch (_) {
+      if (before != null) state = AsyncValue.data(before);
+      return;
+    }
+    ref.invalidate(unreadNotificationsProvider);
+  }
+
   void _replace(List<AppNotification> Function(List<AppNotification>) f) {
     final current = state.valueOrNull;
     if (current != null) state = AsyncValue.data(f(current));

@@ -48,4 +48,20 @@ class NotificationsApi {
       throw AppFailure.fromDioException(e);
     }
   }
+
+  Future<void> delete(String id) async {
+    try {
+      await _dio.delete<void>('/api/notifications/$id');
+    } on DioException catch (e) {
+      throw AppFailure.fromDioException(e);
+    }
+  }
+
+  Future<void> clearAll() async {
+    try {
+      await _dio.delete<void>('/api/notifications');
+    } on DioException catch (e) {
+      throw AppFailure.fromDioException(e);
+    }
+  }
 }

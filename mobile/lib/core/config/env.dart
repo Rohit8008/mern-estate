@@ -9,8 +9,8 @@ abstract final class Env {
   /// (test/app_logger_test.dart fails if they drift); a CI build can pass
   /// --dart-define=APP_VERSION=… / BUILD_NUMBER=… instead. Read this way to
   /// avoid a plugin dependency just for two strings.
-  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.7');
-  static const String buildNumber = String.fromEnvironment('BUILD_NUMBER', defaultValue: '8');
+  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.8');
+  static const String buildNumber = String.fromEnvironment('BUILD_NUMBER', defaultValue: '9');
 
   static const String _override = String.fromEnvironment('API_BASE_URL');
 

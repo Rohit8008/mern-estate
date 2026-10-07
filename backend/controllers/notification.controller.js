@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Notification from '../models/notification.model.js';
 import User from '../models/user.model.js';
 import DeviceToken from '../models/deviceToken.model.js';
@@ -192,6 +193,27 @@ export const unregisterDevice = async (req, res, next) => {
     const token = String(req.body?.token || req.query?.token || '').trim();
     if (token) await inHomeTenant(req, () => DeviceToken.deleteMany({ token, user: req.user.id }));
     res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Delete one of my notifications. Idempotent: already gone is still success. */
+export const deleteNotification = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.json({ success: true });
+    await inHomeTenant(req, () => Notification.deleteOne({ _id: req.params.id, user: req.user.id }));
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Clear my whole feed. Only ever the caller's own rows. */
+export const clearNotifications = async (req, res, next) => {
+  try {
+    const result = await inHomeTenant(req, () => Notification.deleteMany({ user: req.user.id }));
+    res.json({ success: true, data: { deleted: result.deletedCount } });
   } catch (err) {
     next(err);
   }

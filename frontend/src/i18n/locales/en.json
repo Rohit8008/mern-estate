@@ -139,7 +139,11 @@
       "system.alert": "System"
     },
     "markAsRead": "Mark as read",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "delete": "Delete notification",
+    "clearAll": "Clear all",
+    "clearAllTitle": "Clear all notifications?",
+    "clearAllBody": "This removes every notification from your list. It cannot be undone."
   },
   "settings": {
     "title": "Settings",

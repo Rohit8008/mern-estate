@@ -139,7 +139,11 @@
       "system.alert": "सिस्टम"
     },
     "markAsRead": "पढ़ा हुआ चिह्नित करें",
-    "notifications": "सूचनाएँ"
+    "notifications": "सूचनाएँ",
+    "delete": "सूचना हटाएँ",
+    "clearAll": "सभी हटाएँ",
+    "clearAllTitle": "सभी सूचनाएँ हटाएँ?",
+    "clearAllBody": "यह आपकी सूची से सभी सूचनाएँ हटा देगा। इसे वापस नहीं किया जा सकता।"
   },
   "settings": {
     "title": "सेटिंग्स",

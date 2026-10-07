@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   HiOutlineBell,
   HiOutlineCheck,
+  HiOutlineTrash,
   HiOutlineUserAdd,
   HiOutlineViewBoards,
   HiOutlineClipboardCheck,
@@ -15,6 +16,7 @@ import {
 } from 'react-icons/hi';
 import { PageHeader, Button, EmptyState, Spinner } from '../design-system';
 import { useNotificationFeed } from '../contexts/NotificationFeedProvider';
+import ConfirmDialog from '../components/ConfirmDialog';
 import usePageTitle from '../hooks/usePageTitle';
 import { useTranslation } from 'react-i18next';
 
@@ -64,9 +66,10 @@ export default function Notifications() {
   const { t } = useTranslation();
   usePageTitle('Notifications');
 
-  const { items, unread, total, loading, hasMore, load, loadMore, markRead, markAllRead } =
+  const { items, unread, total, loading, hasMore, load, loadMore, markRead, markAllRead, remove, clearAll } =
     useNotificationFeed();
   const [filter, setFilter] = useState('all');
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // Always refetch on mount: the provider may hold a list from an earlier visit.
   useEffect(() => { load(); }, [load]);
@@ -83,10 +86,16 @@ export default function Notifications() {
           title={t('notifications.notifications')}
           description={unread > 0 ? `${unread} unread of ${total}` : `${total} in the last 90 days`}
           actions={
-            unread > 0 ? (
-              <Button variant='secondary' onClick={() => markAllRead()}>
-                <HiOutlineCheck className='w-4 h-4' />{t('notifications.markAllRead')}</Button>
-            ) : null
+            <div className='flex items-center gap-2'>
+              {unread > 0 && (
+                <Button variant='secondary' onClick={() => markAllRead()}>
+                  <HiOutlineCheck className='w-4 h-4' />{t('notifications.markAllRead')}</Button>
+              )}
+              {total > 0 && (
+                <Button variant='secondary' onClick={() => setConfirmClear(true)}>
+                  <HiOutlineTrash className='w-4 h-4' />{t('notifications.clearAll')}</Button>
+              )}
+            </div>
           }
         />
 
@@ -156,6 +165,15 @@ export default function Notifications() {
                         <HiOutlineCheck className='w-4 h-4' />
                       </button>
                     )}
+                    <button
+                      type='button'
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(n._id); }}
+                      className='text-slate-400 hover:text-rose-600 transition-colors flex-shrink-0'
+                      title={t('notifications.delete')}
+                      aria-label={t('notifications.delete')}
+                    >
+                      <HiOutlineTrash className='w-4 h-4' />
+                    </button>
                   </div>
                 );
 
@@ -176,6 +194,15 @@ export default function Notifications() {
             </ul>
           )}
         </div>
+
+        <ConfirmDialog
+          open={confirmClear}
+          title={t('notifications.clearAllTitle')}
+          description={t('notifications.clearAllBody')}
+          confirmLabel={t('notifications.clearAll')}
+          onConfirm={() => { setConfirmClear(false); clearAll(); }}
+          onCancel={() => setConfirmClear(false)}
+        />
 
         {/* Paging applies to the fetched list, so it is offered on the "all" view. */}
         {filter === 'all' && hasMore && (

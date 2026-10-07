@@ -104,6 +104,29 @@ export const NotificationFeedProvider = ({ children }) => {
     }
   }, [refreshCount]);
 
+  const remove = useCallback(async (id) => {
+    const wasUnread = items.some((n) => n._id === id && !n.readAt);
+    setItems((prev) => prev.filter((n) => n._id !== id));
+    setTotal((n) => Math.max(0, n - 1));
+    if (wasUnread) setUnread((n) => Math.max(0, n - 1));
+    try {
+      await apiClient.delete(`/notifications/${id}`);
+    } catch {
+      load();
+    }
+  }, [load, items]);
+
+  const clearAll = useCallback(async () => {
+    setItems([]);
+    setTotal(0);
+    setUnread(0);
+    try {
+      await apiClient.delete('/notifications');
+    } catch {
+      load();
+    }
+  }, [load]);
+
   // Initial count, then poll.
   useEffect(() => {
     if (!userId) {
@@ -171,8 +194,10 @@ export const NotificationFeedProvider = ({ children }) => {
     ensureLoaded,
     markRead,
     markAllRead,
+    remove,
+    clearAll,
     refreshCount,
-  }), [items, unread, total, loading, load, ensureLoaded, markRead, markAllRead, refreshCount]);
+  }), [items, unread, total, loading, load, ensureLoaded, markRead, markAllRead, remove, clearAll, refreshCount]);
 
   return (
     <NotificationFeedContext.Provider value={value}>

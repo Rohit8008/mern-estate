@@ -25,6 +25,7 @@ class NotificationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(notificationsProvider);
     final hasUnread = async.valueOrNull?.any((n) => !n.read) ?? false;
+    final hasAny = async.valueOrNull?.isNotEmpty ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -34,6 +35,12 @@ class NotificationsScreen extends ConsumerWidget {
             TextButton(
               onPressed: () => ref.read(notificationsProvider.notifier).markAllRead(),
               child: const Text('Mark all read'),
+            ),
+          if (hasAny)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined),
+              tooltip: 'Clear all',
+              onPressed: () => _confirmClear(context, ref),
             ),
         ],
       ),
@@ -66,18 +73,53 @@ class NotificationsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                   itemCount: items.length,
                   separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
-                  itemBuilder: (context, i) => _NotificationTile(
-                    notification: items[i],
-                    onTap: () {
-                      ref.read(notificationsProvider.notifier).markRead(items[i]);
-                      openNotificationTarget(context, items[i]);
-                    },
+                  itemBuilder: (context, i) => Dismissible(
+                    key: ValueKey(items[i].id),
+                    direction: DismissDirection.horizontal,
+                    background: const _SwipeBackground(alignment: Alignment.centerLeft),
+                    secondaryBackground: const _SwipeBackground(alignment: Alignment.centerRight),
+                    onDismissed: (_) => ref.read(notificationsProvider.notifier).delete(items[i]),
+                    child: _NotificationTile(
+                      notification: items[i],
+                      onTap: () {
+                        ref.read(notificationsProvider.notifier).markRead(items[i]);
+                        openNotificationTarget(context, items[i]);
+                      },
+                    ),
                   ),
                 ),
         ),
       ),
     );
   }
+}
+
+Future<void> _confirmClear(BuildContext context, WidgetRef ref) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Clear all notifications?'),
+      content: const Text('This removes every notification from your list. It cannot be undone.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Clear all')),
+      ],
+    ),
+  );
+  if (ok == true) ref.read(notificationsProvider.notifier).clearAll();
+}
+
+class _SwipeBackground extends StatelessWidget {
+  const _SwipeBackground({required this.alignment});
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        color: Theme.of(context).colorScheme.error,
+        alignment: alignment,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+      );
 }
 
 /// Opens the screen a notification's web link points at. Unknown links just

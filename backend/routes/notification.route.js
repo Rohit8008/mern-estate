@@ -9,6 +9,8 @@ import {
   updatePreferences,
   registerDevice,
   unregisterDevice,
+  deleteNotification,
+  clearNotifications,
 } from '../controllers/notification.controller.js';
 import { validateBody, notificationValidation } from '../middleware/validation.js';
 
@@ -28,5 +30,7 @@ router.patch('/preferences', validateBody(notificationValidation.preferences), u
 
 router.post('/devices', registerDevice);
 router.delete('/devices', unregisterDevice);
+router.delete('/', clearNotifications);
+router.delete('/:id', deleteNotification);
 
 export default router;
