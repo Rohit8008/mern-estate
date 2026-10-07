@@ -1,5 +1,6 @@
 import Notification from '../models/notification.model.js';
 import User from '../models/user.model.js';
+import DeviceToken from '../models/deviceToken.model.js';
 import { errorHandler } from '../utils/error.js';
 import {
   NOTIFICATION_TYPES,
@@ -152,6 +153,44 @@ export const updatePreferences = async (req, res, next) => {
     }
 
     await inHomeTenant(req, () => User.updateOne({ _id: req.user.id }, { $set: update }));
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * The phone says "send my pushes here".
+ *
+ * Upserted on the token alone: the same install signing in as a different
+ * person must stop receiving the previous person's notifications, so the row
+ * moves to the new user instead of a second one being added.
+ */
+export const registerDevice = async (req, res, next) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (token.length < 20 || token.length > 4096) return next(errorHandler(400, 'A valid device token is required.'));
+    const platform = req.body?.platform === 'ios' ? 'ios' : 'android';
+    const appVersion = String(req.body?.appVersion || '').slice(0, 40);
+
+    await inHomeTenant(req, () =>
+      DeviceToken.findOneAndUpdate(
+        { token },
+        { $set: { user: req.user.id, platform, appVersion, lastSeenAt: new Date() } },
+        { upsert: true, new: true }
+      )
+    );
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Sign-out on this phone: stop pushing to it. Idempotent. */
+export const unregisterDevice = async (req, res, next) => {
+  try {
+    const token = String(req.body?.token || req.query?.token || '').trim();
+    if (token) await inHomeTenant(req, () => DeviceToken.deleteMany({ token, user: req.user.id }));
     res.json({ success: true });
   } catch (err) {
     next(err);

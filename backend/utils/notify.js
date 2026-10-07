@@ -5,6 +5,7 @@ import { sendMail } from './mailer.js';
 import { resolveDelivery, isNotificationType } from './notificationTypes.js';
 import { resolveTemplate } from './emailTemplates.js';
 import { renderEmail } from './emailLayout.js';
+import { sendPush } from './push.js';
 import { logger } from './logger.js';
 
 /**
@@ -98,6 +99,12 @@ export async function notify({
           createdBy: actorId || null,
         });
         created += 1;
+
+        // A phone that is closed gets it as a system notification. Same
+        // preference as the in-app row: someone who turned this type off in
+        // the app is not buzzed about it. Not awaited: FCM is slower than the
+        // request that raised this.
+        sendPush([String(user._id)], { title, body, link, notificationId: String(doc._id) });
 
         // Push straight to any open tab so the bell updates without a poll.
         emitToUser(user._id, 'notification:new', {

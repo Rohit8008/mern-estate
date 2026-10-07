@@ -7,6 +7,8 @@ import {
   markAllRead,
   getPreferences,
   updatePreferences,
+  registerDevice,
+  unregisterDevice,
 } from '../controllers/notification.controller.js';
 import { validateBody, notificationValidation } from '../middleware/validation.js';
 
@@ -23,5 +25,8 @@ router.patch('/:id/read', validateBody(notificationValidation.empty), markRead);
 
 router.get('/preferences', getPreferences);
 router.patch('/preferences', validateBody(notificationValidation.preferences), updatePreferences);
+
+router.post('/devices', registerDevice);
+router.delete('/devices', unregisterDevice);
 
 export default router;
