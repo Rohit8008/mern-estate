@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.6+7
+version: 1.0.7+8
 
 environment:
   sdk: ^3.5.3
@@ -84,6 +84,11 @@ dependencies:
   # Builds the WhatsApp-style chat notifications from the data-only pushes
   flutter_local_notifications: ^17.2.3
   shared_preferences: ^2.3.2
+
+  # In-app updates for the sideloaded APK: installed build number, SHA-256 check, installer hand-off
+  package_info_plus: ^8.0.2
+  crypto: ^3.0.3
+  open_filex: ^4.5.0
 
   # Network-state awareness for the offline banner (section 20) — more
   # immediate than waiting for a request to fail

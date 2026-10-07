@@ -1,3 +1,4 @@
+import '../update_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -41,7 +42,7 @@ class CrmBottomNavShell extends StatelessWidget {
               ),
             ],
           ),
-          body: navigationShell,
+          body: UpdateGate(child: navigationShell),
           floatingActionButton: FloatingActionButton(
             onPressed: () => showQuickActionSheet(context),
             tooltip: 'Quick add',
