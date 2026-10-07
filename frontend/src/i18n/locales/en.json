@@ -1164,7 +1164,17 @@
     "youHaveUnsavedChangesCloseAnyway": "You have unsaved changes. Close anyway?"
   },
   "confirm": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "unsavedTitle": "Leave without saving?",
+    "unsavedBody": "You have unsaved changes. If you leave now, they will be lost.",
+    "leave": "Leave",
+    "withdrawTitle": "Withdraw this link?",
+    "withdrawBody": "Anyone who opens it will see that it has been withdrawn.",
+    "withdraw": "Withdraw",
+    "deletePropertiesTitle_one": "Delete {{count}} property?",
+    "deletePropertiesTitle_other": "Delete {{count}} properties?",
+    "deletePropertiesBody": "This cannot be undone from here.",
+    "delete": "Delete"
   },
   "contact": {
     "contact": "Contact",
@@ -1556,7 +1566,8 @@
     "goHome": "Go Home",
     "pageNotFound": "Page not found",
     "search": "Search",
-    "thePageYouReLookingFor": "The page you’re looking for doesn’t exist or has moved."
+    "thePageYouReLookingFor": "The page you’re looking for doesn’t exist or has moved.",
+    "signIn": "Sign in"
   },
   "offlineIndicator": {
     "backOnline": "Back online",

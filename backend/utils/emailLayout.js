@@ -10,7 +10,7 @@
  */
 
 export const PRODUCT_NAME = 'Real Vista';
-const DEFAULT_ACCENT = '#1e4f6b';
+const DEFAULT_ACCENT = '#2b6faa';
 
 export const escapeHtml = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

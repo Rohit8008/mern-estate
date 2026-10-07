@@ -7,7 +7,7 @@ import { runWithTenant } from '../tenancy/tenantContext.js';
 
 export const verifyToken = async (req, res, next) => {
   const token = req.cookies.access_token;
-  if (!token) return next(new AuthenticationError('Unauthorized'));
+  if (!token) return next(new AuthenticationError('Please sign in again.'));
 
   const jwtOpts = {
     issuer: config.jwt.issuer,
@@ -15,7 +15,7 @@ export const verifyToken = async (req, res, next) => {
   };
 
   jwt.verify(token, config.jwt.secret, jwtOpts, async (err, payload) => {
-    if (err) return next(new AuthenticationError('Unauthorized'));
+    if (err) return next(new AuthenticationError('Please sign in again.'));
     try {
       // Identity is resolved in the user's HOME workspace (`tid`), not in
       // whatever workspace the request is scoped to. A platform operator
@@ -25,7 +25,7 @@ export const verifyToken = async (req, res, next) => {
       const user = await runWithTenant({ tenantId: String(payload.tid) }, () =>
         User.findById(payload.id).select('-password +passwordChangedAt')
       );
-      if (!user) return next(new AuthenticationError('Unauthorized'));
+      if (!user) return next(new AuthenticationError('Please sign in again.'));
 
       // Reject disabled accounts immediately — don't wait for token expiry
       if (user.status === 'inactive' || user.status === 'suspended') {
@@ -151,7 +151,7 @@ export const tryVerifyToken = async (req, res, next) => {
 };
 
 export const requireAdmin = (req, res, next) => {
-  if (req.user?.role !== 'admin') return next(new AuthorizationError('Admin only'));
+  if (req.user?.role !== 'admin') return next(new AuthorizationError('Only an administrator can do this.'));
   next();
 };
 

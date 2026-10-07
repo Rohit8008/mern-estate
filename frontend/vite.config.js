@@ -62,7 +62,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // Inline the registration so there is no render-blocking registerSW.js request.
       injectRegister: 'inline',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Real Vista',
         short_name: 'Real Vista',
@@ -73,18 +73,12 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
+        // PNGs first: Android installability and iOS want raster icons; the
+        // SVG stays for browsers that prefer it.
         icons: [
-          {
-            src: '/pwa-192.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml',
-          },
-          {
-            src: '/pwa-512.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any maskable',
-          },
+          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: '/pwa-512.svg', sizes: 'any', type: 'image/svg+xml' },
         ],
       },
       workbox: {

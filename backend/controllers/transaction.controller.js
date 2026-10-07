@@ -228,7 +228,7 @@ export const deleteTransaction = async (req, res, next) => {
     const doc = await Transaction.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!doc) return next(errorHandler(404, 'Transaction not found'));
     if (req.user.role !== 'admin' && String(doc.agent) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     await Transaction.findByIdAndUpdate(req.params.id, {

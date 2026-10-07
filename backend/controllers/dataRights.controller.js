@@ -60,7 +60,7 @@ export const exportUserData = async (req, res, next) => {
     const isSelf = String(targetId) === String(req.user.id);
 
     if (!isSelf && req.user.role !== 'admin' && req.userRole?.hasPermission?.('exportData') !== true) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     // A session lookup is about the CALLER's workspace, so it is pinned; the
@@ -68,7 +68,7 @@ export const exportUserData = async (req, res, next) => {
     const user = await inHomeTenant(req, () =>
       User.findById(targetId).select('-password -refreshTokens').lean()
     );
-    if (!user) return next(errorHandler(404, 'User not found'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
 
     const [clients, owners, buyers, tasks, documents, activity, security, notifications, messages] =
       await Promise.all([
@@ -219,7 +219,7 @@ export const eraseUser = async (req, res, next) => {
     }
 
     const user = await inHomeTenant(req, () => User.findById(targetId));
-    if (!user) return next(errorHandler(404, 'User not found'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
     if (user.isPlatformAdmin) return next(errorHandler(403, 'A platform operator cannot be erased from here'));
 
     const originalEmail = user.email;

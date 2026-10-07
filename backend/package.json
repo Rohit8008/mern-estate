@@ -1,7 +1,7 @@
 {
   "name": "mern-estate-backend",
   "version": "1.0.0",
-  "description": "MERN Estate API Backend",
+  "description": "Real Vista API Backend",
   "main": "index.js",
   "type": "module",
   "scripts": {

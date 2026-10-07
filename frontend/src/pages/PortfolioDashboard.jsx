@@ -264,18 +264,18 @@ export default function PortfolioDashboard() {
           <p className='text-slate-400 text-sm mt-0.5'>{t('portfolioDashboard.overviewOfYourPropertyPortfolioPerformance')}</p>
         </div>
         <div className='flex items-center gap-2 flex-shrink-0'>
-          <button
+          <button type="button"
             onClick={fetchData}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors'
           >
             <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden='true' />{t('portfolioDashboard.refresh')}</button>
-          <button
+          <button type="button"
             onClick={handleExport}
             disabled={loading || !properties.length}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
           >
             <HiDownload className='w-4 h-4' aria-hidden='true' />{t('portfolioDashboard.export')}</button>
-          <button
+          <button type="button"
             onClick={handlePrint}
             disabled={loading || !properties.length}
             className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -288,7 +288,7 @@ export default function PortfolioDashboard() {
       {error && (
         <div className='bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-center justify-between'>
           <p className='text-rose-700 text-sm'>{error}</p>
-          <button onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>{t('portfolioDashboard.retry')}</button>
+          <button type="button" onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>{t('portfolioDashboard.retry')}</button>
         </div>
       )}
 
@@ -403,7 +403,7 @@ export default function PortfolioDashboard() {
               <h3 className='text-sm font-semibold text-slate-900'>{t('portfolioDashboard.properties')}</h3>
               <div className='flex items-center gap-2'>
                 <div className='relative'>
-                  <button
+                  <button type="button"
                     onClick={() => setShowTypeDropdown(!showTypeDropdown)}
                     aria-expanded={showTypeDropdown}
                     aria-label={`Filter by type: ${selectedType}`}
@@ -416,7 +416,7 @@ export default function PortfolioDashboard() {
                   {showTypeDropdown && (
                     <div className='absolute right-0 top-full mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-10'>
                       {PROPERTY_TYPES.map((type) => (
-                        <button
+                        <button type="button"
                           key={type}
                           onClick={() => { setSelectedType(type); setShowTypeDropdown(false); }}
                           aria-pressed={selectedType === type}

@@ -33,19 +33,19 @@ export const createTask = async (req, res, next) => {
 
     // Non-admins can only assign to themselves
     const assignedTo = payload.assignedTo || req.user.id;
-    if (!canAccessUser(req.user, assignedTo)) return next(errorHandler(403, 'Forbidden'));
+    if (!canAccessUser(req.user, assignedTo)) return next(errorHandler(403, "You don't have permission to do that."));
     if (String(assignedTo) !== String(req.user.id)) await assertAssignable(assignedTo);
 
     // Validate related entity access for employees
     if (payload.related?.kind === 'client' && payload.related?.clientId) {
       const c = await Client.findById(payload.related.clientId).select('assignedTo');
       if (!c) return next(errorHandler(404, 'Client not found'));
-      if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
     }
     if (payload.related?.kind === 'listing' && payload.related?.listingId) {
       const l = await Listing.findById(payload.related.listingId).select('userRef');
       if (!l) return next(errorHandler(404, 'Listing not found'));
-      if (req.user.role !== 'admin' && String(l.userRef) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (req.user.role !== 'admin' && String(l.userRef) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     const doc = await Task.create({
@@ -188,7 +188,7 @@ export const getTaskById = async (req, res, next) => {
   try {
     const doc = await Task.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!doc) return next(errorHandler(404, 'Task not found'));
-    if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, 'Forbidden'));
+    if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, "You don't have permission to do that."));
     res.json({ success: true, data: doc });
   } catch (err) {
     next(err);
@@ -201,7 +201,7 @@ export const updateTask = async (req, res, next) => {
     if (!doc) return next(errorHandler(404, 'Task not found'));
 
     // Only admin or assignee can update
-    if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, 'Forbidden'));
+    if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, "You don't have permission to do that."));
 
     // Non-admins cannot reassign to another user
     if (req.user.role !== 'admin' && req.body.assignedTo && String(req.body.assignedTo) !== req.user.id) {
@@ -284,7 +284,7 @@ export const deleteTask = async (req, res, next) => {
   try {
     const doc = await Task.findById(req.params.id);
     if (!doc) return next(errorHandler(404, 'Task not found'));
-    if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, 'Forbidden'));
+    if (!canAccessUser(req.user, doc.assignedTo)) return next(errorHandler(403, "You don't have permission to do that."));
 
     const clientId = doc.related?.kind === 'client' ? doc.related?.clientId : null;
     await Task.findByIdAndUpdate(req.params.id, {

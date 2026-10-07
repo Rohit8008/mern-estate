@@ -201,7 +201,7 @@ export default function Messages() {
                   <p className='text-sm text-slate-500 text-center py-4'>{t('messages.typeAtLeast2CharactersTo')}</p>
                 )}
                 {searchResults.map((u) => (
-                  <button
+                  <button type="button"
                     key={u._id}
                     onClick={() => startConversation(u)}
                     className='w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left'
@@ -227,7 +227,7 @@ export default function Messages() {
                       <p className='text-sm text-slate-500 text-center py-3'>{t('messages.noOtherUsersOnline')}</p>
                     )}
                     {onlineUsersList.map((u) => (
-                      <button
+                      <button type="button"
                         key={u._id}
                         onClick={() => startConversation(u)}
                         className='w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors text-left'
@@ -276,7 +276,7 @@ export default function Messages() {
                 </div>
               )}
               {filtered.map((c) => (
-                <button
+                <button type="button"
                   key={c.otherId}
                   aria-current={activeChatUser === c.otherId ? 'true' : undefined}
                   onClick={() => {
@@ -328,7 +328,7 @@ export default function Messages() {
                     <HiSearch className='w-5 h-5 text-slate-400' aria-hidden='true' />
                   </div>
                   <p className='text-sm text-slate-500 mb-2'>{t('messages.noConversationsYet')}</p>
-                  <button onClick={() => setShowNewChat(true)} className='text-indigo-600 hover:text-indigo-700 text-sm font-medium hover:underline'>{t('messages.startANewConversation')}</button>
+                  <button type="button" onClick={() => setShowNewChat(true)} className='text-indigo-600 hover:text-indigo-700 text-sm font-medium hover:underline'>{t('messages.startANewConversation')}</button>
                 </div>
               )}
             </div>
@@ -350,7 +350,7 @@ export default function Messages() {
               </div>
               <p className='text-base font-semibold text-slate-600'>{t('messages.selectAConversation')}</p>
               <p className='text-sm text-slate-500 mt-1'>{t('messages.chooseFromYourExistingConversationsOr')}</p>
-              <button onClick={() => setShowNewChat(true)} className='mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-medium hover:underline'>{t('messages.startNewMessage')}</button>
+              <button type="button" onClick={() => setShowNewChat(true)} className='mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-medium hover:underline'>{t('messages.startNewMessage')}</button>
             </div>
           )}
         </section>

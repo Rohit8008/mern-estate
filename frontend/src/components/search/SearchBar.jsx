@@ -217,7 +217,7 @@ export default function SearchBar({
         />
 
         {query && (
-          <button
+          <button type="button"
             onClick={clearSearch}
             aria-label="Clear search"
             className="flex items-center justify-center w-10 text-slate-500 hover:text-slate-700 transition-colors"
@@ -226,7 +226,7 @@ export default function SearchBar({
           </button>
         )}
 
-        <button
+        <button type="button"
           onClick={() => handleSearch()}
           aria-label={t('searchBar.search')}
           className={`flex items-center justify-center bg-indigo-600 text-white rounded-r-xl hover:bg-indigo-500 transition-colors ${
@@ -246,7 +246,7 @@ export default function SearchBar({
             <div className="py-2">
               <div className="px-4 py-1 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('searchBar.suggestions')}</div>
               {suggestions.map((suggestion, index) => (
-                <button
+                <button type="button"
                   key={`${suggestion.text}-${index}`}
                   onClick={() => handleSearch(suggestion.text)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -267,7 +267,7 @@ export default function SearchBar({
               <div className="px-4 py-1 text-xs font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
                 <HiClock className="w-3 h-3" aria-hidden="true" />{t('searchBar.recentSearches')}</div>
               {recentSearches.map((search, index) => (
-                <button
+                <button type="button"
                   key={`recent-${index}`}
                   onClick={() => handleSearch(search)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -289,7 +289,7 @@ export default function SearchBar({
                   <div className="px-4 py-1 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('searchBar.popularCities')}</div>
                   <div className="flex flex-wrap gap-2 px-4 py-2">
                     {popularSearches.popularCities.slice(0, 5).map((city, index) => (
-                      <button
+                      <button type="button"
                         key={`city-${index}`}
                         onClick={() => handleSearch(city.name)}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-full transition-colors"
@@ -306,7 +306,7 @@ export default function SearchBar({
                   <div className="px-4 py-1 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('searchBar.propertyTypes')}</div>
                   <div className="flex flex-wrap gap-2 px-4 py-2">
                     {popularSearches.popularPropertyTypes.slice(0, 4).map((type, index) => (
-                      <button
+                      <button type="button"
                         key={`type-${index}`}
                         onClick={() => handleSearch(type.name)}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm rounded-full transition-colors"

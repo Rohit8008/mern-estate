@@ -210,7 +210,7 @@ export const pinSavedSearch = async (req, res, next) => {
 // ─── Analytics (admin only) ───────────────────────────────────────────────────
 
 export const getSearchAnalytics = async (req, res, next) => {
-  if (req.user.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+  if (req.user.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
   try {
     const since = new Date(Date.now() - 30 * 24 * 3_600_000);
 

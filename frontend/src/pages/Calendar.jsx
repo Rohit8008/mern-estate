@@ -375,7 +375,7 @@ export default function Calendar() {
           )}
 
           {notifPermission !== 'denied' && notifPermission !== 'unsupported' && (
-            <button
+            <button type="button"
               onClick={testNotification}
               className='flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium'
               title='Send a test desktop notification to confirm event reminders can reach you (separate from the notification bell above)'
@@ -388,15 +388,15 @@ export default function Calendar() {
             className='px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'
           >{t('calendar.openClients')}</Link>
 
-          <button
+          <button type="button"
             onClick={openModal}
             className='flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'
           >
             <HiOutlinePlus className='w-4 h-4' aria-hidden='true' />{t('calendar.addEvent')}</button>
 
-          <button onClick={() => setCursor(startOfMonth(addDays(monthStart, -1)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.prev')}</button>
-          <button onClick={() => setCursor(startOfMonth(addDays(monthStart, 32)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.next')}</button>
-          <button
+          <button type="button" onClick={() => setCursor(startOfMonth(addDays(monthStart, -1)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.prev')}</button>
+          <button type="button" onClick={() => setCursor(startOfMonth(addDays(monthStart, 32)))} className='px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium'>{t('calendar.next')}</button>
+          <button type="button"
             onClick={() => { const now = new Date(); setCursor(startOfMonth(now)); setSelected(startOfDay(now)); }}
             className='px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm font-medium'
           >{t('calendar.today')}</button>
@@ -425,7 +425,7 @@ export default function Calendar() {
                 <div className='font-semibold text-slate-900'>
                   {formatDate(monthStart, { day: undefined, month: 'long', year: 'numeric' })}
                 </div>
-                <button
+                <button type="button"
                   onClick={loadRange}
                   disabled={loading}
                   className='px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-semibold disabled:bg-slate-100'
@@ -530,7 +530,7 @@ export default function Calendar() {
                   <div className='font-semibold text-slate-900'>{t('calendar.agenda')}</div>
                   <div className='text-sm text-slate-600 mt-0.5'>{formatDate(selected)}</div>
                 </div>
-                <button
+                <button type="button"
                   onClick={openModal}
                   className='flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors'
                 >
@@ -648,11 +648,11 @@ export default function Calendar() {
         size='sm'
         footer={
           <>
-            <button
+            <button type="button"
               onClick={() => setShowModal(false)}
               className='px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50'
             >{t('calendar.cancel')}</button>
-            <button
+            <button type="button"
               onClick={saveEvent}
               disabled={!newEvent.title.trim()}
               className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50'

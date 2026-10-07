@@ -283,14 +283,14 @@ export default function AdminCategoryFields() {
           <p className="text-xs text-slate-500 mb-2">{t('adminCategoryFields.clickOnTheMapToSet')}</p>
           <LocationPicker value={defaultLocation} onChange={(lat, lng) => setDefaultLocation({ lat, lng })} />
           {defaultLocation && (
-            <button
+            <button type="button"
               onClick={() => setDefaultLocation(null)}
               className="mt-2 text-xs text-slate-500 hover:text-red-600 underline"
             >{t('adminCategoryFields.clearLocation')}</button>
           )}
         </div>
         <div className="p-6 border-t bg-slate-50 flex justify-end">
-          <button
+          <button type="button"
             onClick={saveLocation}
             disabled={savingLocation}
             className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -320,7 +320,7 @@ export default function AdminCategoryFields() {
         <div className="p-6 border-b">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold text-slate-900">{t('adminCategoryFields.dynamicFields')}</h2>
-            <button
+            <button type="button"
               onClick={addField}
               className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
             >{t('adminCategoryFields.addField')}</button>
@@ -349,7 +349,7 @@ export default function AdminCategoryFields() {
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="font-semibold text-slate-900">Field {index + 1}</h3>
                     <div className="flex space-x-2">
-                      <button
+                      <button type="button"
                         onClick={() => moveField(index, 'up')}
                         disabled={index === 0}
                         aria-label={`Move field ${index + 1} up`}
@@ -357,7 +357,7 @@ export default function AdminCategoryFields() {
                       >
                         ↑
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => moveField(index, 'down')}
                         disabled={index === fields.length - 1}
                         aria-label={`Move field ${index + 1} down`}
@@ -365,7 +365,7 @@ export default function AdminCategoryFields() {
                       >
                         ↓
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => removeField(index)}
                         className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
                       >{t('adminCategoryFields.remove')}</button>
@@ -497,7 +497,7 @@ export default function AdminCategoryFields() {
                     <div className="mt-4">
                       <div className="flex justify-between items-center mb-2">
                         <span id={`acf-${index}-options`} className="block text-sm font-medium text-slate-700">{t('adminCategoryFields.options')}</span>
-                        <button
+                        <button type="button"
                           onClick={() => addOption(index)}
                           className="px-3 py-1 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800"
                         >{t('adminCategoryFields.addOption')}</button>
@@ -513,7 +513,7 @@ export default function AdminCategoryFields() {
                               placeholder={`Option ${optionIndex + 1}`}
                               aria-label={`Option ${optionIndex + 1}`}
                             />
-                            <button
+                            <button type="button"
                               onClick={() => removeOption(index, optionIndex)}
                               aria-label={`Remove option ${optionIndex + 1}`}
                               className="px-2 py-1 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
@@ -562,7 +562,7 @@ export default function AdminCategoryFields() {
             <div className="text-sm text-slate-600">
               {fields.length} field{fields.length !== 1 ? 's' : ''} configured
             </div>
-            <button
+            <button type="button"
               onClick={saveFields}
               disabled={saving}
               className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"

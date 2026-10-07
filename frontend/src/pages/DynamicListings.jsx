@@ -115,7 +115,7 @@ const DynamicListings = () => {
     return (
       <div className="text-center py-8">
         <p className="text-red-600 mb-4">{error}</p>
-        <button
+        <button type="button"
           onClick={() => navigate('/categories')}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
@@ -129,7 +129,7 @@ const DynamicListings = () => {
     return (
       <div className="text-center py-8">
         <p className="text-gray-600 mb-4">Category not found</p>
-        <button
+        <button type="button"
           onClick={() => navigate('/categories')}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
@@ -151,7 +151,7 @@ const DynamicListings = () => {
         </div>
         <div className="flex space-x-3">
           {!isBuyerViewMode && (currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') && (
-            <button
+            <button type="button"
               onClick={handleAddNew}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
             >
@@ -159,7 +159,7 @@ const DynamicListings = () => {
               <span>Add New Listing</span>
             </button>
           )}
-          <button
+          <button type="button"
             onClick={() => navigate('/categories')}
             className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
           >

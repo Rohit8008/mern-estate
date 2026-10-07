@@ -91,7 +91,7 @@ export default function CategoryDocuments({ categoryId, canEdit }) {
               onChange={handleFileInput}
               accept='.pdf,.jpg,.jpeg,.png'
             />
-            <button
+            <button type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
               className='px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50'
@@ -123,12 +123,12 @@ export default function CategoryDocuments({ categoryId, canEdit }) {
                       <p className='text-xs text-rose-500'>{t('categoryDocuments.deleteThisMapThisCannotBe')}</p>
                     </div>
                     <div className='flex items-center gap-2 shrink-0'>
-                      <button
+                      <button type="button"
                         onClick={() => setConfirmDeleteId(null)}
                         disabled={deleting}
                         className='px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50'
                       >{t('categoryDocuments.cancel')}</button>
-                      <button
+                      <button type="button"
                         onClick={handleConfirmDelete}
                         disabled={deleting}
                         className='px-3 py-1.5 text-xs font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50'
@@ -154,7 +154,7 @@ export default function CategoryDocuments({ categoryId, canEdit }) {
                         className='px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50'
                       >{t('categoryDocuments.view')}</a>
                       {canEdit && (
-                        <button
+                        <button type="button"
                           onClick={() => setConfirmDeleteId(doc._id)}
                           className='px-3 py-1.5 text-xs font-medium text-rose-600 bg-white border border-slate-200 rounded-lg hover:bg-rose-50'
                         >{t('categoryDocuments.delete')}</button>

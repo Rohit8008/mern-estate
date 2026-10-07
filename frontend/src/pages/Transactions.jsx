@@ -340,7 +340,7 @@ function TransactionDrawer({ open, onClose, transaction, onSaved }) {
               {transaction ? 'Update transaction details' : 'Record a property transaction'}
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={onClose}
             aria-label='Close'
             className='p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700'
@@ -546,7 +546,7 @@ function FilterDropdown({ label, value, options, onChange }) {
 
   return (
     <div className='relative' ref={ref}>
-      <button
+      <button type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className={`px-3 py-2 rounded-lg border text-sm font-medium flex items-center gap-2 transition-colors ${
@@ -561,7 +561,7 @@ function FilterDropdown({ label, value, options, onChange }) {
       {open && (
         <div className='absolute top-full left-0 mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg z-20 py-1'>
           {options.map((opt) => (
-            <button
+            <button type="button"
               key={opt}
               onClick={() => { onChange(opt); setOpen(false); }}
               aria-pressed={value === opt}
@@ -796,7 +796,7 @@ export default function Transactions() {
             className='bg-transparent outline-none flex-1 text-sm text-foreground placeholder:text-muted-foreground min-w-0'
           />
           {searchQuery && (
-            <button onClick={() => changeFilter(setSearchQuery)('')} aria-label='Clear search' className='text-muted-foreground hover:text-foreground flex-shrink-0'>
+            <button type="button" onClick={() => changeFilter(setSearchQuery)('')} aria-label='Clear search' className='text-muted-foreground hover:text-foreground flex-shrink-0'>
               <HiX className='w-4 h-4' aria-hidden='true' />
             </button>
           )}
@@ -806,7 +806,7 @@ export default function Transactions() {
         <FilterDropdown label={t('transactions.status')} value={statusFilter} options={STATUS_OPTS} onChange={changeFilter(setStatusFilter)} />
 
         {hasFilters && (
-          <button
+          <button type="button"
             onClick={clearFilters}
             className='px-3 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1'
           >
@@ -913,7 +913,7 @@ export default function Transactions() {
                     )}
                     <Td>
                       <div className='flex items-center justify-end gap-1'>
-                        <button
+                        <button type="button"
                           onClick={() => openEdit(item)}
                           className='p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors'
                           title={t('transactions.edit')}
@@ -921,7 +921,7 @@ export default function Transactions() {
                         >
                           <HiPencil className='w-4 h-4' aria-hidden='true' />
                         </button>
-                        <button
+                        <button type="button"
                           onClick={() => setPendingDelete(item._id)}
                           className='p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-muted-foreground hover:text-rose-500 transition-colors'
                           title={t('transactions.delete')}

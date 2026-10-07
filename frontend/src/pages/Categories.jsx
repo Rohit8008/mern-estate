@@ -310,7 +310,7 @@ export default function Categories() {
         title={t('categories.categories')}
         description={
           loading
-            ? 'Loading…'
+            ? t('common.loading')
             : isEmpty
               ? 'The colonies, projects and property groups you deal in.'
               : `${totals.count} ${totals.count === 1 ? 'category' : 'categories'} · ${formatNumber(totals.properties)} propert${totals.properties === 1 ? 'y' : 'ies'}`

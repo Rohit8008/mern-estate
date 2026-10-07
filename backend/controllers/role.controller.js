@@ -173,7 +173,7 @@ export const assignRoleToUser = async (req, res, next) => {
     // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
-      return next(errorHandler(404, 'User not found'));
+      return next(errorHandler(404, "We couldn't find that user."));
     }
 
     // Check if role exists
@@ -212,7 +212,7 @@ export const removeRoleFromUser = async (req, res, next) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return next(errorHandler(404, 'User not found'));
+      return next(errorHandler(404, "We couldn't find that user."));
     }
 
     user.assignedRole = null;

@@ -369,7 +369,7 @@ export default function Search() {
                   >
                     {filter.icon && <filter.icon className='w-4 h-4' aria-hidden='true' />}
                     {filter.label}
-                    <button
+                    <button type="button"
                       onClick={() => {
                         if (filter.key === 'price') {
                           removeFilter('minPrice');
@@ -386,7 +386,7 @@ export default function Search() {
                   </span>
                 ))}
               </div>
-              <button
+              <button type="button"
                 onClick={handleClearFilters}
                 className='text-sm text-rose-600 hover:text-rose-700 font-medium ml-auto'
               >{t('search.clearAll')}</button>
@@ -401,7 +401,7 @@ export default function Search() {
               <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
             </svg>
             <span>{error}</span>
-            <button onClick={() => setRefreshKey(prev => prev + 1)} className='ml-auto text-rose-600 hover:text-rose-800' aria-label={t('search.retrySearch')}>
+            <button type="button" onClick={() => setRefreshKey(prev => prev + 1)} className='ml-auto text-rose-600 hover:text-rose-800' aria-label={t('search.retrySearch')}>
               <HiRefresh className='w-5 h-5' aria-hidden='true' />
             </button>
           </div>
@@ -409,7 +409,7 @@ export default function Search() {
 
         <div className='flex flex-col lg:flex-row gap-8'>
           {/* Mobile Filter Button */}
-          <button
+          <button type="button"
             onClick={() => setShowMobileFilters(true)}
             aria-expanded={showMobileFilters}
             className='lg:hidden flex items-center justify-center gap-2 w-full py-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium shadow-sm'
@@ -506,7 +506,7 @@ export default function Search() {
                   <div className='flex items-center gap-3'>
                     {/* View Toggle */}
                     <div className='flex bg-slate-100 rounded-lg p-1'>
-                      <button
+                      <button type="button"
                         onClick={() => setViewAndSyncUrl('grid')}
                         className={`p-2 rounded-md transition-all ${view === 'grid'
                             ? 'bg-white text-indigo-600 shadow-sm'
@@ -518,7 +518,7 @@ export default function Search() {
                       >
                         <HiViewGrid className='w-5 h-5' aria-hidden='true' />
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => setViewAndSyncUrl('list')}
                         className={`p-2 rounded-md transition-all ${view === 'list'
                             ? 'bg-white text-indigo-600 shadow-sm'
@@ -596,7 +596,7 @@ export default function Search() {
                     }
                     action={
                       <div className='flex flex-col sm:flex-row items-center justify-center gap-3'>
-                        <button
+                        <button type="button"
                           onClick={handleClearFilters}
                           className='px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-500 transition-colors'
                         >{t('search.clearAllFilters')}</button>
@@ -634,7 +634,7 @@ export default function Search() {
                 {/* Show More Button */}
                 {showMore && !loading && (
                   <div className='text-center mt-8'>
-                    <button
+                    <button type="button"
                       onClick={onShowMoreClick}
                       disabled={loadingMore}
                       className='px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl font-semibold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2'

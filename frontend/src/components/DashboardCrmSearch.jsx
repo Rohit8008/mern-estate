@@ -26,7 +26,7 @@ function EntityIcon({ entity, className = 'w-4 h-4' }) {
 
 function ResultCard({ item, entity, onClick }) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className='w-full flex items-center gap-3 px-4 py-3 text-left bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:shadow-sm transition-all'
     >

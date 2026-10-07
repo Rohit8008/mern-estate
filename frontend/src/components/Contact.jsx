@@ -92,7 +92,7 @@ export default function Contact({ listing }) {
               href={`/messages?user=${landlord._id}&text=${encodeURIComponent(message)}`}
               className='flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors text-center'
             >{t('contact.openChat')}</a>
-            <button
+            <button type="button"
               onClick={async () => {
                 try {
                   if (!message.trim()) {

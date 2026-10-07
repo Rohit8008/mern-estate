@@ -67,7 +67,7 @@ export const updateUser = async (req, res, next) => {
     }
 
     const existing = await User.findById(req.params.id);
-    if (!existing) return next(errorHandler(404, 'User not found'));
+    if (!existing) return next(errorHandler(404, "We couldn't find that user."));
     const oldPhone = existing.phone || null;
     // Normalize empty string → null so the sparse unique index stays consistent
     const nextPhone = req.body.phone !== undefined
@@ -307,7 +307,7 @@ export const changePassword = async (req, res, next) => {
     // Pinned to the caller's home workspace: an unpinned lookup while a
     // platform operator is viewing a customer would find nothing.
     const user = await inHomeTenant(req, () => User.findById(req.user.id).select('+password'));
-    if (!user || user.isDeleted) return next(errorHandler(404, 'User not found'));
+    if (!user || user.isDeleted) return next(errorHandler(404, "We couldn't find that user."));
 
     // Google-only accounts have no password to check against; they set one
     // through Forgot password, which proves they own the address.
@@ -420,7 +420,7 @@ export const deleteUser = async (req, res, next) => {
     return next(errorHandler(403, 'You can only delete your own account!'));
   try {
     const user = await inHomeTenant(req, () => User.findById(req.user.id).select('+isPlatformAdmin'));
-    if (!user) return next(errorHandler(404, 'User not found'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
     if (user.isPlatformAdmin) {
       return next(errorHandler(403, 'A platform operator account cannot be deleted from here'));
     }
@@ -466,7 +466,7 @@ export const adminDeleteUser = async (req, res, next) => {
 
     const targetUser = await User.findById(targetId);
     if (!targetUser) {
-      return next(errorHandler(404, 'User not found'));
+      return next(errorHandler(404, "We couldn't find that user."));
     }
 
     // Cannot delete another admin
@@ -502,7 +502,7 @@ export const adminToggleUserStatus = async (req, res, next) => {
 
     const targetUser = await User.findById(targetId);
     if (!targetUser) {
-      return next(errorHandler(404, 'User not found'));
+      return next(errorHandler(404, "We couldn't find that user."));
     }
 
     if (targetUser.role === 'admin') {
@@ -543,7 +543,7 @@ export const getUser = async (req, res, next) => {
     // B-006: Exclude soft-deleted users from the public lookup.
     const user = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
 
-    if (!user) return next(errorHandler(404, 'User not found!'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
 
     // The full document (role, assigned role, categories, status, address...) is for
     // the person it describes and for admins. Everyone else gets the same short
@@ -571,7 +571,7 @@ export const getUserPublic = async (req, res, next) => {
       _id: req.params.id,
       isDeleted: { $ne: true },
     }).select('username email avatar phone role _id createdAt');
-    if (!user) return next(errorHandler(404, 'User not found!'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
     res.status(200).json(user);
   } catch (error) {
     next(error);
@@ -581,11 +581,11 @@ export const getUserPublic = async (req, res, next) => {
 export const me = async (req, res, next) => {
   try {
     // verifyToken middleware sets req.user
-    if (!req.user?.id) return next(errorHandler(401, 'Unauthorized'));
+    if (!req.user?.id) return next(errorHandler(401, 'Please sign in again.'));
     // The caller's own record, which lives in their home workspace — not
     // necessarily the one this request is scoped to. See inHomeTenant.
     const user = await inHomeTenant(req, () => User.findById(req.user.id).select('-password +isPlatformAdmin'));
-    if (!user) return next(errorHandler(404, 'User not found!'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
     // The same shape as the sign-in response. isPlatformAdmin is select:false,
     // so this left it out, and every page load replaced the signed-in user
     // with one that lacked it — the Platform link vanished on refresh. Telling
@@ -607,7 +607,7 @@ export const me = async (req, res, next) => {
 export const getLegalAcceptance = async (req, res, next) => {
   try {
     const user = await inHomeTenant(req, () => User.findById(req.user.id).select('+legalAcceptance'));
-    if (!user) return next(errorHandler(404, 'User not found'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
     const accepted = user.legalAcceptance || null;
     res.json({
       success: true,
@@ -647,7 +647,7 @@ export const acceptLegal = async (req, res, next) => {
 
 export const myPermissions = async (req, res, next) => {
   try {
-    if (!req.user?.id) return next(errorHandler(401, 'Unauthorized'));
+    if (!req.user?.id) return next(errorHandler(401, 'Please sign in again.'));
 
     // Admins get all permissions
     if (req.user.role === 'admin') {
@@ -662,7 +662,7 @@ export const myPermissions = async (req, res, next) => {
     }
 
     const user = await inHomeTenant(req, () => User.findById(req.user.id).populate('assignedRole'));
-    if (!user) return next(errorHandler(404, 'User not found!'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
 
     if (!user.assignedRole || !user.assignedRole.isActive) {
       // legacyFallback tells the app that the API treats this person as having
@@ -693,10 +693,10 @@ export const myPermissions = async (req, res, next) => {
 
 export const setUserRole = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
     const { role, assignedCategories } = req.body;
     const target = await User.findById(req.params.id);
-    if (!target) return next(errorHandler(404, 'User not found!'));
+    if (!target) return next(errorHandler(404, "We couldn't find that user."));
     // Prevent admins from changing their own role
     if (String(target._id) === String(req.user.id) && role && role !== target.role) {
       return next(errorHandler(400, 'Admins cannot change their own role'));
@@ -710,7 +710,7 @@ export const setUserRole = async (req, res, next) => {
       { $set: { role, assignedCategories: assignedCategories || [] } },
       { new: true }
     ).select('-password');
-    if (!updated) return next(errorHandler(404, 'User not found!'));
+    if (!updated) return next(errorHandler(404, "We couldn't find that user."));
     res.status(200).json(updated);
   } catch (error) {
     next(error);
@@ -742,7 +742,7 @@ async function withInvitePending(users) {
 
 export const listUsers = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
     const filter = { isDeleted: { $ne: true } };
 
     // Without `page`: the bare array every caller reads (Admin, the assignee
@@ -796,7 +796,7 @@ export const searchUsers = async (req, res, next) => {
 
 export const createEmployee = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
     const { username, firstName, lastName, email, assignedCategories, phone, message } = req.body;
     if (!username || !email) return next(errorHandler(400, 'Missing fields'));
 
@@ -884,11 +884,11 @@ export const createEmployee = async (req, res, next) => {
  */
 export const resendEmployeeInvite = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
 
     const target = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
       .select('+inviteTokenHash +inviteExpiresAt +previousInviteTokenHashes');
-    if (!target) return next(errorHandler(404, 'User not found'));
+    if (!target) return next(errorHandler(404, "We couldn't find that user."));
     if (target.role !== 'employee') return next(errorHandler(403, 'Only employees can be re-invited here'));
     if (!target.inviteTokenHash) {
       return next(errorHandler(409, 'This person has already accepted their invitation.'));
@@ -933,7 +933,7 @@ export const resendEmployeeInvite = async (req, res, next) => {
 
 export const adminSetEmployeePassword = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user?.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
 
     const targetId = req.params.id;
     const { newPassword } = req.body || {};
@@ -944,7 +944,7 @@ export const adminSetEmployeePassword = async (req, res, next) => {
     }
 
     const target = await User.findById(targetId).select('+password');
-    if (!target) return next(errorHandler(404, 'User not found'));
+    if (!target) return next(errorHandler(404, "We couldn't find that user."));
 
     if (target.role === 'admin') return next(errorHandler(403, 'Cannot reset password for an admin account'));
     if (target.role !== 'employee') return next(errorHandler(403, 'Only employee passwords can be changed here'));

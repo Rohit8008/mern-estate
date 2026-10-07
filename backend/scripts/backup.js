@@ -178,7 +178,7 @@ async function listBackups() {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) (async () => {
   console.log('='.repeat(50));
-  console.log('MERN Estate Database Backup');
+  console.log('Real Vista Database Backup');
   console.log('='.repeat(50));
 
   try {

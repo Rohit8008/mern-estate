@@ -517,7 +517,7 @@ export default function DealsBoard() {
                           </div>
                         </div>
                       ) : (
-                        <button
+                        <button type="button"
                           onClick={() => { setAddingDealFor(String(d.clientId)); setQuickDealValue(''); }}
                           className='mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 transition-colors'
                         >

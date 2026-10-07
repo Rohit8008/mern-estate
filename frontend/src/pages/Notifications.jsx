@@ -181,7 +181,7 @@ export default function Notifications() {
         {filter === 'all' && hasMore && (
           <div className='flex justify-center'>
             <Button variant='secondary' onClick={loadMore} disabled={loading}>
-              {loading ? 'Loading…' : 'Load more'}
+              {loading ? t('common.loading') : 'Load more'}
             </Button>
           </div>
         )}

@@ -10,7 +10,7 @@ function endOfDay(d = new Date()) { const x = new Date(d); x.setHours(23,59,59,9
 
 export const getAdminMetrics = async (req, res, next) => {
   try {
-    if (req.user.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
 
     const now = new Date();
     const [totalListings, totalClients, totalTasks, teamCount] = await Promise.all([

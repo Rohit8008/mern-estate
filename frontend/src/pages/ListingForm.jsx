@@ -21,6 +21,7 @@ import EditConflictNotice from '../components/EditConflictNotice';
 import { Button, Input, Select, Textarea, Spinner, PageHeader, Badge } from '../design-system';
 import { areaUnit, getLocaleConfig } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { LISTING_STATUS_LABELS } from '../utils/listingStatus';
 
 /**
@@ -98,6 +99,9 @@ export default function ListingForm({ mode = 'create' }) {
   // A failed save used to show its reason only at the top of a long form, out
   // of sight of the Save button that was just pressed.
   const errorRef = useRef(null);
+  // Set when the visitor chose to leave, so the re-dispatched click passes.
+  const leaveOk = useRef(false);
+  const [leaveTarget, setLeaveTarget] = useState(null);
   useEffect(() => {
     if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [error]);
@@ -112,10 +116,10 @@ export default function ListingForm({ mode = 'create' }) {
       if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey) return;
       const href = a.getAttribute('href');
       if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-      if (!window.confirm('You have unsaved changes. Leave without saving?')) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      if (leaveOk.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTarget(a);
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     document.addEventListener('click', onClick, true);
@@ -126,8 +130,16 @@ export default function ListingForm({ mode = 'create' }) {
   }, [isDirty]);
 
   const leave = () => {
-    if (isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+    if (isDirty) { setLeaveTarget('back'); return; }
     window.history.back();
+  };
+
+  const confirmLeave = () => {
+    const target = leaveTarget;
+    setLeaveTarget(null);
+    leaveOk.current = true;
+    if (target === 'back') window.history.back();
+    else target?.click();
   };
 
   const currency = tenant?.locale?.currency || 'INR';
@@ -526,6 +538,14 @@ export default function ListingForm({ mode = 'create' }) {
         </div>
       </div>
       )}
+      <ConfirmDialog
+        open={!!leaveTarget}
+        title={t('confirm.unsavedTitle')}
+        description={t('confirm.unsavedBody')}
+        confirmLabel={t('confirm.leave')}
+        onConfirm={confirmLeave}
+        onCancel={() => setLeaveTarget(null)}
+      />
     </form>
   );
 }

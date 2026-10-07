@@ -156,7 +156,7 @@ export default function Home() {
               {t('landing.heroBody')}
             </p>
             <div className='mt-10 flex flex-col sm:flex-row gap-3'>
-              <button
+              <button type="button"
                 onClick={openModal}
                 className='inline-flex items-center justify-center gap-2 rounded-full bg-brand-800 hover:bg-brand-900 active:scale-[0.98] text-white px-7 py-3.5 font-semibold transition-[background-color,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f3f5f4]'
               >
@@ -246,7 +246,7 @@ export default function Home() {
             <p className='mt-6 text-lg text-brand-100 max-w-[44ch] text-pretty'>{t('home.a30MinuteWalkthroughMappedTo')}</p>
           </div>
           <div className='lg:col-span-5 lg:justify-self-end flex flex-col gap-6'>
-            <button
+            <button type="button"
               onClick={openModal}
               className='inline-flex items-center justify-center gap-2 rounded-full bg-white hover:bg-brand-50 active:scale-[0.98] text-brand-950 px-8 py-4 font-semibold transition-[background-color,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-950'
             >
@@ -289,7 +289,7 @@ export default function Home() {
                 {/* One separator per line, not three. */}
                 <p className='text-brand-100 text-sm'>{t('home.30MinutesNoCommitment')}</p>
               </div>
-              <button
+              <button type="button"
                 onClick={closeModal}
                 aria-label={t('home.closeDialog')}
                 className='text-white/60 hover:text-white p-1 rounded-lg transition-colors mt-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70'
@@ -310,7 +310,7 @@ export default function Home() {
                     <p>{t('home.weWillReachOutWithin')}<strong className='text-slate-700'>{t('home.24Hours')}</strong>{t('home.toConfirmATime')}</p>
                     <p>{t('home.soonerIsFineTooCall')}<strong className='text-slate-700'>{OWNER_PHONE}</strong>.</p>
                   </div>
-                  <button onClick={closeModal} className='mt-6 text-brand-700 font-semibold text-sm hover:underline'>{t('home.close')}</button>
+                  <button type="button" onClick={closeModal} className='mt-6 text-brand-700 font-semibold text-sm hover:underline'>{t('home.close')}</button>
                 </div>
               ) : (
                 <form onSubmit={handleDemoSubmit} className='space-y-4'>

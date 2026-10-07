@@ -373,7 +373,7 @@ export default function SearchFilters({ filters, onChange, onClear, className = 
           </div>
 
           {/* Apply Filters Button (Mobile) */}
-          <button
+          <button type="button"
             onClick={() => {}}
             className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all lg:hidden"
           >{t('searchFilters.applyFilters')}</button>

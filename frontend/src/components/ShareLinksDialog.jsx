@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import ConfirmDialog from './ConfirmDialog';
 import PropTypes from 'prop-types';
 import { HiOutlineClipboardCopy, HiOutlineLockClosed, HiOutlineEye } from 'react-icons/hi';
 import { apiClient } from '../utils/http';
@@ -18,6 +20,8 @@ export default function ShareLinksDialog({ open, onClose }) {
   const [shares, setShares] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [toRevoke, setToRevoke] = useState(null);
+  const { t } = useTranslation();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,7 +40,7 @@ export default function ShareLinksDialog({ open, onClose }) {
   }, [open, load]);
 
   const revoke = async (share) => {
-    if (!window.confirm('Withdraw this link? Anyone who opens it will see that it has been withdrawn.')) return;
+    setToRevoke(null);
     setBusyId(share.id);
     try {
       await apiClient.post(`/share/${share.id}/revoke`, {});
@@ -100,7 +104,7 @@ export default function ShareLinksDialog({ open, onClose }) {
                     <Button size="sm" variant="secondary" icon={HiOutlineClipboardCopy} onClick={() => copy(s)}>Copy link</Button>
                   )}
                   {s.isLive && (
-                    <Button size="sm" variant="secondary" loading={busyId === s.id} onClick={() => revoke(s)}>Withdraw</Button>
+                    <Button size="sm" variant="secondary" loading={busyId === s.id} onClick={() => setToRevoke(s)}>Withdraw</Button>
                   )}
                 </div>
               </li>
@@ -108,6 +112,14 @@ export default function ShareLinksDialog({ open, onClose }) {
           })}
         </ul>
       )}
+      <ConfirmDialog
+        open={!!toRevoke}
+        title={t('confirm.withdrawTitle')}
+        description={t('confirm.withdrawBody')}
+        confirmLabel={t('confirm.withdraw')}
+        onConfirm={() => revoke(toRevoke)}
+        onCancel={() => setToRevoke(null)}
+      />
     </Modal>
   );
 }

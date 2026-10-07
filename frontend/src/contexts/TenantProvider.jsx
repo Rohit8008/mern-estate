@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../utils/http';
 import { setLocaleConfig } from '../utils/currency';
 import { applyWorkspaceLanguage } from '../i18n/index.js';
+import { setSiteName } from '../hooks/usePageTitle';
 
 /**
  * The workspace this browser is talking to.
@@ -150,7 +151,7 @@ export function TenantProvider({ children }) {
 
   useEffect(() => {
     const productName = tenant?.branding?.productName || tenant?.name;
-    if (productName) document.title = productName;
+    if (productName) setSiteName(productName);
   }, [tenant]);
 
   const value = useMemo(

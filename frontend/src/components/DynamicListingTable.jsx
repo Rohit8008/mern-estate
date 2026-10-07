@@ -300,7 +300,7 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
     return (
       <div className="text-center text-red-600 p-4">
         <p>{error}</p>
-        <button 
+        <button type="button" 
           onClick={() => window.location.reload()} 
           className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
@@ -315,20 +315,20 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
       {/* Toolbar */}
       <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
         <div className="flex items-center space-x-4">
-          <button
+          <button type="button"
             onClick={() => setShowColumnManager(!showColumnManager)}
             className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
           >
             Manage Columns
           </button>
-          <button
+          <button type="button"
             onClick={handleExportExcel}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
             Export Excel
           </button>
           {selectedRows.size > 0 && (
-            <button
+            <button type="button"
               onClick={handleBulkDelete}
               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             >
@@ -447,14 +447,14 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                             className="flex-1 px-2 py-1 text-xs border rounded"
                             autoFocus
                           />
-                          <button
+                          <button type="button"
                             onClick={handleCellSave}
                             aria-label="Save"
                             className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
                           >
                             <span aria-hidden="true">✓</span>
                           </button>
-                          <button
+                          <button type="button"
                             onClick={handleCellCancel}
                             aria-label="Cancel"
                             className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
@@ -493,13 +493,13 @@ const DynamicListingTable = ({ category, onEdit, onDelete, currentUser }) => {
                       currentUser.role === 'employee' || 
                       (currentUser.role === 'seller' && listing.userRef === currentUser._id)) && (
                       <>
-                        <button
+                        <button type="button"
                           onClick={() => onEdit && onEdit(listing)}
                           className="text-blue-600 hover:text-blue-800"
                         >
                           Edit
                         </button>
-                        <button
+                        <button type="button"
                           onClick={() => onDelete && onDelete(listing)}
                           className="text-red-600 hover:text-red-800"
                         >

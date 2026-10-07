@@ -39,7 +39,7 @@ router.post('/', contactLimiter, async (req, res) => {
   const ownerMail = renderEmail({
     preheader: `${name.trim().slice(0, 120)} from ${company.trim().slice(0, 150)} wants a demo`,
     heading: 'New demo request',
-    paragraphs: ['Someone wants to see Real Vista CRM in action. Reply to this email to answer them directly.'],
+    paragraphs: ['Someone wants to see Real Vista in action. Reply to this email to answer them directly.'],
     details: [
       ['Name', name.trim().slice(0, 120)],
       ['Email', email.trim().slice(0, 254)],

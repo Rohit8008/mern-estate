@@ -20,6 +20,7 @@ const DELIVERY_TONE = { delivered: 'success', success: 'success', failed: 'error
 
 /** The recent attempts for one endpoint, so "did my test arrive?" has an answer. */
 function DeliveryLog({ hookId }) {
+  const { t } = useTranslation();
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
 
@@ -44,7 +45,7 @@ function DeliveryLog({ hookId }) {
       {error ? (
         <p className='px-3 py-3 text-xs text-rose-700'>{error}</p>
       ) : !rows ? (
-        <p className='px-3 py-3 text-xs text-slate-400'>Loading…</p>
+        <p className='px-3 py-3 text-xs text-slate-400'>{t('common.loading')}</p>
       ) : !rows.length ? (
         <p className='px-3 py-3 text-xs text-slate-500'>Nothing sent yet. Use the paper-plane button to send a test.</p>
       ) : (

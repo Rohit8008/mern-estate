@@ -443,7 +443,7 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
         </div>
         <div className='flex items-center gap-2'>
           {report.clientEmail && (
-            <button
+            <button type="button"
               onClick={handleSend}
               disabled={sending || sent}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
@@ -454,11 +454,11 @@ function ReportPreviewModal({ isOpen, onClose, report, onSend }) {
               {sent ? 'Sent!' : sending ? 'Sending...' : `Email to ${report.clientEmail}`}
             </button>
           )}
-          <button onClick={handleDownload} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
+          <button type="button" onClick={handleDownload} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
             <HiDownload className='w-4 h-4' aria-hidden='true' />{t('clientReport.download')}</button>
-          <button onClick={handlePrint} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
+          <button type="button" onClick={handlePrint} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5'>
             <HiPrinter className='w-4 h-4' aria-hidden='true' />{t('clientReport.printPdf')}</button>
-          <button onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'>
+          <button type="button" onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'>
             <HiX className='w-5 h-5' aria-hidden='true' />
           </button>
         </div>
@@ -502,7 +502,7 @@ function TemplateModal({ isOpen, onClose, template, onSave }) {
       <div ref={panelRef} role='dialog' aria-modal='true' aria-labelledby='crt-template-title' tabIndex={-1} className='bg-white rounded-xl shadow-xl w-full max-w-lg my-auto focus:outline-none'>
         <div className='p-4 border-b border-slate-200 flex items-center justify-between'>
           <h2 id='crt-template-title' className='text-lg font-semibold text-slate-900'>{template ? 'Edit Template' : 'Create New Template'}</h2>
-          <button onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
+          <button type="button" onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
         </div>
         <form onSubmit={handleSubmit} className='p-4 space-y-4'>
           <div>
@@ -677,7 +677,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
             <h2 id='crt-generate-title' className='text-lg font-semibold text-slate-900'>{isEdit ? 'Edit & Regenerate Report' : 'Generate Report'}</h2>
             {isEdit && <p className='text-xs text-slate-500 mt-0.5'>{t('clientReport.changesWillUpdateTheSavedReport')}</p>}
           </div>
-          <button onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
+          <button type="button" onClick={onClose} aria-label='Close' className='p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
         </div>
         <form onSubmit={handleSubmit} className='p-4 space-y-4'>
           <div>
@@ -796,7 +796,7 @@ function GenerateReportModal({ isOpen, onClose, templates, onGenerate, editingRe
               className='w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm'
               disabled={loadingClients}
             >
-              <option value=''>{loadingClients ? 'Loading...' : 'Pick from CRM or fill manually'}</option>
+              <option value=''>{loadingClients ? t('common.loading') : 'Pick from CRM or fill manually'}</option>
               {clients.map((c) => <option key={c._id} value={c._id}>{c.name}{c.email ? ` — ${c.email}` : ''}</option>)}
             </select>
           </div>
@@ -943,8 +943,8 @@ function ReportEditorModal({ isOpen, onClose, report, onSave }) {
             {dirty && (
               <span className='text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full'>{t('clientReport.unsavedChanges')}</span>
             )}
-            <button onClick={handleClose} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium'>{t('clientReport.cancel')}</button>
-            <button
+            <button type="button" onClick={handleClose} className='px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium'>{t('clientReport.cancel')}</button>
+            <button type="button"
               onClick={handleSave}
               disabled={saving || !dirty}
               className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors'
@@ -1136,20 +1136,20 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
         <div className='flex items-center gap-2'>
           <span className='text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-medium'>{t('clientReport.sampleData')}</span>
           {isInstalled && onEdit && (
-            <button
+            <button type="button"
               onClick={() => { onEdit(template); onClose(); }}
               className='flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50'
             >
               <HiPencil className='w-4 h-4' aria-hidden='true' />{t('clientReport.editTemplate')}</button>
           )}
           {isInstalled && onUse && (
-            <button
+            <button type="button"
               onClick={() => { onUse(template._id); onClose(); }}
               className='flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-900 text-white rounded-lg hover:bg-slate-800'
             >
               <HiDocumentText className='w-4 h-4' aria-hidden='true' />{t('clientReport.useTemplate')}</button>
           )}
-          <button
+          <button type="button"
             onClick={() => {
               const w = window.open('', '_blank');
               w.document.write(html);
@@ -1162,7 +1162,7 @@ function TemplatePreviewModal({ isOpen, onClose, template, onEdit, onUse }) {
           >
             <HiPrinter className='w-5 h-5' aria-hidden='true' />
           </button>
-          <button
+          <button type="button"
             onClick={onClose}
             aria-label='Close'
             className='p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
@@ -1223,7 +1223,7 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
             {report.status === 'sent' ? 'Sent' : 'Draft'}
           </span>
           <div className='relative' ref={menuRef}>
-            <button
+            <button type="button"
               onClick={() => setMenuOpen(v => !v)}
               aria-label='Report actions'
               aria-haspopup='menu'
@@ -1234,18 +1234,18 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
             </button>
             {menuOpen && (
               <div className='absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1'>
-                <button onClick={() => { onView(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
+                <button type="button" onClick={() => { onView(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
                   <HiEye className='w-4 h-4' aria-hidden='true' />{t('clientReport.preview')}</button>
-                <button onClick={() => { onEditContent(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
+                <button type="button" onClick={() => { onEditContent(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
                   <HiPencil className='w-4 h-4' aria-hidden='true' />{t('clientReport.editContent')}</button>
-                <button onClick={() => { onEdit(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
+                <button type="button" onClick={() => { onEdit(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
                   <HiRefresh className='w-4 h-4' aria-hidden='true' />{t('clientReport.regenerate')}</button>
                 {report.clientEmail && (
-                  <button onClick={() => { onSend(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
+                  <button type="button" onClick={() => { onSend(report); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'>
                     <HiMail className='w-4 h-4' aria-hidden='true' />{t('clientReport.sendByEmail')}</button>
                 )}
                 <div className='h-px bg-slate-100 my-1' />
-                <button onClick={() => { onDelete(report._id); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 flex items-center gap-2 text-rose-600'>
+                <button type="button" onClick={() => { onDelete(report._id); setMenuOpen(false); }} className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 flex items-center gap-2 text-rose-600'>
                   <HiTrash className='w-4 h-4' aria-hidden='true' />{t('clientReport.delete')}</button>
               </div>
             )}
@@ -1285,18 +1285,18 @@ function ReportCard({ report, onView, onEdit, onEditContent, onSend, onDelete, t
 
       {/* Actions */}
       <div className='flex items-center gap-2 pt-1 border-t border-slate-100'>
-        <button
+        <button type="button"
           onClick={() => onView(report)}
           className='flex-1 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5'
         >
           <HiEye className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.preview')}</button>
-        <button
+        <button type="button"
           onClick={() => onEditContent(report)}
           className='flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5'
         >
           <HiPencil className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.edit')}</button>
         {report.clientEmail && (
-          <button
+          <button type="button"
             onClick={() => onSend(report)}
             className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors'
             title={`Send to ${report.clientEmail}`}
@@ -1538,12 +1538,12 @@ export default function ClientReportTemplate() {
             <p className='text-sm text-slate-400 mt-1'>{templates.length} templates · {generatedReports.length} reports generated</p>
           </div>
           <div className='flex items-center gap-2'>
-            <button
+            <button type="button"
               onClick={() => openGenerateModal()}
               className='px-4 py-2 rounded-lg border border-white/10 bg-white/10 hover:bg-white/20 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
               <HiDocumentText className='w-4 h-4' aria-hidden='true' />{t('clientReport.generateReport')}</button>
-            <button
+            <button type="button"
               onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}
               className='px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
             >
@@ -1590,7 +1590,7 @@ export default function ClientReportTemplate() {
                 { key: 'templates', label: 'Templates', count: templates.length },
                 { key: 'generated', label: 'Generated Reports', count: generatedReports.length },
               ].map(tab => (
-                <button
+                <button type="button"
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
@@ -1605,7 +1605,7 @@ export default function ClientReportTemplate() {
               ))}
             </div>
             <div className='flex items-center gap-2 py-2'>
-              <button
+              <button type="button"
                 onClick={() => { fetchTemplates(); fetchReports(); }}
                 className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50'
                 title={t('clientReport.refresh')}
@@ -1624,7 +1624,7 @@ export default function ClientReportTemplate() {
                   className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-500 w-36'
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
+                  <button type="button" onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
                 )}
               </div>
             </div>
@@ -1656,7 +1656,7 @@ export default function ClientReportTemplate() {
                           </div>
                         </div>
                         <div className='relative shrink-0' data-tmpl-menu='true'>
-                          <button
+                          <button type="button"
                             onClick={(e) => { e.stopPropagation(); setShowActionsMenu(showActionsMenu === template._id ? null : template._id); }}
                             aria-label={`Actions for ${template.name}`}
                             aria-haspopup='menu'
@@ -1667,23 +1667,23 @@ export default function ClientReportTemplate() {
                           </button>
                           {showActionsMenu === template._id && (
                             <div className='absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1'>
-                              <button
+                              <button type="button"
                                 onClick={() => { setPreviewTemplate(template); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
                                 <HiEye className='w-4 h-4' aria-hidden='true' />{t('clientReport.preview')}</button>
-                              <button
+                              <button type="button"
                                 onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
                                 <HiPencil className='w-4 h-4' aria-hidden='true' />{t('clientReport.edit')}</button>
-                              <button
+                              <button type="button"
                                 onClick={() => handleDuplicateTemplate(template)}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700'
                               >
                                 <HiDuplicate className='w-4 h-4' aria-hidden='true' />{t('clientReport.duplicate')}</button>
                               <div className='h-px bg-slate-100 my-1' />
-                              <button
+                              <button type="button"
                                 onClick={() => { setPendingDeleteTemplate(template._id); setShowActionsMenu(null); }}
                                 className='w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2'
                               >
@@ -1720,16 +1720,16 @@ export default function ClientReportTemplate() {
                       </div>
 
                       <div className='pt-3 border-t border-slate-200 flex items-center gap-1.5'>
-                        <button
+                        <button type="button"
                           onClick={() => openGenerateModal(null, template._id)}
                           className='flex-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors'
                         >{t('clientReport.useTemplate')}</button>
-                        <button
+                        <button type="button"
                           onClick={() => setPreviewTemplate(template)}
                           className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
                         >
                           <HiEye className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.preview')}</button>
-                        <button
+                        <button type="button"
                           onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); }}
                           className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
                         >
@@ -1775,7 +1775,7 @@ export default function ClientReportTemplate() {
                       </div>
 
                       <div className='flex flex-col gap-2'>
-                        <button
+                        <button type="button"
                           onClick={handleSeedTemplates}
                           disabled={seedingTemplates}
                           className='w-full px-4 py-2.5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center justify-center gap-2'
@@ -1786,7 +1786,7 @@ export default function ClientReportTemplate() {
                             <><HiPlus className='w-4 h-4' aria-hidden='true' />{t('clientReport.install6StarterTemplates')}</>
                           )}
                         </button>
-                        <button
+                        <button type="button"
                           onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}
                           className='w-full px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50'
                         >{t('clientReport.buildFromScratch')}</button>
@@ -1817,7 +1817,7 @@ export default function ClientReportTemplate() {
                 <HiDocumentText className='w-12 h-12 text-slate-300 mx-auto mb-3' aria-hidden='true' />
                 <p className='text-sm font-medium text-slate-700 mb-1'>{t('clientReport.noReportsGeneratedYet')}</p>
                 <p className='text-xs text-slate-500 mb-4'>{t('clientReport.generateAReportFromAnyOf')}</p>
-                <button
+                <button type="button"
                   onClick={() => openGenerateModal()}
                   className='px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800'
                 >{t('clientReport.generateYourFirstReport')}</button>

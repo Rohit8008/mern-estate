@@ -245,7 +245,7 @@ export const getClientById = async (req, res, next) => {
       .lean();
     if (!doc) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(doc.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
     res.json({ success: true, data: doc });
   } catch (err) {
@@ -261,7 +261,7 @@ export const updateClient = async (req, res, next) => {
 
     // Non-admins can only update their own
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     // If non-admin tries to reassign, block
@@ -342,7 +342,7 @@ export const deleteClient = async (req, res, next) => {
     const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
     await Client.findByIdAndUpdate(id, {
       isDeleted: true,
@@ -536,7 +536,7 @@ export const exportClients = async (req, res, next) => {
 
 export const assignClient = async (req, res, next) => {
   try {
-    if (req.user.role !== 'admin') return next(errorHandler(403, 'Admin only'));
+    if (req.user.role !== 'admin') return next(errorHandler(403, 'Only an administrator can do this.'));
     const { id } = req.params;
     const { assignedTo } = req.body;
     const before = await Client.findOne({ _id: id, isDeleted: { $ne: true } }).select('assignedTo name').lean();
@@ -595,7 +595,7 @@ export const addClientPhoto = async (req, res, next) => {
     if (!client) return next(errorHandler(404, 'Client not found'));
 
     if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     // Capped so one record cannot grow without bound.
@@ -629,7 +629,7 @@ export const deleteClientPhoto = async (req, res, next) => {
     if (!client) return next(errorHandler(404, 'Client not found'));
 
     if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     const photo = client.photos.id(req.params.photoId);
@@ -651,7 +651,7 @@ export const addInterestedListing = async (req, res, next) => {
     const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
     if (!existing.interestedListings.includes(listingId)) {
       existing.interestedListings.push(listingId);
@@ -670,7 +670,7 @@ export const removeInterestedListing = async (req, res, next) => {
     const existing = await Client.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existing) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(existing.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
     existing.interestedListings = existing.interestedListings.filter((x) => String(x) !== String(listingId));
     await existing.save();
@@ -690,7 +690,7 @@ export const optOutClientEmail = async (req, res, next) => {
     const client = await Client.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!client) return next(errorHandler(404, 'Client not found'));
     if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
     if (!client.email) return next(errorHandler(400, 'This lead has no email address'));
 

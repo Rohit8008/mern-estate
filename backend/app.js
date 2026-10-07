@@ -1,3 +1,4 @@
+import { logger } from './utils/logger.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -84,6 +85,20 @@ const ONE_YEAR_S = 60 * 60 * 24 * 365;
  * forever; the HTML shell and the service worker must be revalidated every time
  * or a deploy would not reach returning visitors.
  */
+/** One neutral, branded page for every server-rendered 404. */
+function notFoundPage({ title, text, detail = '' }) {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" /><title>${escapeHtml(title)} — Real Vista</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f3f5f4;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0f172a}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;max-width:480px;width:92%;padding:36px 32px;text-align:center}
+h1{font-size:22px;margin:0 0 8px}p{color:#334155;line-height:1.6;margin:0 0 20px}
+code{display:inline-block;background:#f1f5f9;border-radius:8px;padding:6px 10px;font-size:13px;color:#475569;margin-bottom:20px;word-break:break-all}
+a{display:inline-block;background:#2b6faa;color:#fff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:999px}
+</style></head><body><main class="card"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p>${detail ? `<code>${escapeHtml(detail)}</code><br>` : ''}<a href="/">Go to Real Vista</a></main></body></html>`;
+}
+
 export function setDistHeaders(res, filePath) {
   const rel = filePath.split(path.sep).join('/');
   if (/\/assets\//.test(rel)) {
@@ -257,41 +272,11 @@ export function createApp() {
   app.use('/api', (req, res) => {
     const acceptsHtml = String(req.headers['accept'] || '').includes('text/html');
     if (acceptsHtml) {
-      return res.status(404).send(`<!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>API route not found</title>
-        <style>
-          body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji";background:linear-gradient(135deg,#faf5ff,#f0fdf4,#eff6ff);min-height:100vh;display:flex;align-items:center;justify-content:center}
-          .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,.06);max-width:760px;width:92%;overflow:hidden}
-          .inner{padding:32px;text-align:center}
-          .pill{width:64px;height:64px;border-radius:9999px;background:#dbeafe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
-          .title{font-size:28px;font-weight:800;color:#0f172a;margin:0 0 8px}
-          .text{color:#334155;margin:0 0 20px}
-          .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;display:inline-block}
-          .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:14px}
-          .btn{padding:10px 16px;border-radius:10px;border:1px solid #e5e7eb;color:#0f172a;text-decoration:none}
-          .btn.primary{background:#0f172a;color:#fff;border-color:#0f172a}
-          .btn:hover{opacity:.95}
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="inner">
-            <div class="pill" aria-hidden="true">🛣️</div>
-            <h1 class="title">API route not found</h1>
-            <p class="text">The endpoint you requested does not exist:</p>
-            <div class="mono">${escapeHtml(req.method)} ${escapeHtml(req.originalUrl)}</div>
-            <div class="row">
-              <a href="/" class="btn primary">Go Home</a>
-              <a href="/messages" class="btn">Open Messages</a>
-            </div>
-          </div>
-        </div>
-      </body>
-    </html>`);
+      return res.status(404).send(notFoundPage({
+        title: "We couldn't find that",
+        text: 'The link you followed does not point to anything on Real Vista.',
+        detail: `${req.method} ${req.originalUrl}`,
+      }));
     }
     res.status(404).json({ success: false, statusCode: 404, code: 'NOT_FOUND', message: 'API route not found', requestId: req.id });
   });
@@ -302,40 +287,13 @@ export function createApp() {
       res.setHeader('Cache-Control', 'no-cache');
       return res.sendFile(indexPath);
     }
-    res.status(404).send(`<!doctype html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Page not found</title>
-      <style>
-        body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji";background:linear-gradient(135deg,#eef2ff,#fef3c7,#ecfeff);min-height:100vh;display:flex;align-items:center;justify-content:center}
-        .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,.06);max-width:680px;width:92%;overflow:hidden}
-        .inner{padding:32px;text-align:center}
-        .pill{width:64px;height:64px;border-radius:9999px;background:#e0f2fe;color:#0369a1;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
-        .title{font-size:28px;font-weight:800;color:#0f172a;margin:0 0 8px}
-        .text{color:#334155;margin:0 0 20px}
-        .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-        .btn{padding:10px 16px;border-radius:10px;border:1px solid #e5e7eb;color:#0f172a;text-decoration:none}
-        .btn.primary{background:#0f172a;color:#fff;border-color:#0f172a}
-        .btn:hover{opacity:.95}
-        code{background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:2px 6px}
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <div class="inner">
-          <div class="pill" aria-hidden="true">🔎</div>
-          <h1 class="title">This page isn’t available</h1>
-          <p class="text">You’re in development without a client build. Use the SPA routes via the dev server at <code>http://localhost:5173</code>, or build the client to enable server-side fallback.</p>
-          <div class="row">
-            <a href="http://localhost:5173" class="btn primary">Go Home</a>
-            <a href="/search" class="btn">Search</a>
-          </div>
-        </div>
-      </div>
-    </body>
-  </html>`);
+    // Production without a client build is a deploy fault, not something to
+    // explain to a visitor: say so in the log, show a neutral page.
+    logger.error('Client build missing; serving fallback 404', { path: req.originalUrl });
+    res.status(404).send(notFoundPage({
+      title: "This page isn't available",
+      text: "Something went wrong on our side. Please try again in a few minutes.",
+    }));
   });
 
   app.use(globalErrorHandler);

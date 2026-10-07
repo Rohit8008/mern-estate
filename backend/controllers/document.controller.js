@@ -70,13 +70,13 @@ export const uploadDocument = async (req, res, next) => {
       related.clientId = clientId;
     }
 
-    if (!ensureAccessForRelated(req.user, related)) return next(errorHandler(403, 'Forbidden'));
+    if (!ensureAccessForRelated(req.user, related)) return next(errorHandler(403, "You don't have permission to do that."));
 
     // Validate ownership/assignment
     if (kind === 'client') {
       const c = await Client.findById(clientId).select('assignedTo');
       if (!c) return next(errorHandler(404, 'Client not found'));
-      if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
     } else if (kind === 'listing') {
       const l = await Listing.findById(listingId).select('userRef assignedAgent');
       if (!l) return next(errorHandler(404, 'Listing not found'));
@@ -85,18 +85,18 @@ export const uploadDocument = async (req, res, next) => {
       const cat = await Category.findById(categoryId).select('slug');
       if (!cat) return next(errorHandler(404, 'Category not found'));
       if (req.user.role !== 'admin' && !(req.user.assignedCategories || []).includes(cat.slug)) {
-        return next(errorHandler(403, 'Forbidden'));
+        return next(errorHandler(403, "You don't have permission to do that."));
       }
     } else if (kind === 'deal') {
       // The parent client decides who may file paperwork against the deal.
       const c = await Client.findOne({ _id: clientId, 'deals._id': dealId }).select('assignedTo');
       if (!c) return next(errorHandler(404, 'Deal not found'));
-      if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (req.user.role !== 'admin' && String(c.assignedTo) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
     } else if (kind === 'transaction') {
       const t = await Transaction.findById(transactionId).select('agent createdBy');
       if (!t) return next(errorHandler(404, 'Transaction not found'));
       const owner = String(t.agent || t.createdBy || '');
-      if (req.user.role !== 'admin' && owner !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (req.user.role !== 'admin' && owner !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     const file = req.file;
@@ -198,7 +198,7 @@ export const listDocuments = async (req, res, next) => {
       if (filter['related.clientId']) {
         const c = await Client.findById(filter['related.clientId']).select('assignedTo');
         if (!c) return next(errorHandler(404, 'Client not found'));
-        if (String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+        if (String(c.assignedTo) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
       }
       if (filter['related.listingId']) {
         const l = await Listing.findById(filter['related.listingId']).select('userRef assignedAgent');
@@ -208,7 +208,7 @@ export const listDocuments = async (req, res, next) => {
       if (filter['related.categoryId']) {
         const cat = await Category.findById(filter['related.categoryId']).select('slug');
         if (!cat) return next(errorHandler(404, 'Category not found'));
-        if (!(req.user.assignedCategories || []).includes(cat.slug)) return next(errorHandler(403, 'Forbidden'));
+        if (!(req.user.assignedCategories || []).includes(cat.slug)) return next(errorHandler(403, "You don't have permission to do that."));
       }
     }
 
@@ -233,13 +233,13 @@ export const deleteDocument = async (req, res, next) => {
     if (req.user.role !== 'admin') {
       if (doc.related.kind === 'client' && doc.related.clientId) {
         const c = await Client.findById(doc.related.clientId).select('assignedTo');
-        if (!c || String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+        if (!c || String(c.assignedTo) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
       } else if (doc.related.kind === 'listing' && doc.related.listingId) {
         const l = await Listing.findById(doc.related.listingId).select('userRef assignedAgent');
         if (!l || !worksOnListing(l, req.user.id)) return next(errorHandler(403, "You can only manage documents on properties you added or that are assigned to you."));
       } else if (doc.related.kind === 'category' && doc.related.categoryId) {
         const cat = await Category.findById(doc.related.categoryId).select('slug');
-        if (!cat || !(req.user.assignedCategories || []).includes(cat.slug)) return next(errorHandler(403, 'Forbidden'));
+        if (!cat || !(req.user.assignedCategories || []).includes(cat.slug)) return next(errorHandler(403, "You don't have permission to do that."));
       }
     }
 
@@ -339,17 +339,17 @@ export const serveDocumentFile = async (req, res, next) => {
     if (req.user.role !== 'admin') {
       if (doc.related.kind === 'client' && doc.related.clientId) {
         const c = await Client.findById(doc.related.clientId).select('assignedTo');
-        if (!c || String(c.assignedTo) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+        if (!c || String(c.assignedTo) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
       } else if (doc.related.kind === 'listing' && doc.related.listingId) {
         const l = await Listing.findById(doc.related.listingId).select('userRef assignedAgent');
         if (!l || !worksOnListing(l, req.user.id)) return next(errorHandler(403, "You can only manage documents on properties you added or that are assigned to you."));
       } else if (doc.related.kind === 'category' && doc.related.categoryId) {
         const cat = await Category.findById(doc.related.categoryId).select('slug');
         if (!cat || !(req.user.assignedCategories || []).includes(cat.slug)) {
-          return next(errorHandler(403, 'Forbidden'));
+          return next(errorHandler(403, "You don't have permission to do that."));
         }
       } else {
-        return next(errorHandler(403, 'Forbidden'));
+        return next(errorHandler(403, "You don't have permission to do that."));
       }
     }
 

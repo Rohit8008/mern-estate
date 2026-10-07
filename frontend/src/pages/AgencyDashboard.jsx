@@ -381,10 +381,10 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
           <span className='text-sm font-semibold text-slate-700 truncate'>{widget.label}</span>
         </div>
         <div className='flex items-center gap-1 flex-shrink-0'>
-          <button onClick={() => onToggleSize(widget.id)} title={widget.span === 'lg' ? 'Make smaller' : 'Make wider'} aria-label={widget.span === 'lg' ? `Make ${widget.label} smaller` : `Make ${widget.label} wider`} className='text-slate-500 hover:text-slate-700 p-2 sm:p-1 rounded transition-colors'>
+          <button type="button" onClick={() => onToggleSize(widget.id)} title={widget.span === 'lg' ? 'Make smaller' : 'Make wider'} aria-label={widget.span === 'lg' ? `Make ${widget.label} smaller` : `Make ${widget.label} wider`} className='text-slate-500 hover:text-slate-700 p-2 sm:p-1 rounded transition-colors'>
             <HiSwitchHorizontal className='w-4 h-4' aria-hidden='true' />
           </button>
-          <button onClick={() => onRemove(widget.id)} aria-label={`Remove ${widget.label} widget`} className='text-slate-500 hover:text-rose-500 p-2 sm:p-1 rounded transition-colors'>
+          <button type="button" onClick={() => onRemove(widget.id)} aria-label={`Remove ${widget.label} widget`} className='text-slate-500 hover:text-rose-500 p-2 sm:p-1 rounded transition-colors'>
             <HiX className='w-4 h-4' aria-hidden='true' />
           </button>
         </div>
@@ -722,7 +722,7 @@ export default function AgencyDashboard() {
 
       {/* Toolbar */}
       <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm'>
-        <button onClick={() => openWidgetModal()} className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium flex items-center gap-1.5 hover:bg-slate-800 transition-colors'>
+        <button type="button" onClick={() => openWidgetModal()} className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium flex items-center gap-1.5 hover:bg-slate-800 transition-colors'>
           <HiPlus className='w-4 h-4' aria-hidden='true' />{t('agencyDashboard.addWidget')}</button>
         <div className='h-5 w-px bg-slate-200' />
         <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-sm flex-1 max-w-md focus-within:bg-white focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-brand-500 transition-colors'>
@@ -734,13 +734,13 @@ export default function AgencyDashboard() {
             value={crmSearchQuery}
             onChange={(e) => setCrmSearchQuery(e.target.value)}
           />
-          {crmSearchQuery && (<button onClick={() => setCrmSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>)}
+          {crmSearchQuery && (<button type="button" onClick={() => setCrmSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>)}
         </div>
 
         {/* People dropdown */}
         {isAdmin && teamMembers.length > 0 && (
           <div className='relative'>
-            <button onClick={() => { setShowPeopleDropdown(!showPeopleDropdown); setShowFilterDropdown(false); }} aria-expanded={showPeopleDropdown} className={`px-3 py-1.5 rounded-md border text-sm font-medium flex items-center gap-1.5 transition-colors ${selectedPeople.length > 0 ? 'border-slate-900 bg-slate-100 text-slate-900' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+            <button type="button" onClick={() => { setShowPeopleDropdown(!showPeopleDropdown); setShowFilterDropdown(false); }} aria-expanded={showPeopleDropdown} className={`px-3 py-1.5 rounded-md border text-sm font-medium flex items-center gap-1.5 transition-colors ${selectedPeople.length > 0 ? 'border-slate-900 bg-slate-100 text-slate-900' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
               <HiUsers className='w-4 h-4' aria-hidden='true' />
               People
               {selectedPeople.length > 0 && (<span className='bg-slate-900 text-white text-xs px-1.5 rounded-full'>{selectedPeople.length}</span>)}
@@ -750,7 +750,7 @@ export default function AgencyDashboard() {
                 <div className='p-2'>
                   <div className='text-xs font-medium text-slate-500 px-2 py-1 mb-1'>{t('agencyDashboard.teamMembers')}</div>
                   {teamMembers.map((person) => (
-                    <button key={person.id} onClick={() => togglePerson(person.id)} aria-pressed={selectedPeople.includes(person.id)} className={`w-full text-left px-2 py-2 rounded text-sm flex items-center gap-3 ${selectedPeople.includes(person.id) ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
+                    <button type="button" key={person.id} onClick={() => togglePerson(person.id)} aria-pressed={selectedPeople.includes(person.id)} className={`w-full text-left px-2 py-2 rounded text-sm flex items-center gap-3 ${selectedPeople.includes(person.id) ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
                       <div className='w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-sm font-medium'>{person.avatar}</div>
                       <div className='flex-1'>
                         <div className='font-medium text-slate-900'>{person.name}</div>
@@ -760,7 +760,7 @@ export default function AgencyDashboard() {
                     </button>
                   ))}
                   {selectedPeople.length > 0 && (
-                    <button onClick={() => { setSelectedPeople([]); setShowPeopleDropdown(false); }} className='w-full text-left px-2 py-1.5 rounded text-sm text-rose-600 hover:bg-rose-50 mt-1'>{t('agencyDashboard.clearSelection')}</button>
+                    <button type="button" onClick={() => { setSelectedPeople([]); setShowPeopleDropdown(false); }} className='w-full text-left px-2 py-1.5 rounded text-sm text-rose-600 hover:bg-rose-50 mt-1'>{t('agencyDashboard.clearSelection')}</button>
                   )}
                 </div>
               </div>
@@ -773,7 +773,7 @@ export default function AgencyDashboard() {
       {error && (
         <div className='bg-rose-50 border border-rose-200 rounded-lg p-4 flex items-center justify-between'>
           <p className='text-rose-800 text-sm'>{error}</p>
-          <button onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>{t('agencyDashboard.retry')}</button>
+          <button type="button" onClick={fetchData} className='text-rose-700 hover:underline text-sm font-medium'>{t('agencyDashboard.retry')}</button>
         </div>
       )}
 
@@ -1104,7 +1104,7 @@ export default function AgencyDashboard() {
                     onDrop={() => handleDrop(widget.id)}
                   />
                 ))}
-                <button onClick={() => openWidgetModal()} className='bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[7rem] flex items-center justify-center text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors cursor-pointer col-span-1'>
+                <button type="button" onClick={() => openWidgetModal()} className='bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[7rem] flex items-center justify-center text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors cursor-pointer col-span-1'>
                   <span className='flex items-center gap-2 text-sm'>
                     <HiPlus className='w-5 h-5' aria-hidden='true' />{t('agencyDashboard.addWidget')}</span>
                 </button>
@@ -1112,7 +1112,7 @@ export default function AgencyDashboard() {
             ) : (
               <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
                 {[1, 2, 3].map((i) => (
-                  <button key={i} onClick={() => openWidgetModal()} className='bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 h-28 flex items-center justify-center text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors cursor-pointer'>
+                  <button type="button" key={i} onClick={() => openWidgetModal()} className='bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 h-28 flex items-center justify-center text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors cursor-pointer'>
                     <span className='flex items-center gap-2 text-sm'>
                       <HiPlus className='w-5 h-5' aria-hidden='true' />{t('agencyDashboard.addWidget')}</span>
                   </button>
@@ -1132,7 +1132,7 @@ export default function AgencyDashboard() {
             <div className='px-6 py-4 border-b border-slate-200 flex items-center justify-between'>
               <div className='flex items-center gap-2'>
                 {widgetStep === 'preset' && (
-                  <button onClick={() => setWidgetStep('type')} aria-label='Back to widget types' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'>
+                  <button type="button" onClick={() => setWidgetStep('type')} aria-label='Back to widget types' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'>
                     <svg aria-hidden='true' className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' /></svg>
                   </button>
                 )}
@@ -1147,7 +1147,7 @@ export default function AgencyDashboard() {
                   )}
                 </h2>
               </div>
-              <button onClick={() => setShowAddWidgetModal(false)} aria-label='Close' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
+              <button type="button" onClick={() => setShowAddWidgetModal(false)} aria-label='Close' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
             </div>
             <div className='p-6'>
               {widgetStep === 'type' ? (
@@ -1157,7 +1157,7 @@ export default function AgencyDashboard() {
                     {WIDGET_TYPES.map((w) => {
                       const WIcon = w.icon;
                       return (
-                        <button key={w.id} onClick={() => selectWidgetType(w)} className='p-4 border border-slate-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors text-left group'>
+                        <button type="button" key={w.id} onClick={() => selectWidgetType(w)} className='p-4 border border-slate-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors text-left group'>
                           <div className='w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-3 transition-colors'>
                             <WIcon className='w-4 h-4 text-slate-500 group-hover:text-indigo-600' aria-hidden='true' />
                           </div>
@@ -1173,7 +1173,7 @@ export default function AgencyDashboard() {
                   <p className='text-sm text-slate-600 mb-4'>{t('agencyDashboard.selectDataToDisplay')}</p>
                   <div className='space-y-2'>
                     {(WIDGET_PRESETS[selectedWidgetType?.id] || []).map((preset) => (
-                      <button key={preset.key} onClick={() => addWidget(selectedWidgetType, preset)} className='w-full p-3 border border-slate-200 rounded-lg hover:border-slate-400 hover:bg-slate-50 transition-colors text-left flex items-center justify-between'>
+                      <button type="button" key={preset.key} onClick={() => addWidget(selectedWidgetType, preset)} className='w-full p-3 border border-slate-200 rounded-lg hover:border-slate-400 hover:bg-slate-50 transition-colors text-left flex items-center justify-between'>
                         <span className='font-medium text-slate-900 text-sm'>{preset.label}</span>
                         <HiPlus className='w-4 h-4 text-slate-400' aria-hidden='true' />
                       </button>
@@ -1192,7 +1192,7 @@ export default function AgencyDashboard() {
           <div ref={inviteModalRef} role='dialog' aria-modal='true' aria-labelledby='ad-invite-title' tabIndex={-1} className='bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain focus:outline-none'>
             <div className='px-6 py-4 border-b border-slate-200 flex items-center justify-between'>
               <h2 id='ad-invite-title' className='text-lg font-semibold text-slate-900'>{t('agencyDashboard.inviteTeamMember')}</h2>
-              <button onClick={closeInviteModal} aria-label='Close' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
+              <button type="button" onClick={closeInviteModal} aria-label='Close' className='p-2 sm:p-1 rounded-lg hover:bg-slate-100 text-slate-500'><HiX className='w-5 h-5' aria-hidden='true' /></button>
             </div>
             <div className='p-6 space-y-4'>
               {inviteSuccess && (
@@ -1223,8 +1223,8 @@ export default function AgencyDashboard() {
                 onChange={(e) => setInviteMessage(e.target.value)}
               />
               <div className='flex items-center justify-end gap-3 pt-2'>
-                <button onClick={closeInviteModal} className='px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'>{t('agencyDashboard.cancel')}</button>
-                <button
+                <button type="button" onClick={closeInviteModal} className='px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors'>{t('agencyDashboard.cancel')}</button>
+                <button type="button"
                   onClick={handleSendInvite}
                   disabled={inviteLoading || !inviteEmail.trim()}
                   className='px-4 py-2 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 rounded-lg transition-colors'

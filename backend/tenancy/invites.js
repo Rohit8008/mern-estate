@@ -107,7 +107,7 @@ export function buildInviteEmail({ url, workspace, workspaceSlug = '', inviterNa
   const expires = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
     .format(expiresAt || new Date(Date.now() + DEFAULT_INVITE_DAYS * 86400000));
   const hello = recipientName ? `Hi ${recipientName},` : 'Hello,';
-  const colour = /^#[0-9a-f]{6}$/i.test(accent || '') ? accent : '#1e4f6b';
+  const colour = /^#[0-9a-f]{6}$/i.test(accent || '') ? accent : '#2b6faa';
 
   const subject = inviterName
     ? `${inviterName} invited you to ${workspace} on ${product}`

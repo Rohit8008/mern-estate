@@ -143,7 +143,7 @@ export const enrollClient = async (req, res, next) => {
 
     // Same ownership rule as editing the lead.
     if (req.user.role !== 'admin' && String(client.assignedTo) !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     if (['won', 'lost'].includes(client.status)) {

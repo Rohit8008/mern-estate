@@ -1,4 +1,4 @@
-# MERN Estate Backend API
+# Real Vista Backend API
 
 A production-ready real estate management system built with Node.js, Express, and MongoDB.
 

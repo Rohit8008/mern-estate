@@ -93,7 +93,7 @@ export const getPreferences = async (req, res, next) => {
     const user = await inHomeTenant(req, () =>
       User.findById(req.user.id).select('preferences').lean()
     );
-    if (!user) return next(errorHandler(404, 'User not found'));
+    if (!user) return next(errorHandler(404, "We couldn't find that user."));
 
     const stored = user.preferences?.notifications || {};
     const notifications = defaultNotificationPreferences();

@@ -94,7 +94,7 @@ export const listActivity = async (req, res, next) => {
     if (!canReadAllLogs(req)) {
       const ownerId = spec.owner(entity);
       if (!ownerId || String(ownerId) !== String(req.user.id)) {
-        return next(errorHandler(403, 'Forbidden'));
+        return next(errorHandler(403, "You don't have permission to do that."));
       }
     }
 
@@ -174,7 +174,7 @@ export function buildTrailFilter(query, tz = 'Asia/Kolkata') {
  */
 export const searchActivity = async (req, res, next) => {
   try {
-    if (!canReadAllLogs(req)) return next(errorHandler(403, 'Forbidden'));
+    if (!canReadAllLogs(req)) return next(errorHandler(403, "You don't have permission to do that."));
 
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
     const offset = Math.max(0, Number(req.query.offset) || 0);
@@ -221,7 +221,7 @@ export const searchActivity = async (req, res, next) => {
  */
 export const exportActivity = async (req, res, next) => {
   try {
-    if (!canReadAllLogs(req)) return next(errorHandler(403, 'Forbidden'));
+    if (!canReadAllLogs(req)) return next(errorHandler(403, "You don't have permission to do that."));
 
     const filter = buildTrailFilter(req.query, workspaceTimezone(req));
     const cursor = ActivityLog.find(filter)

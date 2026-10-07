@@ -279,7 +279,7 @@ export default function OwnersBoard() {
       {error && (
         <div className='bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-3 flex items-center justify-between'>
           {error}
-          <button onClick={() => setError('')} className='text-rose-400 hover:text-rose-600 ml-2'>×</button>
+          <button type="button" onClick={() => setError('')} className='text-rose-400 hover:text-rose-600 ml-2'>×</button>
         </div>
       )}
 

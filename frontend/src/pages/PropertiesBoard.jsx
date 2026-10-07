@@ -5,6 +5,7 @@ import { apiClient, normalizeImageUrl } from '../utils/http';
 import { formatListingPrice, formatNumber, isPlaceholderPrice, formatCurrency as formatMoney, formatDate } from '../utils/currency';
 import BulkActionBar, { BulkSelect, BulkButton } from '../components/BulkActionBar';
 import ShareLinksDialog from '../components/ShareLinksDialog';
+import ConfirmDialog from '../components/ConfirmDialog';
 import DeletedListingsDialog from '../components/DeletedListingsDialog';
 import { toCsv, downloadTextFile } from '../utils/spreadsheet';
 import { localDateString } from '../utils/localDate';
@@ -143,6 +144,7 @@ export default function PropertiesBoard() {
   // only way anything in it reaches someone outside the agency.
   const [selectedToShare, setSelectedToShare] = useState([]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
   const [binOpen, setBinOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -726,6 +728,17 @@ export default function PropertiesBoard() {
         listings={selectedToShare}
       />
       <ShareLinksDialog open={linksOpen} onClose={() => setLinksOpen(false)} />
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        title={t('confirm.deletePropertiesTitle', { count: selectedItems.length })}
+        description={t('confirm.deletePropertiesBody')}
+        confirmLabel={t('confirm.delete')}
+        onCancel={() => setConfirmBulkDelete(false)}
+        onConfirm={() => {
+          setConfirmBulkDelete(false);
+          runBulk('Deleted', (x) => apiClient.delete(`/listing/delete/${x._id}`, { silent: true }));
+        }}
+      />
       {currentUser?.role === 'admin' && (
         <DeletedListingsDialog open={binOpen} onClose={() => setBinOpen(false)} onRestored={() => reload().catch(() => {})} />
       )}
@@ -763,12 +776,7 @@ export default function PropertiesBoard() {
           <BulkButton
             danger
             disabled={bulkBusy}
-            onClick={() => {
-              const n = selectedItems.length;
-              if (window.confirm(`Delete ${n} propert${n === 1 ? 'y' : 'ies'}? This cannot be undone from here.`)) {
-                runBulk('Deleted', (x) => apiClient.delete(`/listing/delete/${x._id}`, { silent: true }));
-              }
-            }}
+            onClick={() => setConfirmBulkDelete(true)}
           >
             Delete
           </BulkButton>

@@ -481,14 +481,14 @@ export default function BuyerRequirements() {
             </div>
 
             <div className='flex items-center gap-2'>
-              <button
+              <button type="button"
                 onClick={exportCsv}
                 className='inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors'
               >
                 <HiDownload className='w-4 h-4' />{t('buyerRequirements.export')}</button>
 
               {!isBuyerViewMode && canCreateBuyer && (
-                <button
+                <button type="button"
                   onClick={() => {
                     setViewingRequirement(null);
                     setShowForm(true);
@@ -1098,14 +1098,14 @@ export default function BuyerRequirements() {
                 </div>
 
                 <div className='flex items-center gap-2 ml-4'>
-                  <button
+                  <button type="button"
                     onClick={() => handleView(requirement)}
                     className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
                     title={t('buyerRequirements.viewRequirement')}
                   >
                     <HiEye className='w-4 h-4' />
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => handleShowMatches(requirement)}
                     className='p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors border border-violet-200'
                     title={t('buyerRequirements.findMatchingProperties')}
@@ -1114,14 +1114,14 @@ export default function BuyerRequirements() {
                   </button>
                   {!isBuyerViewMode && (
                     <>
-                      {canUpdateBuyer && <button
+                      {canUpdateBuyer && <button type="button"
                         onClick={() => handleEdit(requirement)}
                         className='p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200'
                         title={t('buyerRequirements.editRequirement')}
                       >
                         <HiPencil className='w-4 h-4' />
                       </button>}
-                      {canDeleteBuyer && <button
+                      {canDeleteBuyer && <button type="button"
                         onClick={() => setPendingDelete(requirement._id)}
                         className='p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200'
                         title={t('buyerRequirements.deleteRequirement')}

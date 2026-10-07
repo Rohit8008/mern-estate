@@ -362,7 +362,7 @@ const RoleManagement = () => {
                 <HiOutlineRefresh className={`h-4 w-4 mr-2 ${restoring ? 'animate-spin' : ''}`} aria-hidden="true" />
                 Restore default roles
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   setEditingRole(null);
                   setRoleForm({ name: '', description: '', permissions: {} });
@@ -441,7 +441,7 @@ const RoleManagement = () => {
                           <HiOutlineUsers className="h-3 w-3 mr-1" aria-hidden="true" />
                           Members
                         </button>
-                        <button
+                        <button type="button"
                           onClick={() => openEditRole(role)}
                           className="inline-flex items-center px-3 py-1.5 border border-slate-300 shadow-sm text-xs font-medium rounded text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
                         >
@@ -449,7 +449,7 @@ const RoleManagement = () => {
                           Edit
                         </button>
                         {!role.isSystem && (
-                          <button
+                          <button type="button"
                             onClick={() => handleDeleteRole(role._id)}
                             className="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           >
@@ -473,7 +473,7 @@ const RoleManagement = () => {
                     <h3 className="mt-2 text-sm font-medium text-slate-900">No roles</h3>
                     <p className="mt-1 text-sm text-slate-500">Get started by creating a new role.</p>
                     <div className="mt-6">
-                      <button
+                      <button type="button"
                         onClick={() => {
                           setEditingRole(null);
                           setRoleForm({ name: '', description: '', permissions: {} });
@@ -550,7 +550,7 @@ const RoleManagement = () => {
 
                     <div className="mt-6 flex items-center justify-between">
                       <div className="flex space-x-2">
-                        <button
+                        <button type="button"
                           onClick={() => openUserRoleModal(user)}
                           className="inline-flex items-center px-3 py-1.5 border border-slate-300 shadow-sm text-xs font-medium rounded text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
                         >
@@ -558,7 +558,7 @@ const RoleManagement = () => {
                           {user.assignedRole ? 'Change Role' : 'Assign Role'}
                         </button>
                         {user.assignedRole && (
-                          <button
+                          <button type="button"
                             onClick={() => handleRemoveRole(user._id)}
                             className="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           >
@@ -735,7 +735,7 @@ const RoleManagement = () => {
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={editingRole ? handleUpdateRole : handleCreateRole}
                 disabled={loading}
                 className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-colors inline-flex items-center"
@@ -855,13 +855,13 @@ const RoleManagement = () => {
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
-              <button
+              <button type="button"
                 onClick={() => setShowUserRoleModal(false)}
                 className="px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={handleAssignRole}
                 disabled={!selectedRole}
                 className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-colors inline-flex items-center"

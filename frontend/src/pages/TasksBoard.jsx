@@ -417,7 +417,7 @@ export default function TasksBoard() {
             )}
 
             {hasFilters && (
-              <button
+              <button type="button"
                 onClick={clearFilters}
                 className='px-3 py-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium transition-colors'
               >{t('tasks.clearAll')}</button>
@@ -553,7 +553,7 @@ export default function TasksBoard() {
                         />
                       ))}
                       {/* Add task card */}
-                      <button
+                      <button type="button"
                         onClick={() => setShowCreateModal(true)}
                         className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-500 hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50/30 transition-colors'
                       >

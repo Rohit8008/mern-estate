@@ -291,7 +291,7 @@ export default function Profile() {
                 <Button as={Link} to='/create-listing' variant='primary' className='w-full justify-center'>{t('profile.createNewListing')}</Button>
               )}
               <Button variant='secondary' className='w-full justify-center' onClick={handleShowListings} disabled={listingsLoading}>
-                {listingsLoading ? 'Loading...' : 'View My Listings'}
+                {listingsLoading ? t('common.loading') : 'View My Listings'}
               </Button>
               {!isBuyerViewMode && (isAdmin || isEmployee) && (
                 // /admin is the admin console; an employee sent there is bounced

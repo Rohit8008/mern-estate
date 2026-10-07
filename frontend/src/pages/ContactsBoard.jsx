@@ -724,7 +724,7 @@ export default function ContactsBoard() {
                         />
                       ))}
                       {/* Add client card */}
-                      <button
+                      <button type="button"
                         onClick={() => setShowCreateModal(true)}
                         className='border-2 border-dashed border-slate-200 rounded-xl p-4 min-h-[140px] flex flex-col items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors'
                       >

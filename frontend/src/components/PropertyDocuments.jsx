@@ -98,7 +98,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
           <p className='text-xs text-slate-500 mt-0.5'>{t('propertyDocuments.saleDeedsAgreementsNocsSitePlans')}</p>
         </div>
         <div className='flex items-center gap-2'>
-          <button
+          <button type="button"
             onClick={loadDocs}
             className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             title={t('propertyDocuments.refresh')}
@@ -119,7 +119,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                 onChange={handleFileInput}
                 accept='.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.zip'
               />
-              <button
+              <button type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1.5'
@@ -208,12 +208,12 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                       <p className='text-xs text-rose-600'>{t('propertyDocuments.deleteThisDocumentThisCannotBe')}</p>
                     </div>
                     <div className='flex items-center gap-2 shrink-0'>
-                      <button
+                      <button type="button"
                         onClick={() => setConfirmDeleteId(null)}
                         disabled={deleting}
                         className='px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50'
                       >{t('propertyDocuments.cancel')}</button>
-                      <button
+                      <button type="button"
                         onClick={handleConfirmDelete}
                         disabled={deleting}
                         className='px-3 py-1.5 text-xs font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1'
@@ -254,7 +254,7 @@ export default function PropertyDocuments({ listingId, canEdit }) {
                         </svg>
                       </a>
                       {canEdit && (
-                        <button
+                        <button type="button"
                           onClick={() => setConfirmDeleteId(doc._id)}
                           className='p-1.5 rounded hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition-colors'
                           title={t('propertyDocuments.delete')}

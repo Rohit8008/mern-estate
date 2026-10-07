@@ -223,7 +223,7 @@ export default function PasswordReset() {
                   loading={loading}
                   onClick={resetPassword}
                 >{t('passwordReset.updatePassword')}</Button>
-                <button
+                <button type="button"
                   disabled={secondsLeft > 0 || loading}
                   onClick={requestOtp}
                   className='text-sm text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:text-slate-400'

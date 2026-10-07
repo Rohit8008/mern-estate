@@ -550,7 +550,7 @@ export default function ClientDetail() {
       {/* Tabs */}
       <div className="bg-white border border-slate-200 rounded-xl flex overflow-x-auto shadow-sm">
         {tabs.map(tab => (
-          <button
+          <button type="button"
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
@@ -597,7 +597,7 @@ export default function ClientDetail() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">{t('clientDetail.requirements')}</h3>
                 {!editingReqs && (
-                  <button
+                  <button type="button"
                     onClick={() => startEditReqs()}
                     className="text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 border border-indigo-200 rounded transition-colors"
                   >{t('clientDetail.edit')}</button>

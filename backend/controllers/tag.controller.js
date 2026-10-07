@@ -168,7 +168,7 @@ async function setTag(req, res, next, attach) {
     // Same rule as editing the record itself: an employee may tag what they own.
     if (req.user.role !== 'admin') {
       const owner = spec.owner(record);
-      if (!owner || String(owner) !== req.user.id) return next(errorHandler(403, 'Forbidden'));
+      if (!owner || String(owner) !== req.user.id) return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     await (attach ? spec.push(id, tag._id) : spec.pull(id, tag._id));

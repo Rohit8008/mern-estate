@@ -1,4 +1,6 @@
-# Real Vista (mern-estate)
+# Real Vista
+
+> Repository, pm2 process, database and token-issuer identifiers still use the original `mern-estate` name on purpose: renaming them would sign every user out and (for the encryption salt) make stored messages unreadable. Treat them as stable IDs.
 
 A multi-tenant CRM for real estate agencies: leads, property owners, listings, deals and paperwork in one workspace, with share links an agency controls. One deployment serves many agencies; each gets an isolated workspace.
 

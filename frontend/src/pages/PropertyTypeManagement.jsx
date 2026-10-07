@@ -352,7 +352,7 @@ export default function PropertyTypeManagement({ embedded = false }) {
                   </div>
                 </div>
                 <div className='flex items-center gap-2 flex-shrink-0 ml-4'>
-                  <button
+                  <button type="button"
                     onClick={() => handleToggleActive(type._id, type.isActive)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                       type.isActive
@@ -363,12 +363,12 @@ export default function PropertyTypeManagement({ embedded = false }) {
                     {type.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                   {!type.isSystem && (
-                    <button
+                    <button type="button"
                       onClick={() => setPendingDelete(type._id)}
                       className='px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors'
                     >{t('propertyType.delete')}</button>
                   )}
-                  <button
+                  <button type="button"
                     onClick={() => setExpandedId(isExpanded ? null : type._id)}
                     aria-expanded={isExpanded}
                     aria-label={`${isExpanded ? 'Hide' : 'Show'} fields for ${type.name}`}
@@ -396,12 +396,12 @@ export default function PropertyTypeManagement({ embedded = false }) {
                     <div className='flex items-center gap-2'>
                       {isDirty && (
                         <>
-                          <button
+                          <button type="button"
                             onClick={() => discardFieldChanges(type._id)}
                             disabled={isSaving}
                             className='px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50'
                           >{t('propertyType.discard')}</button>
-                          <button
+                          <button type="button"
                             onClick={() => saveFields(type._id)}
                             disabled={isSaving}
                             className='px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50'
@@ -410,7 +410,7 @@ export default function PropertyTypeManagement({ embedded = false }) {
                           </button>
                         </>
                       )}
-                      <button
+                      <button type="button"
                         onClick={() => addLocalField(type._id)}
                         className='px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors'
                       >{t('propertyType.addField')}</button>
@@ -540,7 +540,7 @@ export default function PropertyTypeManagement({ embedded = false }) {
                           )}
 
                           <div className='mt-3 flex justify-end'>
-                            <button
+                            <button type="button"
                               onClick={() => removeLocalField(type._id, idx)}
                               className='text-xs px-3 py-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors'
                             >{t('propertyType.remove')}</button>
@@ -557,12 +557,12 @@ export default function PropertyTypeManagement({ embedded = false }) {
                     <div className='mt-4 flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg'>
                       <span className='text-sm text-amber-800'>{t('propertyType.youHaveUnsavedChanges')}</span>
                       <div className='flex gap-2'>
-                        <button
+                        <button type="button"
                           onClick={() => discardFieldChanges(type._id)}
                           disabled={isSaving}
                           className='px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-white transition-colors disabled:opacity-50'
                         >{t('propertyType.discard')}</button>
-                        <button
+                        <button type="button"
                           onClick={() => saveFields(type._id)}
                           disabled={isSaving}
                           className='px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50'

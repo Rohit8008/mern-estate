@@ -267,7 +267,7 @@ export const getBuyerRequirement = async (req, res, next) => {
     }
 
     if (!isStaff(req.user) && buyerRequirement.createdBy.toString() !== req.user.id) {
-      return next(errorHandler(403, 'Forbidden'));
+      return next(errorHandler(403, "You don't have permission to do that."));
     }
 
     res.json(buyerRequirement);
