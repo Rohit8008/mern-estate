@@ -14,6 +14,35 @@ import './i18n/index.js';
 // Initialize error tracking before rendering
 initSentry();
 
+// A deploy renames the hashed JS files. A tab (or service worker) still on the
+// previous build then asks for a chunk that no longer exists. Recover by
+// dropping the stale caches and reloading once; the guard stops a loop if the
+// file is genuinely missing.
+function recoverFromStaleBuild() {
+  try {
+    const last = Number(sessionStorage.getItem('rv-stale-reload') || 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem('rv-stale-reload', String(Date.now()));
+  } catch { /* storage blocked: still try once below */ }
+  const reload = () => window.location.reload();
+  const clear = async () => {
+    try {
+      const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+      await Promise.all(regs.map((r) => r.unregister()));
+      if (window.caches) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+    } catch { /* reload anyway */ }
+  };
+  clear().then(reload, reload);
+}
+window.addEventListener('vite:preloadError', (e) => { e.preventDefault(); recoverFromStaleBuild(); });
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = String(e.reason?.message || e.reason || '');
+  if (/dynamically imported module|Importing a module script failed|error loading dynamically imported/i.test(msg)) {
+    e.preventDefault();
+    recoverFromStaleBuild();
+  }
+});
+
 // Intercept fetch to prepend API URL for /api and /uploads paths in production
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 if (API_BASE_URL) {
