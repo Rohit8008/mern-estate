@@ -9,11 +9,14 @@ import '../domain/app_user.dart';
 import 'auth_state.dart';
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._api, this._apiClient, this._legalApi) : super(const AuthState.bootstrapping());
+  AuthController(this._api, this._apiClient, this._legalApi, {Future<void> Function()? beforeSignOut})
+      : _beforeSignOut = beforeSignOut,
+        super(const AuthState.bootstrapping());
 
   final AuthApi _api;
   final ApiClient _apiClient;
   final LegalApi _legalApi;
+  final Future<void> Function()? _beforeSignOut;
 
   /// How long the legal check may hold up sign-in before we let the user in
   /// anyway and ask again next launch.
@@ -102,6 +105,11 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    // While the session still exists: the server only accepts a device
+    // removal from the person it belongs to.
+    try {
+      await _beforeSignOut?.call();
+    } catch (_) {}
     try {
       await _api.signOut();
     } catch (_) {

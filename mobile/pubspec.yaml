@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ^3.5.3
@@ -77,6 +77,10 @@ dependencies:
   # Live message/notification delivery — same events the web app listens to
   # (message:new, conversations:update, listing:update, owners:changed)
   socket_io_client: ^2.0.3+1
+
+  # Push notifications (FCM) — delivers notifications while the app is closed
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
 
   # Network-state awareness for the offline banner (section 20) — more
   # immediate than waiting for a request to fail

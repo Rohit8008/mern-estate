@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+import '../core/push/push_providers.dart';
 import '../core/realtime/socket_provider.dart';
+import 'router/app_router.dart';
 import '../features/auth/application/auth_state.dart';
 import '../features/auth/auth_providers.dart';
 import '../features/messages/messages_providers.dart';
@@ -36,6 +40,7 @@ class _RealtimeOverlayState extends ConsumerState<RealtimeOverlay> {
 
       if (isAuthenticated && !wasAuthenticated) {
         _connect();
+        _startPush();
       } else if (!isAuthenticated && wasAuthenticated) {
         ref.read(socketServiceProvider).disconnect();
         _listenersRegistered = false;
@@ -48,6 +53,25 @@ class _RealtimeOverlayState extends ConsumerState<RealtimeOverlay> {
         const OfflineBanner(),
       ],
     );
+  }
+
+  bool _pushTapsWired = false;
+
+  /// Register this phone for pushes, and open the notifications screen when one
+  /// is tapped (from the background, or the one that launched the app).
+  Future<void> _startPush() async {
+    if (!ref.read(pushAvailableProvider)) return;
+    await ref.read(pushServiceProvider).register();
+    if (_pushTapsWired) return;
+    _pushTapsWired = true;
+    void open(RemoteMessage? m) {
+      if (m == null) return;
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationsProvider);
+      ref.read(goRouterProvider).push('/notifications');
+    }
+    FirebaseMessaging.onMessageOpenedApp.listen(open);
+    open(await FirebaseMessaging.instance.getInitialMessage());
   }
 
   Future<void> _connect() async {

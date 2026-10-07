@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/providers.dart';
+import '../../core/push/push_providers.dart';
 import '../legal/data/legal_api.dart';
 import 'application/auth_controller.dart';
 import 'application/auth_state.dart';
@@ -15,6 +16,7 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
     ref.watch(authApiProvider),
     ref.watch(apiClientProvider),
     ref.watch(legalApiProvider),
+    beforeSignOut: () => ref.read(pushServiceProvider).unregister(),
   );
   controller.bootstrap();
   return controller;

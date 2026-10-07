@@ -3,6 +3,8 @@
          release build needs it declared here or every network call — Dio,
          Socket.IO, everything — silently fails. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ asks before showing any notification. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- No backups: the persistent cookie jar (app support dir) holds a 30-day
          refresh token, and allowBackup defaults to true, which would copy it
@@ -39,6 +41,10 @@
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- Pushes without a channel of their own land here (created in MainActivity). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="realvista_default" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

@@ -14,6 +14,7 @@ import '../../features/leads/presentation/leads_list_screen.dart';
 import '../../features/properties/presentation/properties_list_screen.dart';
 import '../../shared/widgets/app_states.dart';
 import 'crm_bottom_nav_shell.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 import 'go_router_refresh_notifier.dart';
 import 'more_screen.dart';
 
@@ -64,6 +65,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: _legalAcceptancePath, builder: (context, state) => const LegalAcceptanceScreen()),
       GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(path: '/more', builder: (context, state) => const MoreScreen()),
+      // Where a tapped push notification lands.
+      GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => CrmBottomNavShell(navigationShell: navigationShell),
         branches: [

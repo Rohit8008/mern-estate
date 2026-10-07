@@ -13,6 +13,8 @@ import 'core/logging/app_logger.dart';
 import 'core/logging/provider_logging_observer.dart';
 import 'core/network/api_client.dart';
 import 'core/network/providers.dart';
+import 'core/push/push_providers.dart';
+import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/root_messenger.dart';
 
@@ -42,9 +44,13 @@ Future<void> _run(DateTime launchedAt) async {
 
   final apiClient = await ApiClient.create(baseUrl: Env.apiBaseUrl);
   appLog.start(sender: dioLogSender(apiClient.dio));
+  final pushAvailable = await PushService.initFirebase();
 
   runApp(ProviderScope(
-    overrides: [apiClientProvider.overrideWithValue(apiClient)],
+    overrides: [
+      apiClientProvider.overrideWithValue(apiClient),
+      pushAvailableProvider.overrideWithValue(pushAvailable),
+    ],
     observers: [ProviderLoggingObserver()],
     child: const RealVistaCrmApp(),
   ));
