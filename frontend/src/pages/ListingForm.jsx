@@ -373,19 +373,30 @@ export default function ListingForm({ mode = 'create' }) {
       <Section title="Price &amp; size" description={`Amounts in ${currency}.`}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Input
-            label={t('listingForm.price')}
+            label={`${t('listingForm.price')} (${currency})`}
             type="number"
             min={0}
+            inputMode="numeric"
             value={form.regularPrice}
             onChange={(e) => setField('regularPrice', Number(e.target.value))}
           />
           <Input
-            label={t('listingForm.offerPrice')}
+            label={`${t('listingForm.offerPrice')} (${currency})`}
             type="number"
             min={0}
-            hint="Must be below the price."
+            inputMode="numeric"
             value={form.discountPrice}
             onChange={(e) => setField('discountPrice', Number(e.target.value))}
+            // Only an error once there is actually a discount above the price —
+            // both-zero and discount-off stay quiet (matches the server rule).
+            error={
+              Number(form.discountPrice) > 0 &&
+              Number(form.regularPrice) > 0 &&
+              Number(form.discountPrice) >= Number(form.regularPrice)
+                ? 'Must be below the price'
+                : undefined
+            }
+            hint="Optional — a reduced asking price."
           />
           {!areaFromCategory && (
             <Input
