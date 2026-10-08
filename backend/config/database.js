@@ -88,6 +88,19 @@ class DatabaseConnection {
     });
     client.on('commandFailed', (e) => {
       this.pending.delete(e.requestId);
+      // Duplicate-key failures are expected and handled at the application layer,
+      // not infrastructure faults: controllers answer 409 (e.g. a taken
+      // username/email), and the job scheduler deliberately swallows the E11000
+      // race when two instances create the same lock in the same instant
+      // (jobs/scheduler.js tryAcquire). Logging those here as errors was
+      // misleading noise — "followup-reminders dup key" looked like a broken job
+      // when the lock was in fact working. Drop them to debug.
+      const code = e.failure?.code ?? e.failure?.cause?.code;
+      const isDuplicateKey = code === 11000 || /E11000/.test(e.failure?.message || '');
+      if (isDuplicateKey) {
+        logger.debug('Database duplicate-key (handled by the app)', { command: e.commandName, duration_ms: e.duration });
+        return;
+      }
       logger.error('Database command failed', { command: e.commandName, duration_ms: e.duration, error: e.failure });
     });
   }
