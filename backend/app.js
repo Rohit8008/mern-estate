@@ -19,6 +19,7 @@ import uploadRouter from './routes/upload.route.js';
 import messageRouter from './routes/message.route.js';
 import ownerRouter from './routes/owner.route.js';
 import buyerRequirementRouter from './routes/buyerRequirement.route.js';
+import noteRouter from './routes/note.route.js';
 import roleRouter from './routes/role.route.js';
 import healthRouter from './routes/health.route.js';
 import docsRouter from './routes/docs.route.js';
@@ -220,6 +221,7 @@ export function createApp() {
   app.use('/api/message', messageRouter);
   app.use('/api/owner', ownerRouter);
   app.use('/api/buyer-requirements', buyerRequirementRouter);
+  app.use('/api/notes', noteRouter);
   app.use('/api/roles', roleRouter);
   app.use('/api/clients', clientRouter);
   app.use('/api/documents', documentRouter);

@@ -147,6 +147,14 @@ export const SCREEN_CATALOGUE = [
     description: 'Site visits and appointments.',
     order: 60,
   },
+  {
+    id: 'notes',
+    label: 'Notes',
+    section: 'crm',
+    description: 'Quick personal captures — a text jot or a voice note — to act on later.',
+    // No permission: a personal scratchpad every signed-in member can use.
+    order: 70,
+  },
 
   // ── Finance & Reports ──────────────────────────────────────────────────────
   {

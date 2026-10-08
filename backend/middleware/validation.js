@@ -1228,6 +1228,13 @@ export const notificationValidation = {
     privacy: Joi.object().pattern(Joi.string().max(40), Joi.boolean().allow(null)),
   }),
   empty: Joi.object({}),
+  // Push device registration (mobile). The controller enforces the token length
+  // and coerces platform; this names the fields so stripUnknown keeps them.
+  registerDevice: Joi.object({
+    token: Joi.string().min(20).max(4096).required(),
+    platform: Joi.string().valid('ios', 'android').optional(),
+    appVersion: Joi.string().max(40).allow('').optional(),
+  }),
 };
 
 // ── The last six write routes that had no schema ────────────────────────────
@@ -1247,6 +1254,18 @@ export const legalValidation = {
     // Compared with LEGAL_VERSION by the controller, which answers 409 with
     // the current version when they differ.
     version: Joi.string().max(40).allow(''),
+  }),
+};
+
+export const noteValidation = {
+  create: Joi.object({
+    text: Joi.string().max(5000).allow('').optional(),
+    audioUrl: Joi.string().uri({ allowRelative: true }).max(1000).allow('').optional(),
+    audioDuration: Joi.number().min(0).max(100000).optional(),
+    // The controller rejects a note that is neither text nor audio.
+  }),
+  link: Joi.object({
+    listingId: Joi.string().hex().length(24).allow(null, '').optional(),
   }),
 };
 

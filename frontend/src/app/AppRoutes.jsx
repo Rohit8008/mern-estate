@@ -57,6 +57,7 @@ const BuyerRequirements = lazy(() => import('../pages/BuyerRequirements'));
 // CRM — misc
 const TasksBoard           = lazy(() => import('../pages/TasksBoard'));
 const Calendar             = lazy(() => import('../pages/Calendar'));
+const Notes                = lazy(() => import('../pages/Notes'));
 const ClientReportTemplate = lazy(() => import('../pages/ClientReportTemplate'));
 const Profile              = lazy(() => import('../pages/Profile'));
 const Settings             = lazy(() => import('../pages/Settings'));
@@ -141,6 +142,7 @@ export default function AppRoutes() {
             <Route path='/messages' element={<Messages />} />
             <Route path='/tasks'    element={<TasksBoard />} />
             <Route path='/calendar' element={<Calendar />} />
+            <Route path='/notes' element={<Notes />} />
             <Route path='/notifications' element={<Notifications />} />
 
             {/* Overview */}

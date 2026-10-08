@@ -28,7 +28,7 @@ router.patch('/:id/read', validateBody(notificationValidation.empty), markRead);
 router.get('/preferences', getPreferences);
 router.patch('/preferences', validateBody(notificationValidation.preferences), updatePreferences);
 
-router.post('/devices', registerDevice);
+router.post('/devices', validateBody(notificationValidation.registerDevice), registerDevice);
 router.delete('/devices', unregisterDevice);
 router.delete('/', clearNotifications);
 router.delete('/:id', deleteNotification);

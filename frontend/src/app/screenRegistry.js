@@ -4,6 +4,7 @@ import {
   HiOutlineViewBoards, HiOutlineCollection, HiOutlineClipboardList,
   HiOutlineCalendar, HiOutlineCurrencyDollar, HiOutlineDocumentReport,
   HiOutlineShieldCheck, HiOutlineCog, HiOutlineDocumentSearch,
+  HiOutlinePencilAlt,
 } from 'react-icons/hi';
 
 /**
@@ -42,6 +43,7 @@ export const SCREEN_REGISTRY = {
                    matches: ['/buyer-requirements'] },
   tasks:         { icon: HiOutlineClipboardList,    route: '/tasks' },
   calendar:      { icon: HiOutlineCalendar,         route: '/calendar' },
+  notes:         { icon: HiOutlinePencilAlt,        route: '/notes' },
 
   transactions:  { icon: HiOutlineCurrencyDollar,   route: '/transactions' },
   reports:       { icon: HiOutlineDocumentReport,   route: '/reports',
