@@ -433,7 +433,27 @@ export default function PropertiesBoard() {
 
   // Inline update: status, agent, or owner — optimistic UI
   async function inlineUpdate(listingId, field, value) {
-    setEditingCell(null);
+    // Owners are a multi-select: keep the menu open so several can be toggled in
+    // one go. Status and agent are single choices and close on pick.
+    if (field !== 'owner') setEditingCell(null);
+
+    // For owners, toggle `value` into the listing's existing owner list
+    // (value === null clears all) and send the full resulting array.
+    let nextOwners = null;
+    if (field === 'owner') {
+      const current = items.find((it) => it._id === listingId);
+      const currentOwners = Array.isArray(current?.ownerIds) ? current.ownerIds : [];
+      if (value === null) {
+        nextOwners = [];
+        setEditingCell(null);
+      } else if (currentOwners.some((o) => (o?._id || o) === value)) {
+        nextOwners = currentOwners.filter((o) => (o?._id || o) !== value);
+      } else {
+        const owner = owners.find((o) => o._id === value);
+        nextOwners = owner ? [...currentOwners, owner] : currentOwners;
+      }
+    }
+
     // Optimistic update
     setItems((prev) =>
       prev.map((it) => {
@@ -443,10 +463,7 @@ export default function PropertiesBoard() {
           const agent = agents.find((a) => a._id === value) || null;
           return { ...it, assignedAgent: agent ? { _id: agent._id, username: agent.username, avatar: agent.avatar } : null };
         }
-        if (field === 'owner') {
-          const owner = owners.find((o) => o._id === value) || null;
-          return { ...it, ownerIds: owner ? [owner] : [] };
-        }
+        if (field === 'owner') return { ...it, ownerIds: nextOwners };
         return it;
       })
     );
@@ -461,12 +478,12 @@ export default function PropertiesBoard() {
           await apiClient.post('/listing/unassign-agent', { listingId });
         }
       } else if (field === 'owner') {
-        await apiClient.post(`/listing/update/${listingId}`, { ownerIds: value ? [value] : [] });
+        await apiClient.post(`/listing/update/${listingId}`, { ownerIds: nextOwners.map((o) => o?._id || o) });
       }
       showSuccess(
         field === 'status' ? `Marked ${listingStatusLabel(value).toLowerCase()}.`
           : field === 'agent' ? (value ? 'Agent assigned.' : 'Agent removed.')
-            : (value ? 'Owner linked.' : 'Owner removed.')
+            : (value === null ? 'Owners cleared.' : 'Owners updated.')
       );
     } catch (e) {
       setError(e?.message || `Failed to update ${field}`);
@@ -998,7 +1015,11 @@ export default function PropertiesBoard() {
 
                       {rows.map((x) => {
                         const thumb = Array.isArray(x.imageUrls) && normalizeImageUrl(x.imageUrls[0]);
-                        const ownerName = Array.isArray(x?.ownerIds) && x.ownerIds.length > 0 ? (x.ownerIds[0]?.name || 'Owner') : null;
+                        const ownerNames = (Array.isArray(x?.ownerIds) ? x.ownerIds : []).map((o) => o?.name).filter(Boolean);
+                        const ownerName = ownerNames.length === 0 ? null
+                          : ownerNames.length === 1 ? ownerNames[0]
+                            : `${ownerNames[0]} +${ownerNames.length - 1}`;
+                        const ownerTitle = ownerNames.join(', ');
                         const agentName = x?.assignedAgent?.username;
                         const pill = STATUS_STYLE[x.status || 'available']?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
                         // The row opens the quick view from the keyboard too; keys pressed
@@ -1118,7 +1139,7 @@ export default function PropertiesBoard() {
                                   title={t('properties.clickToAssignOwner')}
                                 >
                                   {ownerName ? (
-                                    <span className='text-[13px] text-slate-700 truncate block max-w-[140px]'>{ownerName}</span>
+                                    <span className='text-[13px] text-slate-700 truncate block max-w-[140px]' title={ownerTitle}>{ownerName}</span>
                                   ) : (
                                     <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
                                   )}

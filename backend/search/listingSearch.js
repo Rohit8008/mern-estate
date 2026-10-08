@@ -112,6 +112,18 @@ export function buildListingFilter(params = {}, user, { defaultStatus = null, vi
 
   // Access scope, merged with $and so a search's own $or cannot widen it.
   const scope = listingScope(user, { scope: params.scope === 'assigned' ? 'assigned' : 'all', viewAll });
+  // listingScope holds string ids. find() casts them, but aggregation (the facet
+  // counts) does not — the assignedAgent/userRef ObjectId columns then never
+  // match, undercounting an employee's listings. Cast them so both paths agree.
+  const castId = (v) => (typeof v === 'string' && mongoose.isValidObjectId(v) ? new mongoose.Types.ObjectId(v) : v);
+  if (Array.isArray(scope.$or)) {
+    scope.$or = scope.$or.map((clause) => {
+      const [k, v] = Object.entries(clause)[0];
+      return k === 'assignedAgent' || k === 'userRef' ? { [k]: castId(v) } : clause;
+    });
+  } else if (typeof scope.userRef === 'string') {
+    scope.userRef = castId(scope.userRef);
+  }
   return Object.keys(scope).length ? { $and: [filter, scope] } : filter;
 }
 

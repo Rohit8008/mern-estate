@@ -111,9 +111,11 @@ export default function Messages() {
     try {
       const params = new URLSearchParams(location.search);
       const userParam = params.get('user');
-      if (userParam) setActiveChatUser(userParam);
+      // There is no conversation with yourself — a ?user=<own id> deep link must
+      // not open a thread that can only answer "you cannot message yourself".
+      if (userParam && String(userParam) !== String(currentUser?._id)) setActiveChatUser(userParam);
     } catch (_) {}
-  }, [location.search]);
+  }, [location.search, currentUser?._id]);
 
   const closeNewChat = () => { setShowNewChat(false); setSearchQuery(''); setSearchResults([]); };
 

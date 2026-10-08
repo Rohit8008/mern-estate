@@ -208,6 +208,10 @@ export const getThread = async (req, res, next) => {
     const otherId = req.params.otherId;
     const userId = req.user.id;
 
+    // There is no conversation with yourself. Return an empty thread rather than
+    // folding your self-addressed messages back at you.
+    if (String(otherId) === String(userId)) return res.status(200).json([]);
+
     const requested = parseInt(req.query.limit, 10);
     const limit = Math.min(Math.max(Number.isFinite(requested) ? requested : THREAD_DEFAULT_LIMIT, 1), THREAD_MAX_LIMIT);
 
@@ -281,6 +285,11 @@ export const getConversations = async (req, res, next) => {
           },
         },
       },
+      // Drop the self-thread: a message whose sender and receiver are both the
+      // caller groups to a counterpart of themselves. Sending to yourself is
+      // blocked, but legacy self-messages still exist, and a row you can open
+      // only to be told "you cannot message yourself" is not a conversation.
+      { $match: { _id: { $ne: me } } },
       { $sort: { lastAt: -1 } },
     ]);
 

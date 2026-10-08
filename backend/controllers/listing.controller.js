@@ -276,6 +276,14 @@ export const createListing = asyncHandler(async (req, res, next) => {
   // Whitelist fields — never let the client set system-managed fields
   const listingData = buildListingPayload(req.body, req.user.id);
 
+  // Default the agent to whoever is adding the property, unless one was chosen.
+  // A listing with no agent falls to "+ Assign" and drops out of every
+  // agent-scoped view; the person who entered it is the obvious first owner of
+  // the work. An admin can reassign later.
+  if (!listingData.assignedAgent) {
+    listingData.assignedAgent = req.body.assignedAgent || req.user.id;
+  }
+
   // Auto-infer propertyCategory from propertyType when not explicitly provided
   if (listingData.propertyType && !listingData.propertyCategory) {
     const inferred = await inferPropertyCategory(listingData.propertyType);
@@ -552,8 +560,16 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
   const limit = Math.min(parseInt(req.query.limit) || 20, 500);
   const startIndex = Math.max(parseInt(req.query.startIndex) || 0, 0);
 
+  // The employee board shows everything this person may see — not only listings
+  // where they are the assigned agent. That is listingScope's `mine()`: assigned
+  // to them, OR created by them (userRef), OR in a category assigned to them —
+  // so a property they added themselves (even in a category not assigned to
+  // them) and one from an assigned category both appear, matching the count the
+  // dashboard/analytics show. An employee whose role grants viewListings sees
+  // the whole workspace, same as the gate everywhere else. The scope is applied
+  // once at the end (it carries its own $or, which must not clash with the
+  // searchTerm $or below).
   const query = {
-    assignedAgent: req.user.id,
     isDeleted: { $ne: true },
   };
 
@@ -633,9 +649,15 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
     query.$or = [{ name: re }, { address: re }, { city: re }, { locality: re }, { areaName: re }, { propertyNo: re }];
   }
 
+  // Access scope, AND-combined so the searchTerm $or (and any filters) cannot
+  // widen what this person may see. find() casts the string ids, so no manual
+  // ObjectId conversion is needed here.
+  const scope = listingScope(req.user, { viewAll: await canViewAllListings(req.user) });
+  const finalQuery = Object.keys(scope).length ? { $and: [query, scope] } : query;
+
   const [listings, totalCount] = await Promise.all([
     (async () => {
-      let qy = Listing.find(query).select('-__v').sort({ createdAt: -1 }).limit(limit).skip(startIndex);
+      let qy = Listing.find(finalQuery).select('-__v').sort({ createdAt: -1 }).limit(limit).skip(startIndex);
       if (shouldPopulate(req, 'agent')) {
         qy = qy.populate('assignedAgent', 'username avatar role');
       }
@@ -644,7 +666,7 @@ export const getMyAssignedListings = asyncHandler(async (req, res, next) => {
       }
       return qy.lean();
     })(),
-    Listing.countDocuments(query)
+    Listing.countDocuments(finalQuery)
   ]);
 
   await attachEffectiveLocations(listings, Category);
