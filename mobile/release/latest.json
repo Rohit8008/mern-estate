@@ -2,8 +2,8 @@
   "version": "1.0.9",
   "build": 10,
   "file": "realvista-1.0.9.apk",
-  "sizeBytes": 0,
-  "sha256": "FILL_AFTER_BUILD",
-  "releasedAt": "2026-10-08T00:00:00Z",
-  "notes": "You can now update your profile photo and change your password from the Profile screen."
+  "sizeBytes": 30462769,
+  "sha256": "d58ec2657f942432796fdebc34287657dbc7c1c582b46b473c3325a598c19609",
+  "releasedAt": "2026-10-08T17:21:11Z",
+  "notes": "Update your profile photo and change your password from the Profile screen."
 }
