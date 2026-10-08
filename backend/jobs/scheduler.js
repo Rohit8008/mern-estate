@@ -75,24 +75,33 @@ async function tryAcquire(job, now) {
   const due = nextDueFilter(job, now);
   if (!due) return null;
 
+  // Ensure the lock row exists, so the claim below is a pure CONDITIONAL update
+  // rather than an upsert. The old code upserted on `{ name, ...due }`: whenever
+  // the row existed but was not currently claimable (lease held, or not yet due)
+  // the filter matched nothing and the upsert tried to INSERT a second row with
+  // the same unique `name` — an E11000 on every contended tick. Seeding first,
+  // then updating without upsert, removes that race entirely.
   try {
-    return await JobLock.findOneAndUpdate(
-      { name: job.name, ...due },
-      {
-        $set: {
-          name: job.name,
-          lockedUntil: new Date(now.getTime() + job.leaseMs),
-          owner: INSTANCE,
-        },
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+    await JobLock.updateOne(
+      { name: job.name },
+      // lockedUntil epoch 0 → immediately claimable; only applied on insert.
+      { $setOnInsert: { name: job.name, lockedUntil: new Date(0), owner: '' } },
+      { upsert: true }
     );
   } catch (err) {
-    // Duplicate key means another instance created the lock in the same
-    // instant. That is the lock working, not an error worth reporting.
-    if (err?.code === 11000) return null;
-    throw err;
+    // The only remaining race is two instances seeding the very first time a job
+    // is ever seen. Harmless — the row now exists for the claim below.
+    if (err?.code !== 11000) throw err;
   }
+
+  // Claim only if the row is free AND the job is due. No upsert: a held or
+  // not-due lock matches nothing and we simply miss this cycle — no insert, so
+  // no duplicate-key error.
+  return JobLock.findOneAndUpdate(
+    { name: job.name, ...due },
+    { $set: { lockedUntil: new Date(now.getTime() + job.leaseMs), owner: INSTANCE } },
+    { new: true }
+  );
 }
 
 /**
