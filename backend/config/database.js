@@ -71,10 +71,20 @@ class DatabaseConnection {
     if (!slowMs) return;
     const client = mongoose.connection.getClient?.();
     if (!client?.on) return;
+    // Index administration runs at startup — Mongoose's autoIndex ensures every
+    // model's indexes on each connect — and is expected to be slow against a
+    // remote cluster (each createIndexes is a round-trip, ~700ms on Atlas). It is
+    // not a query to tune, so it would only drown the real slow-query signal.
+    // Log it at debug instead of warning.
+    const INDEX_COMMANDS = new Set(['createIndexes', 'listIndexes', 'dropIndexes', 'createSearchIndexes']);
     client.on('commandSucceeded', (e) => {
       const collection = this.pending.get(e.requestId);
       this.pending.delete(e.requestId);
       if (e.duration < slowMs) return;
+      if (INDEX_COMMANDS.has(e.commandName)) {
+        logger.debug('Slow index command (startup, expected)', { command: e.commandName, collection, duration_ms: e.duration });
+        return;
+      }
       logger.warn('Slow database command', { command: e.commandName, collection, duration_ms: e.duration });
     });
     client.on('commandStarted', (e) => {
