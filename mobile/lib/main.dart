@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app/realtime_overlay.dart';
 import 'app/router/app_router.dart';
@@ -36,11 +35,8 @@ Future<void> _run(DateTime launchedAt) async {
   WidgetsFlutterBinding.ensureInitialized();
   _captureGlobalErrors();
 
-  // Fonts come from assets/google_fonts/ only. Left on, google_fonts would
-  // download any missing weight from fonts.gstatic.com at runtime — handing
-  // a third party every user's IP address, which the privacy policy does not
-  // disclose.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Outfit is a bundled font (pubspec `fonts:`), so nothing is fetched at
+  // runtime. Register its OFL licence for the About box.
   LicenseRegistry.addLicense(() async* {
     final license = await rootBundle.loadString('assets/google_fonts/OFL.txt');
     yield LicenseEntryWithLineBreaks(['Outfit'], license);

@@ -11,10 +11,9 @@ import '../../listing_form/presentation/listing_form_screen.dart';
 import '../domain/note.dart';
 import '../notes_providers.dart';
 
-/// Quick-capture: jot a text note on the spot, act on it later (play back a
-/// voice note recorded on the web, turn a note into a property). Notes are
-/// private to the user. On-device voice recording is coming once the Android
-/// toolchain is upgraded; voice notes captured on the web already play here.
+/// Quick-capture: jot a text note, act on it later (play back a voice note
+/// recorded on the web, turn a note into a property). Notes are private to the
+/// user. On-device voice recording is a fast-follow.
 class NotesScreen extends ConsumerStatefulWidget {
   const NotesScreen({super.key});
 
@@ -223,7 +222,7 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),

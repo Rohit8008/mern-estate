@@ -38,7 +38,7 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0.5,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -126,7 +126,7 @@ abstract final class AppTheme {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,

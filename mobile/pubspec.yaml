@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.11+12
+version: 1.0.12+13
 
 environment:
   sdk: ^3.5.3
@@ -51,9 +51,8 @@ dependencies:
   # Call/email/WhatsApp one-tap actions from a lead's card and detail screen
   url_launcher: ^6.3.1
 
-  # Typography — mirrors the web app's 'Outfit' font family. Served from
-  # bundled assets only (assets/google_fonts/); runtime fetching is off.
-  google_fonts: ^6.2.1
+  # Typography — the 'Outfit' family is bundled and declared under flutter.fonts
+  # below (no google_fonts package, which blocked the toolchain upgrade).
 
   # Typed models for fixed-schema API resources
   freezed_annotation: ^2.4.4
@@ -89,8 +88,8 @@ dependencies:
   # to unlock the app, gating the persisted session. No credential is stored.
   local_auth: ^2.3.0
 
-  # Voice-note playback (recording on mobile is deferred until the Android
-  # toolchain is upgraded — the record plugin needs AGP 8.2+).
+  # Voice-note playback (recording to be re-added once the record plugin's
+  # federated deps settle on the new toolchain).
   audioplayers: ^6.1.0
 
   # In-app updates for the sideloaded APK: installed build number, SHA-256 check, installer hand-off
@@ -137,6 +136,13 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Outfit, bundled (no runtime fetch). Declared as a real font family so
+  # AppTypography can use fontFamily: 'Outfit' without the google_fonts package.
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/google_fonts/Outfit-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
