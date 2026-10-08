@@ -1,9 +1,9 @@
 {
-  "version": "1.0.10",
-  "build": 11,
-  "file": "realvista-1.0.10.apk",
-  "sizeBytes": 30655003,
-  "sha256": "a3d3673ee38ed5531279dfe693c928d340ea060032d71966426cc555ff4c99ea",
-  "releasedAt": "2026-10-08T18:14:55Z",
-  "notes": "New: lock the app with Face ID / fingerprint. Turn it on in Settings → Security."
+  "version": "1.0.11",
+  "build": 12,
+  "file": "realvista-1.0.11.apk",
+  "sizeBytes": 30768956,
+  "sha256": "1c1be1c023d8176482de655803e12c3e22ed5410f605421fd73ead678d33f58b",
+  "releasedAt": "2026-10-08T19:40:15Z",
+  "notes": "New: Notes — jot quick notes and play voice memos. Plus a global search across properties, leads and owners from the top bar."
 }
