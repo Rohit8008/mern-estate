@@ -130,6 +130,40 @@ export async function canViewAllListings(user) {
 }
 
 /**
+ * The categories a caller may see, as an allowlist of slugs — or `null` for "no
+ * restriction" (every category).
+ *
+ * An employee's `assignedCategories` is an ALLOWLIST: once an admin assigns any,
+ * the employee sees only those, everywhere (the Categories page, the create-
+ * property picker), and does NOT need the `viewCategories` permission — which
+ * would otherwise reveal the whole catalogue, the opposite of the intent behind
+ * assigning a subset. An employee with none assigned falls back to the
+ * permission (all, if granted). Admins and other roles are unrestricted.
+ */
+export function categoryAllowlist(user) {
+  if (user?.role === 'employee' && user.assignedCategories?.length) {
+    return [...user.assignedCategories];
+  }
+  return null;
+}
+
+/**
+ * Route guard for reading categories. Passes when the caller holds
+ * `viewCategories` (the existing rule) OR is an employee with assigned
+ * categories — assigning a subset is itself the grant to see that subset, so it
+ * must not also require the permission that shows everything.
+ */
+export const requireCategoryRead = async (req, res, next) => {
+  try {
+    if (req.user?.role === 'employee' && req.user.assignedCategories?.length) return next();
+    if (await staffHasPermission(req.user, 'viewCategories')) return next();
+    return next(errorHandler(403, 'Permission denied. Required permission: viewCategories'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Route guard form of staffHasPermission, for routes that used to be open to
  * every signed-in user. Same fail-at-load check on the key as requirePermission.
  */

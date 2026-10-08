@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifyToken } from '../utils/verifyUser.js';
-import { requirePermission, requireStaffPermission } from '../middleware/permissions.js';
+import { requirePermission, requireCategoryRead } from '../middleware/permissions.js';
 import {
   createCategory,
   getCategories,
@@ -19,8 +19,8 @@ const router = express.Router();
 // Categories described the public browse filters, and there is no public
 // browsing any more. `publicView()` in the controller is kept for the reduced
 // shape a share link needs, but nothing reaches these without a session.
-router.get('/list', verifyToken, requireStaffPermission('viewCategories'), getCategories);
-router.get('/by-slug/:slug', verifyToken, requireStaffPermission('viewCategories'), getCategoryBySlug);
+router.get('/list', verifyToken, requireCategoryRead, getCategories);
+router.get('/by-slug/:slug', verifyToken, requireCategoryRead, getCategoryBySlug);
 
 router.post('/create', verifyToken, requirePermission('createCategory'), validateBody(categoryValidation.create), createCategory);
 router.patch('/:id', verifyToken, requirePermission('updateCategory'), validateBody(categoryValidation.rename), renameCategory);

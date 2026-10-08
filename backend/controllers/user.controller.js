@@ -664,11 +664,24 @@ export const myPermissions = async (req, res, next) => {
     const user = await inHomeTenant(req, () => User.findById(req.user.id).populate('assignedRole'));
     if (!user) return next(errorHandler(404, "We couldn't find that user."));
 
+    // Assigning an employee a subset of categories is itself the grant to see
+    // those categories (the Categories screen, the create-property picker) — it
+    // must not also require the viewCategories permission, which reveals the
+    // whole catalogue. So report viewCategories as effectively held whenever the
+    // employee has any assigned. The list endpoint still narrows to the subset.
+    const assignedCategoryPerm =
+      user.role === 'employee' && user.assignedCategories?.length ? { viewCategories: true } : {};
+
     if (!user.assignedRole || !user.assignedRole.isActive) {
       // legacyFallback tells the app that the API treats this person as having
       // today's pre-permission behaviour on the routes that became enforced later
       // (see staffHasPermission), so the UI should not hide what they can still do.
-      return res.status(200).json({ permissions: {}, role: user.role, isAdmin: false, legacyFallback: user.role === 'employee' });
+      return res.status(200).json({
+        permissions: { ...assignedCategoryPerm },
+        role: user.role,
+        isAdmin: false,
+        legacyFallback: user.role === 'employee',
+      });
     }
 
     const perms = {};
@@ -680,7 +693,7 @@ export const myPermissions = async (req, res, next) => {
     }
 
     return res.status(200).json({
-      permissions: perms,
+      permissions: { ...perms, ...assignedCategoryPerm },
       role: user.role,
       roleName: user.assignedRole.name,
       isAdmin: false,

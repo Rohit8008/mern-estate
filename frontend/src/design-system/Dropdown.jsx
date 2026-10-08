@@ -4,12 +4,25 @@ function cx(...xs) { return xs.filter(Boolean).join(' '); }
 
 const MenuContext = createContext(null);
 
-const ALIGN = {
-  'bottom-end':   'top-full right-0 mt-2',
-  'bottom-start': 'top-full left-0 mt-2',
-  'top-end':      'bottom-full right-0 mb-2',
-  'top-start':    'bottom-full left-0 mb-2',
-};
+// The menu is positioned `fixed` (coordinates computed from the trigger) rather
+// than `absolute`. Inside a scrolling/clipping ancestor — e.g. a Table's
+// `overflow-x-auto` wrapper — an absolute menu is clipped and, worse, inflates
+// the ancestor's scroll height, leaving a tall empty gap below a short table.
+// A fixed element is relative to the viewport, so it escapes both. `GAP` is the
+// 8px offset the old `mt-2`/`mb-2` gave.
+const GAP = 8;
+const VALID_PLACEMENTS = new Set(['bottom-end', 'bottom-start', 'top-end', 'top-start']);
+
+function computeMenuStyle(rect, placement) {
+  const top = placement.startsWith('top');
+  const end = placement.endsWith('end');
+  const style = { position: 'fixed' };
+  if (top) style.bottom = Math.round(window.innerHeight - rect.top + GAP);
+  else style.top = Math.round(rect.bottom + GAP);
+  if (end) style.right = Math.round(window.innerWidth - rect.right);
+  else style.left = Math.round(rect.left);
+  return style;
+}
 
 const ITEM_SELECTOR = '[role^="menuitem"]:not([aria-disabled="true"])';
 
@@ -29,6 +42,7 @@ const ITEM_SELECTOR = '[role^="menuitem"]:not([aria-disabled="true"])';
  */
 export default function Dropdown({ trigger, children, placement = 'bottom-end', className, label }) {
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState(null);
   const rootRef = useRef(null);
   const menuRef = useRef(null);
   const triggerRef = useRef(null);
@@ -43,14 +57,31 @@ export default function Dropdown({ trigger, children, placement = 'bottom-end', 
 
   useEffect(() => {
     if (!open) return undefined;
+    // Position from the trigger, then keep it aligned while open.
+    const reposition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setMenuStyle(computeMenuStyle(rect, VALID_PLACEMENTS.has(placement) ? placement : 'bottom-end'));
+    };
+    reposition();
     // Focus the first item once the menu is painted.
     items()[0]?.focus();
     const onDown = (e) => {
+      // The menu is a fixed element but still inside rootRef, so this contains()
+      // check keeps covering clicks on menu items.
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+    // Capture-phase scroll catches scrolling inside any ancestor, not just the
+    // window, so the menu tracks the trigger instead of drifting.
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      setMenuStyle(null);
+    };
+  }, [open, placement]);
 
   const onMenuKeyDown = (e) => {
     const list = items();
@@ -97,10 +128,13 @@ export default function Dropdown({ trigger, children, placement = 'bottom-end', 
             aria-label={label}
             tabIndex={-1}
             onKeyDown={onMenuKeyDown}
+            style={menuStyle || undefined}
             className={cx(
-              'absolute z-50 min-w-[12rem] py-1.5 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl',
+              'z-50 min-w-[12rem] py-1.5 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl',
               'origin-top animate-menu-in motion-reduce:animate-none focus:outline-none',
-              ALIGN[placement] || ALIGN['bottom-end'],
+              // Hidden until positioned, so it never flashes at the top-left for
+              // a frame before the fixed coordinates are measured.
+              menuStyle ? 'visible' : 'invisible',
               className
             )}
           >

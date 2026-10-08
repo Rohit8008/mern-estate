@@ -3,7 +3,7 @@ import Listing from '../models/listing.model.js';
 import { errorHandler, ValidationError, ConflictError, NotFoundError } from '../utils/error.js';
 import { config } from '../config/environment.js';
 import { getTenantScopedCache, invalidateEverywhere } from '../utils/cache.js';
-import { listingScope, canViewAllListings } from '../middleware/permissions.js';
+import { listingScope, canViewAllListings, categoryAllowlist } from '../middleware/permissions.js';
 import { validateCategoryFields, describeFieldErrors } from '../utils/categoryFields.js';
 import { logActivity } from '../utils/activity.js';
 import { CATEGORY_NAME_MAX } from '../middleware/validation.js';
@@ -127,17 +127,30 @@ export const getCategories = async (req, res, next) => {
     const staff = isStaff(req);
     const viewAll = await canViewAllListings(req.user);
     const scope = staff ? listingScope(req.user, { viewAll }) : {};
+
+    // An employee with assigned categories sees only those — the allowlist is the
+    // grant (see categoryAllowlist). This also feeds the create-property picker,
+    // so the picker offers exactly the categories they may file a listing under.
+    const allowed = categoryAllowlist(req.user);
+
+    // A per-user key whenever the view is narrowed (by listing scope OR by the
+    // category allowlist), so one employee's filtered list is never served to
+    // another or to an admin.
     const scopeTag = !staff
       ? 'public'
-      : Object.keys(scope).length === 0
-        ? 'all'
-        : `scoped:${req.user.id}`;
+      : allowed
+        ? `emp:${req.user.id}`
+        : Object.keys(scope).length === 0
+          ? 'all'
+          : `scoped:${req.user.id}`;
     const cacheKey = staff ? `category:list:staff:${scopeTag}` : 'category:list:public';
 
     const cached = cache.get(cacheKey);
     if (cached) return res.status(200).json(cached);
 
-    const categories = await Category.find({ isDeleted: { $ne: true } }).sort({ name: 1 }).lean();
+    const query = { isDeleted: { $ne: true } };
+    if (allowed) query.slug = { $in: allowed };
+    const categories = await Category.find(query).sort({ name: 1 }).lean();
 
     let payload;
     if (staff) {
@@ -162,7 +175,17 @@ export const getCategoryBySlug = async (req, res, next) => {
   try {
     const { slug } = req.params;
     const staff = isStaff(req);
-    const cacheKey = `category:slug:${staff ? 'staff' : 'public'}:${slug}`;
+
+    // Honour the same allowlist as the list: an employee assigned a subset must
+    // not reach a category outside it by typing its address. Outside the
+    // allowlist it is simply not found.
+    const allowed = categoryAllowlist(req.user);
+    if (allowed && !allowed.includes(slug)) {
+      return next(new NotFoundError('No category at that address.'));
+    }
+
+    const scopeKey = allowed ? `emp:${req.user.id}` : staff ? 'staff' : 'public';
+    const cacheKey = `category:slug:${scopeKey}:${slug}`;
 
     const cached = cache.get(cacheKey);
     if (cached) return res.status(200).json(cached);
@@ -170,8 +193,9 @@ export const getCategoryBySlug = async (req, res, next) => {
     const cat = await Category.findOne({ slug, isDeleted: { $ne: true } }).lean();
     if (!cat) return next(new NotFoundError('No category at that address.'));
 
+    const scope = staff ? listingScope(req.user, { viewAll: await canViewAllListings(req.user) }) : {};
     const payload = staff
-      ? { ...cat, listingCount: (await countListingsByCategory([cat.slug]))[cat.slug] || 0 }
+      ? { ...cat, listingCount: (await countListingsByCategory([cat.slug], scope))[cat.slug] || 0 }
       : publicView(cat);
 
     cache.set(cacheKey, payload);
