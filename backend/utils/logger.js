@@ -1,5 +1,9 @@
+import os from 'os';
+import { createRequire } from 'module';
 import { getLogContext } from './logContext.js';
 import { getTenantStore } from '../tenancy/tenantContext.js';
+
+const require = createRequire(import.meta.url);
 
 // ---------------------------------------------------------------------------
 // OpenObserve configuration
@@ -17,6 +21,16 @@ const ooAuth = () => {
 
 const SERVICE = 'backend';
 const ENV     = process.env.NODE_ENV || 'development';
+
+// Infra identity stamped on every line, so logs from a PM2 cluster / multi-dyno
+// deployment are attributable to the instance that wrote them, and errors can be
+// correlated to the release they came from. Resolved once at load.
+const HOST = os.hostname();
+const PID  = process.pid;
+// PM2 sets NODE_APP_INSTANCE per clustered worker; fall back to the pid.
+const INSTANCE_ID = process.env.NODE_APP_INSTANCE ?? process.env.pm_id ?? String(PID);
+const APP_VERSION = process.env.APP_VERSION
+  || (() => { try { return require('../package.json').version; } catch { return 'unknown'; } })();
 
 // ---------------------------------------------------------------------------
 // Log level gate
@@ -158,7 +172,17 @@ function contextFields() {
 
 function push(stream, entry) {
   const buffer = buffers[stream];
-  buffer.push({ _timestamp: tsUs(), service: SERVICE, environment: ENV, ...contextFields(), ...redact(entry) });
+  buffer.push({
+    _timestamp: tsUs(),
+    service: SERVICE,
+    environment: ENV,
+    host: HOST,
+    instance: INSTANCE_ID,
+    pid: PID,
+    app_version: APP_VERSION,
+    ...contextFields(),
+    ...redact(entry),
+  });
   if (buffer.length >= 50) flushStream(stream); // fire-and-forget
   else scheduleFlush();
 }
@@ -178,7 +202,7 @@ function consolePrint(level, message, meta) {
   if (ENV === 'test') return;
   const safe = redact(meta);
   if (JSON_STDOUT) {
-    const line = { ts: new Date().toISOString(), level: level.toLowerCase(), message, ...contextFields(), ...safe };
+    const line = { ts: new Date().toISOString(), level: level.toLowerCase(), message, host: HOST, instance: INSTANCE_ID, app_version: APP_VERSION, ...contextFields(), ...safe };
     const out = level === 'ERROR' || level === 'WARN' ? process.stderr : process.stdout;
     out.write(JSON.stringify(line) + '\n');
     return;
