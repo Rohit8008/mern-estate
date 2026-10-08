@@ -55,6 +55,13 @@ router.get('/export', canView, exportBuyerRequirements);
 // Act on a selection. Scoping is enforced in the controller.
 router.post('/bulk', validateBody(buyerRequirementActionValidation.bulk), canBulk, bulkUpdateBuyerRequirements);
 
+// Saved-match add/remove. These MUST come before the generic '/:id' routes:
+// Express matches in declaration order, so with '/:id' first a DELETE /matches
+// was read as deleting the requirement with id "matches" (404 INVALID_ID) rather
+// than removing a saved match.
+router.post('/matches', canUpdate, validateBody(buyerRequirementActionValidation.match), addMatchedProperty);
+router.delete('/matches', canUpdate, removeMatchedProperty);
+
 // Get specific buyer requirement
 router.get('/:id', canView, getBuyerRequirement);
 
@@ -64,14 +71,9 @@ router.put('/:id', canUpdate, validateBody(buyerRequirementValidation.update), u
 // Delete buyer requirement
 router.delete('/:id', canDelete, deleteBuyerRequirement);
 
-// Find matching properties for a buyer requirement
+// Find matching properties for a buyer requirement ('/:id/matches' is two
+// segments, so it never collides with the single-segment '/:id').
 router.get('/:id/matches', canView, findMatchingProperties);
-
-// Add matched property to buyer requirement
-router.post('/matches', canUpdate, validateBody(buyerRequirementActionValidation.match), addMatchedProperty);
-
-// Remove matched property from buyer requirement
-router.delete('/matches', canUpdate, removeMatchedProperty);
 
 // Update buyer status
 router.patch('/:id/status', canUpdate, validateBody(buyerRequirementActionValidation.status), updateBuyerStatus);
