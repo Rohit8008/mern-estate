@@ -27,22 +27,24 @@ dev machine doesn't have, so none of it could be verified end-to-end here.
 
 ## The SDK this project builds with
 
-**Flutter 3.24.5.** `pubspec.yaml` asks for Dart `^3.5.3`, which is the 3.24
-series, and the Android build is pinned to that era too: Gradle 8.3,
-AGP 8.1.0, Kotlin 1.8.22.
+**Flutter 3.47+.** The Android toolchain was upgraded (Oct 2026) from the old
+3.24.5 pin to **Gradle 8.14 / AGP 8.11.1 / Kotlin 2.2.20** — Flutter 3.47's
+minimums. `android/gradle.properties` carries the migrator's
+`android.builtInKotlin=false` / `android.newDsl=false` (AGP-9 opt-outs; we stay
+on AGP 8.x). `cardTheme` uses `CardThemeData` (3.47's type), and the
+`google_fonts` package was dropped (its 6.3.0 fails to compile on 3.47, and
+9.0.0 cascades into intl 0.20) — Outfit is now a bundled `flutter.fonts` family.
 
-Current Flutter (3.47) cannot build it. Its Gradle plugin declares a minimum
-Gradle of 8.14, and `--android-skip-build-dependency-validation` does not
-rescue it — the build then fails further in, inside AGP's `KgpUtils`, because
-8.1.0 does not expose the API the newer plugin calls. Flutter 3.47's own
-template is Gradle 9.3.1 / AGP 9.1.0 / Kotlin 2.4.0, so closing this gap is an
-Android toolchain migration across all 21 plugin dependencies, not a version
-bump. Worth doing before store submission; not worth doing by accident.
+Flutter warns that Gradle/AGP/Kotlin "will soon be dropped; upgrade to
+9.x/2.3.20" — those are the next step when convenient, not required now.
 
-Running a newer `flutter` against this project also rewrites files in place —
-`android/gradle.properties` (adds `android.builtInKotlin` / `android.newDsl`),
-`analysis_options.yaml`, and `pubspec.lock`. Check `git status` after, and
-revert those if you did not mean to migrate.
+Release builds are **arm64** (`--target-platform android-arm64`, ~26 MB), which
+covers all modern devices; `publish-apk.sh` passes that flag.
+
+Known follow-up: on-device **voice recording** (the `record` plugin) is not yet
+wired — `record` 5.1.x needs `compileSdk 36` and its `record_linux` federated
+dep is currently skewed; resolve that (and bump `compileSdk`) to enable mic
+capture in Notes. Voice notes recorded on the web already play in the app.
 
 ## Sideloaded releases (until the app is on the Play Store)
 
@@ -59,10 +61,11 @@ The page reads `/app/latest.json`, so a new version needs no web deploy:
 ./scripts/publish-apk.sh "What changed in this version"
 ```
 
-It builds with Flutter 3.24.5 from `~/development/flutter-3.24.5` (override with
-`FLUTTER=`), points the app at `https://realvista.duckdns.org`, uploads the APK
-and then `latest.json` to `~/sites/realvista-app/` on the server (nginx serves
-it at `/app/`), and restores the committed `pubspec.lock`.
+It builds with Flutter 3.47+ (the `flutter` on your PATH, or override with
+`FLUTTER=`), as an arm64 release, points the app at
+`https://realvista.duckdns.org`, uploads the APK and then `latest.json` to
+`~/sites/realvista-app/` on the server (nginx serves it at `/app/`), and restores
+the committed `pubspec.lock`.
 
 **The release keystore is `~/.realvista/realvista-upload.jks`** (password in
 `android/key.properties`, with a copy in `~/.realvista/key.properties.backup`).

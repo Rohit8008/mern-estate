@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
 /// Text scale built on 'Outfit' — the same family the web CRM sets globally
-/// in index.css — so type feels continuous between the two surfaces.
+/// in index.css — so type feels continuous between the two surfaces. The TTF is
+/// bundled (pubspec `fonts:`), so there is no runtime font fetch and no
+/// google_fonts dependency (which blocked the Flutter toolchain upgrade).
 abstract final class AppTypography {
   static TextTheme textTheme(Color ink, Color inkSoft) {
-    final base = GoogleFonts.outfitTextTheme();
+    final base = Typography.material2021(platform: TargetPlatform.android).black.apply(fontFamily: 'Outfit');
     return base
         .copyWith(
           displaySmall: base.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5, color: ink),
