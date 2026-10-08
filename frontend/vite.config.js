@@ -98,9 +98,12 @@ export default defineConfig({
         ],
         // Fall back to cached index.html for all SPA navigation when offline
         navigateFallback: 'index.html',
-        // /app/ holds the Android APK and its latest.json: never answer those
-        // with the SPA shell.
-        navigateFallbackDenylist: [/^\/api\//, /^\/app\//],
+        // Paths the SPA must never answer with its app shell: the API, the
+        // Android APK channel (/app), the OpenObserve console (/observe, which is
+        // nginx-proxied to a separate service), and uploaded files (/uploads).
+        // Without /observe here the service worker served the SPA's "Page not
+        // found" over the logging console.
+        navigateFallbackDenylist: [/^\/api\//, /^\/app\//, /^\/observe\//, /^\/uploads\//],
         runtimeCaching: [
           // No rule for /api/. Responses there are personal data — clients,
           // owners, messages, the signed-in user — and a service-worker cache
