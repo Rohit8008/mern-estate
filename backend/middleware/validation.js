@@ -608,9 +608,15 @@ export const listingValidation = {
     discountPrice: Joi.number()
       .min(0)
       .max(1000000000)
+      // Only enforce discount < regular once a real price is set. The form
+      // defaults both fields to 0, and `0 < 0` is false — testing merely that
+      // regularPrice `exist()`s rejected a priceless listing (both 0) on edit
+      // with "Discount price must be less than regular price". Match the create
+      // schema: require regularPrice > 0 before comparing.
       .when('regularPrice', {
-        is: Joi.number().exist(),
+        is: Joi.number().greater(0).required(),
         then: Joi.number().less(Joi.ref('regularPrice')),
+        otherwise: Joi.number(),
       })
       .optional()
       .messages({
