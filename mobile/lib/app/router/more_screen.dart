@@ -9,6 +9,7 @@ import '../../features/admin/presentation/admin_screen.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
 import '../../features/buyers/presentation/buyers_list_screen.dart';
 import '../../features/messages/presentation/messages_list_screen.dart';
+import '../../features/notes/presentation/notes_screen.dart';
 import '../../features/owners/presentation/owners_list_screen.dart';
 import '../../features/permissions/permissions_providers.dart';
 import '../../features/profile/presentation/profile_screen.dart';
@@ -34,6 +35,7 @@ final _items = [
   _MoreItem(label: 'Property Owners', icon: Icons.groups_2_outlined, requires: 'viewOwners', screenBuilder: (_) => const OwnersListScreen()),
   _MoreItem(label: 'Buyer Requirements', icon: Icons.fact_check_outlined, requires: 'viewBuyerRequirements', screenBuilder: (_) => const BuyersListScreen()),
   _MoreItem(label: 'Tasks', icon: Icons.checklist_rounded, screenBuilder: (_) => const TasksListScreen()),
+  _MoreItem(label: 'Notes', icon: Icons.sticky_note_2_outlined, screenBuilder: (_) => const NotesScreen()),
   _MoreItem(label: 'Transactions', icon: Icons.payments_outlined, requires: 'viewAnalytics', screenBuilder: (_) => const TransactionsListScreen()),
   _MoreItem(label: 'Client Reports', icon: Icons.description_outlined, requires: 'exportData', screenBuilder: (_) => const ReportsScreen()),
   _MoreItem(label: 'Messages', icon: Icons.chat_bubble_outline_rounded, screenBuilder: (_) => const MessagesListScreen()),
