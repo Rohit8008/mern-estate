@@ -296,9 +296,14 @@ const tenantSchema = new mongoose.Schema(
   }
 );
 
+// Unique across workspaces that actually set a custom domain. `$ne: ''` is NOT
+// allowed in a partialFilterExpression (Mongo rejects the implied $not), which
+// made this index fail to build on every boot and left the uniqueness
+// unenforced. `$gt: ''` is supported and means the same thing for strings — any
+// non-empty string sorts after '' — so empty/unset domains are excluded.
 tenantSchema.index(
   { customDomain: 1 },
-  { unique: true, partialFilterExpression: { customDomain: { $type: 'string', $ne: '' } } }
+  { unique: true, partialFilterExpression: { customDomain: { $type: 'string', $gt: '' } } }
 );
 
 /** Whether this tenant may currently be served. */
