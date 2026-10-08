@@ -1,9 +1,9 @@
 {
-  "version": "1.0.9",
-  "build": 10,
-  "file": "realvista-1.0.9.apk",
-  "sizeBytes": 30462769,
-  "sha256": "d58ec2657f942432796fdebc34287657dbc7c1c582b46b473c3325a598c19609",
-  "releasedAt": "2026-10-08T17:21:11Z",
-  "notes": "Update your profile photo and change your password from the Profile screen."
+  "version": "1.0.10",
+  "build": 11,
+  "file": "realvista-1.0.10.apk",
+  "sizeBytes": 30655003,
+  "sha256": "a3d3673ee38ed5531279dfe693c928d340ea060032d71966426cc555ff4c99ea",
+  "releasedAt": "2026-10-08T18:14:55Z",
+  "notes": "New: lock the app with Face ID / fingerprint. Turn it on in Settings → Security."
 }
