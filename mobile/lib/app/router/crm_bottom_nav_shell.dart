@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/search/presentation/global_search_screen.dart';
 import 'quick_action_sheet.dart';
 
 const _tabTitles = ['Dashboard', 'Leads', 'Properties', 'Activities'];
@@ -34,6 +35,12 @@ class CrmBottomNavShell extends StatelessWidget {
           appBar: AppBar(
             title: Text(_tabTitles[index]),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.search_rounded),
+                tooltip: 'Search',
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const GlobalSearchScreen())),
+              ),
               const NotificationBell(),
               IconButton(
                 icon: const Icon(Icons.grid_view_rounded),

@@ -8,6 +8,7 @@ import '../../../core/utils/format.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../../auth/auth_providers.dart';
 import '../../buyers/presentation/buyers_list_screen.dart';
+import '../../search/presentation/global_search_screen.dart';
 import '../../tasks/presentation/tasks_list_screen.dart';
 import '../../transactions/presentation/transactions_list_screen.dart';
 import '../dashboard_providers.dart';
@@ -73,6 +74,8 @@ class _DashboardContent extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
       children: [
         _GreetingBanner(greeting: _greeting, name: firstName ?? 'there', dateLabel: today),
+        const SizedBox(height: AppSpacing.lg),
+        _SearchBar(onTap: () => push(const GlobalSearchScreen())),
         const SizedBox(height: AppSpacing.xl),
         KpiGrid(
           children: [
@@ -340,6 +343,40 @@ class _RecentBuyerRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           AppBadge(label: buyer.status, variant: _buyerStatusVariant(buyer.status)),
         ],
+      ),
+    );
+  }
+}
+
+/// Prominent tap-to-search bar on the dashboard — opens the global search.
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.slate200),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.search_rounded, color: AppColors.slate400, size: 20),
+              SizedBox(width: AppSpacing.sm),
+              Text('Search properties, leads, owners…',
+                  style: TextStyle(color: AppColors.slate400, fontSize: 14)),
+            ],
+          ),
+        ),
       ),
     );
   }
