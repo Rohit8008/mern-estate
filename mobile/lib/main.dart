@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app/realtime_overlay.dart';
 import 'app/router/app_router.dart';
+import 'core/security/lock_gate.dart';
 import 'core/config/env.dart';
 import 'core/logging/app_logger.dart';
 import 'core/logging/provider_logging_observer.dart';
@@ -101,7 +102,7 @@ class RealVistaCrmApp extends ConsumerWidget {
       themeMode: ThemeMode.system,
       routerConfig: router,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      builder: (context, child) => RealtimeOverlay(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => AppLockGate(child: RealtimeOverlay(child: child ?? const SizedBox.shrink())),
     );
   }
 }

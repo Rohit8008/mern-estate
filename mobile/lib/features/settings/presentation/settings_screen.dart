@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
 import '../../../core/legal/legal_links.dart';
+import '../../../core/security/app_lock.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/widgets.dart';
@@ -64,6 +65,10 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(height: AppSpacing.xl),
+            const _SectionLabel('Security'),
+            const SizedBox(height: AppSpacing.xs),
+            const _SecuritySection(),
             const SizedBox(height: AppSpacing.xl),
             const _SectionLabel('Privacy'),
             const SizedBox(height: AppSpacing.xs),
@@ -132,6 +137,49 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The biometric app-lock toggle. Enabling it authenticates once (so the lock is
+/// never turned on where it cannot be turned off); when the device cannot
+/// authenticate the row is shown disabled with a reason.
+class _SecuritySection extends ConsumerWidget {
+  const _SecuritySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lock = ref.watch(appLockControllerProvider);
+    final controller = ref.read(appLockControllerProvider.notifier);
+    final unavailable = lock.ready && !lock.available;
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: SwitchListTile(
+        value: lock.enabled,
+        onChanged: unavailable
+            ? null
+            : (next) async {
+                if (next) {
+                  final ok = await controller.enable();
+                  if (!ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not turn on app lock. Authentication was not completed.')),
+                    );
+                  }
+                } else {
+                  await controller.disable();
+                }
+              },
+        title: const Text('Unlock with Face ID / fingerprint', style: TextStyle(fontWeight: FontWeight.w500)),
+        subtitle: Text(
+          unavailable
+              ? 'Not available on this device.'
+              : 'Require Face ID, fingerprint or your device passcode to open the app.',
+          style: const TextStyle(fontSize: 12.5, color: AppColors.slate400),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
       ),
     );
   }
