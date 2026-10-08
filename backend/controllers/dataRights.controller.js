@@ -3,6 +3,7 @@ import Client from '../models/client.model.js';
 import Owner from '../models/owner.model.js';
 import BuyerRequirement from '../models/buyerRequirement.model.js';
 import Task from '../models/task.model.js';
+import Listing from '../models/listing.model.js';
 import Message from '../models/message.model.js';
 import Document from '../models/document.model.js';
 import ActivityLog from '../models/activityLog.model.js';
@@ -119,6 +120,58 @@ export const exportUserData = async (req, res, next) => {
       `attachment; filename="data-export-${String(targetId)}-${new Date().toISOString().slice(0, 10)}.json"`
     );
     res.send(JSON.stringify(payload, null, 2));
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * A compact, human-friendly summary of the caller's own record — the profile
+ * basics plus a count of what they have created. This backs the self-service
+ * "Your data" card on the profile page, which renders it as a printable ID card
+ * rather than handing a person a raw JSON dump of every log line and message.
+ *
+ * Self only: the full, machine-readable export (exportUserData) remains for
+ * admins handling a subject-access request.
+ */
+export const getUserCard = async (req, res, next) => {
+  try {
+    const id = req.user.id;
+
+    const user = await inHomeTenant(req, () =>
+      User.findById(id)
+        .select('username firstName lastName email phone role avatar createdAt')
+        .lean()
+    );
+    if (!user) return next(errorHandler(404, "We couldn't find your account."));
+
+    // Counts only — "the records you created", no personal data of contacts and
+    // no logs. Each mirrors the ownership used by the full export above.
+    const [clients, owners, buyerRequirements, tasks, documents, listings] =
+      await Promise.all([
+        Client.countDocuments({ $or: [{ assignedTo: id }, { createdBy: id }] }),
+        Owner.countDocuments({ createdBy: id }),
+        BuyerRequirement.countDocuments({ $or: [{ createdBy: id }, { assignedAgent: id }] }),
+        Task.countDocuments({ $or: [{ assignedTo: id }, { createdBy: id }] }),
+        Document.countDocuments({ uploadedBy: id }),
+        Listing.countDocuments({ $or: [{ userRef: id }, { assignedAgent: id }] }),
+      ]);
+
+    res.status(200).json({
+      generatedAt: new Date().toISOString(),
+      profile: {
+        id: String(user._id),
+        username: user.username || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        role: user.role || '',
+        avatar: user.avatar || '',
+        memberSince: user.createdAt || null,
+      },
+      counts: { clients, owners, buyerRequirements, tasks, documents, listings },
+    });
   } catch (err) {
     next(err);
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../core/config/env.dart';
 import '../../../core/errors/app_failure.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -27,10 +29,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   late final TextEditingController _firstName;
   late final TextEditingController _lastName;
   late final TextEditingController _phone;
+  late final TextEditingController _currentPassword;
+  late final TextEditingController _newPassword;
 
   bool _saving = false;
   String? _error;
   String? _usernameError;
+
+  bool _uploadingAvatar = false;
+
+  bool _changingPassword = false;
+  String? _passwordError;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
 
   @override
   void initState() {
@@ -40,6 +51,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _firstName = TextEditingController(text: user?.firstName ?? '');
     _lastName = TextEditingController(text: user?.lastName ?? '');
     _phone = TextEditingController(text: user?.phone ?? '');
+    _currentPassword = TextEditingController();
+    _newPassword = TextEditingController();
   }
 
   @override
@@ -48,7 +61,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _firstName.dispose();
     _lastName.dispose();
     _phone.dispose();
+    _currentPassword.dispose();
+    _newPassword.dispose();
     super.dispose();
+  }
+
+  /// Relative `/uploads/...` URLs from the backend need the host prepended
+  /// before a NetworkImage can fetch them; absolute (e.g. Cloudinary) URLs are
+  /// left as-is.
+  static String? _resolveAvatar(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return '${Env.apiBaseUrl}$url';
   }
 
   /// Mirrors the server's Joi rule (alphanum, 3..30) so a bad username is
@@ -92,6 +116,85 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _changeAvatar() async {
+    final user = ref.read(authControllerProvider).user;
+    if (user == null || _uploadingAvatar) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 1024);
+    if (picked == null) return;
+
+    setState(() {
+      _uploadingAvatar = true;
+      _error = null;
+    });
+    try {
+      final bytes = await picked.readAsBytes();
+      final api = ref.read(profileApiProvider);
+      final url = await api.uploadAvatar(picked.name, bytes);
+      final updated = await api.update(user.id, {'avatar': url});
+      ref.read(authControllerProvider.notifier).applyUser(updated);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo updated')));
+    } on AppFailure catch (f) {
+      if (mounted) setState(() => _error = f.message);
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _changePassword() async {
+    if (_changingPassword) return;
+    final current = _currentPassword.text;
+    final next = _newPassword.text;
+
+    if (current.isEmpty) {
+      setState(() => _passwordError = 'Enter your current password');
+      return;
+    }
+    if (next.length < 8) {
+      setState(() => _passwordError = 'New password must be at least 8 characters');
+      return;
+    }
+
+    setState(() {
+      _changingPassword = true;
+      _passwordError = null;
+    });
+    try {
+      await ref.read(profileApiProvider).changePassword(currentPassword: current, newPassword: next);
+      _currentPassword.clear();
+      _newPassword.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed')));
+    } on AppFailure catch (f) {
+      if (mounted) setState(() => _passwordError = f.message);
+    } finally {
+      if (mounted) setState(() => _changingPassword = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
@@ -114,22 +217,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
-                  radius: 36,
-                  backgroundColor: AppColors.slate100,
-                  backgroundImage: (user.avatar != null && user.avatar!.isNotEmpty)
-                      ? NetworkImage(user.avatar!)
-                      : null,
-                  child: (user.avatar == null || user.avatar!.isEmpty)
-                      ? Text(
-                          _initials(user.fullName),
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.slate600,
+                GestureDetector(
+                  onTap: _uploadingAvatar ? null : _changeAvatar,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundColor: AppColors.slate100,
+                        backgroundImage: _resolveAvatar(user.avatar) != null
+                            ? NetworkImage(_resolveAvatar(user.avatar)!)
+                            : null,
+                        child: (user.avatar == null || user.avatar!.isEmpty)
+                            ? Text(
+                                _initials(user.fullName),
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.slate600,
+                                ),
+                              )
+                            : null,
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: AppColors.indigo600,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                        )
-                      : null,
+                          child: _uploadingAvatar
+                              ? const SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.photo_camera_rounded, size: 13, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(user.fullName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
@@ -167,6 +296,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             style: TextStyle(color: AppColors.slate400, fontSize: 12),
             textAlign: TextAlign.center,
           ),
+
+          const SizedBox(height: AppSpacing.xl),
+          const Text('Change password', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.md),
+          if (_passwordError != null) ...[
+            AppCard(child: Text(_passwordError!, style: const TextStyle(color: AppColors.rose600, fontSize: 13))),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          AppTextField(
+            label: 'Current password',
+            controller: _currentPassword,
+            obscureText: _obscureCurrent,
+            suffixIcon: IconButton(
+              tooltip: _obscureCurrent ? 'Show password' : 'Hide password',
+              icon: Icon(_obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  size: 20, color: AppColors.slate400),
+              onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            label: 'New password',
+            controller: _newPassword,
+            obscureText: _obscureNew,
+            suffixIcon: IconButton(
+              tooltip: _obscureNew ? 'Show password' : 'Hide password',
+              icon: Icon(_obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  size: 20, color: AppColors.slate400),
+              onPressed: () => setState(() => _obscureNew = !_obscureNew),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text('At least 8 characters.', style: TextStyle(color: AppColors.slate400, fontSize: 12)),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: 'Update password',
+            variant: AppButtonVariant.secondary,
+            onPressed: _changingPassword ? null : _changePassword,
+            loading: _changingPassword,
+            expand: true,
+          ),
+
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),

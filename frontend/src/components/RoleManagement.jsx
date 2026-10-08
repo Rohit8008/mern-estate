@@ -594,13 +594,13 @@ const RoleManagement = () => {
       {showRoleForm && (
         <div className="fixed inset-0 !mt-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-form-title"
           >
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div className="flex-shrink-0 px-6 py-4 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -628,7 +628,7 @@ const RoleManagement = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="px-6 py-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+            <div className="flex-1 min-h-0 px-6 py-6 overflow-y-auto">
               {roleFormError && (
                 <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">
                   {roleFormError}
@@ -727,7 +727,7 @@ const RoleManagement = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
+            <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
               <button
                 type="button"
                 onClick={() => setShowRoleForm(false)}
@@ -764,13 +764,13 @@ const RoleManagement = () => {
       {showUserRoleModal && (
         <div className="fixed inset-0 !mt-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-md"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
             role="dialog"
             aria-modal="true"
             aria-labelledby="user-role-title"
           >
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div className="flex-shrink-0 px-6 py-4 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -794,7 +794,7 @@ const RoleManagement = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="px-6 py-6">
+            <div className="flex-1 min-h-0 px-6 py-6 overflow-y-auto">
               <div className="space-y-6">
                 {/* User Info */}
                 <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-lg">
@@ -854,7 +854,7 @@ const RoleManagement = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
+            <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
               <button type="button"
                 onClick={() => setShowUserRoleModal(false)}
                 className="px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"

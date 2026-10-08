@@ -16,6 +16,8 @@ import { formatListingPrice } from '../utils/currency';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
 import { useBuyerView } from '../contexts/BuyerViewContext';
+import { useTenant } from '../contexts/TenantProvider';
+import { buildDataCardHtml } from '../utils/dataCard';
 import { useNotification } from '../contexts/NotificationContext';
 import {
   PageHeader, Button,
@@ -36,6 +38,7 @@ export default function Profile() {
   const [scrollToListings, setScrollToListings] = useState(false);
   const { currentUser, loading, error } = useSelector((state) => state.user);
   const { isBuyerViewMode } = useBuyerView();
+  const { tenant } = useTenant();
   const dispatch = useDispatch();
 
   const [file, setFile] = useState(undefined);
@@ -173,12 +176,22 @@ export default function Profile() {
   const handleExportData = async () => {
     setExporting(true);
     try {
-      const data = await apiClient.get('/data-rights/export/me');
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      // A compact, human-readable ID card — profile basics plus a count of what
+      // you have created — instead of a raw JSON dump of every record and log.
+      const data = await apiClient.get('/data-rights/card/me');
+      const html = buildDataCardHtml({
+        profile: data?.profile || {},
+        counts: data?.counts || {},
+        workspace: {
+          name: tenant?.branding?.productName || tenant?.name || 'Real Vista',
+          logoUrl: normalizeImageUrl(tenant?.branding?.logoMarkUrl || tenant?.branding?.logoUrl || ''),
+        },
+      });
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `real-vista-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `my-data-card-${new Date().toISOString().slice(0, 10)}.html`;
       document.body.appendChild(a);
       a.click();
       a.remove();

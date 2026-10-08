@@ -3,6 +3,7 @@ import { verifyToken, requireAdmin } from '../utils/verifyUser.js';
 import { requirePermission } from '../middleware/permissions.js';
 import {
   exportUserData,
+  getUserCard,
   exportContactData,
   eraseUser,
   eraseContact,
@@ -14,6 +15,9 @@ router.use(verifyToken);
 
 // Anyone may export themselves — that is the point of a subject access request.
 router.get('/export/me', exportUserData);
+
+// A compact, printable summary of your own record, for the self-service card.
+router.get('/card/me', getUserCard);
 
 // Exporting somebody else, or a contact, is a reporting action.
 router.get('/export/user/:id', requirePermission('exportData'), exportUserData);

@@ -233,7 +233,11 @@ export const removeRoleFromUser = async (req, res, next) => {
 // Get users with specific role
 export const getUsersByRole = async (req, res, next) => {
   try {
-    const { roleId } = req.params;
+    // The route param is `:id` (as everywhere in this router), not `roleId`.
+    // Reading `roleId` here left it undefined, so `User.find({ assignedRole:
+    // undefined })` matched the wrong users — the members list and count never
+    // reflected who actually held the role.
+    const { id: roleId } = req.params;
     const { page = 1, limit = 20 } = req.query;
 
     const users = await User.find({ assignedRole: roleId })

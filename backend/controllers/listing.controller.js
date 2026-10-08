@@ -19,7 +19,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { notify } from '../utils/notify.js';
 import { isCategoryFieldActive } from '../utils/categoryVisibility.js';
-import { canAccessListing, listingScope } from '../middleware/permissions.js';
+import { canAccessListing, listingScope, canViewAllListings } from '../middleware/permissions.js';
 import { assertWithinLimit } from '../tenancy/limits.js';
 import { runHook } from '../plugins/registry.js';
 import { emitEvent } from '../utils/webhooks.js';
@@ -441,9 +441,11 @@ export const updateListing = asyncHandler(async (req, res, next) => {
 });
 
 export const getListing = asyncHandler(async (req, res, next) => {
-  // Same scope as the list: an employee's list showed only their listings, but
-  // any other one opened by URL. Outside the scope it is simply not found.
-  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true }, ...listingScope(req.user) })
+  // Same scope as the list: an employee bounded to their own work cannot open
+  // another's listing by URL (it is simply not found), while one whose role
+  // grants viewListings can open any — matching what the board now shows them.
+  const viewAll = await canViewAllListings(req.user);
+  const listing = await Listing.findOne({ _id: req.params.id, isDeleted: { $ne: true }, ...listingScope(req.user, { viewAll }) })
     .populate('userRef', 'username avatar _id')
     .populate('ownerIds', 'name email phone companyName _id')
     .lean();
@@ -1048,9 +1050,11 @@ export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
   const termLower = searchTerm.toLowerCase().trim();
 
   // Keyed by the caller's access scope as well as the term, so one user's
-  // in-scope suggestions are never served to another. The workspace is added by
-  // the cache itself.
-  const scopeKey = req.user ? `${req.user.role}:${req.user.id}` : 'anon';
+  // in-scope suggestions are never served to another. `viewAll` rides in the key
+  // too: a role change that widens or narrows a caller's scope must not be served
+  // stale from before. The workspace is added by the cache itself.
+  const viewAll = await canViewAllListings(req.user);
+  const scopeKey = req.user ? `${req.user.role}:${req.user.id}:${viewAll ? 'all' : 'mine'}` : 'anon';
   const cacheKey = `listing:suggestions:${scopeKey}:${termLower}`;
   const cached = getCachedResults(cacheKey);
   if (cached) {
@@ -1063,7 +1067,7 @@ export const getSearchSuggestions = asyncHandler(async (req, res, next) => {
 
   // Suggestions must not leak names/localities from listings the caller cannot
   // otherwise see, so they run inside the same access scope as the list query.
-  const scope = listingScope(req.user);
+  const scope = listingScope(req.user, { viewAll });
   const inScope = (extra) =>
     Object.keys(scope).length
       ? { $and: [{ isDeleted: { $ne: true }, ...extra }, scope] }

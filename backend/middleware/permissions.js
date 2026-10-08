@@ -115,6 +115,21 @@ export async function userHasPermission(user, permission) {
 }
 
 /**
+ * Whether this caller may see EVERY listing in the workspace rather than only
+ * their own work — admins always, employees only when their role grants
+ * `viewListings`. Async because it may resolve the caller's role; pass the
+ * result into listingScope as `viewAll`. Uses the strict permission check (no
+ * legacy fallback): a scope WIDENING must never be granted by the mere absence
+ * of a role.
+ */
+export async function canViewAllListings(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'employee') return false;
+  return userHasPermission(user, 'viewListings');
+}
+
+/**
  * Route guard form of staffHasPermission, for routes that used to be open to
  * every signed-in user. Same fail-at-load check on the key as requirePermission.
  */
@@ -180,7 +195,7 @@ export const canAccessListing = (user, listing, { allowAssignedAgent = false } =
  *        work even for admins, backing the "My properties" view.
  * @returns {object} a filter to spread into the query, `{}` when unrestricted
  */
-export const listingScope = (user, { scope = 'all' } = {}) => {
+export const listingScope = (user, { scope = 'all', viewAll = false } = {}) => {
   const userId = user ? String(user.id || user._id) : null;
 
   const mine = () => ({
@@ -202,7 +217,15 @@ export const listingScope = (user, { scope = 'all' } = {}) => {
 
   if (user.role === 'admin') return scope === 'assigned' ? mine() : {};
 
-  if (user.role === 'employee') return mine();
+  if (user.role === 'employee') {
+    // "My properties" (scope==='assigned') always narrows to the caller's own
+    // work. Otherwise an employee whose role grants viewListings sees the whole
+    // workspace book like an admin; without it they stay bounded to mine().
+    // `viewAll` is resolved by the caller (canViewAllListings) because the
+    // permission check is async and this filter builder is not.
+    if (scope === 'assigned') return mine();
+    return viewAll ? {} : mine();
+  }
 
   // Sellers only ever see what they created.
   return { userRef: userId };

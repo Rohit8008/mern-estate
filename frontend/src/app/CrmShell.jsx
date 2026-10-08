@@ -476,9 +476,6 @@ export default function CrmShell() {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
-  // A screen stays highlighted while you are anywhere it owns — editing a
-  // property should not make the sidebar look like you have left Properties.
-  const itemActive = (item) => [item.route, ...(item.matches || [])].some(isActive);
 
   const username  = currentUser?.username || currentUser?.name || 'User';
   const avatarSrc = currentUser?.avatar ? normalizeImageUrl(currentUser.avatar) : '';
@@ -495,6 +492,27 @@ export default function CrmShell() {
   // useScreens for how the three filters (product / workspace / user) combine.
   const { screens, sections: navSections, ready: screensReady, canSee } = useScreens();
   const { trail, current } = useBreadcrumbs(location.pathname, screens, navSections, productName);
+
+  // Exactly one screen is highlighted at a time: the one whose route (or alias)
+  // is the LONGEST prefix of the current path — the same "longest route wins"
+  // rule the breadcrumb uses. A plain prefix test lit up every ancestor too, so
+  // '/admin' (Admin Panel) stayed highlighted alongside the real child screen on
+  // '/admin/audit-log', '/admin/import' and friends. A screen still stays active
+  // while you are anywhere it owns (e.g. editing a property under /properties).
+  const activePath = useMemo(() => {
+    let best = null;
+    for (const section of navSections) {
+      for (const item of section.items) {
+        for (const path of [item.route, ...(item.matches || [])]) {
+          if (isActive(path) && (best === null || path.length > best.length)) best = path;
+        }
+      }
+    }
+    return best;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navSections, location.pathname]);
+  const itemActive = (item) =>
+    activePath != null && [item.route, ...(item.matches || [])].includes(activePath);
 
   // Remember where this person has been, for the palette's "Recently visited".
   // Keyed on the full URL so a filtered list comes back as that view.

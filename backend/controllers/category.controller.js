@@ -3,6 +3,7 @@ import Listing from '../models/listing.model.js';
 import { errorHandler, ValidationError, ConflictError, NotFoundError } from '../utils/error.js';
 import { config } from '../config/environment.js';
 import { getTenantScopedCache, invalidateEverywhere } from '../utils/cache.js';
+import { listingScope, canViewAllListings } from '../middleware/permissions.js';
 import { validateCategoryFields, describeFieldErrors } from '../utils/categoryFields.js';
 import { logActivity } from '../utils/activity.js';
 import { CATEGORY_NAME_MAX } from '../middleware/validation.js';
@@ -49,11 +50,17 @@ function publicView(category) {
 
 const isStaff = (req) => req.user?.role === 'admin' || req.user?.role === 'employee';
 
-/** How many live listings sit in each of the given categories. */
-async function countListingsByCategory(slugs) {
+/**
+ * How many live listings sit in each of the given categories, counting only the
+ * ones `scope` lets the caller see. Without the scope an employee bounded to
+ * their own work saw workspace-wide counts here — properties they could not open
+ * from the board — so the Categories page and All Properties disagreed.
+ */
+async function countListingsByCategory(slugs, scope = {}) {
   if (!slugs.length) return {};
+  const match = { category: { $in: slugs }, isDeleted: { $ne: true } };
   const rows = await Listing.aggregate([
-    { $match: { category: { $in: slugs }, isDeleted: { $ne: true } } },
+    { $match: Object.keys(scope).length ? { $and: [match, scope] } : match },
     { $group: { _id: '$category', count: { $sum: 1 } } },
   ]);
   return Object.fromEntries(rows.map((r) => [r._id, r.count]));
@@ -111,9 +118,21 @@ export const createCategory = async (req, res, next) => {
 export const getCategories = async (req, res, next) => {
   try {
     // Staff see usage counts and internal fields; the public browse filters do
-    // not. Keyed separately so one is never served to the other.
+    // not. The count is scoped to what the caller can actually open, so an
+    // employee bounded to their own work does not see phantom counts for
+    // properties missing from their All Properties board. The cache key carries
+    // that scope: admins and viewListings-holders share the unscoped 'all'
+    // counts; a bounded employee gets their own per-user entry, never served to
+    // another.
     const staff = isStaff(req);
-    const cacheKey = staff ? 'category:list:staff' : 'category:list:public';
+    const viewAll = await canViewAllListings(req.user);
+    const scope = staff ? listingScope(req.user, { viewAll }) : {};
+    const scopeTag = !staff
+      ? 'public'
+      : Object.keys(scope).length === 0
+        ? 'all'
+        : `scoped:${req.user.id}`;
+    const cacheKey = staff ? `category:list:staff:${scopeTag}` : 'category:list:public';
 
     const cached = cache.get(cacheKey);
     if (cached) return res.status(200).json(cached);
@@ -124,7 +143,7 @@ export const getCategories = async (req, res, next) => {
     if (staff) {
       // The count is what makes "can I safely delete this?" answerable without
       // leaving the page.
-      const counts = await countListingsByCategory(categories.map((c) => c.slug));
+      const counts = await countListingsByCategory(categories.map((c) => c.slug), scope);
       payload = categories.map((c) => ({ ...c, listingCount: counts[c.slug] || 0 }));
     } else {
       payload = categories.map(publicView);

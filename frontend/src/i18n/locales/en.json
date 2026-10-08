@@ -1715,7 +1715,7 @@
     "username": "Username",
     "yourListings": "Your Listings",
     "yourData": "Your data",
-    "yourDataBody": "Download a copy of your profile and the records you created, as a JSON file.",
+    "yourDataBody": "Download your profile as a printable ID card, with a summary of what you've created.",
     "downloadMyData": "Download my data",
     "preparingDownload": "Preparing download…",
     "exportFailed": "Could not prepare your download. Please try again."

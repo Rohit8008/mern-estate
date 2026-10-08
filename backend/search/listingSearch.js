@@ -31,7 +31,7 @@
 
 import Listing from '../models/listing.model.js';
 import mongoose from 'mongoose';
-import { listingScope } from '../middleware/permissions.js';
+import { listingScope, canViewAllListings } from '../middleware/permissions.js';
 import { buildFuzzyRegex, tokenize } from '../utils/search.js';
 
 /** Below this many hits, the next tier is tried as well. */
@@ -52,7 +52,7 @@ function escapeRe(s) {
  * Shared by search and by the facets endpoint, so a count and the rows it
  * describes can never be computed from different filters.
  */
-export function buildListingFilter(params = {}, user, { defaultStatus = null } = {}) {
+export function buildListingFilter(params = {}, user, { defaultStatus = null, viewAll = false } = {}) {
   const filter = { isDeleted: { $ne: true } };
 
   const eq = (key, value, transform = (v) => v) => {
@@ -111,7 +111,7 @@ export function buildListingFilter(params = {}, user, { defaultStatus = null } =
   });
 
   // Access scope, merged with $and so a search's own $or cannot widen it.
-  const scope = listingScope(user, { scope: params.scope === 'assigned' ? 'assigned' : 'all' });
+  const scope = listingScope(user, { scope: params.scope === 'assigned' ? 'assigned' : 'all', viewAll });
   return Object.keys(scope).length ? { $and: [filter, scope] } : filter;
 }
 
@@ -228,7 +228,8 @@ export async function searchListings({
   projection = LIST_PROJECTION,
 } = {}) {
   const started = Date.now();
-  const base = buildListingFilter(params, user, { defaultStatus });
+  const viewAll = await canViewAllListings(user);
+  const base = buildListingFilter(params, user, { defaultStatus, viewAll });
   const proj = projectionFor(projection);
   const term = String(q || '').trim();
 
@@ -290,7 +291,8 @@ export async function searchListings({
  * and presents it as the total. These are the real numbers.
  */
 export async function getListingFacets({ params = {}, user, defaultStatus = null } = {}) {
-  const filter = buildListingFilter(params, user, { defaultStatus });
+  const viewAll = await canViewAllListings(user);
+  const filter = buildListingFilter(params, user, { defaultStatus, viewAll });
 
   const [result] = await Listing.aggregate([
     { $match: filter },
