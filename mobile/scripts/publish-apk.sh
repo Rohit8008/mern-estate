@@ -2,7 +2,7 @@
 # Build the Android app and publish it at https://realvista.duckdns.org/download
 # (sideloaded APK; the app is not on the Play Store yet).
 #
-# Needs: Flutter 3.24.5 (see RELEASE.md; newer Flutter cannot build this
+# Needs: Flutter 3.47+ (see RELEASE.md). The Android toolchain was upgraded
 # project), android/key.properties pointing at the release keystore, and the
 # "realvista" host in ~/.ssh/config.
 #
@@ -38,8 +38,8 @@ VERSION_LINE=$(grep -E '^version:' pubspec.yaml | awk '{print $2}')
 VERSION=${VERSION_LINE%%+*}
 BUILD=${VERSION_LINE##*+}
 
-"$FLUTTER" build apk --release --dart-define=API_BASE_URL="$API_BASE_URL"
-# Flutter 3.24.5 re-resolves pubspec.lock; keep the committed one.
+"$FLUTTER" build apk --release --target-platform android-arm64 --dart-define=API_BASE_URL="$API_BASE_URL"
+# Flutter re-resolves pubspec.lock; keep the committed one.
 git checkout -- pubspec.lock 2>/dev/null || true
 
 APK=build/app/outputs/flutter-apk/app-release.apk
