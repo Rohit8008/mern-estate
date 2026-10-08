@@ -1146,6 +1146,7 @@ export default function PropertiesBoard() {
                                 </button>
                                 {editingCell?.id === x._id && editingCell?.field === 'owner' && (
                                   <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 max-h-56 overflow-y-auto' onClick={(e) => e.stopPropagation()}>
+                                    <div className='px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400'>{t('properties.selectOneOrMoreOwners')}</div>
                                     <button
                                       type='button'
                                       onClick={() => inlineUpdate(x._id, 'owner', null)}

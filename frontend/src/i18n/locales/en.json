@@ -1738,6 +1738,7 @@
     "clearAllFilters": "Clear all filters",
     "clickToAssignAgent": "Click to assign agent",
     "clickToAssignOwner": "Click to assign owner",
+    "selectOneOrMoreOwners": "Select one or more owners",
     "clickToChangeStatus": "Click to change status",
     "close": "Close",
     "commercial": "Commercial",
