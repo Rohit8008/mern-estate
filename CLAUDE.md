@@ -235,6 +235,16 @@ Category paperwork/photos are typed (`backend/utils/documentTypes.js`) — RERA,
 brochure, photograph. **`isPublic` defaults to false and is never set implicitly**; only an admin
 can publish, and `suggestPublic` merely pre-ticks the form.
 
+An employee's `assignedCategories` (slugs) is an **allowlist that both grants and restricts**: once
+an admin assigns any, that employee sees **only** those — the Categories page *and* the create-property
+picker — and no longer needs the `viewCategories` permission (which would expose the whole catalogue,
+the opposite of the intent). With none assigned they fall back to `viewCategories` (all, if granted);
+admins see all. `categoryAllowlist(user)` returns the slug list or `null`; `requireCategoryRead`
+guards `/api/category/list` and `/by-slug` (passing for an employee with assignments OR a
+`viewCategories` holder), the controller filters both to the allowlist and keys its cache per-user,
+and `myPermissions` reports `viewCategories: true` for such an employee so the Categories nav tab
+appears.
+
 ### CLI scripts
 Never `import` a model directly in a script — a global Mongoose plugin only applies to schemas
 compiled after it registers, and hoisted imports produce records with no `tenantId` that the app
@@ -247,6 +257,15 @@ without a session. Sharing outside the agency goes through `/api/share` → `/s/
 revocable, optionally passcoded, view-counted. Two rules: `forRecipient()` is an **allowlist**
 (a new Listing column must never become public by being added), and `createShare` re-reads
 listings through `listingScope` so **you cannot share what you cannot see**.
+
+`listingScope(user, { scope, viewAll })` is the one filter every multi-listing read spreads in (list,
+`/listing/my-assigned`, search, facets, suggestions, and single-listing open by URL). An employee is
+bounded to `mine()` — **assigned to them OR created by them (`userRef`) OR in a category assigned to
+them** — unless their role grants `viewListings`, which widens them to the whole workspace like an
+admin (`scope: 'assigned'` always narrows back to `mine()`, for "My properties"). That widening flag
+is resolved by the async `canViewAllListings(user)` and passed in as `viewAll`, because the filter
+builder is synchronous. `createListing` defaults `assignedAgent` to the creator when none is chosen,
+so a new property is never orphaned at "+ Assign" and out of every agent-scoped view.
 
 ### Errors, request ids and the request pipeline
 Every failure answers one shape: `{ success: false, statusCode, code, message, type?, field?,
@@ -303,7 +322,10 @@ the ⌘K palette all delegate to it. Matching is tiered (identifier → `$text` 
 fuzzy), ranked and paged in the database via `$facet`. Never add a fourth search path.
 `GET /api/listing/facets` gives counts over the whole filtered set (use it for any header count;
 never count a page). Note `$text` must sit in the first `$match` of a pipeline — the tenant plugin
-merges into a leading `$match` rather than unshifting, to keep that true.
+merges into a leading `$match` rather than unshifting, to keep that true. `buildListingFilter` casts
+`listingScope`'s string ids (`assignedAgent`/`userRef`) to `ObjectId`: `find()` casts them but the
+facet aggregation does not, so without the cast a scoped employee's facet counts would undercount and
+disagree with the list.
 
 ### Per-workspace customisation
 Four axes, all under Settings for a workspace admin: branding tokens (Tailwind `bg-workspace`

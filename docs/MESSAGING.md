@@ -91,13 +91,13 @@ Unauthenticated connections receive `Error('Unauthorized')` and are dropped.
 
 ### Client → Server Events
 
-All message sends go through the REST API (`POST /api/messages/send`), not directly over the socket. The socket is used for presence tracking and receiving pushed notifications.
+All message sends go through the REST API (`POST /api/message/send`), not directly over the socket. The socket is used for presence tracking and receiving pushed notifications.
 
 ---
 
 ## REST API
 
-**Base path:** `/api/messages`  
+**Base path:** `/api/message`  
 **File:** `backend/routes/message.route.js`
 
 All endpoints require authentication (`verifyToken`).
@@ -123,6 +123,18 @@ All endpoints require authentication (`verifyToken`).
 ```
 
 When `listingId` is provided, the server appends property details (name, price, address) to the message content before encryption.
+
+### No conversation with yourself
+
+There is no self-conversation. Sending to yourself is rejected on `/send`; on top of that:
+
+- `GET /thread/:otherId` returns an empty array (`[]`) when `otherId` is the caller — it does not
+  fold your self-addressed messages back at you.
+- `GET /conversations` drops the self row (`$match: { _id: { $ne: me } }`) — legacy self-messages
+  still exist, but a row you could only open to be told "you cannot message yourself" is not a
+  conversation.
+- The web (`frontend/src/pages/Messages.jsx`) ignores a `?user=<own id>` deep link rather than
+  opening such a dead thread.
 
 ---
 

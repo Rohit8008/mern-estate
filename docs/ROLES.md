@@ -135,6 +135,10 @@ canToggleOwnerActive              // Owner status-toggle specific
 canCreateListing                  // Checks createListing + category match for employee
 canManageRoles                    // Role management gate
 canAccessListing(user, listing)   // ABAC check (see below)
+canViewAllListings(user)          // async — whole-workspace listing visibility (admin always;
+                                  //   employee only if role grants viewListings). Feeds listingScope's viewAll
+categoryAllowlist(user)           // → slug[] an employee may see, or null for "no restriction" (see below)
+requireCategoryRead               // Route guard for reading categories (see below)
 ```
 
 ### Role Caching
@@ -177,12 +181,31 @@ Controller handler
 
 ## Employee Category Restrictions
 
-Employees have `user.assignedCategories[]` — an array of `Category` ObjectIds. When an employee tries to create or view a listing:
+Employees have `user.assignedCategories[]` — an array of `Category` slugs. When an employee tries to create or view a listing:
 
 1. `requireEmployeeOrAdminForCategory(getCategoryFn)` middleware resolves the listing's category
 2. If `admin` → passes through
 3. If `employee` → must have that category in `assignedCategories`
 4. Otherwise → 403
+
+### `assignedCategories` is an allowlist — it both grants and restricts
+
+Once an admin assigns an employee any categories, `assignedCategories` becomes both the **grant**
+and the **ceiling**: that employee sees **only** those categories — on the Categories page *and* in
+the create-property category picker — and no longer needs the `viewCategories` permission (which
+exposes the whole catalogue, the opposite of the intent behind assigning a subset). An employee with
+**none** assigned falls back to the `viewCategories` permission (all categories, if granted). Admins
+and other roles are unrestricted.
+
+- **`categoryAllowlist(user)`** returns the slug allowlist for an employee with assigned categories,
+  or `null` ("no restriction") otherwise.
+- **`requireCategoryRead`** guards `GET /api/category/list` and `GET /api/category/by-slug/:slug`
+  (replacing `requireStaffPermission('viewCategories')`): it passes when the caller is an employee
+  with assigned categories **or** holds `viewCategories`. The controller then filters the list and
+  the per-slug lookup to the allowlist — a slug outside it is "not found" — and scopes each
+  category's listing count to what the caller can actually open.
+- **`myPermissions`** reports `viewCategories: true` for an employee who has any assigned categories,
+  so the Categories nav tab appears even though the real permission is not held.
 
 ---
 

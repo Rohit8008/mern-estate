@@ -60,7 +60,7 @@
 |---|---|---|
 | `userRef` | ObjectId ref User | Primary listing owner (seller) |
 | `ownerIds` | ObjectId[] ref Owner | Property owners (multiple) |
-| `assignedAgent` | ObjectId ref User | Assigned employee/agent |
+| `assignedAgent` | ObjectId ref User | Assigned employee/agent. On `createListing`, defaults to the creator when none is supplied, so a new property is never orphaned at "+ Assign" and out of every agent-scoped view |
 
 ### Soft Delete
 
@@ -90,7 +90,7 @@
 | `POST` | `/restore/:id` | Admin | — | Restore soft-deleted |
 | `POST` | `/assign-agent` | Admin | — | Assign agent to listing |
 | `POST` | `/unassign-agent` | Admin | — | Remove agent assignment |
-| `GET` | `/my-assigned` | Auth | — | Current agent's listings |
+| `GET` | `/my-assigned` | Auth | — | The employee board — everything in the caller's listing scope (see Access Control), not only where they are the assigned agent |
 | `POST` | `/bulk-import` | Admin | — | Bulk import from CSV/Excel (max 100) |
 
 ### GET `/get` Query Parameters
@@ -128,7 +128,7 @@
 
 **File:** `backend/middleware/permissions.js`
 
-`canAccessListing(user, listing)` — attribute-based check:
+`canAccessListing(user, listing)` — attribute-based check for a single listing already in hand:
 
 ```
 admin         → always allowed
@@ -136,6 +136,29 @@ employee      → allowed if listing.assignedAgent === user.id
                 OR user.assignedCategories includes listing.category
 owner (seller) → allowed if listing.userRef === user.id
 ```
+
+### `listingScope(user, { scope, viewAll })` — the query filter
+
+List and open queries (the board, `/my-assigned`, search, facets, suggestions, and `getListing`
+by URL) all spread `listingScope` into the Mongo filter, so **you only ever see what the scope
+lets you see** — a listing outside it is simply "not found", not forbidden.
+
+```
+admin            → {} (whole workspace); mine() only when scope === 'assigned' ("My properties")
+employee         → scope === 'assigned'          → mine()
+                   viewAll (role grants viewListings) → {} (whole workspace, like admin)
+                   otherwise                     → mine()
+seller           → { userRef: user.id }
+```
+
+`mine()` for an employee is an `$or` of **assigned to them (`assignedAgent`) OR created by them
+(`userRef`) OR in a category assigned to them (`assignedCategories`)** — so an employee's own
+listings (even in a category not assigned to them) and their assigned-category listings all appear,
+matching the dashboard/analytics count.
+
+`viewAll` is resolved by `canViewAllListings(user)` (async, because it may load the role) and passed
+in: admins always, employees only when their role grants `viewListings`. Because the builder is
+synchronous it cannot resolve the permission itself, hence the separate helper.
 
 Routes that mutate data require `requirePermission('createListing' | 'updateListing' | 'deleteListing')` from the user's Role document.
 

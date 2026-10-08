@@ -46,6 +46,11 @@ revert those if you did not mean to migrate.
 
 ## Sideloaded releases (until the app is on the Play Store)
 
+**Current release: 1.0.9+10** (`version:` in `pubspec.yaml`, mirrored in
+`release/latest.json`). It added avatar change (pick/camera → upload) and
+password change to the Profile screen, bringing it to parity with the web
+Profile.
+
 The app is published as an APK at **https://realvista.duckdns.org/download**.
 The page reads `/app/latest.json`, so a new version needs no web deploy:
 
