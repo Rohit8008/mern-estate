@@ -20,6 +20,7 @@ import VoiceNotePanel from '../components/VoiceNotePanel';
 import EditConflictNotice from '../components/EditConflictNotice';
 import { Button, Input, Select, Textarea, Spinner, PageHeader, Badge } from '../design-system';
 import { areaUnit, getLocaleConfig } from '../utils/currency';
+import { plotSizeToSqFt } from '../utils/plotSize';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { LISTING_STATUS_LABELS } from '../utils/listingStatus';
@@ -182,6 +183,18 @@ export default function ListingForm({ mode = 'create' }) {
     // size work for every workspace; sqYard stays the column for yards.
     if (usesSqYardColumn) setField('sqYard', next);
     setField('areaSqFt', Math.round(next * unit.inSqft));
+  };
+
+  // Plot dimensions (e.g. 32'6" × 70'6") drive the area: parse to square feet,
+  // convert to the workspace's area unit, and fill the Area field — unless the
+  // category's own Plot Area field already drives size. Editable afterward.
+  const plotSqFt = plotSizeToSqFt(form.plotSize);
+  const plotArea = plotSqFt != null ? Math.round((plotSqFt / unit.inSqft) * 100) / 100 : null;
+  const onPlotSizeChange = (text) => {
+    setField('plotSize', text);
+    if (areaFromCategory) return;
+    const sqft = plotSizeToSqFt(text);
+    if (sqft != null) setAreaValue(Math.round((sqft / unit.inSqft) * 100) / 100);
   };
 
   // Total value = area × rate, until someone types their own figure.
@@ -437,7 +450,13 @@ export default function ListingForm({ mode = 'create' }) {
             value={form.sqYardRate}
             onChange={(e) => setField('sqYardRate', Number(e.target.value))}
           />
-          <Input label={t('listingForm.plotSize')} value={form.plotSize} onChange={(e) => setField('plotSize', e.target.value)} placeholder={t('listingForm.30x50')} />
+          <Input
+            label={t('listingForm.plotSize')}
+            value={form.plotSize}
+            onChange={(e) => onPlotSizeChange(e.target.value)}
+            placeholder={`32'6" × 70'6"`}
+            hint={plotArea != null && !areaFromCategory ? `≈ ${plotArea} ${unit.label} — fills Area` : 'Width × length, e.g. 30 × 50'}
+          />
           <Input
             label={t('listingForm.totalValue')}
             type="number"
