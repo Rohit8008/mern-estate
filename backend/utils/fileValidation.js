@@ -15,12 +15,16 @@ export const IMAGE_TYPES = {
 };
 
 export const AUDIO_TYPES = {
-  // MediaRecorder audio-only blobs are frequently detected as the shared video/* container
-  // mime since webm/ogg containers don't self-report audio-vs-video — still safe to accept:
+  // Audio-only container blobs are frequently detected as the shared video/* container
+  // mime since these containers don't self-report audio-vs-video — still safe to accept:
   // these magic bytes are just as distinct from HTML/JS/SVG as a stricter audio-only list.
+  // The mobile app records AAC into an MP4/M4A container (the `record` plugin); MediaMuxer
+  // stamps a generic `mp42`/`isom` ftyp brand, which file-type reports as `video/mp4` (only
+  // an `M4A ` brand comes back as audio/x-m4a) — so accept video/mp4 too or every voice
+  // note is rejected as "not audio".
   'audio/webm': '.webm', 'video/webm': '.webm',
   'audio/ogg': '.ogg', 'video/ogg': '.ogg',
-  'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a',
+  'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'video/mp4': '.m4a',
   'audio/mpeg': '.mp3',
   'audio/wav': '.wav', 'audio/x-wav': '.wav',
   'audio/aac': '.aac',

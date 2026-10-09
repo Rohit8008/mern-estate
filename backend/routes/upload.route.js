@@ -4,7 +4,9 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { verifyToken } from '../utils/verifyUser.js';
+import { fileTypeFromBuffer } from 'file-type';
 import { resolveSafeExtension, safeBaseName, IMAGE_TYPES, AUDIO_TYPES } from '../utils/fileValidation.js';
+import { logger } from '../utils/logger.js';
 import { assertStorageAvailable } from '../tenancy/limits.js';
 import { storedDocumentBytes } from '../controllers/document.controller.js';
 
@@ -37,7 +39,19 @@ const memoryAudioUpload = multer({ storage: multer.memoryStorage(), limits: { fi
 // or null if the content doesn't match anything in the allowlist.
 async function persistValidatedFile(file, allowlist) {
   const ext = await resolveSafeExtension(file.buffer, allowlist, file.originalname);
-  if (!ext) return null;
+  if (!ext) {
+    // Say WHAT was seen vs what's allowed, so a "wrong type" rejection is
+    // diagnosable from the logs instead of guessing (this is exactly how the
+    // voice-note container mismatch stayed invisible).
+    const detected = await fileTypeFromBuffer(file.buffer).catch(() => null);
+    logger.warn('upload rejected: unsupported type', {
+      detected_mime: detected?.mime || 'unrecognised',
+      detected_ext: detected?.ext || null,
+      size_bytes: file.size,
+      allowed: Object.keys(allowlist).join(','),
+    });
+    return null;
+  }
   const filename = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}_${safeBaseName(file.originalname)}${ext}`;
   await fs.promises.writeFile(path.join(uploadsDir, filename), file.buffer);
   return filename;
