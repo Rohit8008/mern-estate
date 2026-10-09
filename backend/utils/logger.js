@@ -215,20 +215,20 @@ function consolePrint(level, message, meta) {
   process.stdout.write(`${C[level] ?? ''}[${ts}] [${level}]${rid} ${message}${mx}${C.RESET}\n`);
 }
 
-// Which security events deserve a Discord ping. Routine successes (token
-// refresh, sign-out, a normal login) are traffic, not incidents, so they are
-// suppressed — otherwise the channel is unreadable. A handful of sensitive
-// actions always ping even when they "succeed" (impersonation, a password
-// change, a workspace suspension).
+// Which security events deserve a Discord ping. We want logins, logouts and
+// every failure/suspicious event — but NOT the access-token refresh that fires
+// every ~15 minutes per active session, which is the one piece of pure traffic
+// that would drown the channel. A handful of sensitive actions always ping.
 const ALWAYS_ALERT_SECURITY = new Set([
   'acting_as_started', 'acting_as_ended', 'tenant_suspended', 'platform_access_denied',
   'password_changed', 'password_reset_completed', 'password_reset_otp_attempts_exceeded',
 ]);
 function securityNoteworthy(event, details = {}) {
   if (ALWAYS_ALERT_SECURITY.has(event)) return true;
-  // Anything that is not an explicit success — a block, a failure, or an event
-  // that carries no status at all (those are the suspicious ones).
-  return details.status !== 'success';
+  // The only routine, high-frequency event: a SUCCESSFUL token refresh. A failed
+  // or reused refresh token is an incident and still alerts.
+  if (details.method === 'refresh_token' && details.status === 'success') return false;
+  return true; // logins, logouts, lockouts, wrong-password, etc.
 }
 
 // ---------------------------------------------------------------------------
