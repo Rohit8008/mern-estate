@@ -20,7 +20,9 @@ if (hasReleaseKeystore) {
 
 android {
     namespace = "com.realvista.realvista_crm"
-    compileSdk = 35
+    // 36 is required by the `record` plugin (on-device voice notes); the rest of
+    // the toolchain (AGP 8.11 / Flutter 3.47) already supports it.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

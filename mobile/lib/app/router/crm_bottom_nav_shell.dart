@@ -4,16 +4,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
-import '../../features/search/presentation/global_search_screen.dart';
 import 'quick_action_sheet.dart';
 
-const _tabTitles = ['Dashboard', 'Leads', 'Properties', 'Activities'];
-const _tabIcons = [Icons.home_outlined, Icons.people_alt_outlined, Icons.apartment_outlined, Icons.checklist_rounded];
-const _tabIconsActive = [Icons.home_rounded, Icons.people_alt_rounded, Icons.apartment_rounded, Icons.checklist_rounded];
+// Branch order must match app_router.dart: home, leads, search, properties,
+// activities. Search sits in the centre — finding a property is the app's
+// most-used action, so it gets the most-reachable tab.
+const _tabTitles = ['Dashboard', 'Leads', 'Search', 'Properties', 'Activities'];
+const _tabIcons = [Icons.home_outlined, Icons.people_alt_outlined, Icons.search_rounded, Icons.apartment_outlined, Icons.checklist_rounded];
+const _tabIconsActive = [Icons.home_rounded, Icons.people_alt_rounded, Icons.search_rounded, Icons.apartment_rounded, Icons.checklist_rounded];
 
-/// The app's single persistent chrome once authenticated: one shared
-/// AppBar (title follows the active tab), a notched bottom bar around a
-/// central quick-action FAB, and an overflow entry to MoreScreen — mirrors
+/// The app's single persistent chrome once authenticated: one shared AppBar
+/// (title follows the active tab, quick-add + notifications + more on the
+/// right) and a five-tab bottom bar with Search in the centre — mirrors
 /// CrmShell.jsx's sidebar+topbar, reshaped for one thumb.
 class CrmBottomNavShell extends StatelessWidget {
   const CrmBottomNavShell({super.key, required this.navigationShell});
@@ -23,9 +25,10 @@ class CrmBottomNavShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final index = navigationShell.currentIndex;
-    // Android back on Leads/Properties/Activities returns to the Dashboard
-    // instead of leaving the app; only back on the Dashboard exits. Screens
-    // opened on top of a tab are popped before this is ever asked.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Android back on any non-Dashboard tab returns to the Dashboard instead
+    // of leaving the app; only back on the Dashboard exits. Screens opened on
+    // top of a tab are popped before this is ever asked.
     return PopScope(
         canPop: index == 0,
         onPopInvokedWithResult: (didPop, _) {
@@ -36,10 +39,9 @@ class CrmBottomNavShell extends StatelessWidget {
             title: Text(_tabTitles[index]),
             actions: [
               IconButton(
-                icon: const Icon(Icons.search_rounded),
-                tooltip: 'Search',
-                onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const GlobalSearchScreen())),
+                icon: const Icon(Icons.add_rounded),
+                tooltip: 'Quick add',
+                onPressed: () => showQuickActionSheet(context),
               ),
               const NotificationBell(),
               IconButton(
@@ -50,30 +52,25 @@ class CrmBottomNavShell extends StatelessWidget {
             ],
           ),
           body: UpdateGate(child: navigationShell),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => showQuickActionSheet(context),
-            tooltip: 'Quick add',
-            backgroundColor: AppColors.indigo600,
-            child: const Icon(Icons.add_rounded, color: AppColors.white),
-          ),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-          bottomNavigationBar: BottomAppBar(
-            shape: const CircularNotchedRectangle(),
-            notchMargin: 8,
-            padding: EdgeInsets.zero,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _NavButton(
-                    label: _tabTitles[0], icon: _tabIcons[0], activeIcon: _tabIconsActive[0], selected: index == 0, onTap: () => navigationShell.goBranch(0)),
-                _NavButton(
-                    label: _tabTitles[1], icon: _tabIcons[1], activeIcon: _tabIconsActive[1], selected: index == 1, onTap: () => navigationShell.goBranch(1)),
-                const SizedBox(width: 56),
-                _NavButton(
-                    label: _tabTitles[2], icon: _tabIcons[2], activeIcon: _tabIconsActive[2], selected: index == 2, onTap: () => navigationShell.goBranch(2)),
-                _NavButton(
-                    label: _tabTitles[3], icon: _tabIcons[3], activeIcon: _tabIconsActive[3], selected: index == 3, onTap: () => navigationShell.goBranch(3)),
-              ],
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: dark ? AppColors.slate900 : AppColors.white,
+              border: Border(top: BorderSide(color: dark ? AppColors.slate800 : AppColors.slate200)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _tabTitles.length; i++)
+                    _NavButton(
+                      label: _tabTitles[i],
+                      icon: _tabIcons[i],
+                      activeIcon: _tabIconsActive[i],
+                      selected: index == i,
+                      onTap: () => navigationShell.goBranch(i),
+                    ),
+                ],
+              ),
             ),
           ),
         ));

@@ -41,17 +41,18 @@ Flutter warns that Gradle/AGP/Kotlin "will soon be dropped; upgrade to
 Release builds are **arm64** (`--target-platform android-arm64`, ~26 MB), which
 covers all modern devices; `publish-apk.sh` passes that flag.
 
-Known follow-up: on-device **voice recording** (the `record` plugin) is not yet
-wired — `record` 5.1.x needs `compileSdk 36` and its `record_linux` federated
-dep is currently skewed; resolve that (and bump `compileSdk`) to enable mic
-capture in Notes. Voice notes recorded on the web already play in the app.
+On-device **voice recording** is now wired: `record` 6.2.1 resolves cleanly on
+this toolchain, `compileSdk` is `36`, and the `RECORD_AUDIO` permission is in the
+main manifest. Notes can record a voice memo (AAC/m4a → `/api/upload/audio` →
+`createVoice`), and web-recorded voice notes still play.
 
 ## Sideloaded releases (until the app is on the Play Store)
 
-**Current release: 1.0.9+10** (`version:` in `pubspec.yaml`, mirrored in
-`release/latest.json`). It added avatar change (pick/camera → upload) and
-password change to the Profile screen, bringing it to parity with the web
-Profile.
+**Current release: 1.0.13+14** (`version:` in `pubspec.yaml`, mirrored in
+`release/latest.json`). It makes **property Search its own centre tab** (the
+most-used action) and adds **on-device voice recording** to Notes. Earlier
+1.0.12 moved to the Flutter 3.47 arm64 toolchain; 1.0.9 added avatar + password
+change to Profile.
 
 The app is published as an APK at **https://realvista.duckdns.org/download**.
 The page reads `/app/latest.json`, so a new version needs no web deploy:

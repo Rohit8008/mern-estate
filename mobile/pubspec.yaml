@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.12+13
+version: 1.0.13+14
 
 environment:
   sdk: ^3.5.3
@@ -88,9 +88,9 @@ dependencies:
   # to unlock the app, gating the persisted session. No credential is stored.
   local_auth: ^2.3.0
 
-  # Voice-note playback (recording to be re-added once the record plugin's
-  # federated deps settle on the new toolchain).
+  # Voice notes: playback + on-device recording to m4a/AAC.
   audioplayers: ^6.1.0
+  record: ^6.0.0
 
   # In-app updates for the sideloaded APK: installed build number, SHA-256 check, installer hand-off
   package_info_plus: ^8.0.2

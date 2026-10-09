@@ -8,7 +8,6 @@ import '../../../core/utils/format.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../../auth/auth_providers.dart';
 import '../../buyers/presentation/buyers_list_screen.dart';
-import '../../search/presentation/global_search_screen.dart';
 import '../../tasks/presentation/tasks_list_screen.dart';
 import '../../transactions/presentation/transactions_list_screen.dart';
 import '../dashboard_providers.dart';
@@ -75,7 +74,7 @@ class _DashboardContent extends StatelessWidget {
       children: [
         _GreetingBanner(greeting: _greeting, name: firstName ?? 'there', dateLabel: today),
         const SizedBox(height: AppSpacing.lg),
-        _SearchBar(onTap: () => push(const GlobalSearchScreen())),
+        _SearchBar(onTap: () => context.go('/search')),
         const SizedBox(height: AppSpacing.xl),
         KpiGrid(
           children: [

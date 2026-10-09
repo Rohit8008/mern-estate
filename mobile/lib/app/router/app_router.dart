@@ -12,6 +12,7 @@ import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/legal/presentation/legal_acceptance_screen.dart';
 import '../../features/leads/presentation/leads_list_screen.dart';
 import '../../features/properties/presentation/properties_list_screen.dart';
+import '../../features/search/presentation/property_search_screen.dart';
 import '../../shared/widgets/app_states.dart';
 import 'crm_bottom_nav_shell.dart';
 import '../../features/messages/domain/chat_user.dart';
@@ -84,6 +85,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/leads', builder: (context, state) => const LeadsListScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/search', builder: (context, state) => const PropertySearchScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/properties', builder: (context, state) => const PropertiesListScreen()),
