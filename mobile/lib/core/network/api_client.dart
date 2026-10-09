@@ -126,6 +126,16 @@ class _WorkspaceInterceptor extends Interceptor {
   }
 }
 
+/// Makes a request's body safe to send again on a retry. A [FormData] (every
+/// file upload) finalizes its multipart stream when first sent, so replaying the
+/// same instance throws "already finalized" with no HTTP response — which is why
+/// a voice-note upload that hit a CSRF/refresh retry surfaced as an opaque
+/// "request failed: unknown" instead of succeeding. Cloning rebuilds the stream.
+void _replayBody(RequestOptions options) {
+  final data = options.data;
+  if (data is FormData) options.data = data.clone();
+}
+
 /// Fires `onExpired` exactly once when the session is confirmed dead, until a
 /// new sign-in calls `reset()`. Without the one-shot guard a dead session's
 /// burst of parallel 401s would each try to log the user out.
@@ -166,6 +176,7 @@ class _RefreshOn401Interceptor extends Interceptor {
 
     try {
       final retryOptions = err.requestOptions..extra['retriedAfterRefresh'] = true;
+      _replayBody(retryOptions); // a FormData body can't be sent twice
       final response = await _dio.fetch(retryOptions);
       return handler.resolve(response);
     } on DioException catch (retryError) {
@@ -245,14 +256,22 @@ class _CsrfInterceptor extends Interceptor {
     return handler.next(options);
   }
 
+  // Both are self-healing by fetching /api/auth/csrf, which re-mints the cookie
+  // AND returns the matching token:
+  //   CSRF_TOKEN_INVALID  — cached token went stale (session refreshed / act-as).
+  //   CSRF_COOKIE_MISSING — the csrf_token cookie is absent (a session predating
+  //                         the CSRF check, or a cookie that didn't persist).
+  // Without handling the second, such a session can't do ANY write — every
+  // upload/create 403s with no way back. One re-mint + retry fixes it; if the
+  // session itself is dead the retry 401s and the session guard takes over.
+  static const _recoverableCsrf = {'CSRF_TOKEN_INVALID', 'CSRF_COOKIE_MISSING'};
+
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final code = err.response?.data is Map ? err.response?.data['code'] : null;
     final alreadyRetried = err.requestOptions.extra['retriedAfterCsrf'] == true;
 
-    // A rotated token (the session refreshed, or act-as switched workspace)
-    // invalidates the cached one. Refetch once and replay.
-    if (err.response?.statusCode != 403 || code != 'CSRF_TOKEN_INVALID' || alreadyRetried) {
+    if (err.response?.statusCode != 403 || !_recoverableCsrf.contains(code) || alreadyRetried) {
       return handler.next(err);
     }
 
@@ -264,6 +283,7 @@ class _CsrfInterceptor extends Interceptor {
       final retryOptions = err.requestOptions
         ..extra['retriedAfterCsrf'] = true
         ..headers['X-CSRF-Token'] = token;
+      _replayBody(retryOptions); // a FormData body can't be sent twice
       return handler.resolve(await _dio.fetch(retryOptions));
     } on DioException catch (retryError) {
       return handler.next(retryError);

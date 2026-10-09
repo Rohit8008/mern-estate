@@ -1,9 +1,9 @@
 {
-  "version": "1.0.14",
-  "build": 15,
-  "file": "realvista-1.0.14.apk",
+  "version": "1.0.15",
+  "build": 16,
+  "file": "realvista-1.0.15.apk",
   "sizeBytes": 26203520,
-  "sha256": "a9c0beb72fbfb8a2f76462f892342af27234820f468cab5807ea7661e6192dae",
+  "sha256": "3208c5f04f4709368e6292046ba3519296141abac4e7800adb1e4f537cf6f78c",
   "releasedAt": "2026-10-09T00:00:00Z",
-  "notes": "Fixes a session bug: when your sign-in expires, the app now takes you straight to the login screen instead of getting stuck, and unlocking with fingerprint no longer opens an expired session."
+  "notes": "Session reliability: expired sign-ins now return you to login cleanly, fingerprint no longer opens an expired session, and voice-note uploads recover instead of failing. Plus clearer diagnostics behind the scenes."
 }

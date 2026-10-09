@@ -27,6 +27,18 @@ function routePattern(req) {
 export const requestLogger = (req, res, next) => {
   const start = process.hrtime.bigint();
 
+  // Capture the error envelope's `code` so the access/rejection line says WHY a
+  // request failed (CSRF_COOKIE_MISSING, VALIDATION_ERROR, …), not just the
+  // status. The body is the only place the code lives for hand-written
+  // res.json() rejections (e.g. CSRF), so grab it as it goes out.
+  const sendJson = res.json.bind(res);
+  res.json = (body) => {
+    if (body && body.success === false && typeof body.code === 'string') {
+      res.locals._errorCode = body.code;
+    }
+    return sendJson(body);
+  };
+
   res.on('finish', () => {
     const duration = Number(process.hrtime.bigint() - start) / 1e6;
     const userId = req.user?.id ?? null;
@@ -42,6 +54,9 @@ export const requestLogger = (req, res, next) => {
       url,
       route,
       status:         res.statusCode,
+      // Why it failed, when it did — the single field that turns "a 403 happened"
+      // into "CSRF_COOKIE_MISSING: their session has no csrf cookie".
+      code:           res.statusCode >= 400 ? (res.locals._errorCode || undefined) : undefined,
       duration_ms:    Math.round(duration * 10) / 10,
       ip:             req.ip,
       user_agent:     req.get('User-Agent'),

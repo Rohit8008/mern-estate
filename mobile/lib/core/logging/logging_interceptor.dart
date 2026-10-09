@@ -52,7 +52,20 @@ class LoggingInterceptor extends Interceptor {
       if (!_skip(o) && err.type != DioExceptionType.cancel) {
         final status = err.response?.statusCode;
         final fields = _fields(o, status, _durationMs(o), err.response?.headers)..['error_type'] = err.type.name;
+        // The server's error-envelope `code` + `message` turn "rejected: 403"
+        // into "rejected: 403 CSRF_COOKIE_MISSING". Safe to log: both are the
+        // non-secret envelope fields, never the request body.
+        final data = err.response?.data;
+        if (data is Map) {
+          if (data['code'] is String) fields['code'] = data['code'];
+          if (data['message'] is String) fields['server_message'] = data['message'];
+        }
         if (status == null) {
+          // No HTTP response — a timeout, a dropped connection, or an error
+          // thrown inside an interceptor (e.g. a retry that couldn't replay the
+          // body). Without the detail this logged only "unknown" and said
+          // nothing; `error_detail` is what that was.
+          fields['error_detail'] = (err.error ?? err.message)?.toString();
           _logger.warn('request failed: ${err.type.name}', fields: fields);
         } else if (status >= 500) {
           _logger.error('request failed: $status', fields: fields);
