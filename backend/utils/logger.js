@@ -215,6 +215,22 @@ function consolePrint(level, message, meta) {
   process.stdout.write(`${C[level] ?? ''}[${ts}] [${level}]${rid} ${message}${mx}${C.RESET}\n`);
 }
 
+// Which security events deserve a Discord ping. Routine successes (token
+// refresh, sign-out, a normal login) are traffic, not incidents, so they are
+// suppressed — otherwise the channel is unreadable. A handful of sensitive
+// actions always ping even when they "succeed" (impersonation, a password
+// change, a workspace suspension).
+const ALWAYS_ALERT_SECURITY = new Set([
+  'acting_as_started', 'acting_as_ended', 'tenant_suspended', 'platform_access_denied',
+  'password_changed', 'password_reset_completed', 'password_reset_otp_attempts_exceeded',
+]);
+function securityNoteworthy(event, details = {}) {
+  if (ALWAYS_ALERT_SECURITY.has(event)) return true;
+  // Anything that is not an explicit success — a block, a failure, or an event
+  // that carries no status at all (those are the suspicious ones).
+  return details.status !== 'success';
+}
+
 // ---------------------------------------------------------------------------
 // Public logger API  (same surface as the previous file-based logger)
 // ---------------------------------------------------------------------------
@@ -223,9 +239,10 @@ export const logger = {
     if (currentLevel >= LOG_LEVELS.ERROR) {
       consolePrint('ERROR', message, meta);
       push('backend_logs', { level: 'error', message, ...meta });
-      // Dev alert — no-op unless DISCORD_WEBHOOK_URL is set. Redacted here so
-      // nothing secret leaves; deduped/paced inside so a flood is one message.
-      alertDiscord('error', message, redact(meta));
+      // Dev alert — no-op unless DISCORD_WEBHOOK_URL is set. Merge the async
+      // context (request_id / tenant_id / user_id) so the alert says who/where,
+      // then redact so nothing secret leaves; deduped/paced inside.
+      alertDiscord('error', message, redact({ ...contextFields(), ...meta }));
     }
   },
   warn(message, meta = {}) {
@@ -249,9 +266,17 @@ export const logger = {
   security(event, details = {}) {
     consolePrint('SECURITY', event, details);
     push('security_logs', { level: 'security', message: event, ...details });
-    // Security events are off the Discord channel by default (they can be
-    // chatty — every failed login); opt in with DISCORD_ALERT_SECURITY=true.
-    if (process.env.DISCORD_ALERT_SECURITY === 'true') alertDiscord('security', event, redact(details));
+    // Security events are off the Discord channel by default; opt in with
+    // DISCORD_ALERT_SECURITY=true. Even then, only NOTEWORTHY ones alert —
+    // routine successes (token refresh, sign-out, login) are suppressed so the
+    // channel carries incidents, not traffic. Context identity is merged in so
+    // the alert names the user/tenant.
+    if (process.env.DISCORD_ALERT_SECURITY === 'true' && securityNoteworthy(event, details)) {
+      // Many auth events share the generic name 'security_event' and carry the
+      // specifics in `reason` — use that as the title so the channel is scannable.
+      const title = event === 'security_event' && details.reason ? details.reason : event;
+      alertDiscord('security', title, redact({ ...contextFields(), ...details }));
+    }
   },
   audit(action, details = {}) {
     consolePrint('AUDIT', action, details);

@@ -58,17 +58,30 @@ function signatureOf(level, title, fields) {
   return [level, title, fields.code, fields.route || fields.url, fields.job].filter(Boolean).join('|');
 }
 
-/** The embed "fields" grid — only the useful, bounded identifiers. */
+/** The embed "fields" grid — identity first, then the request details. Bounded
+ *  to an allowlist so only known-safe keys ever leave, and capped in count. */
 function detailFields(fields) {
-  const pick = ['request_id', 'tenant_id', 'user_id', 'route', 'url', 'method', 'status', 'code', 'job', 'reason'];
+  // user_id and userId are the same thing from two sources (async context vs a
+  // call that passed it explicitly); show it once.
+  const merged = { ...fields };
+  if (merged.user_id == null && merged.userId != null) merged.user_id = merged.userId;
+  delete merged.userId;
+
+  const pick = [
+    // who
+    'email', 'name', 'user_id', 'role', 'tenant_id', 'workspace', 'tenant',
+    // what / where
+    'ip', 'method', 'status', 'reason', 'route', 'url', 'path', 'code', 'job', 'request_id', 'user_agent',
+  ];
   const out = [];
   for (const key of pick) {
-    if (fields[key] === undefined || fields[key] === null || fields[key] === '') continue;
-    out.push({ name: key, value: clip(fields[key], 180), inline: true });
+    const v = merged[key];
+    if (v === undefined || v === null || v === '') continue;
+    out.push({ name: key, value: clip(v, 180), inline: true });
   }
   const env = process.env.NODE_ENV || 'development';
   out.push({ name: 'where', value: clip(`${env} · ${HOST} · i${INSTANCE_ID} · v${APP_VERSION}`, 180), inline: false });
-  return out.slice(0, 12);
+  return out.slice(0, 14);
 }
 
 /**
