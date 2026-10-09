@@ -2,7 +2,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  HiX, HiEye, HiEyeOff, HiCog, HiLogout, HiCamera,
+  HiX, HiEye, HiEyeOff, HiCamera,
 } from 'react-icons/hi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CameraCapture from '../components/CameraCapture';
@@ -11,7 +11,6 @@ import {
   deleteUserFailure, deleteUserStart, deleteUserSuccess,
 } from '../redux/user/userSlice';
 import { apiClient, normalizeImageUrl } from '../utils/http';
-import { signOutAndLeave } from '../utils/session';
 import { formatListingPrice } from '../utils/currency';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { DEFAULT_AVATAR_URL } from '../utils/avatarPlaceholder';
@@ -203,8 +202,6 @@ export default function Profile() {
     }
   };
 
-  const handleSignOut = () => signOutAndLeave(dispatch);
-
   const handleShowListings = async () => {
     try {
       setShowListingsError(false);
@@ -236,20 +233,13 @@ export default function Profile() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
+      {/* Header. Settings and Sign Out intentionally omitted — they live in the
+          global account menu (top-right, on every page), which is also where
+          "View Profile" brought the user here. Duplicating them on this page
+          produced two Settings and two Sign Out controls side by side. */}
       <PageHeader
         title={t('profile.myProfile')}
         description={t('profile.manageYourPersonalInformationAndAccount')}
-        actions={
-          <div className='flex items-center gap-2'>
-            <Link
-              to='/settings'
-              className='inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 rounded-lg text-slate-700 transition-colors'
-            >
-              <HiCog className='w-4 h-4' />{t('profile.settings')}</Link>
-            <Button icon={HiLogout} onClick={handleSignOut}>{t('profile.signOut')}</Button>
-          </div>
-        }
       />
 
       {/* Layout */}
