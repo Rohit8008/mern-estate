@@ -13,12 +13,31 @@ const MenuContext = createContext(null);
 const GAP = 8;
 const VALID_PLACEMENTS = new Set(['bottom-end', 'bottom-start', 'top-end', 'top-start']);
 
+// Keep the menu off the very edge of the viewport, and never let it run off the
+// page: cap its height to the room on whichever side it opens (the menu itself
+// scrolls past that), and flip to the roomier side when the preferred one is too
+// cramped — otherwise a tall menu near the top or bottom spills off-screen with
+// no way to reach the last items.
+const EDGE_MARGIN = 8;
+const MIN_MENU_HEIGHT = 140;
+
 function computeMenuStyle(rect, placement) {
-  const top = placement.startsWith('top');
   const end = placement.endsWith('end');
+  const spaceBelow = window.innerHeight - rect.bottom - GAP - EDGE_MARGIN;
+  const spaceAbove = rect.top - GAP - EDGE_MARGIN;
+
+  let openUp = placement.startsWith('top');
+  if (openUp && spaceAbove < MIN_MENU_HEIGHT && spaceBelow > spaceAbove) openUp = false;
+  if (!openUp && spaceBelow < MIN_MENU_HEIGHT && spaceAbove > spaceBelow) openUp = true;
+
   const style = { position: 'fixed' };
-  if (top) style.bottom = Math.round(window.innerHeight - rect.top + GAP);
-  else style.top = Math.round(rect.bottom + GAP);
+  if (openUp) {
+    style.bottom = Math.round(window.innerHeight - rect.top + GAP);
+    style.maxHeight = Math.max(MIN_MENU_HEIGHT, Math.round(spaceAbove));
+  } else {
+    style.top = Math.round(rect.bottom + GAP);
+    style.maxHeight = Math.max(MIN_MENU_HEIGHT, Math.round(spaceBelow));
+  }
   if (end) style.right = Math.round(window.innerWidth - rect.right);
   else style.left = Math.round(rect.left);
   return style;
@@ -131,6 +150,9 @@ export default function Dropdown({ trigger, children, placement = 'bottom-end', 
             style={menuStyle || undefined}
             className={cx(
               'z-50 min-w-[12rem] py-1.5 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl',
+              // maxHeight is set in computeMenuStyle; scroll past it rather than
+              // spilling off the page.
+              'overflow-y-auto overflow-x-hidden overscroll-contain',
               'origin-top animate-menu-in motion-reduce:animate-none focus:outline-none',
               // Hidden until positioned, so it never flashes at the top-left for
               // a frame before the fixed coordinates are measured.
