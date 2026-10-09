@@ -77,6 +77,10 @@ export function clearSearchCache() {
   invalidateEverywhere({ prefix: 'listing:' });
   // Dashboard figures are derived from the same listings.
   invalidateEverywhere({ prefix: 'dashboard:' });
+  // The category list caches a per-category property count — stale after a
+  // create/delete/assignment, which is why a category showed "1 property" with
+  // two inside.
+  invalidateEverywhere({ prefix: 'category:' });
   logger.info('Search cache cleared');
 }
 
