@@ -1552,59 +1552,58 @@ export default function ClientReportTemplate() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className='bg-white border border-slate-200 rounded-xl'>
-        <div className='border-b border-slate-200 px-4'>
-          <div className='flex items-center justify-between'>
-            <div className='flex gap-1'>
-              {[
-                { key: 'templates', label: 'Templates', count: templates.length },
-                { key: 'generated', label: 'Generated Reports', count: generatedReports.length },
-              ].map(tab => (
-                <button type="button"
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                    activeTab === tab.key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {tab.label}
-                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${activeTab === tab.key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className='flex items-center gap-2 py-2'>
-              <button type="button"
-                onClick={() => { fetchTemplates(); fetchReports(); }}
-                className='p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50'
-                title={t('clientReport.refresh')}
-                aria-label={t('clientReport.refresh')}
-              >
-                <HiRefresh className='w-4 h-4' aria-hidden='true' />
-              </button>
-              <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-brand-500'>
-                <HiSearch className='w-4 h-4 text-slate-400' aria-hidden='true' />
-                <input
-                  type='text'
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('clientReport.search')}
-                  aria-label='Search templates and reports'
-                  className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-500 w-36'
-                />
-                {searchQuery && (
-                  <button type="button" onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-500 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* Toolbar: a segmented view toggle + search, sitting directly on the
+          page so the white cards below don't read as cards-inside-a-card. */}
+      <div className='flex items-center justify-between gap-3 flex-wrap'>
+        <div className='inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100'>
+          {[
+            { key: 'templates', label: 'Templates', count: templates.length },
+            { key: 'generated', label: 'Generated', count: generatedReports.length },
+          ].map(tab => (
+            <button type="button"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              aria-pressed={activeTab === tab.key}
+              className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                activeTab === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab.label}
+              <span className={`text-xs font-semibold tabular-nums ${activeTab === tab.key ? 'text-slate-400' : 'text-slate-400'}`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
+        <div className='flex items-center gap-2'>
+          <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-400'>
+            <HiSearch className='w-4 h-4 text-slate-400' aria-hidden='true' />
+            <input
+              type='text'
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('clientReport.search')}
+              aria-label='Search templates and reports'
+              className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-40 sm:w-56'
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-400 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
+            )}
+          </div>
+          <button type="button"
+            onClick={() => { fetchTemplates(); fetchReports(); }}
+            className='p-2 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors'
+            title={t('clientReport.refresh')}
+            aria-label={t('clientReport.refresh')}
+          >
+            <HiRefresh className='w-4 h-4' aria-hidden='true' />
+          </button>
+        </div>
+      </div>
 
-        {/* ── Templates Tab ── */}
-        {activeTab === 'templates' && (
-          <div className='p-4'>
+      {/* ── Templates Tab ── */}
+      {activeTab === 'templates' && (
+        <div>
             {loadingTemplates ? (
               <div className='py-16 text-center'>
                 <div className='w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin mx-auto mb-3' />
@@ -1762,9 +1761,9 @@ export default function ClientReportTemplate() {
           </div>
         )}
 
-        {/* ── Generated Reports Tab ── */}
-        {activeTab === 'generated' && (
-          <div className='p-4'>
+      {/* ── Generated Reports Tab ── */}
+      {activeTab === 'generated' && (
+        <div>
             {loadingReports ? (
               <div className='py-16 text-center'>
                 <div className='w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin mx-auto mb-3' />
@@ -1798,7 +1797,6 @@ export default function ClientReportTemplate() {
             )}
           </div>
         )}
-      </div>
 
       {/* Confirm — delete template */}
       <ConfirmDialog
