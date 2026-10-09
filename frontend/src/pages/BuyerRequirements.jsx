@@ -12,7 +12,7 @@ import { apiClient, parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import {
-  Modal, Input, Select, Textarea, Spinner, Button, EmptyState, Pagination, SkeletonCard, Badge, Checkbox,
+  Modal, Input, Select, Textarea, Spinner, Button, EmptyState, Pagination, SkeletonCard, Badge, Checkbox, SearchBar,
 } from '../design-system';
 import { formatListingPrice, formatCompactCurrency, currencySymbol } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
@@ -527,16 +527,13 @@ export default function BuyerRequirements() {
           <div className='flex flex-col lg:flex-row gap-4 items-center justify-between'>
             <div className='flex flex-col sm:flex-row gap-3 flex-1 w-full'>
               {/* Search */}
-              <div className='relative flex-1 max-w-xl w-full'>
-                <HiSearch className='absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400' />
-                <input
-                  type='text'
-                  placeholder={t('buyerRequirements.searchBuyersOrRequirements')}
-                  className='w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-400 bg-white'
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <SearchBar
+                className='flex-1 max-w-xl w-full'
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder={t('buyerRequirements.searchBuyersOrRequirements')}
+                label={t('buyerRequirements.searchBuyersOrRequirements')}
+              />
 
               {/* Filter */}
               <select

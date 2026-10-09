@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { HiOutlineOfficeBuilding, HiPlus } from 'react-icons/hi';
 import ListingItem from '../components/ListingItem';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useTranslation } from 'react-i18next';
+import { EmptyState, Button } from '../design-system';
 
 export default function CategoryListings() {
   const { t } = useTranslation();
@@ -108,26 +110,18 @@ export default function CategoryListings() {
 
         {/* Empty State */}
         {!loading && !error && listings.length === 0 && (
-          <div className='text-center py-16'>
-            <div className='w-24 h-24 mx-auto mb-6 bg-slate-100 rounded-full flex items-center justify-center'>
-              <svg className='w-12 h-12 text-slate-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' />
-              </svg>
-            </div>
-            <h3 className='text-xl font-semibold text-slate-900 mb-2'>{t('categoryListings.noPropertiesFound')}</h3>
-            <p className='text-slate-600 mb-6'>
-              There are no listings in the {slug} category yet.
-            </p>
-            {!isBuyerViewMode && (currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') && (
-              <Link
-                to={`/create-listing?category=${encodeURIComponent(slug)}`}
-                className='inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors'
-              >
-                <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 6v6m0 0v6m0-6h6m-6 0H6' />
-                </svg>{t('categoryListings.createFirstListing')}</Link>
-            )}
-          </div>
+          <EmptyState
+            icon={HiOutlineOfficeBuilding}
+            title={t('categoryListings.noPropertiesFound')}
+            body={`There are no listings in the ${slug} category yet.`}
+            action={
+              !isBuyerViewMode && (currentUser?.role === 'admin' || currentUser?.role === 'employee' || currentUser?.role === 'seller') && (
+                <Button as={Link} to={`/create-listing?category=${encodeURIComponent(slug)}`} icon={HiPlus}>
+                  {t('categoryListings.createFirstListing')}
+                </Button>
+              )
+            }
+          />
         )}
       </div>
     </main>

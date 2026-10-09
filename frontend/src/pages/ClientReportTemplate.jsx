@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient, normalizeImageUrl } from '../utils/http';
 import { formatDate, formatListingPrice } from '../utils/currency';
-import { PageHeader, Button } from '../design-system';
+import { PageHeader, Button, SearchBar } from '../design-system';
 import {
   HiRefresh, HiPlus, HiSearch, HiX,
   HiDocumentText, HiDownload, HiPrinter, HiMail, HiEye,
@@ -1573,20 +1573,13 @@ export default function ClientReportTemplate() {
           ))}
         </div>
         <div className='flex items-center gap-2'>
-          <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-400'>
-            <HiSearch className='w-4 h-4 text-slate-400' aria-hidden='true' />
-            <input
-              type='text'
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('clientReport.search')}
-              aria-label='Search templates and reports'
-              className='bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-40 sm:w-56'
-            />
-            {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery('')} aria-label='Clear search' className='text-slate-400 hover:text-slate-700'><HiX className='w-4 h-4' aria-hidden='true' /></button>
-            )}
-          </div>
+          <SearchBar
+            className='w-40 sm:w-56'
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t('clientReport.search')}
+            label='Search templates and reports'
+          />
           <button type="button"
             onClick={() => { fetchTemplates(); fetchReports(); }}
             className='p-2 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors'

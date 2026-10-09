@@ -8,7 +8,7 @@ import { useBuyerView } from '../contexts/BuyerViewContext';
 import {
   PageHeader, Button, Modal, Input, Select, Textarea,
   Thead, Th, Tbody, Checkbox, ColumnToggle, Pagination, EmptyState,
-  Skeleton, SkeletonRows, useRowSelection,
+  Skeleton, SkeletonRows, useRowSelection, SearchBar,
 } from '../design-system';
 import { useColumnPrefs } from '../hooks/useColumnPrefs';
 import {
@@ -468,21 +468,13 @@ export default function ContactsBoard() {
 
           {/* Search and filters */}
           <div className='flex flex-wrap items-center gap-2 flex-1'>
-            <div className='relative flex-1 max-w-xs'>
-              <HiSearch className='w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2' aria-hidden='true' />
-              <input
-                className='w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-indigo-400 transition-all placeholder:text-slate-500'
-                placeholder={t('contacts.searchClients')}
-                aria-label={t('contacts.searchClients')}
-                value={q}
-                onChange={(e) => setParam('q', e.target.value)}
-              />
-              {q && (
-                <button type='button' onClick={() => setParam('q', '')} aria-label='Clear search' className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700'>
-                  <HiX className='w-4 h-4' aria-hidden='true' />
-                </button>
-              )}
-            </div>
+            <SearchBar
+              className='flex-1 max-w-xs'
+              value={q}
+              onChange={(v) => setParam('q', v)}
+              placeholder={t('contacts.searchClients')}
+              label={t('contacts.searchClients')}
+            />
 
             <select
               value={statusFilter}
