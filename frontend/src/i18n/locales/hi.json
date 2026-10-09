@@ -897,6 +897,9 @@
   },
   "categories": {
     "addSome": "कुछ जोड़ें",
+    "locationSet": "स्थान सेट है",
+    "setLocation": "स्थान सेट करें",
+    "noLocation": "कोई स्थान नहीं",
     "amohaGardens": "Amoha Gardens",
     "cancel": "रद्द करें",
     "categories": "श्रेणियाँ",

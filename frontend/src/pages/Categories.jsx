@@ -6,6 +6,7 @@ import {
   HiOutlineCollection,
   HiOutlineExclamation,
   HiOutlineOfficeBuilding,
+  HiOutlineLocationMarker,
   HiOutlinePencil,
   HiOutlinePlus,
   HiOutlineSearch,
@@ -69,7 +70,10 @@ function CategoryCard({ category, hasPerm, onDelete, onRename, deleting }) {
   return (
     <div className="group bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 hover:shadow-sm transition-all flex flex-col">
       <div className="p-4 flex-1">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 ring-1 ring-indigo-100 flex items-center justify-center flex-shrink-0">
+            <HiOutlineOfficeBuilding className="w-5 h-5 text-indigo-600" aria-hidden="true" />
+          </div>
           <div className="min-w-0 flex-1">
             {renaming ? (
               <input
@@ -140,6 +144,24 @@ function CategoryCard({ category, hasPerm, onDelete, onRename, deleting }) {
                 <span className="px-2 py-0.5 text-[11px] text-slate-400">+{fieldCount - 4}</span>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Whether the colony has a default map location — it drives the
+            auto-fill when a property is added here, so it's worth showing. */}
+        <div className="mt-2.5 flex items-center gap-1.5 text-[11px]">
+          {Number.isFinite(category.defaultLocation?.lat) && Number.isFinite(category.defaultLocation?.lng) ? (
+            <span className="inline-flex items-center gap-1 text-emerald-600">
+              <HiOutlineLocationMarker className="w-3.5 h-3.5" aria-hidden="true" />{t('categories.locationSet')}
+            </span>
+          ) : hasPerm('updateCategory') ? (
+            <Link to={`/admin/categories/${category.slug}/fields`} className="inline-flex items-center gap-1 text-slate-400 hover:text-indigo-600">
+              <HiOutlineLocationMarker className="w-3.5 h-3.5" aria-hidden="true" />{t('categories.setLocation')}
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-slate-400">
+              <HiOutlineLocationMarker className="w-3.5 h-3.5" aria-hidden="true" />{t('categories.noLocation')}
+            </span>
           )}
         </div>
       </div>

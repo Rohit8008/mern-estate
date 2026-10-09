@@ -897,6 +897,9 @@
   },
   "categories": {
     "addSome": "Add some",
+    "locationSet": "Location set",
+    "setLocation": "Set location",
+    "noLocation": "No location",
     "amohaGardens": "Amoha Gardens",
     "cancel": "Cancel",
     "categories": "Categories",
