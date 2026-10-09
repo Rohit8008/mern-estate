@@ -4,6 +4,19 @@ import { config } from '../config/environment.js';
 import User from '../models/user.model.js';
 import Role from '../models/role.model.js';
 import { runWithTenant } from '../tenancy/tenantContext.js';
+import { getLogContext } from './logContext.js';
+
+/**
+ * Put the authenticated user's id on the async log context the moment auth
+ * succeeds, so EVERY log line for the rest of the request — the error that goes
+ * to OpenObserve, the Discord alert, the access line — carries user_id without a
+ * DB lookup. Previously only the access log (written on response finish) had it,
+ * so a 500 mid-request was anonymous.
+ */
+function stampLogUser(id) {
+  const ctx = getLogContext();
+  if (ctx) ctx.userId = String(id);
+}
 
 export const verifyToken = async (req, res, next) => {
   const token = req.cookies.access_token;
@@ -72,6 +85,7 @@ export const verifyToken = async (req, res, next) => {
         assignedCategories: user.assignedCategories,
         assignedRole: user.assignedRole ? String(user.assignedRole) : null,
       };
+      stampLogUser(user._id);
 
       return next();
     } catch (_) {
@@ -142,6 +156,7 @@ export const tryVerifyToken = async (req, res, next) => {
         assignedCategories: user.assignedCategories,
         assignedRole: user.assignedRole ? String(user.assignedRole) : null,
       };
+      stampLogUser(user._id);
 
       return next();
     } catch (_) {
