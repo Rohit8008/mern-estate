@@ -420,6 +420,10 @@ export default function ListingForm({ mode = 'create' }) {
               label={`Area (${unit.label})`}
               type="number"
               min={0}
+              // Area is computed to 2 decimals (e.g. 254.58 sq yd from a plot
+              // size); without step="any" the browser rejects any non-integer.
+              step="any"
+              inputMode="decimal"
               value={areaValue}
               onChange={(e) => setAreaValue(Number(e.target.value))}
             />
@@ -428,6 +432,8 @@ export default function ListingForm({ mode = 'create' }) {
             label={`Rate per ${unit.label}`}
             type="number"
             min={0}
+            step="any"
+            inputMode="decimal"
             value={form.sqYardRate}
             onChange={(e) => setField('sqYardRate', Number(e.target.value))}
           />
@@ -436,6 +442,8 @@ export default function ListingForm({ mode = 'create' }) {
             label={t('listingForm.totalValue')}
             type="number"
             min={0}
+            step="any"
+            inputMode="decimal"
             value={form.totalValue}
             hint={!totalTouched && computedTotal > 0 ? 'Area × rate. Type a figure to override.' : undefined}
             onChange={(e) => {
