@@ -1552,35 +1552,6 @@ export default function ClientReportTemplate() {
         </div>
       </div>
 
-      {/* Report Type Quick-create Cards */}
-      <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3'>
-        {REPORT_TYPES.map((type) => {
-          const matchingTemplate = templates.find(t => t.type === type.id);
-          return (
-            <div
-              key={type.id}
-              role='button'
-              tabIndex={0}
-              className='bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
-              onClick={() => openGenerateModal(null, matchingTemplate?._id || '')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGenerateModal(null, matchingTemplate?._id || ''); }
-              }}
-              title={matchingTemplate ? `Generate using "${matchingTemplate.name}"` : 'Generate report (select template in form)'}
-            >
-              <div className={`w-9 h-9 rounded-xl ${type.color} flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
-                <type.Component className='w-5 h-5' aria-hidden='true' />
-              </div>
-              <h3 className='text-sm font-medium text-slate-900 leading-tight'>{type.label}</h3>
-              <p className='text-xs text-slate-500 mt-1 line-clamp-2'>{type.description}</p>
-              {matchingTemplate && (
-                <p className='text-xs text-indigo-500 mt-2 truncate font-medium'>{matchingTemplate.name}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
       {/* Tabs */}
       <div className='bg-white border border-slate-200 rounded-xl'>
         <div className='border-b border-slate-200 px-4'>
@@ -1644,7 +1615,7 @@ export default function ClientReportTemplate() {
                 {filteredTemplates.map((template) => {
                   const typeInfo = getReportTypeInfo(template.type);
                   return (
-                    <div key={template._id} className='bg-slate-50 border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors'>
+                    <div key={template._id} className='bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition-all flex flex-col'>
                       <div className='flex items-start justify-between mb-3'>
                         <div className='flex items-center gap-3 min-w-0'>
                           <div className={`w-9 h-9 rounded-xl ${typeInfo.color} flex items-center justify-center shrink-0`}>
@@ -1700,7 +1671,7 @@ export default function ClientReportTemplate() {
                       {template.sections?.length > 0 && (
                         <div className='flex flex-wrap gap-1 mb-3'>
                           {template.sections.slice(0, 3).map(s => (
-                            <span key={s} className='text-xs bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full'>{s}</span>
+                            <span key={s} className='text-xs bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full'>{s}</span>
                           ))}
                           {template.sections.length > 3 && (
                             <span className='text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full'>+{template.sections.length - 3}</span>
@@ -1708,32 +1679,19 @@ export default function ClientReportTemplate() {
                         </div>
                       )}
 
-                      <div className='flex items-center gap-3 text-xs text-slate-500 mb-3'>
-                        <span className='flex items-center gap-1'>
-                          <HiCalendar className='w-3.5 h-3.5' aria-hidden='true' />
-                          {formatDate(template.createdAt, { day: 'numeric', month: 'short' })}
+                      {/* Footer pinned to the card bottom so uneven descriptions
+                          don't leave actions at different heights across the row. */}
+                      <div className='mt-auto pt-3 border-t border-slate-100 flex items-center justify-between gap-2'>
+                        <span className='text-xs text-slate-400 flex items-center gap-1 min-w-0'>
+                          <HiCalendar className='w-3.5 h-3.5 shrink-0' aria-hidden='true' />
+                          <span className='truncate'>{formatDate(template.createdAt, { day: 'numeric', month: 'short' })}</span>
+                          {template.usageCount > 0 && <span className='text-slate-300'>·</span>}
+                          {template.usageCount > 0 && <span className='truncate'>used {template.usageCount}×</span>}
                         </span>
-                        <span className='flex items-center gap-1'>
-                          <HiClipboardList className='w-3.5 h-3.5' aria-hidden='true' />
-                          Used {template.usageCount || 0}×
-                        </span>
-                      </div>
-
-                      <div className='pt-3 border-t border-slate-200 flex items-center gap-1.5'>
                         <button type="button"
                           onClick={() => openGenerateModal(null, template._id)}
-                          className='flex-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors'
+                          className='shrink-0 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors'
                         >{t('clientReport.useTemplate')}</button>
-                        <button type="button"
-                          onClick={() => setPreviewTemplate(template)}
-                          className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
-                        >
-                          <HiEye className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.preview')}</button>
-                        <button type="button"
-                          onClick={() => { setEditingTemplate(template); setShowTemplateModal(true); }}
-                          className='flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors'
-                        >
-                          <HiPencil className='w-3.5 h-3.5' aria-hidden='true' />{t('clientReport.edit')}</button>
                       </div>
                     </div>
                   );
