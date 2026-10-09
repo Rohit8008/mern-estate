@@ -166,8 +166,19 @@ function contextFields() {
   if (ctx?.requestId) fields.request_id = ctx.requestId;
   if (ctx?.job) fields.job = ctx.job;
   if (tenant?.tenantId) fields.tenant_id = String(tenant.tenantId);
+  // Human-readable workspace — no query. Prefer the request-wide log context
+  // (stamped in resolveTenant, survives inHomeTenant's tenant-store swap, so
+  // login/logout/refresh logs have it), falling back to the tenant doc in the
+  // tenant store for background jobs/scripts.
+  const tenantName = ctx?.tenantName || tenant?.tenant?.name;
+  const tenantSlug = ctx?.tenantSlug || tenant?.tenant?.slug;
+  if (tenantName) fields.tenant_name = tenantName;
+  if (tenantSlug) fields.tenant_slug = tenantSlug;
   const userId = ctx?.userId || tenant?.userId;
   if (userId) fields.user_id = String(userId);
+  // The signed-in user's display name, stamped by verifyToken from the user doc
+  // it already loaded (no query). Present on authenticated-request logs.
+  if (ctx?.userName) fields.user_name = ctx.userName;
   return fields;
 }
 

@@ -13,9 +13,11 @@ import { getLogContext } from './logContext.js';
  * DB lookup. Previously only the access log (written on response finish) had it,
  * so a 500 mid-request was anonymous.
  */
-function stampLogUser(id) {
+function stampLogUser(user) {
   const ctx = getLogContext();
-  if (ctx) ctx.userId = String(id);
+  if (!ctx) return;
+  ctx.userId = String(user._id ?? user.id);
+  if (user.username) ctx.userName = user.username;
 }
 
 export const verifyToken = async (req, res, next) => {
@@ -85,7 +87,7 @@ export const verifyToken = async (req, res, next) => {
         assignedCategories: user.assignedCategories,
         assignedRole: user.assignedRole ? String(user.assignedRole) : null,
       };
-      stampLogUser(user._id);
+      stampLogUser(user);
 
       return next();
     } catch (_) {
@@ -156,7 +158,7 @@ export const tryVerifyToken = async (req, res, next) => {
         assignedCategories: user.assignedCategories,
         assignedRole: user.assignedRole ? String(user.assignedRole) : null,
       };
-      stampLogUser(user._id);
+      stampLogUser(user);
 
       return next();
     } catch (_) {

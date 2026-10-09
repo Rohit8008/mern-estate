@@ -68,8 +68,9 @@ function detailFields(fields) {
   delete merged.userId;
 
   const pick = [
-    // who
-    'email', 'name', 'user_id', 'role', 'tenant_id', 'workspace', 'tenant',
+    // who — readable identifiers first, opaque ids after
+    'email', 'user_name', 'name', 'role', 'tenant_name', 'tenant_slug',
+    'user_id', 'tenant_id',
     // what / where
     'ip', 'method', 'status', 'reason', 'route', 'url', 'path', 'code', 'job', 'request_id', 'user_agent',
   ];
@@ -81,7 +82,7 @@ function detailFields(fields) {
   }
   const env = process.env.NODE_ENV || 'development';
   out.push({ name: 'where', value: clip(`${env} · ${HOST} · i${INSTANCE_ID} · v${APP_VERSION}`, 180), inline: false });
-  return out.slice(0, 14);
+  return out.slice(0, 16);
 }
 
 /**

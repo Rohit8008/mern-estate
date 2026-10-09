@@ -25,6 +25,7 @@ import { MemoryCache } from '../utils/cache.js';
 import { logger } from '../utils/logger.js';
 import { runWithTenant, runWithoutTenantScope } from './tenantContext.js';
 import { TenantScopeError } from './tenantPlugin.js';
+import { getLogContext } from '../utils/logContext.js';
 
 /**
  * Tenant records change rarely and are read on every single request, so they
@@ -240,6 +241,12 @@ export function resolveTenant({ required = true } = {}) {
 
       req.tenant = tenant;
       req.tenantId = String(tenant._id);
+
+      // Stamp the readable workspace on the REQUEST-WIDE log context (not the
+      // tenant store), so it survives inHomeTenant()'s tenant-store swap and
+      // shows up on login/logout/refresh logs and alerts, which run inside it.
+      const lc = getLogContext();
+      if (lc) { lc.tenantName = tenant.name; lc.tenantSlug = tenant.slug; }
 
       // Everything from here runs inside the tenant's context — the workspace
       // being viewed, which is the acting target when there is one.
