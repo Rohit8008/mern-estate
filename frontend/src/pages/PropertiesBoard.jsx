@@ -217,6 +217,13 @@ export default function PropertiesBoard() {
     });
     return () => { alive = false; };
   }, []);
+  // slug -> colony, so a property with no city of its own can fall back to its
+  // colony's name in the Location column (and anywhere else that needs it).
+  const categoriesBySlug = useMemo(() => {
+    const m = {};
+    for (const c of filterCategories) if (c?.slug) m[c.slug] = c;
+    return m;
+  }, [filterCategories]);
   // Row selection for Share / bulk actions / export. Share used to send every
   // property in the current results, with no way to choose.
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -1116,8 +1123,20 @@ export default function PropertiesBoard() {
                               </div>
                             </td>
                             <td className='px-3 py-3'>
-                              <div className='text-slate-700 text-[13px] truncate max-w-[200px]'>{x.city || '-'}</div>
-                              {x.locality && <div className='text-[11px] text-slate-500 truncate'>{x.locality}</div>}
+                              {x.city ? (
+                                <>
+                                  <div className='text-slate-700 text-[13px] truncate max-w-[200px]'>{x.city}</div>
+                                  {x.locality && <div className='text-[11px] text-slate-500 truncate'>{x.locality}</div>}
+                                </>
+                              ) : categoriesBySlug[x.category]?.name ? (
+                                // No location of its own — fall back to the colony it belongs to.
+                                <div className='flex items-center gap-1 max-w-[200px]' title={`From colony: ${categoriesBySlug[x.category].name}`}>
+                                  <HiOfficeBuilding className='w-3.5 h-3.5 text-slate-400 shrink-0' aria-hidden='true' />
+                                  <span className='text-[13px] text-slate-500 truncate'>{categoriesBySlug[x.category].name}</span>
+                                </div>
+                              ) : (
+                                <span className='text-slate-400'>-</span>
+                              )}
                             </td>
                             <td className='px-3 py-3'>
                               <span className='text-[12px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-md'>{x.type === 'rent' ? 'Rent' : x.type === 'lease' ? 'Lease' : 'Sale'}</span>
