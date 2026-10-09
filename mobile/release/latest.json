@@ -1,9 +1,9 @@
 {
-  "version": "1.0.11",
-  "build": 12,
-  "file": "realvista-1.0.11.apk",
-  "sizeBytes": 30768956,
-  "sha256": "1c1be1c023d8176482de655803e12c3e22ed5410f605421fd73ead678d33f58b",
-  "releasedAt": "2026-10-08T19:40:15Z",
-  "notes": "New: Notes — jot quick notes and play voice memos. Plus a global search across properties, leads and owners from the top bar."
+  "version": "1.0.12",
+  "build": 13,
+  "file": "realvista-1.0.12.apk",
+  "sizeBytes": 26141922,
+  "sha256": "e58026af9554908a22a8a3a9e11a007bb93f805370f59e33914e630df04a4ad2",
+  "releasedAt": "2026-10-09T00:00:00Z",
+  "notes": "Faster, lighter app (smaller download) on the latest build toolchain. Includes biometric app-lock, profile editing, Notes and global search."
 }
