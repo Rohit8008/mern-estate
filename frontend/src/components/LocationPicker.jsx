@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { HiSearch, HiX, HiLocationMarker } from 'react-icons/hi';
 import { apiClient } from '../utils/http';
+import { TILE_LAYERS } from './listing/ListingMapPicker';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -57,6 +58,8 @@ export default function LocationPicker({ value, onChange, defaultCenter = DEFAUL
   const [showResults, setShowResults] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
   const [note, setNote] = useState('');
+  // Satellite shows a new colony/plot even before it is on the street map.
+  const [layer, setLayer] = useState('street');
   const boxRef = useRef(null);
   const debounceRef = useRef(null);
   const seqRef = useRef(0);
@@ -161,12 +164,20 @@ export default function LocationPicker({ value, onChange, defaultCenter = DEFAUL
 
       {note && <p className='text-xs text-amber-600'>{note}</p>}
 
-      <div className='w-full rounded-lg overflow-hidden border border-slate-200' style={{ height }}>
+      <div className='relative w-full rounded-lg overflow-hidden border border-slate-200' style={{ height }}>
+        {/* Layer switcher — satellite is the one that shows new construction. */}
+        <div className='absolute top-2 left-2 z-[1000] flex rounded-lg overflow-hidden border border-slate-200 shadow-sm text-xs'>
+          {Object.entries(TILE_LAYERS).map(([key, l]) => (
+            <button
+              key={key}
+              type='button'
+              onClick={() => setLayer(key)}
+              className={`px-2.5 py-1.5 font-medium transition-colors ${layer === key ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+            >{l.label}</button>
+          ))}
+        </div>
         <MapContainer center={center} zoom={hasValue ? 15 : zoom} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-          />
+          <TileLayer key={layer} attribution={(TILE_LAYERS[layer] || TILE_LAYERS.street).attribution} url={(TILE_LAYERS[layer] || TILE_LAYERS.street).url} />
           <ClickHandler onChange={onChange} />
           {hasValue && <FlyToLocation lat={value.lat} lng={value.lng} />}
           {hasValue && <Marker position={[value.lat, value.lng]} icon={customIcon} />}
