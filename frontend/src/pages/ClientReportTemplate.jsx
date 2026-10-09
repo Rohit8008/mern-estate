@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient, normalizeImageUrl } from '../utils/http';
 import { formatDate, formatListingPrice } from '../utils/currency';
+import { PageHeader, Button } from '../design-system';
 import {
   HiRefresh, HiPlus, HiSearch, HiX,
   HiDocumentText, HiDownload, HiPrinter, HiMail, HiEye,
@@ -1530,27 +1531,23 @@ export default function ClientReportTemplate() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-5'>
-        <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
-          <div>
-            <h1 className='text-xl font-bold text-white'>{t('clientReport.clientReports')}</h1>
-            <p className='text-sm text-slate-400 mt-1'>{templates.length} templates · {generatedReports.length} reports generated</p>
-          </div>
-          <div className='flex items-center gap-2'>
-            <button type="button"
-              onClick={() => openGenerateModal()}
-              className='px-4 py-2 rounded-lg border border-white/10 bg-white/10 hover:bg-white/20 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
-            >
-              <HiDocumentText className='w-4 h-4' aria-hidden='true' />{t('clientReport.generateReport')}</button>
-            <button type="button"
-              onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}
-              className='px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center gap-1.5 transition-colors'
-            >
-              <HiPlus className='w-4 h-4' aria-hidden='true' />{t('clientReport.newTemplate')}</button>
-          </div>
-        </div>
-      </div>
+      {/* Standard light page header — the app-wide pattern (20 pages). The old
+          hand-rolled dark gradient here was one of only two off-pattern headers
+          and read heavier than everything around it. */}
+      <PageHeader
+        title={t('clientReport.clientReports')}
+        description={`${templates.length} templates · ${generatedReports.length} reports generated`}
+        actions={
+          <>
+            <Button variant='secondary' size='sm' icon={HiDocumentText} onClick={() => openGenerateModal()}>
+              {t('clientReport.generateReport')}
+            </Button>
+            <Button variant='primary' size='sm' icon={HiPlus} onClick={() => { setEditingTemplate(null); setShowTemplateModal(true); }}>
+              {t('clientReport.newTemplate')}
+            </Button>
+          </>
+        }
+      />
 
       {/* Toolbar: a segmented view toggle + search, sitting directly on the
           page so the white cards below don't read as cards-inside-a-card. */}

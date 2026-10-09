@@ -6,7 +6,7 @@ import { apiClient, normalizeImageUrl } from '../utils/http';
 import { formatDate, formatListingPrice, formatNumber, isPlaceholderPrice } from '../utils/currency';
 import { useNotification } from '../contexts/NotificationContext';
 import { toCsv, downloadTextFile } from '../utils/spreadsheet';
-import { KpiCard } from '../design-system';
+import { KpiCard, PageHeader, Button } from '../design-system';
 import {
   HiRefresh, HiTrendingUp, HiHome, HiCurrencyDollar,
   HiChartBar, HiLocationMarker, HiEye, HiFilter,
@@ -255,34 +255,27 @@ export default function PortfolioDashboard() {
 
   return (
     <div className='space-y-6'>
-      {/* Header */}
-      <div className='relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm overflow-hidden'>
-        <div className='absolute inset-0 crm-banner-dots pointer-events-none' aria-hidden='true' />
-        <div>
-          <p className='text-slate-400 text-xs font-medium uppercase tracking-widest mb-1'>{t('portfolioDashboard.portfolio')}</p>
-          <h1 className='text-xl font-bold text-white'>{t('portfolioDashboard.portfolioDashboard')}</h1>
-          <p className='text-slate-400 text-sm mt-0.5'>{t('portfolioDashboard.overviewOfYourPropertyPortfolioPerformance')}</p>
-        </div>
-        <div className='flex items-center gap-2 flex-shrink-0'>
-          <button type="button"
-            onClick={fetchData}
-            className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors'
-          >
-            <HiRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden='true' />{t('portfolioDashboard.refresh')}</button>
-          <button type="button"
-            onClick={handleExport}
-            disabled={loading || !properties.length}
-            className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-          >
-            <HiDownload className='w-4 h-4' aria-hidden='true' />{t('portfolioDashboard.export')}</button>
-          <button type="button"
-            onClick={handlePrint}
-            disabled={loading || !properties.length}
-            className='px-3 py-1.5 rounded-lg border border-white/10 bg-white/10 text-white hover:bg-white/20 text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-          >
-            <HiPrinter className='w-4 h-4' aria-hidden='true' />{t('portfolioDashboard.print')}</button>
-        </div>
-      </div>
+      {/* Dashboard hero header — the shared dark PageHeader (same component the
+          main dashboard uses), replacing a hand-rolled copy of the same gradient. */}
+      <PageHeader
+        dark
+        title={t('portfolioDashboard.portfolioDashboard')}
+        description={t('portfolioDashboard.overviewOfYourPropertyPortfolioPerformance')}
+        actions={
+          <>
+            <Button variant='dark' size='sm' icon={HiRefresh} onClick={fetchData}
+              className={loading ? '[&>svg]:animate-spin' : ''}>
+              {t('portfolioDashboard.refresh')}
+            </Button>
+            <Button variant='dark' size='sm' icon={HiDownload} onClick={handleExport} disabled={loading || !properties.length}>
+              {t('portfolioDashboard.export')}
+            </Button>
+            <Button variant='dark' size='sm' icon={HiPrinter} onClick={handlePrint} disabled={loading || !properties.length}>
+              {t('portfolioDashboard.print')}
+            </Button>
+          </>
+        }
+      />
 
       {/* Error */}
       {error && (
