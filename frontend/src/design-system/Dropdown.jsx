@@ -1,15 +1,17 @@
 import { createContext, forwardRef, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 function cx(...xs) { return xs.filter(Boolean).join(' '); }
 
 const MenuContext = createContext(null);
 
-// The menu is positioned `fixed` (coordinates computed from the trigger) rather
-// than `absolute`. Inside a scrolling/clipping ancestor — e.g. a Table's
-// `overflow-x-auto` wrapper — an absolute menu is clipped and, worse, inflates
-// the ancestor's scroll height, leaving a tall empty gap below a short table.
-// A fixed element is relative to the viewport, so it escapes both. `GAP` is the
-// 8px offset the old `mt-2`/`mb-2` gave.
+// The menu is positioned `fixed` (coordinates computed from the trigger) AND
+// rendered through a portal on document.body. Fixed alone is not enough: an
+// ancestor with `transform`, `filter`, `backdrop-filter` (the header's
+// backdrop-blur!) or `contain` becomes the containing block for a fixed child,
+// so the menu resolves against that 56px-tall header and gets clipped instead of
+// floating over the viewport. The portal lifts it out of every such ancestor.
+// `GAP` is the 8px offset the old `mt-2`/`mb-2` gave.
 const GAP = 8;
 const VALID_PLACEMENTS = new Set(['bottom-end', 'bottom-start', 'top-end', 'top-start']);
 
@@ -85,9 +87,11 @@ export default function Dropdown({ trigger, children, placement = 'bottom-end', 
     // Focus the first item once the menu is painted.
     items()[0]?.focus();
     const onDown = (e) => {
-      // The menu is a fixed element but still inside rootRef, so this contains()
-      // check keeps covering clicks on menu items.
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+      // The menu is portaled out of rootRef, so an outside-click check must
+      // exempt BOTH the trigger (rootRef) and the menu itself (menuRef).
+      const inTrigger = rootRef.current?.contains(e.target);
+      const inMenu = menuRef.current?.contains(e.target);
+      if (!inTrigger && !inMenu) setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     // Capture-phase scroll catches scrolling inside any ancestor, not just the
@@ -139,31 +143,32 @@ export default function Dropdown({ trigger, children, placement = 'bottom-end', 
     <MenuContext.Provider value={{ close }}>
       <div ref={rootRef} className='relative'>
         {trigger(triggerProps, open)}
-        {open && (
-          <div
-            ref={menuRef}
-            id={menuId}
-            role='menu'
-            aria-label={label}
-            tabIndex={-1}
-            onKeyDown={onMenuKeyDown}
-            style={menuStyle || undefined}
-            className={cx(
-              'z-50 min-w-[12rem] py-1.5 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl',
-              // maxHeight is set in computeMenuStyle; scroll past it rather than
-              // spilling off the page.
-              'overflow-y-auto overflow-x-hidden overscroll-contain',
-              'origin-top animate-menu-in motion-reduce:animate-none focus:outline-none',
-              // Hidden until positioned, so it never flashes at the top-left for
-              // a frame before the fixed coordinates are measured.
-              menuStyle ? 'visible' : 'invisible',
-              className
-            )}
-          >
-            {children}
-          </div>
-        )}
       </div>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          id={menuId}
+          role='menu'
+          aria-label={label}
+          tabIndex={-1}
+          onKeyDown={onMenuKeyDown}
+          style={menuStyle || undefined}
+          className={cx(
+            'z-50 min-w-[12rem] py-1.5 rounded-xl border border-border bg-popover text-popover-foreground shadow-xl',
+            // maxHeight is set in computeMenuStyle; scroll past it rather than
+            // spilling off the page.
+            'overflow-y-auto overflow-x-hidden overscroll-contain',
+            'origin-top animate-menu-in motion-reduce:animate-none focus:outline-none',
+            // Hidden until positioned, so it never flashes at the top-left for
+            // a frame before the fixed coordinates are measured.
+            menuStyle ? 'visible' : 'invisible',
+            className
+          )}
+        >
+          {children}
+        </div>,
+        document.body
+      )}
     </MenuContext.Provider>
   );
 }
