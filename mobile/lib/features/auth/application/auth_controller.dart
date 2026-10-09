@@ -46,7 +46,34 @@ class AuthController extends StateNotifier<AuthState> {
       rethrow;
     }
     appLog.info('login success', fields: {'role': user.role});
+    _apiClient.armSessionGuard(); // a fresh session can expire again later
     state = AuthState.authenticated(user, pendingLegalVersion: await _pendingLegalVersion());
+  }
+
+  /// The session is confirmed dead (the refresh token was rejected). Clear the
+  /// local cookies and drop to unauthenticated so the router shows /login — the
+  /// one place a dead session should ever land. Wired to
+  /// [ApiClient.onSessionExpired]; idempotent, so the burst of 401s a dead
+  /// session produces only logs the user out once.
+  void handleSessionExpired() {
+    if (state.status == AuthStatus.unauthenticated) return;
+    _apiClient.clearSession();
+    appLog.info('session expired — signed out');
+    state = const AuthState.unauthenticated();
+  }
+
+  /// Confirm the session is still alive against the server. Used right after a
+  /// biometric unlock, so fingerprint can never reveal a session that has since
+  /// expired — if `me()` comes back as an auth failure the user is sent to
+  /// login instead of into a dead app. Any other error (offline) is ignored.
+  Future<void> revalidate() async {
+    if (state.status != AuthStatus.authenticated) return;
+    try {
+      final user = await _api.me();
+      applyUser(user);
+    } on AppFailure catch (f) {
+      if (f.type == AppFailureType.authentication) handleSessionExpired();
+    }
   }
 
   /// The Terms version this user still has to accept, or null.

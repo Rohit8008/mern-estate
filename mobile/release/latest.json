@@ -1,9 +1,9 @@
 {
-  "version": "1.0.13",
-  "build": 14,
-  "file": "realvista-1.0.13.apk",
+  "version": "1.0.14",
+  "build": 15,
+  "file": "realvista-1.0.14.apk",
   "sizeBytes": 26203520,
-  "sha256": "d32dbed3e2a339a66324071b5f318aa9ab885b3a903300e1af52e6a0f777f6eb",
+  "sha256": "a9c0beb72fbfb8a2f76462f892342af27234820f468cab5807ea7661e6192dae",
   "releasedAt": "2026-10-09T00:00:00Z",
-  "notes": "Property Search is now its own tab, front and centre. Notes can record voice memos on your phone. Plus the form and validation fixes from the web."
+  "notes": "Fixes a session bug: when your sign-in expires, the app now takes you straight to the login screen instead of getting stuck, and unlocking with fingerprint no longer opens an expired session."
 }

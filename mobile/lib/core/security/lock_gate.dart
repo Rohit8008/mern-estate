@@ -53,7 +53,12 @@ class _LockScreenState extends ConsumerState<_LockScreen> {
     if (_attempting) return;
     setState(() => _attempting = true);
     try {
-      await ref.read(appLockControllerProvider.notifier).unlock();
+      final unlocked = await ref.read(appLockControllerProvider.notifier).unlock();
+      // The fingerprint only lifts the LOCAL lock — it is not a server login.
+      // Confirm the session is still alive, so unlocking can never drop the
+      // user into a session that expired while the app was backgrounded; a dead
+      // session sends them to /login instead.
+      if (unlocked) await ref.read(authControllerProvider.notifier).revalidate();
     } finally {
       if (mounted) setState(() => _attempting = false);
     }

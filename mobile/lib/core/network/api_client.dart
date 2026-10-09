@@ -17,15 +17,27 @@ import 'workspace_store.dart';
 /// restarts) and a refresh-on-401 interceptor mirroring the web app's
 /// fetchWithRefresh() in utils/http.js.
 class ApiClient {
-  ApiClient._(this.dio, this._cookieJar, this.workspace) {
+  ApiClient._(this.dio, this._cookieJar, this.workspace, this._guard) {
     dio.interceptors.insert(0, _WorkspaceInterceptor(workspace));
   }
 
   final Dio dio;
   final CookieJar _cookieJar;
+  final _SessionGuard _guard;
 
   /// Which agency to sign in to; sent as `x-tenant`.
   final WorkspaceStore workspace;
+
+  /// Called ONCE when the session is definitively dead — a `/api/auth/refresh`
+  /// that the server rejects with 401/403 (not a transient network error). The
+  /// app wires this to AuthController so a dead session flips straight to the
+  /// login screen instead of leaving every provider stuck retrying 401s (and
+  /// instead of the biometric lock unlocking into a session that no longer
+  /// exists). Fires again only after a fresh sign-in resets the guard.
+  set onSessionExpired(void Function() cb) => _guard.onExpired = cb;
+
+  /// Re-arm the guard after a successful sign-in, so a later expiry fires.
+  void armSessionGuard() => _guard.reset();
 
   static Future<ApiClient> create({required String baseUrl}) async {
     final dio = Dio(BaseOptions(
@@ -42,6 +54,8 @@ class ApiClient {
       },
     ));
 
+    final guard = _SessionGuard();
+
     if (kIsWeb) {
       // On web there is no dart:io / path_provider (getApplicationSupportDirectory
       // throws MissingPluginException) — and none of this is needed anyway:
@@ -49,9 +63,9 @@ class ApiClient {
       // We only need to opt the XHR/fetch adapter into sending credentials.
       (dio.httpClientAdapter as dynamic).withCredentials = true;
       dio.interceptors.add(_CsrfInterceptor(dio));
-      dio.interceptors.add(_RefreshOn401Interceptor(dio));
+      dio.interceptors.add(_RefreshOn401Interceptor(dio, guard));
       dio.interceptors.add(LoggingInterceptor());
-      return ApiClient._(dio, CookieJar(), WorkspaceStore.memory());
+      return ApiClient._(dio, CookieJar(), WorkspaceStore.memory(), guard);
     }
 
     final supportDir = await getApplicationSupportDirectory();
@@ -60,11 +74,11 @@ class ApiClient {
     final cookieJar = PersistCookieJar(storage: FileStorage(cookieDir.path));
     dio.interceptors.add(CookieManager(cookieJar));
     dio.interceptors.add(_CsrfInterceptor(dio));
-    dio.interceptors.add(_RefreshOn401Interceptor(dio));
+    dio.interceptors.add(_RefreshOn401Interceptor(dio, guard));
     // Last, so it records the outcome after refresh/CSRF retries.
     dio.interceptors.add(LoggingInterceptor());
 
-    return ApiClient._(dio, cookieJar, await WorkspaceStore.open(supportDir));
+    return ApiClient._(dio, cookieJar, await WorkspaceStore.open(supportDir), guard);
   }
 
   /// Test-only entry point — skips the disk-backed cookie jar (which needs
@@ -73,7 +87,7 @@ class ApiClient {
   /// transport can be swapped for a fake adapter.
   @visibleForTesting
   factory ApiClient.forTesting({required Dio dio, CookieJar? cookieJar, WorkspaceStore? workspace}) =>
-      ApiClient._(dio, cookieJar ?? CookieJar(), workspace ?? WorkspaceStore.memory());
+      ApiClient._(dio, cookieJar ?? CookieJar(), workspace ?? WorkspaceStore.memory(), _SessionGuard());
 
   /// Wipes the local cookie store — used on sign-out so a stale
   /// refresh_token never lingers on the device after the server revokes it.
@@ -112,10 +126,27 @@ class _WorkspaceInterceptor extends Interceptor {
   }
 }
 
+/// Fires `onExpired` exactly once when the session is confirmed dead, until a
+/// new sign-in calls `reset()`. Without the one-shot guard a dead session's
+/// burst of parallel 401s would each try to log the user out.
+class _SessionGuard {
+  void Function()? onExpired;
+  bool _fired = false;
+
+  void markExpired() {
+    if (_fired) return;
+    _fired = true;
+    onExpired?.call();
+  }
+
+  void reset() => _fired = false;
+}
+
 class _RefreshOn401Interceptor extends Interceptor {
-  _RefreshOn401Interceptor(this._dio);
+  _RefreshOn401Interceptor(this._dio, this._guard);
 
   final Dio _dio;
+  final _SessionGuard _guard;
   Completer<bool>? _refreshInFlight;
 
   static const _authEndpoints = ['/api/auth/signin', '/api/auth/refresh', '/api/auth/signup'];
@@ -152,8 +183,16 @@ class _RefreshOn401Interceptor extends Interceptor {
     final completer = Completer<bool>();
     _refreshInFlight = completer;
     _dio.post<void>('/api/auth/refresh').then((_) {
+      _guard.reset(); // a working session re-arms expiry detection
       completer.complete(true);
-    }).catchError((_) {
+    }).catchError((Object e) {
+      // Only a server REJECTION (401/403) means the session is truly dead and
+      // the user must sign in again. A timeout / connection drop / 5xx is
+      // transient — fail the request but keep the session so we don't sign the
+      // user out every time the network hiccups.
+      final rejected = e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403);
+      if (rejected) _guard.markExpired();
       completer.complete(false);
     }).whenComplete(() {
       _refreshInFlight = null;

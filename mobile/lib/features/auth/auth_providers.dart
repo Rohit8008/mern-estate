@@ -12,12 +12,16 @@ final authApiProvider = Provider<AuthApi>((ref) => AuthApi(ref.watch(apiClientPr
 final legalApiProvider = Provider<LegalApi>((ref) => LegalApi(ref.watch(apiClientProvider).dio));
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
+  final apiClient = ref.watch(apiClientProvider);
   final controller = AuthController(
     ref.watch(authApiProvider),
-    ref.watch(apiClientProvider),
+    apiClient,
     ref.watch(legalApiProvider),
     beforeSignOut: () => ref.read(pushServiceProvider).unregister(),
   );
+  // A dead refresh token (session expired/revoked) flips the app straight to
+  // the login screen instead of leaving providers stuck looping on 401s.
+  apiClient.onSessionExpired = controller.handleSessionExpired;
   controller.bootstrap();
   return controller;
 });
