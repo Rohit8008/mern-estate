@@ -8,6 +8,7 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "make-admin": "node scripts/makeAdmin.js",
+    "alert:test": "node scripts/testDiscordAlert.js",
     "db:migrate-tenancy": "node scripts/migrateToMultiTenant.js",
     "db:migrate-fields": "node scripts/migrateFieldStores.js",
     "db:migrate-permissions": "node scripts/migratePermissions.js",

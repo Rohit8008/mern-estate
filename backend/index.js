@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { validateConfig, config } from './config/environment.js';
 import { registerTenancy } from './tenancy/tenantPlugin.js';
 import { logger, flushLogs } from './utils/logger.js';
+import { flushDiscordAlerts, alertDiscord } from './utils/discordAlert.js';
 
 // Tenant scoping is a global Mongoose plugin, and a plugin only applies to
 // schemas compiled AFTER it is registered. This has to run before the first
@@ -44,6 +45,12 @@ const bootstrap = async () => {
       host: config.server.host,
       environment: config.server.nodeEnv,
     });
+    // Optional "deploy is live" ping, so the team sees the service come back up
+    // (and that alerts are wired). Off by default; opt in with
+    // DISCORD_ALERT_ON_START=true. In a PM2 cluster, limit to one instance.
+    if (process.env.DISCORD_ALERT_ON_START === 'true' && (process.env.NODE_APP_INSTANCE ?? '0') === '0') {
+      alertDiscord('success', 'Backend started', { message: `${config.server.nodeEnv} is live and serving traffic.` });
+    }
   } catch (error) {
     logger.error('Failed to start server', { message: error.message, stack: error.stack });
     process.exit(1);
@@ -94,6 +101,9 @@ async function shutdown(reason, exitCode = 0) {
     exitCode = exitCode || 1;
   } finally {
     clearTimeout(force);
+    // Give a crash alert (uncaughtException/unhandledRejection logged just
+    // above) its chance to reach Discord before the process exits.
+    await flushDiscordAlerts().catch(() => {});
     await flushLogs().catch(() => {});
     process.exit(exitCode);
   }

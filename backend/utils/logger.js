@@ -2,6 +2,7 @@ import os from 'os';
 import { createRequire } from 'module';
 import { getLogContext } from './logContext.js';
 import { getTenantStore } from '../tenancy/tenantContext.js';
+import { alertDiscord } from './discordAlert.js';
 
 const require = createRequire(import.meta.url);
 
@@ -222,6 +223,9 @@ export const logger = {
     if (currentLevel >= LOG_LEVELS.ERROR) {
       consolePrint('ERROR', message, meta);
       push('backend_logs', { level: 'error', message, ...meta });
+      // Dev alert — no-op unless DISCORD_WEBHOOK_URL is set. Redacted here so
+      // nothing secret leaves; deduped/paced inside so a flood is one message.
+      alertDiscord('error', message, redact(meta));
     }
   },
   warn(message, meta = {}) {
@@ -245,6 +249,9 @@ export const logger = {
   security(event, details = {}) {
     consolePrint('SECURITY', event, details);
     push('security_logs', { level: 'security', message: event, ...details });
+    // Security events are off the Discord channel by default (they can be
+    // chatty — every failed login); opt in with DISCORD_ALERT_SECURITY=true.
+    if (process.env.DISCORD_ALERT_SECURITY === 'true') alertDiscord('security', event, redact(details));
   },
   audit(action, details = {}) {
     consolePrint('AUDIT', action, details);
