@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { apiClient, parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { fieldProblem, fieldProblems, suggestKey } from '../utils/categoryFieldRules';
-import { PageHeader, EmptyState, PageLoader } from '../design-system';
+import { PageHeader, EmptyState, PageLoader, Button } from '../design-system';
 import { HiOutlineArrowLeft, HiOutlineAdjustments, HiOutlinePlus } from 'react-icons/hi';
 import { usePermissions } from '../contexts/PermissionsContext';
 import LocationPicker from '../components/LocationPicker';
@@ -240,11 +240,9 @@ export default function AdminCategoryFields() {
         title={category?.name || 'Category'}
         description={t('adminCategoryFields.theExtraDetailsEveryPropertyIn')}
         actions={
-          <Link
-            to="/categories"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors"
-          >
-            <HiOutlineArrowLeft className="w-4 h-4" aria-hidden="true" />{t('adminCategoryFields.allCategories')}</Link>
+          <Button as={Link} to="/categories" variant="secondary" icon={HiOutlineArrowLeft}>
+            {t('adminCategoryFields.allCategories')}
+          </Button>
         }
       />
 
@@ -261,38 +259,33 @@ export default function AdminCategoryFields() {
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold text-slate-900">{t('adminCategoryFields.defaultLocation')}</h2>
-          <p className="text-sm text-slate-600 mt-1">{t('adminCategoryFields.usedAsTheMapPinFor')}</p>
+        <div className="p-5 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900">{t('adminCategoryFields.defaultLocation')}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{t('adminCategoryFields.usedAsTheMapPinFor')}</p>
         </div>
-        <div className="p-6">
+        <div className="p-5 space-y-3">
           {locationMessage && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm">
               {locationMessage}
             </div>
           )}
           {locationError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-sm">
               {locationError}
             </div>
           )}
-          <p className="text-xs text-slate-500 mb-2">{t('adminCategoryFields.clickOnTheMapToSet')}</p>
           <LocationPicker value={defaultLocation} onChange={(lat, lng) => setDefaultLocation({ lat, lng })} />
           {defaultLocation && (
             <button type="button"
               onClick={() => setDefaultLocation(null)}
-              className="mt-2 text-xs text-slate-500 hover:text-red-600 underline"
+              className="text-xs text-slate-500 hover:text-rose-600 underline"
             >{t('adminCategoryFields.clearLocation')}</button>
           )}
         </div>
-        <div className="p-6 border-t bg-slate-50 flex justify-end">
-          <button type="button"
-            onClick={saveLocation}
-            disabled={savingLocation}
-            className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {savingLocation ? 'Saving...' : 'Save Default Location'}
-          </button>
+        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end rounded-b-xl">
+          <Button onClick={saveLocation} loading={savingLocation} disabled={savingLocation}>
+            {savingLocation ? 'Saving…' : 'Save location'}
+          </Button>
         </div>
       </div>
 
