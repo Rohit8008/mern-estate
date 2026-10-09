@@ -93,7 +93,7 @@ const COVERED_BY_FORM = new Set(['transactionType']);
 export const plotAreaDrivesSize = (attributes) =>
   !attributes?.plotAreaUnit || attributes.plotAreaUnit in PLOT_UNIT_SQFT;
 
-export function useListingForm({ mode, listingId }) {
+export function useListingForm({ mode, listingId, cloneFrom }) {
   const navigate = useNavigate();
   const isEdit = mode === 'edit';
 
@@ -101,10 +101,11 @@ export function useListingForm({ mode, listingId }) {
   const [categories, setCategories] = useState([]);
   const [owners, setOwners] = useState([]);
   const [propertyTypes, setPropertyTypes] = useState([]);
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(isEdit || (!isEdit && !!cloneFrom));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [clonedFromName, setClonedFromName] = useState('');
   const { showSuccess } = useNotification();
   // What was loaded (or EMPTY for a new property), to tell edits from nothing.
   const baselineRef = useRef(JSON.stringify(payloadOf(EMPTY)));
@@ -233,6 +234,44 @@ export function useListingForm({ mode, listingId }) {
     };
   }, [isEdit, listingId, reloadKey]);
 
+  // Clone: seed a NEW property from an existing one (an owner with ten plots in
+  // one colony differs only by plot number). Same mapping as edit, but it stays
+  // a create — no listingId, baseline left at EMPTY so it saves as new — and the
+  // plot number is cleared so the user must set the one that differs.
+  useEffect(() => {
+    if (isEdit || !cloneFrom) return undefined;
+    let alive = true;
+    setLoading(true);
+    apiClient
+      .get(`/listing/get/${cloneFrom}`)
+      .then((data) => {
+        if (!alive) return;
+        const listing = data?.data || data;
+        const loaded = {
+          ...EMPTY,
+          ...listing,
+          attributes: listing.attributes || {},
+          location: listing.location || { lat: null, lng: null },
+          ownerIds: (listing.owners || listing.ownerIds || []).map((o) =>
+            typeof o === 'string' ? o : String(o._id)
+          ),
+          imageUrls: listing.imageUrls || [],
+          propertyNo: '', // the one thing that must differ between plots
+        };
+        // Baseline stays EMPTY (set in useState), so the clone counts as unsaved
+        // new content and the Save button is enabled.
+        setClonedFromName(listing.name || 'property');
+        setForm(loaded);
+      })
+      .catch((err) => {
+        if (alive) setLoadError(err?.message || 'That property could not be loaded to clone.');
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => { alive = false; };
+  }, [isEdit, cloneFrom]);
+
   const selectedCategory = useMemo(
     () => categories.find((c) => c.slug === form.category) || null,
     [categories, form.category]
@@ -360,6 +399,7 @@ export function useListingForm({ mode, listingId }) {
     error,
     setError,
     loadError,
+    clonedFromName,
     submit,
     isEdit,
     conflict,

@@ -17,7 +17,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import SavedViewsBar from '../components/SavedViewsBar';
 import SharePropertiesDialog from '../components/SharePropertiesDialog';
-import { HiPlus, HiOfficeBuilding, HiOutlineUpload, HiOutlineShare, HiX } from 'react-icons/hi';
+import { HiPlus, HiOfficeBuilding, HiOutlineUpload, HiOutlineShare, HiX, HiOutlineDuplicate } from 'react-icons/hi';
 import { PageHeader, Button, EmptyState, Modal, SearchBar } from '../design-system';
 import { useTranslation } from 'react-i18next';
 import { LISTING_STATUS_LABELS, listingStatusLabel } from '../utils/listingStatus';
@@ -1287,6 +1287,15 @@ export default function PropertiesBoard() {
                                 >
                                   <svg aria-hidden='true' className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' /></svg>
                                 </button>
+                                <Link
+                                  to={`/create-listing?cloneFrom=${x._id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className='p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                                  title={t('properties.clone')}
+                                  aria-label={t('properties.clone')}
+                                >
+                                  <HiOutlineDuplicate className='w-4 h-4' aria-hidden='true' />
+                                </Link>
                                 <Link
                                   to={`/listing/${x._id}`}
                                   target='_blank'

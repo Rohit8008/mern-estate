@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import {
   HiOutlineArrowLeft,
   HiOutlineCheck,
   HiOutlineExclamationCircle,
   HiOutlineLocationMarker,
   HiOutlineSearch,
+  HiOutlineDuplicate,
 } from 'react-icons/hi';
 import { useListingForm } from '../hooks/useListingForm';
 import { useAddressGeocoding } from '../hooks/useAddressGeocoding';
@@ -69,14 +70,16 @@ export default function ListingForm({ mode = 'create' }) {
   const { t } = useTranslation();
   const params = useParams();
   const listingId = params.listingId;
+  const location = useLocation();
+  const cloneFrom = mode === 'create' ? new URLSearchParams(location.search).get('cloneFrom') : null;
   const { tenant } = useTenant();
 
   const {
     form, isDirty, setField, patch, setCategoryField, categoryFieldValue,
     categories, selectedCategory, categoryFields, owners, setOwners, propertyTypes, selectedPropertyType,
-    loading, saving, error, loadError, submit, isEdit,
+    loading, saving, error, loadError, clonedFromName, submit, isEdit,
     conflict, reloadLatest, overwrite,
-  } = useListingForm({ mode, listingId });
+  } = useListingForm({ mode, listingId, cloneFrom });
 
   const [mapLayer, setMapLayer] = useState('street');
 
@@ -233,18 +236,30 @@ export default function ListingForm({ mode = 'create' }) {
   return (
     <form onSubmit={submit} className="space-y-5 max-w-5xl">
       <PageHeader
-        title={isEdit ? 'Edit property' : 'Add a property'}
+        title={isEdit ? 'Edit property' : clonedFromName ? 'Clone property' : 'Add a property'}
         description={
           isEdit
             ? 'Changes are saved when you press Save.'
-            : categoryHasRequired
-              ? `A name and the fields marked * for ${selectedCategory.name} are required.`
-              : 'Only a name is required — everything else can be filled in later.'
+            : clonedFromName
+              ? `Copied from "${clonedFromName}". Set the new plot number and adjust anything that differs, then save.`
+              : categoryHasRequired
+                ? `A name and the fields marked * for ${selectedCategory.name} are required.`
+                : 'Only a name is required — everything else can be filled in later.'
         }
         actions={
           <Button type="button" variant="secondary" onClick={leave}>{t('listingForm.cancel')}</Button>
         }
       />
+
+      {clonedFromName && (
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+          <HiOutlineDuplicate className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-indigo-900">
+            Cloning <span className="font-semibold">{clonedFromName}</span> — owner, colony, location, price and size are
+            prefilled. The <span className="font-semibold">plot number</span> was cleared; set the new one and save to create a separate property.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div ref={errorRef} role="alert" className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 scroll-mt-20">
