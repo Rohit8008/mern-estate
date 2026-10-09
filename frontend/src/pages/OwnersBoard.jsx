@@ -432,12 +432,17 @@ export default function OwnersBoard() {
             <Input
               label={t('owners.email')}
               type='email'
+              inputMode='email'
+              autoComplete='email'
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
               placeholder={t('owners.ownerExampleCom')}
             />
             <Input
               label={t('owners.phone')}
+              type='tel'
+              inputMode='tel'
+              autoComplete='tel'
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               placeholder='+91 98765 43210'
@@ -460,6 +465,8 @@ export default function OwnersBoard() {
             />
             <Input
               label={t('owners.pinPostal')}
+              inputMode='numeric'
+              autoComplete='postal-code'
               value={form.postal}
               onChange={(e) => setForm((f) => ({ ...f, postal: e.target.value }))}
               placeholder='400001'

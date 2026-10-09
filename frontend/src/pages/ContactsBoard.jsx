@@ -1326,6 +1326,8 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title, notice =
           <Input
             label={t('contacts.email')}
             type='email'
+            inputMode='email'
+            autoComplete='email'
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             placeholder={t('contacts.emailExampleCom')}
@@ -1333,6 +1335,8 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title, notice =
           <Input
             label={t('contacts.phone')}
             type='tel'
+            inputMode='tel'
+            autoComplete='tel'
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             placeholder='+1 234 567 8900'
@@ -1341,6 +1345,7 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title, notice =
         <Input
           label={t('contacts.alternatePhone')}
           type='tel'
+          inputMode='tel'
           value={formData.alternatePhone}
           onChange={set('alternatePhone')}
           placeholder={t('contacts.optionalSecondNumber')}
@@ -1397,6 +1402,7 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title, notice =
               <Input
                 label={`Budget Min (${currencySymbol()})`}
                 type='number'
+                inputMode='numeric'
                 value={formData.budgetMin}
                 onChange={set('budgetMin')}
                 placeholder={t('contacts.eG2000000')}
@@ -1405,10 +1411,20 @@ function ContactFormModal({ contact, onClose, onSubmit, loading, title, notice =
               <Input
                 label={`Budget Max (${currencySymbol()})`}
                 type='number'
+                inputMode='numeric'
                 value={formData.budgetMax}
                 onChange={set('budgetMax')}
                 placeholder={t('contacts.eG5000000')}
                 min={0}
+                // Quiet until a real max sits below a real min (mirrors the
+                // listing price/discount inline rule).
+                error={
+                  Number(formData.budgetMax) > 0 &&
+                  Number(formData.budgetMin) > 0 &&
+                  Number(formData.budgetMax) < Number(formData.budgetMin)
+                    ? 'Must be above the minimum'
+                    : undefined
+                }
               />
             </div>
             <Input

@@ -14,7 +14,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import {
   Modal, Input, Select, Textarea, Spinner, Button, EmptyState, Pagination, SkeletonCard, Badge, Checkbox,
 } from '../design-system';
-import { formatListingPrice, formatCompactCurrency } from '../utils/currency';
+import { formatListingPrice, formatCompactCurrency, currencySymbol } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
 import { localDateString } from '../utils/localDate';
 
@@ -835,6 +835,8 @@ export default function BuyerRequirements() {
                     id='buyerEmail'
                     label={t('buyerRequirements.email')}
                     type='email'
+                    inputMode='email'
+                    autoComplete='email'
                     value={formData.buyerEmail}
                     readOnly={!!formData.clientId}
                     onChange={(e) => setFormData({...formData, buyerEmail: e.target.value})}
@@ -844,6 +846,8 @@ export default function BuyerRequirements() {
                     id='buyerPhone'
                     label={t('buyerRequirements.phone')}
                     type='tel'
+                    inputMode='tel'
+                    autoComplete='tel'
                     required
                     value={formData.buyerPhone}
                     readOnly={!!formData.clientId}
@@ -877,16 +881,28 @@ export default function BuyerRequirements() {
 
                   <div className='grid grid-cols-2 gap-4'>
                     <Input
-                      label={t('buyerRequirements.minPrice')}
+                      label={`${t('buyerRequirements.minPrice')} (${currencySymbol()})`}
                       type='number'
+                      inputMode='numeric'
+                      min={0}
                       value={formData.minPrice}
                       onChange={(e) => setFormData({...formData, minPrice: e.target.value})}
                     />
                     <Input
-                      label={t('buyerRequirements.maxPrice')}
+                      label={`${t('buyerRequirements.maxPrice')} (${currencySymbol()})`}
                       type='number'
+                      inputMode='numeric'
+                      min={0}
                       value={formData.maxPrice}
                       onChange={(e) => setFormData({...formData, maxPrice: e.target.value})}
+                      // Quiet until a real max sits below a real min.
+                      error={
+                        Number(formData.maxPrice) > 0 &&
+                        Number(formData.minPrice) > 0 &&
+                        Number(formData.maxPrice) < Number(formData.minPrice)
+                          ? 'Must be above the minimum'
+                          : undefined
+                      }
                     />
                   </div>
 
@@ -894,6 +910,7 @@ export default function BuyerRequirements() {
                     <Input
                       label={t('buyerRequirements.minBedrooms')}
                       type='number'
+                      inputMode='numeric'
                       min='1'
                       value={formData.minBedrooms}
                       onChange={(e) => setFormData({...formData, minBedrooms: e.target.value})}
@@ -901,6 +918,7 @@ export default function BuyerRequirements() {
                     <Input
                       label={t('buyerRequirements.minBathrooms')}
                       type='number'
+                      inputMode='numeric'
                       min='1'
                       value={formData.minBathrooms}
                       onChange={(e) => setFormData({...formData, minBathrooms: e.target.value})}

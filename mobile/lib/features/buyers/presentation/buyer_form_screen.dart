@@ -44,6 +44,14 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
   String? _error;
   String? _nameError;
   String? _emailError;
+  String? _priceError;
+
+  // Quiet until a real max sits below a real min (mirrors the web form).
+  String? _priceRangeError() {
+    final min = num.tryParse(_minPriceController.text.trim()) ?? 0;
+    final max = num.tryParse(_maxPriceController.text.trim()) ?? 0;
+    return (min > 0 && max > 0 && max < min) ? 'Must be above the minimum' : null;
+  }
 
   bool get _dirty =>
       _snapshot.changed ||
@@ -71,10 +79,12 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
     // Field problems show on the field; _error is for the server.
     final nameError = name.isEmpty ? 'Buyer name is required.' : null;
     final emailErr = emailError(_emailController.text);
-    if (nameError != null || emailErr != null) {
+    final priceErr = _priceRangeError();
+    if (nameError != null || emailErr != null || priceErr != null) {
       setState(() {
         _nameError = nameError;
         _emailError = emailErr;
+        _priceError = priceErr;
         _error = null;
       });
       return;
@@ -84,6 +94,7 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
       _error = null;
       _nameError = null;
       _emailError = null;
+      _priceError = null;
     });
 
     final payload = {
@@ -182,9 +193,9 @@ class _BuyerFormScreenState extends ConsumerState<BuyerFormScreen> {
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
-              Expanded(child: AppTextField(label: 'Min price (₹)', controller: _minPriceController, keyboardType: TextInputType.number)),
+              Expanded(child: AppTextField(label: 'Min price (₹)', controller: _minPriceController, keyboardType: TextInputType.number, onChanged: (_) { if (_priceError != null) setState(() => _priceError = null); })),
               const SizedBox(width: AppSpacing.md),
-              Expanded(child: AppTextField(label: 'Max price (₹)', controller: _maxPriceController, keyboardType: TextInputType.number)),
+              Expanded(child: AppTextField(label: 'Max price (₹)', controller: _maxPriceController, keyboardType: TextInputType.number, errorText: _priceError, onChanged: (_) { if (_priceError != null) setState(() => _priceError = null); })),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),

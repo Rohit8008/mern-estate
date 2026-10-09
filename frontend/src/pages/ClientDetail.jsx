@@ -632,6 +632,7 @@ export default function ClientDetail() {
                     <Input
                       label={`Budget Min (${currencySymbol()})`}
                       type="number"
+                      inputMode="numeric"
                       value={reqsForm.budgetMin}
                       onChange={(e) => setReqsForm((p) => ({ ...p, budgetMin: e.target.value }))}
                       placeholder="0"
@@ -640,10 +641,19 @@ export default function ClientDetail() {
                     <Input
                       label={`Budget Max (${currencySymbol()})`}
                       type="number"
+                      inputMode="numeric"
                       value={reqsForm.budgetMax}
                       onChange={(e) => setReqsForm((p) => ({ ...p, budgetMax: e.target.value }))}
                       placeholder="0"
                       min={0}
+                      // Quiet until a real max sits below a real min.
+                      error={
+                        Number(reqsForm.budgetMax) > 0 &&
+                        Number(reqsForm.budgetMin) > 0 &&
+                        Number(reqsForm.budgetMax) < Number(reqsForm.budgetMin)
+                          ? 'Must be above the minimum'
+                          : undefined
+                      }
                     />
                   </div>
                   <Input
