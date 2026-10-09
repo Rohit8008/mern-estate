@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { apiClient, normalizeImageUrl } from '../utils/http';
@@ -54,6 +55,57 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
+
+/**
+ * An inline-edit menu (agent / owner / status) that renders through a portal on
+ * document.body with fixed coordinates measured from its trigger. The table is
+ * wrapped in `overflow-x-auto`, which clips an absolutely-positioned menu —
+ * especially with few rows — so the menu was getting cut off. The portal lifts
+ * it out of that clip and keeps it aligned to the trigger; it flips above when
+ * there isn't room below. `data-inline-dropdown` stays on both so the existing
+ * outside-click handler keeps treating the trigger and menu as "inside".
+ */
+function InlineDropdown({ open, trigger, children, width = 208 }) {
+  const anchorRef = useRef(null);
+  const [style, setStyle] = useState(null);
+
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current) { setStyle(null); return undefined; }
+    const place = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+      const spaceBelow = window.innerHeight - r.bottom;
+      const openUp = spaceBelow < 260 && r.top > spaceBelow;
+      setStyle({
+        position: 'fixed', left, width,
+        maxHeight: Math.max(180, Math.round((openUp ? r.top : spaceBelow) - 16)),
+        ...(openUp ? { bottom: Math.round(window.innerHeight - r.top + 4) } : { top: Math.round(r.bottom + 4) }),
+      });
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); };
+  }, [open, width]);
+
+  return (
+    <div className='relative' data-inline-dropdown ref={anchorRef}>
+      {trigger}
+      {open && createPortal(
+        <div
+          data-inline-dropdown
+          style={style || undefined}
+          className={`bg-white border border-slate-200 rounded-xl shadow-xl z-[60] py-1 overflow-y-auto ${style ? 'visible' : 'invisible'}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
 
 export default function PropertiesBoard() {
   const { t } = useTranslation();
@@ -1082,126 +1134,128 @@ export default function PropertiesBoard() {
                             </td>
                             {/* Agent — inline editable */}
                             <td className='px-3 py-3'>
-                              <div className='relative' data-inline-dropdown>
+                              <InlineDropdown
+                                open={editingCell?.id === x._id && editingCell?.field === 'agent'}
+                                width={208}
+                                trigger={
+                                  <button
+                                    type='button'
+                                    onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'agent' ? null : { id: x._id, field: 'agent' }); }}
+                                    className='flex items-center gap-2 rounded-lg px-2 py-1 -mx-2 -my-1 min-h-[36px] hover:bg-slate-100 transition-colors w-full text-left'
+                                    title={t('properties.clickToAssignAgent')}
+                                  >
+                                    {agentName ? (
+                                      <>
+                                        <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
+                                          {agentName[0]?.toUpperCase()}
+                                        </div>
+                                        <span className='text-[13px] text-slate-700 truncate'>{agentName}</span>
+                                      </>
+                                    ) : (
+                                      <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
+                                    )}
+                                  </button>
+                                }
+                              >
                                 <button
                                   type='button'
-                                  onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'agent' ? null : { id: x._id, field: 'agent' }); }}
-                                  className='flex items-center gap-2 rounded-lg px-2 py-1 -mx-2 -my-1 min-h-[36px] hover:bg-slate-100 transition-colors w-full text-left'
-                                  title={t('properties.clickToAssignAgent')}
-                                >
-                                  {agentName ? (
-                                    <>
-                                      <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
-                                        {agentName[0]?.toUpperCase()}
-                                      </div>
-                                      <span className='text-[13px] text-slate-700 truncate'>{agentName}</span>
-                                    </>
-                                  ) : (
-                                    <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
-                                  )}
-                                </button>
-                                {editingCell?.id === x._id && editingCell?.field === 'agent' && (
-                                  <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 max-h-56 overflow-y-auto' onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                      type='button'
-                                      onClick={() => inlineUpdate(x._id, 'agent', null)}
-                                      className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
-                                    >{t('properties.unassigned')}</button>
-                                    {agents.map((a) => (
-                                      <button
-                                        key={a._id}
-                                        type='button'
-                                        onClick={() => inlineUpdate(x._id, 'agent', a._id)}
-                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${x.assignedAgent?._id === a._id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
-                                      >
-                                        <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
-                                          {(a.username?.[0] || '?').toUpperCase()}
-                                        </div>
-                                        {a.username}
-                                        {x.assignedAgent?._id === a._id && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
-                                      </button>
-                                    ))}
-                                    {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-500'>{t('properties.noAgentsAvailable')}</div>}
-                                  </div>
-                                )}
-                              </div>
+                                  onClick={() => inlineUpdate(x._id, 'agent', null)}
+                                  className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
+                                >{t('properties.unassigned')}</button>
+                                {agents.map((a) => (
+                                  <button
+                                    key={a._id}
+                                    type='button'
+                                    onClick={() => inlineUpdate(x._id, 'agent', a._id)}
+                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${x.assignedAgent?._id === a._id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
+                                  >
+                                    <div className='w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0'>
+                                      {(a.username?.[0] || '?').toUpperCase()}
+                                    </div>
+                                    {a.username}
+                                    {x.assignedAgent?._id === a._id && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                  </button>
+                                ))}
+                                {agents.length === 0 && <div className='px-3 py-2 text-xs text-slate-500'>{t('properties.noAgentsAvailable')}</div>}
+                              </InlineDropdown>
                             </td>
                             {/* Owner — inline editable */}
                             <td className='px-3 py-3'>
-                              <div className='relative' data-inline-dropdown>
+                              <InlineDropdown
+                                open={editingCell?.id === x._id && editingCell?.field === 'owner'}
+                                width={224}
+                                trigger={
+                                  <button
+                                    type='button'
+                                    onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'owner' ? null : { id: x._id, field: 'owner' }); }}
+                                    className='rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left truncate block'
+                                    title={t('properties.clickToAssignOwner')}
+                                  >
+                                    {ownerName ? (
+                                      <span className='text-[13px] text-slate-700 truncate block max-w-[140px]' title={ownerTitle}>{ownerName}</span>
+                                    ) : (
+                                      <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
+                                    )}
+                                  </button>
+                                }
+                              >
+                                <div className='px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400'>{t('properties.selectOneOrMoreOwners')}</div>
                                 <button
                                   type='button'
-                                  onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'owner' ? null : { id: x._id, field: 'owner' }); }}
-                                  className='rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-slate-100 transition-colors w-full text-left truncate block'
-                                  title={t('properties.clickToAssignOwner')}
-                                >
-                                  {ownerName ? (
-                                    <span className='text-[13px] text-slate-700 truncate block max-w-[140px]' title={ownerTitle}>{ownerName}</span>
-                                  ) : (
-                                    <span className='text-[12px] text-slate-500 italic'>{t('properties.assign')}</span>
-                                  )}
-                                </button>
-                                {editingCell?.id === x._id && editingCell?.field === 'owner' && (
-                                  <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 max-h-56 overflow-y-auto' onClick={(e) => e.stopPropagation()}>
-                                    <div className='px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400'>{t('properties.selectOneOrMoreOwners')}</div>
+                                  onClick={() => inlineUpdate(x._id, 'owner', null)}
+                                  className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
+                                >{t('properties.noOwner')}</button>
+                                {owners.map((o) => {
+                                  const isActive = Array.isArray(x?.ownerIds) && x.ownerIds.some((ow) => ow?._id === o._id);
+                                  return (
                                     <button
+                                      key={o._id}
                                       type='button'
-                                      onClick={() => inlineUpdate(x._id, 'owner', null)}
-                                      className='w-full text-left px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 italic'
-                                    >{t('properties.noOwner')}</button>
-                                    {owners.map((o) => {
-                                      const isActive = Array.isArray(x?.ownerIds) && x.ownerIds.some((ow) => ow?._id === o._id);
-                                      return (
-                                        <button
-                                          key={o._id}
-                                          type='button'
-                                          onClick={() => inlineUpdate(x._id, 'owner', o._id)}
-                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
-                                        >
-                                          <span className='truncate'>{o.name || o.email || o._id}</span>
-                                          {isActive && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
-                                        </button>
-                                      );
-                                    })}
-                                    {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-500'>{t('properties.noOwnersAvailable')}</div>}
-                                  </div>
-                                )}
-                              </div>
+                                      onClick={() => inlineUpdate(x._id, 'owner', o._id)}
+                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center gap-2 ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'}`}
+                                    >
+                                      <span className='truncate'>{o.name || o.email || o._id}</span>
+                                      {isActive && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                    </button>
+                                  );
+                                })}
+                                {owners.length === 0 && <div className='px-3 py-2 text-xs text-slate-500'>{t('properties.noOwnersAvailable')}</div>}
+                              </InlineDropdown>
                             </td>
                             {/* Status — inline editable */}
                             <td className='px-3 py-3'>
-                              <div className='relative' data-inline-dropdown>
-                                <button
-                                  type='button'
-                                  onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'status' ? null : { id: x._id, field: 'status' }); }}
-                                  className='rounded-lg px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-100 transition-colors'
-                                  title={t('properties.clickToChangeStatus')}
-                                >
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${pill}`}>
-                                    {listingStatusLabel(x.status)}
-                                  </span>
-                                </button>
-                                {editingCell?.id === x._id && editingCell?.field === 'status' && (
-                                  <div data-inline-dropdown className='absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1' onClick={(e) => e.stopPropagation()}>
-                                    {STATUS_ORDER.map((st) => {
-                                      const stPill = STATUS_STYLE[st]?.pill || 'bg-slate-100 text-slate-700 border-slate-200';
-                                      const stStripe = STATUS_STYLE[st]?.stripe || 'bg-slate-300';
-                                      return (
-                                        <button
-                                          key={st}
-                                          type='button'
-                                          onClick={() => inlineUpdate(x._id, 'status', st)}
-                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2.5 ${x.status === st ? 'bg-slate-50 font-medium' : ''}`}
-                                        >
-                                          <div className={`w-2 h-2 rounded-full ${stStripe}`} />
-                                          <span>{listingStatusLabel(st)}</span>
-                                          {x.status === st && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
+                              <InlineDropdown
+                                open={editingCell?.id === x._id && editingCell?.field === 'status'}
+                                width={192}
+                                trigger={
+                                  <button
+                                    type='button'
+                                    onClick={(e) => { e.stopPropagation(); setEditingCell(editingCell?.id === x._id && editingCell?.field === 'status' ? null : { id: x._id, field: 'status' }); }}
+                                    className='rounded-lg px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-100 transition-colors'
+                                    title={t('properties.clickToChangeStatus')}
+                                  >
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${pill}`}>
+                                      {listingStatusLabel(x.status)}
+                                    </span>
+                                  </button>
+                                }
+                              >
+                                {STATUS_ORDER.map((st) => {
+                                  const stStripe = STATUS_STYLE[st]?.stripe || 'bg-slate-300';
+                                  return (
+                                    <button
+                                      key={st}
+                                      type='button'
+                                      onClick={() => inlineUpdate(x._id, 'status', st)}
+                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2.5 ${x.status === st ? 'bg-slate-50 font-medium' : ''}`}
+                                    >
+                                      <div className={`w-2 h-2 rounded-full ${stStripe}`} />
+                                      <span>{listingStatusLabel(st)}</span>
+                                      {x.status === st && <svg aria-hidden='true' className='w-4 h-4 ml-auto text-indigo-600' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' /></svg>}
+                                    </button>
+                                  );
+                                })}
+                              </InlineDropdown>
                             </td>
                             <td className='px-4 py-3 text-right'>
                               <div className='flex items-center justify-end gap-1 hover-reveal transition-opacity'>
