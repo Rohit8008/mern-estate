@@ -289,6 +289,21 @@ export async function fetchWithRefresh(url, options = {}, silent = false) {
   return response;
 }
 
+// Client-side GET cache (opt-in via apiClient.get(url, { cache })). Module-level
+// so it is shared across every component and survives route changes.
+const _apiGetCache = new Map();    // key -> { data, at }
+const _apiGetInflight = new Map(); // key -> in-flight Promise
+
+/**
+ * Drop cached GETs. No argument clears everything (used after any mutation, and
+ * on sign-out / tenant switch, so nothing stale is ever served). A substring
+ * clears only matching URLs.
+ */
+export function clearApiCache(substr) {
+  if (!substr) { _apiGetCache.clear(); return; }
+  for (const k of [..._apiGetCache.keys()]) if (k.includes(substr)) _apiGetCache.delete(k);
+}
+
 // Enhanced API client with better error handling
 export class ApiClient {
   constructor(baseURL = '') {
@@ -332,36 +347,51 @@ export class ApiClient {
     }
   }
 
+  // Opt-in client cache for GETs: pass `{ cache: true }` (default 5 min TTL) or
+  // `{ cache: <ms> }`. Reference lists (categories, owners, property types) are
+  // refetched on every page/form open otherwise. Concurrent identical GETs share
+  // one request (dedupe). ANY mutation clears the whole cache (see below), so a
+  // create/update — and sign-out / act-as, which are POSTs — can never be served
+  // stale afterwards. Cached data is shared, so treat it as read-only.
   async get(endpoint, options = {}) {
-    return this.request(endpoint, { ...options, method: 'GET' });
+    const { cache, ...rest } = options;
+    const ttl = cache === true ? 5 * 60 * 1000 : (typeof cache === 'number' ? cache : 0);
+    if (!ttl) return this.request(endpoint, { ...rest, method: 'GET' });
+
+    const key = this.baseURL + endpoint;
+    const hit = _apiGetCache.get(key);
+    if (hit && Date.now() - hit.at < ttl) return hit.data;
+    if (_apiGetInflight.has(key)) return _apiGetInflight.get(key);
+
+    const p = this.request(endpoint, { ...rest, method: 'GET' })
+      .then((data) => { _apiGetCache.set(key, { data, at: Date.now() }); return data; })
+      .finally(() => _apiGetInflight.delete(key));
+    _apiGetInflight.set(key, p);
+    return p;
   }
 
   async post(endpoint, data, options = {}) {
-    return this.request(endpoint, {
-      ...options,
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const r = await this.request(endpoint, { ...options, method: 'POST', body: JSON.stringify(data) });
+    clearApiCache();
+    return r;
   }
 
   async put(endpoint, data, options = {}) {
-    return this.request(endpoint, {
-      ...options,
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    const r = await this.request(endpoint, { ...options, method: 'PUT', body: JSON.stringify(data) });
+    clearApiCache();
+    return r;
   }
 
   async patch(endpoint, data, options = {}) {
-    return this.request(endpoint, {
-      ...options,
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    const r = await this.request(endpoint, { ...options, method: 'PATCH', body: JSON.stringify(data) });
+    clearApiCache();
+    return r;
   }
 
   async delete(endpoint, options = {}) {
-    return this.request(endpoint, { ...options, method: 'DELETE' });
+    const r = await this.request(endpoint, { ...options, method: 'DELETE' });
+    clearApiCache();
+    return r;
   }
 
   async upload(endpoint, formData, options = {}) {
@@ -377,7 +407,9 @@ export class ApiClient {
       if (!response.ok) {
         logApiFailure({ method: 'POST', url, status: response.status, requestId: response.headers.get('X-Request-Id') });
       }
-      return await handleApiResponse(response, silent);
+      const result = await handleApiResponse(response, silent);
+      clearApiCache();
+      return result;
     } catch (error) {
       if (error instanceof TypeError) logApiFailure({ method: 'POST', url, status: 0, message: error.message });
       console.error('Upload request failed:', error);

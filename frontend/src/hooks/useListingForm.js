@@ -182,9 +182,9 @@ export function useListingForm({ mode, listingId, cloneFrom }) {
   useEffect(() => {
     let alive = true;
     Promise.all([
-      apiClient.get('/category/list', { silent: true }).catch(() => []),
-      apiClient.get('/owner/list', { silent: true }).catch(() => []),
-      apiClient.get('/property-types/list', { silent: true }).catch(() => []),
+      apiClient.get('/category/list', { silent: true, cache: true }).catch(() => []),
+      apiClient.get('/owner/list', { silent: true, cache: true }).catch(() => []),
+      apiClient.get('/property-types/list', { silent: true, cache: true }).catch(() => []),
     ]).then(([cats, owns, types]) => {
       if (!alive) return;
       const unwrap = (r) => (Array.isArray(r) ? r : r?.data || []);

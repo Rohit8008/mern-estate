@@ -208,8 +208,8 @@ export default function PropertiesBoard() {
     let alive = true;
     const unwrap = (r) => (Array.isArray(r) ? r : r?.data || []);
     Promise.all([
-      apiClient.get('/category/list', { silent: true }).catch(() => []),
-      apiClient.get('/property-types/list', { silent: true }).catch(() => []),
+      apiClient.get('/category/list', { silent: true, cache: true }).catch(() => []),
+      apiClient.get('/property-types/list', { silent: true, cache: true }).catch(() => []),
     ]).then(([cats, types]) => {
       if (!alive) return;
       setFilterCategories(unwrap(cats));
