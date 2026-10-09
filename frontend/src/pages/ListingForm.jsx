@@ -81,6 +81,23 @@ export default function ListingForm({ mode = 'create' }) {
 
   const geo = useAddressGeocoding(patch);
 
+  // New property in a colony: pre-fill "Where it is" from the colony's saved
+  // default location — drop the pin, set the colony name, and reverse-geocode
+  // the city/locality/state/pincode. Everything stays editable; we only touch
+  // empty fields and only once per colony, and never move a pin already placed.
+  const colonyFilledRef = useRef(null);
+  useEffect(() => {
+    if (mode !== 'create') return;
+    const cat = selectedCategory;
+    const dl = cat?.defaultLocation;
+    const hasDefault = dl && Number.isFinite(dl.lat) && Number.isFinite(dl.lng);
+    if (!cat || !hasDefault || colonyFilledRef.current === cat.slug) return;
+    colonyFilledRef.current = cat.slug;
+    if (form.location && Number.isFinite(form.location.lat)) return; // keep a placed pin
+    patch({ location: { lat: dl.lat, lng: dl.lng }, areaName: cat.name }, { overwrite: false });
+    geo.reverseGeocode(dl.lat, dl.lng);
+  }, [mode, selectedCategory, form.location, patch, geo]);
+
   // Fields the chosen category supplies itself; the matching built-in inputs
   // are hidden so the form does not ask the same thing twice.
   const categoryKeys = new Set(categoryFields.map((f) => f.key));
