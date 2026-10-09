@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { apiClient, parseJsonSafely, fetchWithRefresh } from '../utils/http';
 import { fieldProblem, fieldProblems, suggestKey } from '../utils/categoryFieldRules';
-import { PageHeader, EmptyState } from '../design-system';
+import { PageHeader, EmptyState, PageLoader } from '../design-system';
 import { HiOutlineArrowLeft, HiOutlineAdjustments, HiOutlinePlus } from 'react-icons/hi';
 import { usePermissions } from '../contexts/PermissionsContext';
 import LocationPicker from '../components/LocationPicker';
@@ -222,11 +222,7 @@ export default function AdminCategoryFields() {
   }
 
   if (!ready || loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (error && !category) {

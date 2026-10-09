@@ -7,6 +7,7 @@ import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { HiOutlineDocumentText } from 'react-icons/hi';
+import { PageLoader } from '../design-system';
 
 const DynamicListings = () => {
   const { categorySlug } = useParams();
@@ -104,11 +105,7 @@ const DynamicListings = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (error) {

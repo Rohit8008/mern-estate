@@ -1033,7 +1033,7 @@ export default function PropertiesBoard() {
                               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFilesQ(''); setQuickView(x); }
                             }}
                           >
-                            <td className='pl-4 pr-1 py-2.5' onClick={(e) => e.stopPropagation()}>
+                            <td className='pl-4 pr-1 py-3' onClick={(e) => e.stopPropagation()}>
                               <input
                                 type='checkbox'
                                 aria-label={`Select ${x.name}`}
@@ -1042,7 +1042,7 @@ export default function PropertiesBoard() {
                                 className='w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500'
                               />
                             </td>
-                            <td className='pl-2 pr-2 py-2.5'>
+                            <td className='pl-2 pr-2 py-3'>
                               <div className='flex items-center gap-3'>
                                 <div className='w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200'>
                                   {thumb ? (
@@ -1063,15 +1063,15 @@ export default function PropertiesBoard() {
                                 </div>
                               </div>
                             </td>
-                            <td className='px-3 py-2.5'>
+                            <td className='px-3 py-3'>
                               <div className='text-slate-700 text-[13px] truncate max-w-[200px]'>{x.city || '-'}</div>
                               {x.locality && <div className='text-[11px] text-slate-500 truncate'>{x.locality}</div>}
                             </td>
-                            <td className='px-3 py-2.5'>
+                            <td className='px-3 py-3'>
                               <span className='text-[12px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-md'>{x.type === 'rent' ? 'Rent' : x.type === 'lease' ? 'Lease' : 'Sale'}</span>
                               {x.propertyType && <div className='text-[11px] text-slate-500 mt-1 capitalize truncate'>{String(x.propertyType).replace(/[-_]+/g, ' ')}</div>}
                             </td>
-                            <td className='px-3 py-2.5'>
+                            <td className='px-3 py-3'>
                               <div className='font-semibold text-slate-900 text-[13px]'>
                                 {formatCurrency(x.regularPrice)}
                                 {x.type === 'rent' && Number(x.regularPrice) > 1 && <span className='font-normal text-slate-500'> / month</span>}
@@ -1081,7 +1081,7 @@ export default function PropertiesBoard() {
                               )}
                             </td>
                             {/* Agent — inline editable */}
-                            <td className='px-3 py-2.5'>
+                            <td className='px-3 py-3'>
                               <div className='relative' data-inline-dropdown>
                                 <button
                                   type='button'
@@ -1127,7 +1127,7 @@ export default function PropertiesBoard() {
                               </div>
                             </td>
                             {/* Owner — inline editable */}
-                            <td className='px-3 py-2.5'>
+                            <td className='px-3 py-3'>
                               <div className='relative' data-inline-dropdown>
                                 <button
                                   type='button'
@@ -1169,7 +1169,7 @@ export default function PropertiesBoard() {
                               </div>
                             </td>
                             {/* Status — inline editable */}
-                            <td className='px-3 py-2.5'>
+                            <td className='px-3 py-3'>
                               <div className='relative' data-inline-dropdown>
                                 <button
                                   type='button'
@@ -1203,7 +1203,7 @@ export default function PropertiesBoard() {
                                 )}
                               </div>
                             </td>
-                            <td className='px-4 py-2.5 text-right'>
+                            <td className='px-4 py-3 text-right'>
                               <div className='flex items-center justify-end gap-1 hover-reveal transition-opacity'>
                                 <button
                                   type='button'

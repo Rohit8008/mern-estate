@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { apiClient, normalizeImageUrl } from '../utils/http';
 import { formatDate, formatListingPrice } from '../utils/currency';
-import { PageHeader, Button, SearchBar } from '../design-system';
+import { PageHeader, Button, SearchBar, PageLoader } from '../design-system';
 import {
   HiRefresh, HiPlus, HiSearch, HiX,
   HiDocumentText, HiDownload, HiPrinter, HiMail, HiEye,
@@ -1595,10 +1595,7 @@ export default function ClientReportTemplate() {
       {activeTab === 'templates' && (
         <div>
             {loadingTemplates ? (
-              <div className='py-16 text-center'>
-                <div className='w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin mx-auto mb-3' />
-                <p className='text-sm text-slate-500'>{t('clientReport.loadingTemplates')}</p>
-              </div>
+              <PageLoader message={t('clientReport.loadingTemplates')} />
             ) : (
               <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
                 {filteredTemplates.map((template) => {
@@ -1755,10 +1752,7 @@ export default function ClientReportTemplate() {
       {activeTab === 'generated' && (
         <div>
             {loadingReports ? (
-              <div className='py-16 text-center'>
-                <div className='w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin mx-auto mb-3' />
-                <p className='text-sm text-slate-500'>{t('clientReport.loadingReports')}</p>
-              </div>
+              <PageLoader message={t('clientReport.loadingReports')} />
             ) : filteredReports.length === 0 ? (
               <div className='py-16 text-center'>
                 <HiDocumentText className='w-12 h-12 text-slate-300 mx-auto mb-3' aria-hidden='true' />

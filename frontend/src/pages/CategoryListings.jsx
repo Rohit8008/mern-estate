@@ -6,7 +6,7 @@ import ListingItem from '../components/ListingItem';
 import { apiClient } from '../utils/http';
 import { useBuyerView } from '../contexts/BuyerViewContext';
 import { useTranslation } from 'react-i18next';
-import { EmptyState, Button } from '../design-system';
+import { EmptyState, Button, PageLoader } from '../design-system';
 
 export default function CategoryListings() {
   const { t } = useTranslation();
@@ -82,14 +82,7 @@ export default function CategoryListings() {
         </div>
 
         {/* Loading State */}
-        {loading && (
-          <div className='flex items-center justify-center py-12'>
-            <div className='flex items-center gap-3'>
-              <div className='w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin'></div>
-              <span className='text-slate-600'>{t('categoryListings.loadingProperties')}</span>
-            </div>
-          </div>
-        )}
+        {loading && <PageLoader message={t('categoryListings.loadingProperties')} />}
 
         {/* Error State */}
         {error && (
