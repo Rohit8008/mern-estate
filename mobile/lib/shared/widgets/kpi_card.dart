@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'app_card.dart';
 
-/// Port of design-system/KpiCard.jsx — accent top border, icon chip,
-/// tabular-nums value, optional trend pill.
+/// Port of design-system/KpiCard.jsx — gradient-filled icon tile with a
+/// coloured glow, tabular-nums value, optional trend pill.
 class KpiCard extends StatelessWidget {
   const KpiCard({
     super.key,
@@ -35,7 +35,6 @@ class KpiCard extends StatelessWidget {
     final ink = Theme.of(context).colorScheme.onSurface;
 
     return AppCard(
-      topAccent: swatch.bar,
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,14 +53,20 @@ class KpiCard extends StatelessWidget {
               ),
               if (icon != null)
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: swatch.iconBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: swatch.iconRing),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [swatch.tileStart, swatch.tileEnd],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: swatch.glow.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
                   ),
-                  child: Icon(icon, size: 18, color: swatch.text),
+                  child: Icon(icon, size: 20, color: AppColors.white),
                 ),
             ],
           ),

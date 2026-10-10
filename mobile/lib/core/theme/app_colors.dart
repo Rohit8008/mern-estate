@@ -16,16 +16,21 @@ abstract final class AppColors {
   static const slate900 = Color(0xFF0F172A);
   static const slate950 = Color(0xFF020617);
 
-  // Indigo — brand accent, primary CTAs on dark surfaces.
-  static const indigo50 = Color(0xFFEEF2FF);
-  static const indigo100 = Color(0xFFE0E7FF);
-  static const indigo200 = Color(0xFFC7D2FE);
-  static const indigo300 = Color(0xFFA5B4FC);
-  static const indigo400 = Color(0xFF818CF8);
-  static const indigo500 = Color(0xFF6366F1);
-  static const indigo600 = Color(0xFF4F46E5);
-  static const indigo700 = Color(0xFF4338CA);
-  static const indigo800 = Color(0xFF3730A3);
+  // Brand accent — a deep petrol blue, kept under the `indigo*` names so every
+  // call site (theme seed, primary, input focus, bottom nav, KpiCard accent)
+  // follows along. The web CRM re-pointed its Tailwind `indigo` ramp to this
+  // exact petrol ramp (tailwind.config.js) to retire the stock violet-blue
+  // #4F46E5 — the most recognisable "generated UI" tell — so matching the hex
+  // values here keeps the app and the website one brand.
+  static const indigo50 = Color(0xFFF3F8FE);
+  static const indigo100 = Color(0xFFE1EEFC);
+  static const indigo200 = Color(0xFFC3DEF8);
+  static const indigo300 = Color(0xFF9AC5EF);
+  static const indigo400 = Color(0xFF6FA7DD);
+  static const indigo500 = Color(0xFF488AC5);
+  static const indigo600 = Color(0xFF2B6FAA);
+  static const indigo700 = Color(0xFF1D588A);
+  static const indigo800 = Color(0xFF17456D);
 
   /// Prices and amounts: indigo 700 is unreadable on a dark card.
   static Color moneyInk(BuildContext context) =>
@@ -85,36 +90,57 @@ abstract final class AppColors {
 enum AppAccent { blue, amber, emerald, purple, rose, indigo, slate }
 
 class AppAccentSwatch {
-  const AppAccentSwatch({required this.bar, required this.iconBg, required this.iconRing, required this.text});
+  const AppAccentSwatch({
+    required this.bar,
+    required this.iconBg,
+    required this.iconRing,
+    required this.text,
+    required this.tileStart,
+    required this.tileEnd,
+    required this.glow,
+  });
 
   final Color bar;
   final Color iconBg;
   final Color iconRing;
   final Color text;
 
+  /// Gradient fill for the KpiCard icon tile (500 -> 600), with [glow] as the
+  /// coloured drop-shadow beneath it — mirrors the web KpiCard's gradient tile.
+  final Color tileStart;
+  final Color tileEnd;
+  final Color glow;
+
   static AppAccentSwatch of(AppAccent accent) => switch (accent) {
         AppAccent.blue => const AppAccentSwatch(
-            bar: AppColors.blue500, iconBg: AppColors.blue50, iconRing: AppColors.blue100, text: AppColors.blue600),
+            bar: AppColors.blue500, iconBg: AppColors.blue50, iconRing: AppColors.blue100, text: AppColors.blue600,
+            tileStart: AppColors.blue500, tileEnd: AppColors.blue600, glow: AppColors.blue500),
         AppAccent.amber => const AppAccentSwatch(
-            bar: AppColors.amber500, iconBg: AppColors.amber50, iconRing: AppColors.amber100, text: AppColors.amber600),
+            bar: AppColors.amber500, iconBg: AppColors.amber50, iconRing: AppColors.amber100, text: AppColors.amber600,
+            tileStart: AppColors.amber500, tileEnd: AppColors.amber600, glow: AppColors.amber500),
         AppAccent.emerald => const AppAccentSwatch(
             bar: AppColors.emerald500,
             iconBg: AppColors.emerald50,
             iconRing: AppColors.emerald100,
-            text: AppColors.emerald600),
+            text: AppColors.emerald600,
+            tileStart: AppColors.emerald500, tileEnd: AppColors.emerald600, glow: AppColors.emerald500),
         AppAccent.purple => const AppAccentSwatch(
             bar: AppColors.purple500,
             iconBg: AppColors.purple50,
             iconRing: AppColors.purple100,
-            text: AppColors.purple600),
+            text: AppColors.purple600,
+            tileStart: AppColors.purple500, tileEnd: AppColors.purple600, glow: AppColors.purple500),
         AppAccent.rose => const AppAccentSwatch(
-            bar: AppColors.rose500, iconBg: AppColors.rose50, iconRing: AppColors.rose100, text: AppColors.rose600),
+            bar: AppColors.rose500, iconBg: AppColors.rose50, iconRing: AppColors.rose100, text: AppColors.rose600,
+            tileStart: AppColors.rose500, tileEnd: AppColors.rose600, glow: AppColors.rose500),
         AppAccent.indigo => const AppAccentSwatch(
             bar: AppColors.indigo500,
             iconBg: AppColors.indigo50,
             iconRing: AppColors.indigo100,
-            text: AppColors.indigo600),
+            text: AppColors.indigo600,
+            tileStart: AppColors.indigo500, tileEnd: AppColors.indigo600, glow: AppColors.indigo500),
         AppAccent.slate => const AppAccentSwatch(
-            bar: AppColors.slate500, iconBg: AppColors.slate100, iconRing: AppColors.slate200, text: AppColors.slate600),
+            bar: AppColors.slate500, iconBg: AppColors.slate100, iconRing: AppColors.slate200, text: AppColors.slate600,
+            tileStart: AppColors.slate600, tileEnd: AppColors.slate700, glow: AppColors.slate500),
       };
 }
