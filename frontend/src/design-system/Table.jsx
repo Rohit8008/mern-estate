@@ -14,7 +14,9 @@ export function Table({ children, className, maxHeight }) {
   return (
     // `relative`: an absolutely positioned child (a visually-hidden header label)
     // is clipped by the scroll box only when the box is its containing block.
-    <div className={cx('relative rounded-xl border border-slate-200', maxHeight ? cx('overflow-auto', maxHeight) : 'overflow-x-auto')}>
+    // bg-white + shadow-sm make the table read as a data card floating on the
+    // slate-50 page rather than dissolving into it.
+    <div className={cx('relative rounded-2xl border border-slate-200 bg-white shadow-sm', maxHeight ? cx('overflow-auto', maxHeight) : 'overflow-x-auto')}>
       <table className={cx('w-full text-sm text-left', className)}>
         {children}
       </table>

@@ -10,14 +10,16 @@ const SIZE = {
 };
 
 const VARIANT = {
-  primary:   'bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950 disabled:bg-slate-400',
+  // Filled buttons carry a soft shadow that lifts a touch on hover, so the
+  // primary action reads as raised. Ghost/secondary stay flat on purpose.
+  primary:   'bg-slate-900 text-white shadow-sm hover:bg-slate-800 hover:shadow-md active:bg-slate-950 disabled:bg-slate-400 disabled:shadow-none',
   secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50',
   ghost:     'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50',
-  danger:    'bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 disabled:bg-rose-300',
-  brand:     'bg-indigo-600 text-white hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-indigo-300',
+  danger:    'bg-rose-600 text-white shadow-sm hover:bg-rose-700 hover:shadow-md hover:shadow-rose-500/25 active:bg-rose-800 disabled:bg-rose-300 disabled:shadow-none',
+  brand:     'bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 hover:shadow-md hover:shadow-brand-500/30 active:bg-indigo-700 disabled:bg-indigo-300 disabled:shadow-none',
   // For use on dark backgrounds
   dark:      'bg-white/10 text-white border border-white/10 hover:bg-white/20 disabled:opacity-50',
-  darkBrand: 'bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-indigo-800',
+  darkBrand: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 hover:shadow-md hover:shadow-brand-500/30 disabled:bg-indigo-800 disabled:shadow-none',
 };
 
 /**

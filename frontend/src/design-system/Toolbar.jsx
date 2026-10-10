@@ -10,7 +10,7 @@ function cx(...xs) { return xs.filter(Boolean).join(' '); }
 export default function Toolbar({ left, right, children, className }) {
   return (
     <div className={cx(
-      'flex flex-wrap items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm',
+      'flex flex-wrap items-center justify-between gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2.5 shadow-sm',
       className
     )}>
       <div className='flex flex-wrap items-center gap-2 flex-1 min-w-0'>{left}</div>

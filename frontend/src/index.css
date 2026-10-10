@@ -441,7 +441,8 @@ html {
         scroll-behavior: auto !important;
     }
 
-    .crm-animate-in { animation: none; opacity: 1; transform: none; }
+    .crm-animate-in,
+    .crm-stagger > * { animation: none; opacity: 1; transform: none; }
 }
 
 /* ═══════════════════════════════════════════
@@ -603,6 +604,21 @@ a, button, [role='button'] { -webkit-tap-highlight-color: transparent; }
 .crm-delay-5 { animation-delay: 0.24s; }
 .crm-delay-6 { animation-delay: 0.29s; }
 
+/* Stagger helper — apply to a grid/row and its direct children cascade up on
+   mount, no per-card delay class needed. The cards a dashboard leads with read
+   as arriving, which is what lifts a metric row from "rendered" to "composed". */
+.crm-stagger > * {
+    animation: crm-fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.crm-stagger > *:nth-child(1) { animation-delay: 0.03s; }
+.crm-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.crm-stagger > *:nth-child(3) { animation-delay: 0.13s; }
+.crm-stagger > *:nth-child(4) { animation-delay: 0.18s; }
+.crm-stagger > *:nth-child(5) { animation-delay: 0.23s; }
+.crm-stagger > *:nth-child(6) { animation-delay: 0.28s; }
+.crm-stagger > *:nth-child(7) { animation-delay: 0.33s; }
+.crm-stagger > *:nth-child(8) { animation-delay: 0.38s; }
+
 /* Nav active glow — used by CrmShell NavItem */
 .crm-nav-active {
     background-color: rgba(111, 167, 221, 0.16);
@@ -673,6 +689,27 @@ a, button, [role='button'] { -webkit-tap-highlight-color: transparent; }
   }
 
   a[href]::after { content: ""; } /* no URL footnotes on an internal report */
+}
+
+/* ═══════════════════════════════════════════
+   SCROLL REVEAL (public site)
+   Sections fade + lift as they enter the
+   viewport, once. The <Reveal> component toggles
+   .reveal-in via an IntersectionObserver; here is
+   the motion, surrendered under reduced-motion.
+═══════════════════════════════════════════ */
+.reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+.reveal-in {
+    opacity: 1;
+    transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
 }
 
 /* Landing page deal journey: a new activity row eases in when the deal moves.

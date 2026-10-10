@@ -5,9 +5,9 @@ export default function Card({ children, className, padding = true, hover = fals
     <div
       {...props}
       className={cx(
-        'bg-white border border-slate-200 rounded-xl shadow-sm',
+        'bg-white border border-slate-200 rounded-2xl shadow-sm',
         padding && 'p-5',
-        hover && 'hover:shadow-md transition-shadow',
+        hover && 'hover:shadow-lg hover:-translate-y-0.5 transition-[box-shadow,transform] duration-200',
         className
       )}
     >

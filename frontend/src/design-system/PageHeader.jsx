@@ -14,14 +14,19 @@ export default function PageHeader({ title, description, actions, dark = false, 
   if (dark) {
     return (
       <div className={cx(
-        'relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-5 overflow-hidden',
+        'relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl px-6 py-6 overflow-hidden ring-1 ring-white/5 shadow-lg',
         className
       )}>
+        {/* Brand aurora — a soft bloom of the workspace accent in the top-right,
+            and a cooler one bottom-left, so the banner has depth rather than a
+            flat slate wash. Decorative, behind the dot grid. */}
+        <div className='absolute -top-24 -right-16 w-80 h-80 rounded-full bg-brand-500/20 blur-3xl pointer-events-none' aria-hidden='true' />
+        <div className='absolute -bottom-28 -left-10 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none' aria-hidden='true' />
         <div className='absolute inset-0 crm-banner-dots pointer-events-none' aria-hidden='true' />
         <div className='relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
           <div className='min-w-0'>
-            <h1 className='text-xl font-bold text-white tracking-tight'>{title}</h1>
-            {description && <p className='text-slate-400 text-sm mt-0.5'>{description}</p>}
+            <h1 className='text-2xl font-bold text-white tracking-tight'>{title}</h1>
+            {description && <p className='text-slate-300/80 text-sm mt-1'>{description}</p>}
           </div>
           {actions && <div className='flex items-center gap-2 flex-shrink-0'>{actions}</div>}
         </div>

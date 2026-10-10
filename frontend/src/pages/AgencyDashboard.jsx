@@ -372,7 +372,7 @@ function CustomWidget({ widget, onRemove, onToggleSize, analytics, propertyStats
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`bg-white border-2 rounded-xl p-5 flex flex-col overflow-hidden transition-all ${isDragOver ? 'border-blue-400 bg-blue-50/40 scale-[1.02]' : 'border-slate-200'
+      className={`bg-white border-2 rounded-2xl p-5 flex flex-col overflow-hidden transition-all ${isDragOver ? 'border-blue-400 bg-blue-50/40 scale-[1.02]' : 'border-slate-200'
         } ${widget.span === 'lg' ? 'col-span-1 lg:col-span-2' : 'col-span-1'}`}
     >
       <div className='flex items-center justify-between mb-3 flex-shrink-0'>
@@ -721,7 +721,7 @@ export default function AgencyDashboard() {
       <OnboardingChecklist />
 
       {/* Toolbar */}
-      <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-2.5 shadow-sm'>
+      <div className='flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-2xl p-2.5 shadow-sm'>
         <button type="button" onClick={() => openWidgetModal()} className='px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium flex items-center gap-1.5 hover:bg-slate-800 transition-colors'>
           <HiPlus className='w-4 h-4' aria-hidden='true' />{t('agencyDashboard.addWidget')}</button>
         <div className='h-5 w-px bg-slate-200' />
@@ -806,7 +806,7 @@ export default function AgencyDashboard() {
           </div>
 
           {/* KPI Cards */}
-          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+          <div className='crm-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
             {(
               <KpiCard
                 title={t('agencyDashboard.totalProperties')}
@@ -867,7 +867,7 @@ export default function AgencyDashboard() {
                 <h2 className='text-base font-semibold text-slate-900'>{t('agencyDashboard.salesOverview')}</h2>
                 <p className='text-slate-500 text-xs mt-0.5'>{t('agencyDashboard.salesOverviewSubtitle')}</p>
               </div>
-              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+              <div className='crm-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
                 <KpiCard
                   title={t('agencyDashboard.openDeals')}
                   value={fmt(crm.deals?.activeDeals)}
@@ -916,7 +916,7 @@ export default function AgencyDashboard() {
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {/* Listing status bar chart */}
             {(
-              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='bg-white border border-slate-200 rounded-2xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.listingStatus')}</h3>
                 {statusBreakdown.length > 0 ? (
                   <Chart
@@ -943,7 +943,7 @@ export default function AgencyDashboard() {
 
             {/* Monthly trend line chart */}
             {(
-              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='bg-white border border-slate-200 rounded-2xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.newListingsByMonth')}</h3>
                 {monthlyTrend.length > 1 ? (
                   <Chart
@@ -952,13 +952,13 @@ export default function AgencyDashboard() {
                     options={{
                       chart: { toolbar: { show: false }, fontFamily: 'inherit', sparkline: { enabled: false } },
                       stroke: { curve: 'smooth', width: 3 },
-                      colors: ['#6366f1'],
+                      colors: ['#2b6faa'],
                       fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1, stops: [0, 90, 100] } },
                       dataLabels: { enabled: false },
                       xaxis: { categories: monthlyTrend.map((d) => d.month), labels: { style: { fontSize: '11px', colors: chartAxisColor } } },
                       yaxis: { labels: { style: { fontSize: '11px', colors: chartAxisColor } }, min: 0 },
                       grid: { borderColor: chartGridColor, strokeDashArray: 4 },
-                      markers: { size: 5, colors: ['#6366f1'], strokeColors: chartStrokeColor, strokeWidth: 2, hover: { size: 7 } },
+                      markers: { size: 5, colors: ['#2b6faa'], strokeColors: chartStrokeColor, strokeWidth: 2, hover: { size: 7 } },
                       tooltip: { theme: chartTooltipTheme },
                     }}
                     series={[{ name: 'Listings', data: monthlyTrend.map((d) => d.count) }]}
@@ -973,7 +973,7 @@ export default function AgencyDashboard() {
           {/* Properties by Category & City */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {props.byCategory?.length > 0 && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='bg-white border border-slate-200 rounded-2xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.propertiesByCategory')}</h3>
                 <Chart
                   type='donut'
@@ -981,7 +981,7 @@ export default function AgencyDashboard() {
                   options={{
                     chart: { fontFamily: 'inherit' },
                     labels: props.byCategory.map((cat) => cat.categoryName || 'Unknown'),
-                    colors: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+                    colors: ['#2b6faa', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
                     legend: { position: 'bottom', fontSize: '12px', labels: { colors: chartAxisColor } },
                     dataLabels: { enabled: true, style: { fontSize: '11px', fontWeight: 600 } },
                     plotOptions: { pie: { donut: { size: '55%', labels: { show: true, total: { show: true, label: 'Total', fontSize: '12px', color: chartAxisColor, formatter: () => props.total } } } } },
@@ -994,7 +994,7 @@ export default function AgencyDashboard() {
             )}
 
             {props.byCity?.length > 0 && (
-              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='bg-white border border-slate-200 rounded-2xl p-5 shadow-sm'>
                 <h3 className='text-sm font-semibold text-slate-700 mb-4'>{t('agencyDashboard.topCities')}</h3>
                 <Chart
                   type='bar'
@@ -1018,7 +1018,7 @@ export default function AgencyDashboard() {
           {/* Recent Activity */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
             {(
-              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='bg-white border border-slate-200 rounded-2xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
                   <h3 className='text-sm font-semibold text-slate-700'>{t('agencyDashboard.recentListings')}</h3>
                   <Link to='/properties' className='text-xs font-medium text-slate-500 hover:text-slate-900'>{t('agencyDashboard.viewAll')}</Link>
@@ -1046,7 +1046,7 @@ export default function AgencyDashboard() {
             )}
 
             {(
-              <div className='bg-white border border-slate-200 rounded-xl p-5 shadow-sm'>
+              <div className='bg-white border border-slate-200 rounded-2xl p-5 shadow-sm'>
                 <div className='flex items-center justify-between mb-4'>
                   <h3 className='text-sm font-semibold text-slate-700'>{t('agencyDashboard.recentBuyerRequirements')}</h3>
                   <Link to='/buyer-requirements' className='text-xs font-medium text-slate-500 hover:text-slate-900'>{t('agencyDashboard.viewAll')}</Link>
