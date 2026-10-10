@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 export default function Footer() {
   const { t } = useTranslation();
   return (
-    <footer className='bg-slate-950 text-white'>
+    <footer className='bg-brand-950 text-white'>
       <div className='max-w-7xl mx-auto px-4 py-14'>
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10'>
 
@@ -41,7 +41,7 @@ export default function Footer() {
                 <li key={label}>
                   <Link
                     to={to}
-                    className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'
+                    className='flex items-center gap-2 text-slate-400 hover:text-white hover:translate-x-1 transition-all duration-200 text-sm'
                   >
                     <Icon className='w-3.5 h-3.5 text-brand-400 flex-shrink-0' aria-hidden='true' />
                     {label}
@@ -51,7 +51,7 @@ export default function Footer() {
               <li>
                 <Link
                   to='/sign-up'
-                  className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'
+                  className='flex items-center gap-2 text-slate-400 hover:text-white hover:translate-x-1 transition-all duration-200 text-sm'
                 >
                   <HiOutlineLockClosed className='w-3.5 h-3.5 text-slate-500 flex-shrink-0' aria-hidden='true' />{t('footer.registrationsClosed')}</Link>
               </li>
@@ -88,11 +88,11 @@ export default function Footer() {
           <div>
             <h2 className='text-sm font-semibold text-white mb-5'>{t('footer.getInTouch')}</h2>
             <div className='space-y-3 mb-6'>
-              <a href={`tel:${OWNER_PHONE.replace(/\s/g, '')}`} className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'>
+              <a href={`tel:${OWNER_PHONE.replace(/\s/g, '')}`} className='flex items-center gap-2 text-slate-400 hover:text-white hover:translate-x-1 transition-all duration-200 text-sm'>
                 <HiOutlinePhone className='w-4 h-4 text-brand-400 flex-shrink-0' aria-hidden='true' />
                 {OWNER_PHONE}
               </a>
-              <a href={`mailto:${OWNER_EMAIL}`} className='flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm'>
+              <a href={`mailto:${OWNER_EMAIL}`} className='flex items-center gap-2 text-slate-400 hover:text-white hover:translate-x-1 transition-all duration-200 text-sm'>
                 <HiOutlineMail className='w-4 h-4 text-brand-400 flex-shrink-0' aria-hidden='true' />
                 {OWNER_EMAIL}
               </a>
@@ -107,7 +107,7 @@ export default function Footer() {
       </div>
 
       {/* Bottom bar */}
-      <div className='border-t border-slate-800'>
+      <div className='border-t border-white/10'>
         <div className='max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3 text-slate-400 text-xs'>
           <span>{t('footer.2026RealVistaAllRightsReserved')}</span>
           <nav aria-label={t('footer.legal')} className='flex flex-wrap justify-center gap-x-5 gap-y-2'>

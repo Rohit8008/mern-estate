@@ -9,6 +9,7 @@ import { apiClient } from '../utils/http';
 import usePageTitle from '../hooks/usePageTitle';
 import { CTA_DEMO, OWNER_PHONE, OWNER_EMAIL } from '../utils/marketingCopy';
 import DealJourney from '../components/landing/DealJourney';
+import Reveal from '../components/Reveal';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -148,7 +149,7 @@ export default function Home() {
       {/* ── HERO ─────────────────────────────────────────────────────────────── */}
       <section className='pt-28 pb-20 lg:pt-36 lg:pb-28'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-12 lg:gap-10 items-start'>
-          <div className='lg:col-span-6 xl:col-span-6 lg:pt-10'>
+          <Reveal className='lg:col-span-6 xl:col-span-6 lg:pt-10'>
             <h1 className='font-display font-bold text-[clamp(2.25rem,4.6vw,3.75rem)] leading-[1.08] tracking-[-0.02em] text-brand-950 text-balance max-w-[13ch]'>
               {t('landing.heroTitle')}
             </h1>
@@ -174,7 +175,7 @@ export default function Home() {
               {t('landing.inviteNote')}{' '}
               <Link to='/download' className='font-medium text-brand-700 hover:underline'>{t('landing.getAndroidApp')}</Link>
             </p>
-          </div>
+          </Reveal>
 
           <div className='lg:col-span-6 xl:col-span-5 xl:col-start-8'>
             <DealJourney />
@@ -186,26 +187,26 @@ export default function Home() {
       <section className='bg-white border-y border-brand-950/5 py-20 lg:py-28'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-12'>
           <div className='lg:col-span-4'>
-            <div className='lg:sticky lg:top-28'>
+            <Reveal className='lg:sticky lg:top-28'>
               <h2 className='font-display font-bold text-3xl lg:text-4xl leading-[1.1] tracking-[-0.015em] text-balance'>
                 {t('landing.book.title')}
               </h2>
               <p className='mt-5 text-lg text-slate-600 leading-relaxed max-w-[36ch] text-pretty'>{t('landing.book.body')}</p>
-            </div>
+            </Reveal>
           </div>
           <ul className='lg:col-span-8 grid sm:grid-cols-2 gap-x-12 gap-y-14'>
-            {BOOK_ITEMS.map(({ key, icon: Icon }) => (
-              <li key={key}>
-                <div className='w-12 h-12 rounded-2xl bg-brand-50 ring-1 ring-brand-100 text-brand-700 flex items-center justify-center'>
+            {BOOK_ITEMS.map(({ key, icon: Icon }, i) => (
+              <Reveal as='li' key={key} delay={i * 70} className='group'>
+                <div className='w-12 h-12 rounded-2xl bg-brand-50 ring-1 ring-brand-100 text-brand-700 flex items-center justify-center transition-[transform,background-color,box-shadow] duration-300 group-hover:scale-110 group-hover:bg-brand-100 group-hover:shadow-md group-hover:shadow-brand-500/15'>
                   <Icon className='w-6 h-6' aria-hidden='true' />
                 </div>
-                <h3 className='mt-5 font-display font-bold text-xl leading-snug tracking-[-0.01em] text-balance'>
+                <h3 className='mt-5 font-display font-bold text-xl leading-snug tracking-[-0.01em] text-balance transition-colors duration-300 group-hover:text-brand-800'>
                   {t(`landing.book.items.${key}.title`)}
                 </h3>
                 <p className='mt-2 text-slate-600 leading-relaxed max-w-[44ch] text-pretty'>
                   {t(`landing.book.items.${key}.body`)}
                 </p>
-              </li>
+              </Reveal>
             ))}
           </ul>
         </div>
@@ -219,18 +220,18 @@ export default function Home() {
       */}
       <section className='py-20 lg:py-28'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-12'>
-          <div className='lg:col-span-4'>
+          <Reveal className='lg:col-span-4'>
             <h2 className='font-display font-bold text-3xl lg:text-4xl leading-[1.1] tracking-[-0.015em] text-balance'>
               {t('home.straightAnswers')}
             </h2>
             <p className='mt-5 text-lg text-slate-600 leading-relaxed max-w-[36ch] text-pretty'>{t('home.theQuestionsAgencyOwnersAskOn')}</p>
-          </div>
+          </Reveal>
           <dl className='lg:col-span-8 divide-y divide-brand-950/10 border-y border-brand-950/10'>
-            {FAQ_KEYS.map((key) => (
-              <div key={key} className='py-7 grid md:grid-cols-5 gap-3 md:gap-10'>
-                <dt className='md:col-span-2 font-display font-bold text-lg leading-snug text-balance'>{t(`landing.faq.${key}.q`)}</dt>
+            {FAQ_KEYS.map((key, i) => (
+              <Reveal key={key} delay={i * 60} className='py-7 grid md:grid-cols-5 gap-3 md:gap-10 group'>
+                <dt className='md:col-span-2 font-display font-bold text-lg leading-snug text-balance transition-colors duration-300 group-hover:text-brand-800'>{t(`landing.faq.${key}.q`)}</dt>
                 <dd className='md:col-span-3 text-slate-600 leading-relaxed text-pretty'>{t(`landing.faq.${key}.a`)}</dd>
-              </div>
+              </Reveal>
             ))}
           </dl>
         </div>
@@ -239,13 +240,13 @@ export default function Home() {
       {/* ── CLOSING ──────────────────────────────────────────────────────────── */}
       <section className='bg-brand-950 text-white'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-24 grid lg:grid-cols-12 gap-10 items-end'>
-          <div className='lg:col-span-7'>
+          <Reveal className='lg:col-span-7'>
             <h2 className='font-display font-bold text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.02em] text-balance max-w-[16ch]'>
               {t('home.seeItAgainstYourOwnPipeline')}
             </h2>
             <p className='mt-6 text-lg text-brand-100 max-w-[44ch] text-pretty'>{t('home.a30MinuteWalkthroughMappedTo')}</p>
-          </div>
-          <div className='lg:col-span-5 lg:justify-self-end flex flex-col gap-6'>
+          </Reveal>
+          <Reveal delay={120} className='lg:col-span-5 lg:justify-self-end flex flex-col gap-6'>
             <button type="button"
               onClick={openModal}
               className='inline-flex items-center justify-center gap-2 rounded-full bg-white hover:bg-brand-50 active:scale-[0.98] text-brand-950 px-8 py-4 font-semibold transition-[background-color,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-950'
@@ -263,7 +264,7 @@ export default function Home() {
                 {OWNER_EMAIL}
               </a>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 

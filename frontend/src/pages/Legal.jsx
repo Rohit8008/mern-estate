@@ -223,29 +223,32 @@ const REFUNDS = [
   },
 ];
 
+/** A stable anchor id from a section heading, for the "on this page" nav. */
+const slugify = (s) => s.toLowerCase().replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '');
+
 function Section({ heading, body, list, after, table, link }) {
   const paragraphs = Array.isArray(body) ? body : body ? [body] : [];
   return (
-    <section>
-      <h2 className='text-lg font-bold text-slate-900 mb-2'>{heading}</h2>
+    <section id={slugify(heading)} className='scroll-mt-24'>
+      <h2 className='font-display text-lg font-bold text-brand-950 mb-2 tracking-[-0.01em]'>{heading}</h2>
       <div className='space-y-3 text-slate-600 leading-relaxed max-w-[68ch] text-pretty'>
         {paragraphs.map((p) => <p key={p.slice(0, 40)}>{p}</p>)}
         {list && (
-          <ul className='list-disc pl-5 space-y-2'>
+          <ul className='list-disc pl-5 space-y-2 marker:text-brand-400'>
             {list.map((item) => <li key={item.slice(0, 40)}>{item}</li>)}
           </ul>
         )}
         {table && (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-sm border border-slate-200 rounded-lg'>
-              <thead className='bg-slate-100 text-slate-900'>
-                <tr>{table.head.map((h) => <th key={h} scope='col' className='text-left font-semibold px-3 py-2'>{h}</th>)}</tr>
+          <div className='overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm'>
+            <table className='w-full text-sm'>
+              <thead className='bg-slate-50 text-slate-500 border-b border-slate-200'>
+                <tr>{table.head.map((h) => <th key={h} scope='col' className='text-left text-xs font-semibold uppercase tracking-wider px-4 py-3'>{h}</th>)}</tr>
               </thead>
-              <tbody className='divide-y divide-slate-200'>
+              <tbody className='divide-y divide-slate-100'>
                 {table.rows.map(([name, ...cells]) => (
-                  <tr key={name}>
-                    <th scope='row' className='text-left font-mono font-medium text-slate-900 px-3 py-2 align-top whitespace-nowrap'>{name}</th>
-                    {cells.map((c) => <td key={c} className='px-3 py-2 align-top'>{c}</td>)}
+                  <tr key={name} className='hover:bg-slate-50/60 transition-colors'>
+                    <th scope='row' className='text-left font-mono font-medium text-brand-800 px-4 py-3 align-top whitespace-nowrap'>{name}</th>
+                    {cells.map((c) => <td key={c} className='px-4 py-3 align-top text-slate-600'>{c}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -309,26 +312,53 @@ function LegalPage({ title, intro, sections }) {
   usePageTitle(title);
 
   return (
-    <main className='max-w-3xl mx-auto px-4 py-16 lg:py-20'>
-      <Link
-        to='/'
-        className='inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors mb-10'
-      >
-        <HiOutlineArrowLeft className='w-4 h-4' aria-hidden='true' />{t('legal.backToHome')}</Link>
+    <main className='bg-[#f3f5f4] min-h-[calc(100vh-3.5rem)]'>
+      <div className='max-w-6xl mx-auto px-4 py-12 lg:py-16'>
+        <Link
+          to='/'
+          className='inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-brand-700 transition-colors mb-8 group'
+        >
+          <HiOutlineArrowLeft className='w-4 h-4 transition-transform group-hover:-translate-x-0.5' aria-hidden='true' />{t('legal.backToHome')}</Link>
 
-      <article>
-        <header className='mb-10 pb-8 border-b border-slate-200'>
-          <h1 className='text-4xl font-extrabold text-slate-900 tracking-[-0.03em] mb-3'>{title}</h1>
-          <p className='text-slate-600 leading-relaxed max-w-[62ch] text-pretty'>{intro}</p>
-          <p className='text-slate-600 text-sm mt-4 tabular-nums'>Last updated {LEGAL_UPDATED}</p>
-        </header>
+        <div className='lg:grid lg:grid-cols-[13rem,1fr] lg:gap-10 xl:gap-14'>
+          {/* On-page navigation for the longer policies — a quick way to jump,
+              and a sense of how much there is. Desktop only; it would just push
+              the content down on a phone. */}
+          <aside className='hidden lg:block'>
+            <nav aria-label='On this page' className='sticky top-24'>
+              <p className='text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3'>On this page</p>
+              <ul className='space-y-1 border-l border-slate-200'>
+                {sections.map((s) => (
+                  <li key={s.heading}>
+                    <a
+                      href={`#${slugify(s.heading)}`}
+                      className='block -ml-px border-l-2 border-transparent pl-3 py-1 text-sm text-slate-500 hover:text-brand-700 hover:border-brand-400 transition-colors'
+                    >
+                      {s.heading}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </aside>
 
-        <div className='space-y-9'>
-          {sections.map((section) => <Section key={section.heading} {...section} />)}
+          <article className='bg-white rounded-2xl border border-slate-200 shadow-sm px-6 sm:px-10 py-10 lg:py-12 crm-animate-in'>
+            <header className='mb-10 pb-8 border-b border-slate-200'>
+              <span className='inline-flex items-center rounded-full bg-brand-50 text-brand-700 ring-1 ring-brand-100 px-3 py-1 text-xs font-semibold tabular-nums mb-4'>
+                Last updated {LEGAL_UPDATED}
+              </span>
+              <h1 className='font-display text-4xl font-bold text-brand-950 tracking-[-0.03em] mb-3'>{title}</h1>
+              <p className='text-slate-600 leading-relaxed max-w-[62ch] text-pretty'>{intro}</p>
+            </header>
+
+            <div className='space-y-9'>
+              {sections.map((section) => <Section key={section.heading} {...section} />)}
+            </div>
+
+            <BusinessDetails />
+          </article>
         </div>
-
-        <BusinessDetails />
-      </article>
+      </div>
     </main>
   );
 }

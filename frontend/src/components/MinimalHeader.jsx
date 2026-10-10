@@ -29,6 +29,17 @@ export default function MinimalHeader() {
   const logoUrl = tenant?.branding?.logoUrl;
   const { currentUser } = useSelector((state) => state.user);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The bar is frosted and borderless over the top of the page, then gains a
+  // hairline and a soft shadow once the visitor scrolls — so it lifts off the
+  // content rather than sitting as a flat band from the first pixel.
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Close on any navigation (browser back included) and on Escape, rather than
   // relying on every link inside the menu to remember its onClick.
@@ -53,8 +64,9 @@ export default function MinimalHeader() {
   return (
     <header
       className={classNames(
-        'fixed top-0 left-0 right-0 z-40 transition-colors',
-        'bg-white border-b border-slate-200'
+        'fixed top-0 left-0 right-0 z-40 transition-[background-color,box-shadow,border-color] duration-300',
+        'bg-white/85 backdrop-blur-lg backdrop-saturate-150',
+        scrolled ? 'border-b border-slate-200 shadow-sm' : 'border-b border-transparent'
       )}
     >
       <div className='max-w-7xl mx-auto px-4 sm:px-6'>
@@ -70,8 +82,8 @@ export default function MinimalHeader() {
               </div>
             )}
             <span className={classNames(
-              'text-base font-bold transition-colors',
-              'text-slate-900 group-hover:text-brand-700'
+              'font-display text-base font-bold tracking-[-0.01em] transition-colors',
+              'text-brand-950 group-hover:text-brand-700'
             )}>
               {productName}
             </span>
@@ -152,7 +164,7 @@ export default function MinimalHeader() {
             ) : (
               <Link
                 to='/sign-in'
-                className='px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors'
+                className='px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 hover:shadow-md hover:shadow-brand-500/25 active:scale-[0.97] transition-[background-color,box-shadow,transform] duration-200'
               >{t('minimalHeader.signIn')}</Link>
             )}
 

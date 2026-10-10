@@ -84,16 +84,16 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className='min-h-[calc(100vh-3.5rem)] bg-slate-50 flex items-center justify-center p-4'>
-      <div className='max-w-md w-full space-y-8'>
+    <div className='min-h-[calc(100vh-3.5rem)] bg-[#f3f5f4] flex items-center justify-center p-4'>
+      <div className='max-w-md w-full space-y-8 crm-animate-in'>
         {/* Header */}
         <div className='text-center'>
           <div className='flex justify-center mb-8'>
-            <div className='w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20'>
+            <div className='w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/25 ring-1 ring-white/20'>
               <HiOutlineLockClosed className='w-8 h-8 text-white' />
             </div>
           </div>
-          <h1 className='text-3xl font-bold text-slate-900 mb-2'>
+          <h1 className='font-display text-3xl font-bold text-brand-950 tracking-[-0.02em] mb-2'>
             {step === 1 ? 'Forgot Password?' : 'Reset Password'}
           </h1>
           <p className='text-base text-slate-600'>
@@ -104,7 +104,7 @@ export default function ForgotPassword() {
         </div>
 
         {/* Form */}
-        <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
+        <div className='bg-white rounded-2xl border border-slate-200 shadow-lg p-8'>
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className='space-y-5'>
               {/* The reset code is looked up in the workspace chosen here. */}
@@ -167,7 +167,7 @@ export default function ForgotPassword() {
                 <button
                   type='button'
                   onClick={() => setStep(1)}
-                  className='text-sm text-indigo-600 hover:text-indigo-800 font-medium focus-visible:outline-none focus-visible:underline'
+                  className='text-sm text-brand-700 hover:text-brand-900 font-medium focus-visible:outline-none focus-visible:underline'
                 >
                   Didn&apos;t receive OTP? Go back and try again
                 </button>
@@ -188,9 +188,9 @@ export default function ForgotPassword() {
           )}
 
           {/* Step indicator */}
-          <div className='mt-6 flex justify-center space-x-2'>
-            <div className={`w-2 h-2 rounded-full ${step === 1 ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-            <div className={`w-2 h-2 rounded-full ${step === 2 ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+          <div className='mt-6 flex justify-center items-center gap-2'>
+            <div className={`h-2 rounded-full transition-all duration-300 ${step === 1 ? 'w-6 bg-brand-600' : 'w-2 bg-slate-200'}`}></div>
+            <div className={`h-2 rounded-full transition-all duration-300 ${step === 2 ? 'w-6 bg-brand-600' : 'w-2 bg-slate-200'}`}></div>
           </div>
         </div>
 
@@ -198,7 +198,7 @@ export default function ForgotPassword() {
         <div className='text-center'>
           <Link
             to='/sign-in'
-            className='text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center justify-center gap-2'
+            className='text-sm text-brand-700 hover:text-brand-900 font-medium flex items-center justify-center gap-2'
           >
             <HiOutlineArrowLeft className='w-4 h-4' />{t('forgotPassword.backToSignIn')}</Link>
         </div>

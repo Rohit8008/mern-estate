@@ -57,10 +57,11 @@ export default function AppShell({ children }) {
     (isStaff && STAFF_PREFIXES.some((p) => location.pathname.startsWith(p)));
 
   /**
-   * The landing page is theme-locked dark and its header floats transparently
-   * over the hero. Reserving the usual 56px header strip here would paint a
-   * light band above that hero, and the page background would show light-grey
-   * on overscroll, so "/" opts out of both.
+   * The landing page is a light "mist" theme and its frosted header floats over
+   * the hero. Reserving the usual 56px header strip here would paint a band
+   * above that hero, so "/" opts out of the top padding, and the wrapper takes
+   * the mist colour so an overscroll bounce matches the page rather than
+   * flashing a different background.
    */
   const isLandingRoute = location.pathname === '/';
 
@@ -77,7 +78,7 @@ export default function AppShell({ children }) {
         tabIndex={-1}
         className={[
           isCrmRoute || isLandingRoute ? '' : 'pt-14',
-          isLandingRoute ? 'bg-slate-950' : 'bg-slate-50',
+          isLandingRoute ? 'bg-[#f3f5f4]' : 'bg-slate-50',
           'min-h-screen focus:outline-none',
         ].join(' ')}
       >

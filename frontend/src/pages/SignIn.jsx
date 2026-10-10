@@ -47,21 +47,21 @@ export default function SignIn() {
   };
 
   return (
-    <div className='min-h-[calc(100vh-3.5rem)] bg-slate-50 flex items-center justify-center p-4'>
-      <div className='max-w-md w-full space-y-8'>
+    <div className='min-h-[calc(100vh-3.5rem)] bg-[#f3f5f4] flex items-center justify-center p-4'>
+      <div className='max-w-md w-full space-y-8 crm-animate-in'>
         {/* Header */}
         <div className='text-center'>
           <div className='flex justify-center mb-8'>
-            <div className='w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20'>
+            <div className='w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/25 ring-1 ring-white/20'>
               <HiOutlineOfficeBuilding className='w-8 h-8 text-white' />
             </div>
           </div>
-          <h1 className='text-4xl font-bold text-slate-900 mb-2'>{t('signIn.welcomeBack')}</h1>
+          <h1 className='font-display text-4xl font-bold text-brand-950 tracking-[-0.02em] mb-2'>{t('signIn.welcomeBack')}</h1>
           <p className='text-lg text-slate-600'>{t('signIn.signInToYourAccount')}</p>
         </div>
 
         {/* Form */}
-        <div className='bg-white rounded-2xl border border-slate-200 shadow-md p-8'>
+        <div className='bg-white rounded-2xl border border-slate-200 shadow-lg p-8'>
           {/* Which agency: every workspace shares this address. */}
           <div className='mb-5'>
             <WorkspacePicker onChange={() => dispatch(signInFailure(null))} />
@@ -88,7 +88,7 @@ export default function SignIn() {
             <div className='flex justify-end -mt-1'>
               <Link
                 to='/forgot-password'
-                className='text-sm text-indigo-600 hover:text-indigo-800 font-medium'
+                className='text-sm text-brand-700 hover:text-brand-900 font-medium transition-colors'
               >{t('signIn.forgotPassword')}</Link>
             </div>
 
