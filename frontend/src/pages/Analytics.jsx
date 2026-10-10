@@ -45,6 +45,31 @@ export default function Analytics() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
   const isManualRefreshRef = useRef(false);
+  // Which datasets are already in state for the current range, so a plain tab
+  // switch reuses them instead of re-hitting the API. Cleared when the range
+  // changes or the user hits Refresh (see `force` below).
+  const prevRangeRef = useRef(dateRange);
+  const prevRefreshRef = useRef(refreshCount);
+  const loadedKeysRef = useRef(new Set());
+
+  // One endpoint per dataset, and which datasets each tab needs. Overview shows
+  // all five; a dedicated tab shows its own slice (which Overview already loaded).
+  const DATASETS = {
+    dashboard: (p) => `/api/analytics/dashboard${p}`,
+    properties: (p) => `/api/analytics/properties${p}`,
+    sales: (p) => `/api/analytics/sales${p}`,
+    leads: (p) => `/api/analytics/leads/conversion${p}`,
+    revenue: (p) => `/api/analytics/revenue${p}`,
+    agents: (p) => `/api/analytics/agents${p}`,
+  };
+  const TAB_DATASETS = {
+    overview: ['dashboard', 'properties', 'sales', 'leads', 'revenue'],
+    properties: ['properties'],
+    sales: ['sales'],
+    leads: ['leads'],
+    revenue: ['revenue'],
+    agents: ['agents'],
+  };
 
   useEffect(() => {
     const isRefresh = isManualRefreshRef.current;
@@ -60,53 +85,45 @@ export default function Analytics() {
     }
     const params = `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`;
 
+    // A new range (or an explicit Refresh) invalidates everything we cached for
+    // the old range; a tab switch keeps the cache and fetches only what's missing.
+    const force = prevRangeRef.current !== dateRange || prevRefreshRef.current !== refreshCount;
+    prevRangeRef.current = dateRange;
+    prevRefreshRef.current = refreshCount;
+    if (force) loadedKeysRef.current = new Set();
+
+    const needed = TAB_DATASETS[activeTab] || [];
+    const toFetch = needed.filter((key) => !loadedKeysRef.current.has(key));
+    if (toFetch.length === 0) {
+      setLoading(false);
+      setRefreshing(false);
+      return () => { mounted = false; };
+    }
+
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
 
     (async () => {
       try {
-        if (activeTab === 'overview') {
-          const dashboardRes = await fetchWithRefresh(`/api/analytics/dashboard${params}`);
-          if (!mounted) return;
-          const dashboardData = await parseJsonSafely(dashboardRes);
-          if (dashboardData?.success) setData(prev => ({ ...prev, dashboard: dashboardData.data }));
+        const results = await Promise.all(
+          toFetch.map(async (key) => {
+            const res = await fetchWithRefresh(DATASETS[key](params));
+            const json = await parseJsonSafely(res);
+            return [key, json];
+          })
+        );
+        if (!mounted) return;
+        const updates = {};
+        for (const [key, json] of results) {
+          if (json?.success) {
+            updates[key] = json.data;
+            loadedKeysRef.current.add(key);
+          }
         }
-
-        if (activeTab === 'overview' || activeTab === 'properties') {
-          const propertyRes = await fetchWithRefresh(`/api/analytics/properties${params}`);
-          if (!mounted) return;
-          const propertyData = await parseJsonSafely(propertyRes);
-          if (propertyData?.success) setData(prev => ({ ...prev, properties: propertyData.data }));
-        }
-
-        if (activeTab === 'overview' || activeTab === 'sales') {
-          const salesRes = await fetchWithRefresh(`/api/analytics/sales${params}`);
-          if (!mounted) return;
-          const salesData = await parseJsonSafely(salesRes);
-          if (salesData?.success) setData(prev => ({ ...prev, sales: salesData.data }));
-        }
-
-        if (activeTab === 'overview' || activeTab === 'leads') {
-          const leadsRes = await fetchWithRefresh(`/api/analytics/leads/conversion${params}`);
-          if (!mounted) return;
-          const leadsData = await parseJsonSafely(leadsRes);
-          if (leadsData?.success) setData(prev => ({ ...prev, leads: leadsData.data }));
-        }
-
-        if (activeTab === 'overview' || activeTab === 'revenue') {
-          const revenueRes = await fetchWithRefresh(`/api/analytics/revenue${params}`);
-          if (!mounted) return;
-          const revenueData = await parseJsonSafely(revenueRes);
-          if (revenueData?.success) setData(prev => ({ ...prev, revenue: revenueData.data }));
-        }
-
-        if (activeTab === 'agents') {
-          const agentsRes = await fetchWithRefresh(`/api/analytics/agents${params}`);
-          if (!mounted) return;
-          const agentsData = await parseJsonSafely(agentsRes);
-          if (agentsData?.success) setData(prev => ({ ...prev, agents: agentsData.data }));
-        }
+        // On force, replace so stale data for untouched tabs is dropped (they
+        // refetch when next visited); on a tab switch, merge into the cache.
+        setData((prev) => (force ? updates : { ...prev, ...updates }));
       } catch (err) {
         if (mounted) {
           console.error('Failed to load analytics:', err);
@@ -121,7 +138,8 @@ export default function Analytics() {
     })();
 
     return () => { mounted = false; };
-  }, [dateRange, activeTab, refreshCount]);  
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, activeTab, refreshCount]);
 
   function loadData(isRefresh = false) {
     if (isRefresh) isManualRefreshRef.current = true;
